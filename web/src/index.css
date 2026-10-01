@@ -1,0 +1,1321 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* DEGO ERP v2 — Tailwind v4 + shadcn/ui.
+   Token màu bám bộ nhận diện DEGO: sky blue #00aeef (primary), navy #1b2559 (chữ đậm). */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.5rem;
+
+  --background: #ffffff;
+  --foreground: #1b2559;
+
+  --card: #ffffff;
+  --card-foreground: #1b2559;
+
+  --popover: #ffffff;
+  --popover-foreground: #1b2559;
+
+  --primary: #00aeef;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f6f8fb;
+  --secondary-foreground: #1b2559;
+
+  /*  NỀN TRANG (khu nội dung, màn chọn phân hệ, dải tiêu đề dính).
+      Tách riêng khỏi `--secondary` vì hai thứ có VAI TRÒ khác nhau, dù ở bộ màu
+      DEGO chúng trùng giá trị: `--secondary` là màu NHẤN cho nút phụ, còn cái
+      này là mảng nền lớn. Bảng màu nhập từ ngoài đặt `secondary` là màu rực
+      (Starry Night dùng #f7c873 vàng cam, Bubblegum dùng #8acfd1 xanh ngọc) —
+      lấy nó làm nền trang thì cả ứng dụng nhuộm một màu chói, trong khi bản
+      mẫu của họ chỉ tô màu đó lên một cái nút.
+
+      ⚠️ Chỉ bộ màu DEGO mới có bậc màu riêng cho nền trang (#f6f8fb so với thẻ
+      trắng). Bảng màu nhập từ tweakcn KHÔNG khai biến này và được suy ra bằng
+      đúng `--background` — thẻ tách ra bằng viền + đổ bóng như bản gốc của họ.
+      Xem `DERIVED_TOKENS` trong `shared/theme/build-theme-css.ts`. */
+  --canvas: #f6f8fb;
+
+  --muted: #f6f8fb;
+  --muted-foreground: #64748b;
+
+  /* Nền ô CHỈ XEM — `shared/ui/read-only-value.tsx`.
+
+     Tách khỏi `--muted` vì `--muted` quá nhạt (#f6f8fb, gần như trắng): đặt cạnh
+     một ô nhập nền trắng thì mắt không phân biệt được ô nào khóa, ô nào gõ được
+     — khách báo đúng chỗ này ngày 31/08/2026. Ô khóa phải XÁM thấy rõ, còn chữ
+     bên trong vẫn là dữ liệu thật nên giữ đủ tương phản để đọc, đừng làm mờ.
+     09/09/2026 khách báo ngược lại: #e4eaf1 "xám dữ quá" khi cả màn chi tiết ĐMH
+     đã duyệt toàn ô khóa — hạ về #edf1f6, rồi hạ tiếp #f1f5f9 (khách vẫn thấy
+     nặng). Đây là nấc cuối: nhạt hơn nữa là không còn phân biệt được với ô trắng. */
+  --locked: #f1f5f9;
+  --locked-foreground: #334155;
+
+  /* Nền các HÀNG của bảng danh sách (`DataTable`, `LinesTable`).
+
+     Trước đây năm màu này viết cứng bằng bảng màu Tailwind gốc — `bg-slate-200/80`
+     cho hàng tiêu đề, `even:bg-slate-100` cho vằn hàng chẵn, `hover:bg-sky-100`,
+     `data-[state=selected]:bg-blue-100`. Màu Tailwind gốc KHÔNG đi theo bảng màu,
+     nên khi người dùng đổi giao diện thì một cái bảng có tới ba họ màu đánh nhau:
+     tiêu đề lấy `--muted` của bảng màu (Starry Night là kem), vằn hàng và hover
+     vẫn xanh slate/sky cố định. Lỗi thấy được 27/08/2026.
+
+     Bảng màu nhập từ ngoài thì suy ra từ chính `--card` và `--primary` của nó
+     (xem `DERIVED_TOKENS` trong `shared/theme/build-theme-css.ts`); riêng bảng
+     màu DEGO ghim tay ngay dưới đây.
+
+     10/09/2026: hàng tiêu đề trước là #e6ebf2 / #0f172a — xám gần đen chồng lên
+     xám xanh nhạt, khách đọc ra "màu xám" và đòi trả về xanh nước biển như bản
+     v1 (v1: chữ `--navy`, nền #f4f7fe). Không bê nguyên #f4f7fe được: nó SÁNG
+     hơn vằn hàng `--row-stripe` bên dưới, dán vào thì tiêu đề chìm hơn cả thân
+     bảng. Nên chọn nền đậm hơn `--row-stripe` mà vẫn ra xanh. Đây là mặc định
+     của bảng màu DEGO thôi; ai đổi giao diện thì token đi theo bảng màu đó. */
+  --row-head: #dbe6f5;
+  --row-head-foreground: #1b2559;
+  /* 09/09/2026: #fafcff nhạt tới mức bảng nhiều dòng nhìn như không có vằn —
+     khách đòi đậm thêm một xíu để dóng mắt theo hàng. */
+  --row-stripe: #f0f4f9;
+  --row-hover: #e0f2fe;
+  --row-selected: #dbeafe;
+
+  --accent: #eef4fb;
+  --accent-foreground: #14507a;
+
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #00aeef;
+
+  /* Nét NHÁNH CÂY của bảng gom nhóm (hàng cha ▸ hàng con) — xem
+     `modules/hr/utils/group-leave-balances.ts`.
+
+     ⚠️ KHÔNG dùng `--border` cho việc này. Nét kẻ ô chỉ cần tách hai vùng nền
+     cạnh nhau nên nó cố tình nhạt; còn nhánh cây phải ĐỌC ĐƯỢC THÀNH HÌNH, mà
+     lại đi qua ba nền khác nhau — nền thẻ, nền hàng con `muted`, và nền xanh
+     `row-selected` của hàng cha đang bung. Ở nền xanh đó `--border` mất hút
+     hoàn toàn: thân cây có vẽ, chỉ là không ai thấy. */
+  --tree-line: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+
+  /* Màu ngữ nghĩa cho trạng thái chứng từ (chờ duyệt / đã duyệt / hủy). */
+  --success: #16a34a;
+  --warning: #d97706;
+  --info: #0284c7;
+
+  /* Màu phụ của bộ nhận diện. */
+  --navy: #1b2559;
+  --navy-deep: #14224f;
+  /* Nền navy ĐẶC, GIỮ NGUYÊN ở nền tối — xem ghi chú ở khối `.dark`. */
+  --navy-solid: #1b2559;
+  --teal-dark: #0096cc; /* điểm cuối gradient của nút chính */
+  --sky-soft: #5ed0ff; /* icon trên nền navy */
+  --brand-green: #92c83e;
+
+  /* ---- Màu biểu đồ ----------------------------------------------------
+     KHÔNG dùng --primary (#00aeef) làm màu cột: độ tương phản trên nền trắng
+     chỉ 1.9:1, cột mảnh sẽ chìm. Bốn slot dưới đây là bảng phân loại đã kiểm
+     (dải sáng, ngưỡng chroma, tách màu cho người mù màu protan/deutan
+     ΔE 9.1 ≥ 8, thị lực thường ΔE 22.9 ≥ 15). Gán theo THỨ TỰ CỐ ĐỊNH — lọc
+     bớt chuỗi dữ liệu không được đổi màu các chuỗi còn lại. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  /* Xám trung tính cho nhóm "Khác" / phần bị làm mờ — không mang ý nghĩa. */
+  --chart-neutral: #cbd5e1;
+  /* Nền rãnh của thanh tỉ lệ — bậc nhạt cùng tông xanh của --chart-1. */
+  --chart-track: #cde2fb;
+  /* Lưới/trục: hairline lùi về sau, chỉ hơn nền một bậc. */
+  --chart-grid: #e8edf4;
+
+  /* Menu trái — bám bảng màu DEGO, không dùng xám mặc định của shadcn. */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1b2559;
+  --sidebar-accent: #eef4fb;
+  --sidebar-accent-foreground: #14507a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-primary: #00aeef;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #00aeef;
+
+  /* MỤC MENU ĐANG MỞ — viên nền + màu chữ.
+
+     Bộ màu DEGO cố ý dùng VỆT NHẠT chứ không phải viên tô đặc: xanh lơ #00aeef
+     tô đặc cả một dòng menu thì chói hẳn so với phần còn lại của giao diện
+     (quyết ngày 27/08/2026 theo yêu cầu). Giá trị dưới đây ghim đúng màu đang
+     chạy trước đó — chính là `bg-primary/10` đã chồng sẵn lên nền menu, nên
+     không đổi một pixel nào.
+
+     ⚠️ Bảng màu nhập từ tweakcn thì NGƯỢC LẠI: chúng để trống hai biến này và
+     `shared/theme/build-theme-css.ts` suy ra viên TÔ ĐẶC từ `--sidebar-primary`
+     (kèm ép chữ đạt 4.5:1). Lý do: `primary` của bảng màu ngoài phần lớn là màu
+     trầm, phủ 10% alpha lên thì đo được cao nhất mới 1.31:1 so với nền menu —
+     tức không bảng màu nào cho ra vệt nhìn thấy được. */
+  --sidebar-active: #e6f7fd;
+  --sidebar-active-foreground: #00aeef;
+
+  /* ĐỔ BÓNG — thang này ghim ĐÚNG `shadow-*` gốc của Tailwind (đen 10%, lệch
+     xuống 1px, nhoè 3px), nên bộ màu DEGO không đổi một pixel nào.
+
+     Bảng màu nhập từ tweakcn thì mỗi bảng một bộ bóng riêng, dựng ở
+     `shared/theme/build-theme-css.ts` theo đúng công thức của họ — khoảng cách
+     rất xa nhau: Twitter và Mono đặt độ mờ 0 (cố ý KHÔNG có bóng), Doom 64 đặt
+     0.4, Bubblegum đặt 1.0 kèm lệch 3px (bóng cứng). Trước 27/08/2026 ứng dụng
+     đổ chung một kiểu cho tất cả nên bảng màu nào cũng thấy bóng nặng hơn bản
+     gốc. */
+  --erp-shadow-2xs: 0px 1px 3px 0px color-mix(in srgb, #000000 5%, transparent);
+  --erp-shadow-xs: 0px 1px 3px 0px color-mix(in srgb, #000000 5%, transparent);
+  --erp-shadow-sm:
+    0px 1px 3px 0px color-mix(in srgb, #000000 10%, transparent),
+    0px 1px 2px -1px color-mix(in srgb, #000000 10%, transparent);
+  --erp-shadow-md:
+    0px 1px 3px 0px color-mix(in srgb, #000000 10%, transparent),
+    0px 2px 4px -1px color-mix(in srgb, #000000 10%, transparent);
+  --erp-shadow-lg:
+    0px 1px 3px 0px color-mix(in srgb, #000000 10%, transparent),
+    0px 4px 6px -1px color-mix(in srgb, #000000 10%, transparent);
+  --erp-shadow-xl:
+    0px 1px 3px 0px color-mix(in srgb, #000000 10%, transparent),
+    0px 8px 10px -1px color-mix(in srgb, #000000 10%, transparent);
+  --erp-shadow-2xl: 0px 1px 3px 0px color-mix(in srgb, #000000 25%, transparent);
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+
+  /*  `--navy` là màu CHỮ ĐẬM (112 chỗ dùng `text-navy`), không phải màu thương
+      hiệu để tô nền. Ở nền tối phải lật thành màu sáng, nếu không thì mọi tiêu
+      đề thành chữ đen trên nền đen — đo được lúc bật chế độ tối lần đầu: nguyên
+      màn chọn phân hệ không đọc nổi một chữ nào.
+      Chỗ nào cần NỀN navy đặc (ảnh đại diện, lớp phủ) thì dùng `--navy-solid`
+      bên dưới — nó KHÔNG lật, vì nền tối + chữ trắng vẫn đúng ở cả hai chế độ. */
+  --navy: #e2e8f0;
+  --navy-deep: #cbd5e1;
+  --navy-solid: #1b2559;
+
+  --card: #1e293b;
+  --card-foreground: #e2e8f0;
+
+  --popover: #1e293b;
+  --popover-foreground: #e2e8f0;
+
+  --primary: #00aeef;
+  --primary-foreground: #06283d;
+
+  --secondary: #1e293b;
+  --secondary-foreground: #e2e8f0;
+  --canvas: #1e293b;
+
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+
+  /* Xem chú thích ở `:root`. Nền tối thì ô khóa phải SÁNG hơn mặt thẻ
+     (#1e293b) mới nổi lên, ngược chiều với nền sáng. */
+  --locked: #243348;
+  --locked-foreground: #dbe3ec;
+
+  /* Xem chú thích ở `:root`. Nền tối thì hàng tiêu đề vốn đã đục sẵn
+     (`dark:bg-slate-800`) nên ghim thẳng, không phải chồng alpha. */
+  --row-head: #1e293b;
+  --row-head-foreground: #f1f5f9;
+  /* Trùng `--card` thì nền tối mất hẳn vằn hàng — nâng lên một nấc (09/09/2026). */
+  --row-stripe: #243044;
+  --row-hover: #334155;
+  --row-selected: #475569;
+
+  --accent: #334155;
+  --accent-foreground: #e2e8f0;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --border: #334155;
+  --input: #334155;
+  --ring: #00aeef;
+
+  /* Khai lại cho nền tối dù biểu thức y hệt: `--muted-foreground` ở đây là
+     #94a3b8 chứ không phải #64748b, nên nét ra sáng hơn nền thay vì tối hơn.
+     Giữ cùng tỉ lệ 45% để độ tương phản hai chế độ ngang nhau. */
+  --tree-line: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+
+  /* Cùng 4 tông nhưng chỉnh bậc cho nền tối (không lật màu tự động) —
+     đã kiểm lại trên nền #1e293b: tương phản ≥ 3:1, CVD ΔE 8.4. */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-neutral: #475569;
+  --chart-track: #1c3a5e;
+  --chart-grid: #2b3b52;
+
+  --sidebar: #1e293b;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-accent: #334155;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #334155;
+  --sidebar-primary: #00aeef;
+  --sidebar-primary-foreground: #06283d;
+  --sidebar-ring: #00aeef;
+
+  /* Xem chú thích ở `:root`. Nền tối thì vệt nhạt là màu lơ pha vào nền menu. */
+  --sidebar-active: #1b364d;
+  --sidebar-active-foreground: #00aeef;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-canvas: var(--canvas);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-locked: var(--locked);
+  --color-locked-foreground: var(--locked-foreground);
+  --color-row-head: var(--row-head);
+  --color-row-head-foreground: var(--row-head-foreground);
+  --color-row-stripe: var(--row-stripe);
+  --color-row-hover: var(--row-hover);
+  --color-row-selected: var(--row-selected);
+  --color-tree-line: var(--tree-line);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-neutral: var(--chart-neutral);
+  --color-chart-track: var(--chart-track);
+  --color-chart-grid: var(--chart-grid);
+
+  --color-navy: var(--navy);
+  --color-navy-solid: var(--navy-solid);
+  --color-navy-deep: var(--navy-deep);
+  --color-teal-dark: var(--teal-dark);
+  --color-sky-soft: var(--sky-soft);
+  --color-brand-green: var(--brand-green);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+
+  /*  Nối thang đổ bóng vào tiện ích `shadow-*` của Tailwind.
+
+      ⚠️ PHẢI nằm trong `@theme inline` và trỏ sang một biến TÊN KHÁC
+      (`--erp-shadow-*`). Tailwind v4 nướng giá trị của `--shadow-*` thẳng vào
+      lớp tiện ích lúc dựng, nên ghi đè `--shadow-sm` ở `:root` lúc chạy KHÔNG
+      có tác dụng gì — đã thử và đo, bóng không nhúc nhích. `inline` mới khiến
+      nó phát ra `var(...)` để bảng màu đổi được lúc chạy.
+
+      Đánh đổi: tiện ích `shadow-<màu>` của Tailwind (đặt `--tw-shadow-color`)
+      hết tác dụng vì màu đã nằm cứng trong chuỗi. Ứng dụng không dùng chỗ nào. */
+  --shadow-2xs: var(--erp-shadow-2xs);
+  --shadow-xs: var(--erp-shadow-xs);
+  --shadow-sm: var(--erp-shadow-sm);
+  --shadow-md: var(--erp-shadow-md);
+  --shadow-lg: var(--erp-shadow-lg);
+  --shadow-xl: var(--erp-shadow-xl);
+  --shadow-2xl: var(--erp-shadow-2xl);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+}
+
+/*
+ * Giấu thanh cuộn nhưng GIỮ khả năng cuộn.
+ *
+ * Dùng cho dải cuộn ngang trong giao diện — dải tab của trang chi tiết
+ * (`ScrollableTabsList`). Ở đó thanh cuộn không phải thông tin: nó vẽ một vệt
+ * xám dày ngay dưới hàng tab, đọc ra như một đường kẻ của thiết kế chứ không
+ * như một thanh cuộn, và trên máy cảm ứng thì nó vốn tự ẩn.
+ *
+ * ⚠️ Chỉ dùng khi CÒN dấu hiệu khác nói rằng chỗ này cuộn được — dải tab luôn
+ * để lộ một phần tab kế tiếp ở mép. Giấu thanh cuộn trên một khối không có dấu
+ * hiệu nào là giấu luôn phần nội dung nằm ngoài tầm nhìn.
+ */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/**
+ * Thanh cuộn MẢNH và LUÔN HIỆN — ngược hẳn với `scrollbar-none` ở trên.
+ *
+ * ⚠️ **Vì sao cần khai riêng thay vì để mặc định.** macOS và iOS dùng thanh cuộn
+ * KIỂU CHỒNG (overlay): nó chỉ hiện trong lúc đang cuộn rồi tự mờ đi. Với một
+ * khối cuộn DỌC thì không sao — nội dung bị cắt ngang ở mép dưới đã là dấu hiệu
+ * đủ rõ. Nhưng với khối cuộn NGANG thì thành ra không còn dấu hiệu nào cả: bảng
+ * chỉ hiện chữ cụt ở mép phải, và trên máy tính có CHUỘT thì không có cách nào
+ * cuộn ngang (lăn chuột đi xuống, không đi ngang) — tức nội dung nằm ngoài tầm
+ * nhìn trở nên KHÔNG THỂ VỚI TỚI, không phải chỉ là khó thấy. Khách báo đúng
+ * câu "không scroll được gì luôn, chỉ thấy 2 cột" ngày 14/09/2026 ở bảng dòng
+ * phiếu yêu cầu mua hàng.
+ *
+ * ⚠️ **`::-webkit-scrollbar` và `scrollbar-width` KHÔNG ĐƯỢC khai cùng nhau.**
+ * Từ Chrome 121, hễ thấy `scrollbar-width` (hoặc `scrollbar-color`) là nó chuyển
+ * sang bộ thanh cuộn CHUẨN và **bỏ qua sạch** mấy lớp `::-webkit-scrollbar` —
+ * mà bộ chuẩn trên macOS lại vẫn là kiểu chồng, tức thanh cuộn vẫn tự mờ và vẫn
+ * không chiếm chỗ. Viết cả hai cho "chắc" chính là thứ làm bản vá đầu tiên
+ * không có tác dụng gì (đo `offsetHeight - clientHeight` ra đúng 0).
+ *
+ * Nên: WebKit/Blink đi bằng pseudo-element, Firefox đi bằng thuộc tính chuẩn,
+ * và tách nhau bằng `@supports` để không bao giờ cùng có hiệu lực.
+ *
+ * Màu lấy từ token nên tự đổi theo nền sáng/tối; đừng gắn mã màu cứng ở đây.
+ */
+@utility scrollbar-slim {
+  &::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  /*  Firefox không có `::-webkit-scrollbar` nên nhánh này mới chạy ở đó. */
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Số tiền/số lượng đọc theo cột — chữ số phải cùng bề rộng mới thẳng hàng. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Trục timeline phải có kích thước thật, không phụ thuộc utility được sinh lại bởi Vite HMR.
+
+     ⚠️ Vạch chỉ chạy trong KHOẢNG TRỐNG giữa hai mốc, không xuyên qua mốc.
+     Mốc là vòng tròn `size-8` (2rem) nằm ở đỉnh dòng, và nhiều mốc có nền gần
+     như trong suốt (`bg-destructive/5`) — kéo vạch từ 1rem (tâm mốc trên) tới
+     -1rem (tâm mốc dưới) thì nó hiện xuyên qua ruột vòng tròn, đâm thẳng vào
+     biểu tượng. Nên: bắt đầu ngay DƯỚI đáy vòng tròn (2rem) và dừng trước
+     đỉnh vòng tròn kế tiếp, chừa 0.25rem hai đầu cho thoáng. */
+  .approval-timeline-rail {
+    position: absolute;
+    top: 2.25rem;
+    bottom: 0.25rem;
+    left: 15px;
+    width: 2px;
+    background: var(--primary);
+    pointer-events: none;
+  }
+
+  .approval-timeline-system-node {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 9999px;
+    background: var(--primary);
+  }
+
+  /* Trục các chặng dùng màu trung tính vì nó biểu diễn thứ tự, không phải đã hoàn tất.
+     Cùng lý do với `.approval-timeline-rail`: vạch nằm giữa hai mốc, không xuyên mốc. */
+  .approval-flow-step-rail {
+    position: absolute;
+    top: 2.25rem;
+    bottom: 0.25rem;
+    left: 15px;
+    width: 2px;
+    background: var(--chart-neutral);
+    pointer-events: none;
+  }
+}
+
+/* ============ Màn hình xác thực (đăng nhập / quên mật khẩu) ============
+   Chỉ những hiệu ứng viết bằng class Tailwind sẽ không đọc nổi mới để ở đây;
+   phần còn lại của layout dùng utility trực tiếp trong component. */
+
+/* Nền bảng thương hiệu: 2 vầng sáng teal chồng lên nền navy chuyển sắc. */
+.auth-brand {
+  background:
+    radial-gradient(1100px 520px at 12% 8%, rgba(0, 174, 239, 0.28), transparent 60%),
+    radial-gradient(900px 600px at 100% 100%, rgba(0, 174, 239, 0.2), transparent 55%),
+    linear-gradient(155deg, var(--navy-deep) 0%, var(--navy) 42%, #0f2b52 100%);
+}
+
+/* Lưới chấm mờ phủ lên nền — thuần CSS, không tốn ảnh, GPU rẻ. */
+.auth-brand::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(160deg, #000 20%, transparent 78%);
+  pointer-events: none;
+}
+
+/* Form trôi lên nhẹ khi vào trang. */
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.auth-rise {
+  animation: auth-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Nút chính của màn xác thực — gradient dọc + bóng teal. */
+.auth-submit {
+  background-image: linear-gradient(180deg, var(--primary) 0%, var(--teal-dark) 100%);
+  box-shadow: 0 8px 20px rgba(0, 174, 239, 0.28);
+}
+
+.auth-submit:hover:not(:disabled) {
+  box-shadow: 0 12px 26px rgba(0, 174, 239, 0.34);
+  transform: translateY(-1px);
+}
+
+.auth-submit:disabled {
+  opacity: 0.7;
+  box-shadow: none;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-rise {
+    animation: none;
+  }
+
+  .auth-submit {
+    transition: none;
+  }
+}
+
+/* Trong lúc kéo giãn menu trái: tắt transition để mép menu bám sát con trỏ.
+   Không có nó thì bề rộng chạy trễ 200ms sau chuột, cảm giác như bị dính. */
+[data-sidebar-resizing='true'] [data-slot='sidebar-gap'],
+[data-sidebar-resizing='true'] [data-slot='sidebar-container'] {
+  transition: none !important;
+}
+
+/* ── Trình soạn thảo văn bản (Tiptap) ─────────────────────────────────────────
+   Tiptap là trình soạn thảo "headless": nó chỉ sinh HTML thuần, mọi kiểu hiển
+   thị phải tự khai. Đặt ở đây chứ không dùng class Tailwind vì các thẻ (<h1>,
+   <table>, <li>…) do người dùng gõ ra lúc chạy, không có chỗ nào để gắn class.
+   Preflight của Tailwind đã gỡ sạch kiểu mặc định của trình duyệt nên không
+   khai thì tiêu đề với danh sách trông y hệt đoạn văn thường. */
+
+/* Tờ giấy A4: 210 × 297mm ở 96dpi ≈ 794 × 1123px, lề 20mm ≈ 76px.
+   ⚠️ KHÔNG khai `padding` / `min-height` ở đây: chiều cao trang, lề và khe
+   ngắt trang do `PaginationPlus` (xem `rich-text-editor.tsx`) tự vẽ theo đúng
+   bộ số đo trên — khai thêm ở CSS là cộng dồn hai lần lề. */
+/* CHỮ KÝ ĐẶT TỰ DO — xem `signature-extension.ts`.
+   `position: relative` ở đây là MỐC NEO cho chữ ký: toạ độ left/top của nó tính
+   từ mép tờ giấy. Bỏ dòng này là mọi chữ ký nhảy về góc màn hình. */
+.doc-page {
+  position: relative;
+  width: 794px;
+  max-width: 100%;
+  margin-inline: auto;
+  background: #fff;
+  box-shadow:
+    0 1px 3px rgb(15 23 42 / 0.12),
+    0 8px 24px rgb(15 23 42 / 0.08);
+  font-family: 'Times New Roman', serif;
+  font-size: 14pt;
+  /* GIÃN DÒNG ĐƠN đúng như Word: Word đo một dòng theo số đo của bộ phông
+     (Times New Roman = 1,15 lần cỡ chữ), CSS thì đo theo cỡ chữ — nên "dòng
+     đơn" của Word ra `line-height: 1.15`, không phải 1. Trước đây để 1.5, đặt
+     cạnh bản Word thì dòng thưa hơn hẳn.
+     Ai cần thưa hơn thì chọn nấc 1,5 ở thanh công cụ; các nấc đó cũng đã quy
+     đổi qua `rich-text-editor/word-line-spacing.ts`. */
+  line-height: 1.15;
+  color: #111827;
+  outline: none;
+}
+
+/*
+ * TRONG KHUNG SOẠN THẢO, tờ giấy giữ ĐÚNG KHỔ A4 — phần dôi ra đi vào thanh
+ * cuộn ngang của `.doc-canvas`, không bóp tờ giấy lại.
+ *
+ * ⚠️ `max-width: 100%` ở `.doc-page` là đúng cho phiếu IN nhưng SAI cho chỗ
+ * soạn: trên màn 390px nó co tờ giấy còn **288px** trong khi THƯỚC KẺ ngay trên
+ * vẫn kẻ theo 794px — hai thứ nói hai số khác nhau, nên kéo lề trên thước không
+ * còn khớp chỗ chữ xuống dòng. Tệ hơn, đó là WYSIWYG nói dối: chữ ngắt dòng
+ * theo bề rộng 288px, còn bản in ra lại ngắt theo 794px.
+ *
+ * Khung `.doc-canvas` đã khai sẵn `overflow-x-auto`, nên bỏ trần là tờ giấy
+ * cuộn ngang được — đúng cách Google Docs làm trên trình duyệt điện thoại.
+ * Ở màn rộng luật này KHÔNG đổi gì: khung vốn đã rộng hơn 794px nên
+ * `max-width: 100%` chưa bao giờ chạm tới.
+ */
+.doc-canvas .doc-page {
+  max-width: none;
+}
+
+/*
+ * Lề trái/phải của trang giấy do THƯỚC KẺ chỉnh (`editor-ruler.tsx`).
+ *
+ * Phải để `!important`: `tiptap-pagination-plus` ghi thẳng
+ * `padding-left: var(--rm-margin-left)` vào thuộc tính `style` của chính thẻ
+ * này mỗi lần nó tính lại trang, mà style nội tuyến thì luật thường không đè
+ * lại được. Chỉ đụng lề NGANG — lề trên/dưới là số liệu chia trang của nó.
+ */
+.doc-page.rm-with-pagination {
+  padding-left: var(--doc-margin-left, 76px) !important;
+  padding-right: var(--doc-margin-right, 76px) !important;
+}
+
+/* Khối này cách khối kia 6pt — trước tiêu đề, danh sách, bảng… */
+.doc-page > * + * {
+  margin-top: 6pt;
+}
+
+/*
+ * HAI ĐOẠN VĂN LIỀN NHAU thì KHÔNG chèn khe.
+ *
+ * Word để "Spacing After: 0" cho đoạn thường, và quan trọng hơn: trình duyệt chỉ
+ * tô nền vùng chọn trên các DÒNG CHỮ, phần margin giữa hai đoạn thì để trắng.
+ * Có khe là bôi đen mấy dòng liền nhau lại thấy vệt trắng cắt ngang, trong khi
+ * bên Word vệt chọn liền một mạch. Đoạn nào cần cách xa thì đặt riêng khoảng
+ * cách cho đoạn đó (thuộc tính `spaceBefore` / `spaceAfter`, tệp Word nhập vào
+ * cũng mang theo số của chính nó) — hơn là ép cả trang.
+ */
+.doc-page > p + p {
+  margin-top: 0;
+}
+
+.doc-page h1 {
+  font-size: 1.6em;
+  font-weight: 700;
+}
+.doc-page h2 {
+  font-size: 1.35em;
+  font-weight: 700;
+}
+.doc-page h3 {
+  font-size: 1.15em;
+  font-weight: 700;
+}
+
+/*
+ * ĐÁNH SỐ MỤC TỰ ĐỘNG cho tiêu đề.
+ *
+ * Hai lối gắn class, dùng chung một bộ luật đếm:
+ *   `.doc-auto-number`      — thẻ BỌC NGOÀI trang giấy (trình soạn thảo), nên
+ *                             bật/tắt không phải dựng lại trình soạn thảo;
+ *   `.doc-auto-number-body` — gắn thẳng lên thân bài (bản in), nơi không có
+ *                             thẻ bọc nào.
+ *
+ * Ba cấp theo lối văn bản hành chính Việt Nam: I · 1 · a.
+ *
+ * Dùng bộ đếm CSS chứ không chèn số vào nội dung: chèn vào nội dung thì thêm
+ * một mục ở giữa là phải sửa tay toàn bộ số phía sau, mà đó đúng là việc người
+ * ta muốn máy làm hộ.
+ *
+ * ⚠️ Đánh đổi đã biết: số do `::before` vẽ ra nên KHÔNG đi theo khi sao chép
+ * sang nơi khác. Bản in đọc cùng bộ luật này (`document-print-page.tsx`), còn
+ * bản xuất ra tệp Word thì backend tự đánh số lúc chuyển đổi.
+ */
+.doc-auto-number .doc-page,
+.doc-auto-number-body {
+  counter-reset: doc-muc1;
+}
+.doc-auto-number .doc-page h1,
+.doc-auto-number-body h1 {
+  counter-reset: doc-muc2;
+  counter-increment: doc-muc1;
+}
+.doc-auto-number .doc-page h1::before,
+.doc-auto-number-body h1::before {
+  content: counter(doc-muc1, upper-roman) '. ';
+}
+.doc-auto-number .doc-page h2,
+.doc-auto-number-body h2 {
+  counter-reset: doc-muc3;
+  counter-increment: doc-muc2;
+}
+.doc-auto-number .doc-page h2::before,
+.doc-auto-number-body h2::before {
+  content: counter(doc-muc2) '. ';
+}
+.doc-auto-number .doc-page h3,
+.doc-auto-number-body h3 {
+  counter-increment: doc-muc3;
+}
+.doc-auto-number .doc-page h3::before,
+.doc-auto-number-body h3::before {
+  content: counter(doc-muc3, lower-alpha) ') ';
+}
+
+/* Khối XEM TRƯỚC phần nội dung sắp trích (hộp thoại Tạo bản trích) và Ô NHẬP
+   rich text gọn (`rich-text-field.tsx`). Chỉ cần đọc được ra hình văn bản,
+   không cần đúng khổ giấy — nên khai riêng vài luật thay vì mượn `.doc-page`
+   (thứ kéo theo cả bề ngang 794px và bóng đổ).
+
+   Hai chỗ dùng CHUNG bộ luật: ô nhập và khối xem trước là hai mặt của cùng một
+   nội dung, khai lệch nhau thì soạn xong bấm "Xem trước" lại thấy một hình
+   khác — người dùng không biết bản nào mới là bản sắp chia ra ngoài. */
+.doc-excerpt-preview h1,
+.doc-excerpt-preview h2,
+.doc-excerpt-preview h3,
+.doc-rich-field h1,
+.doc-rich-field h2,
+.doc-rich-field h3 {
+  margin-bottom: 0.25rem;
+  font-weight: 700;
+}
+.doc-excerpt-preview h1,
+.doc-rich-field h1 { font-size: 1.15em; }
+.doc-excerpt-preview h2,
+.doc-rich-field h2 { font-size: 1.08em; }
+.doc-excerpt-preview p + p,
+.doc-excerpt-preview * + h1,
+.doc-excerpt-preview * + h2,
+.doc-excerpt-preview * + h3,
+.doc-rich-field p + p,
+.doc-rich-field * + h1,
+.doc-rich-field * + h2,
+.doc-rich-field * + h3 {
+  margin-top: 0.5rem;
+}
+.doc-excerpt-preview ul,
+.doc-excerpt-preview ol,
+.doc-rich-field ul,
+.doc-rich-field ol {
+  margin-top: 0.35rem;
+  padding-left: 1.4em;
+  list-style: revert;
+}
+.doc-excerpt-preview table,
+.doc-rich-field table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: 0.5rem;
+}
+.doc-excerpt-preview th,
+.doc-excerpt-preview td,
+.doc-rich-field th,
+.doc-rich-field td {
+  border: 1px solid var(--border);
+  padding: 4px 6px;
+}
+
+/* Ảnh có chú thích trong bài rich (bao-CR-275). Bài dán từ web mang theo
+   <figure><figcaption> nhưng cụm luật này chưa có dòng nào cho nó — chú thích
+   hiện to bằng chữ thân bài, mất hẳn kiểu "chữ nghiêng nhỏ" của bài gốc.
+   KHÔNG bám [data-editor-image] như .doc-page: sanitize phía server lột các
+   thuộc tính data-*, HTML lưu về chỉ còn <figure> trần. */
+.doc-excerpt-preview figure {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  margin-block: 0.5rem;
+  text-align: center;
+}
+.doc-excerpt-preview figcaption {
+  margin-top: 0.35rem;
+  color: var(--muted-foreground);
+  font-size: 0.85em;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Vùng gõ của ô rich text gọn. Cuộn trong ô chứ không đẩy hộp thoại dài ra —
+   hộp thoại cao quá màn hình là nút Lưu trôi khỏi tầm mắt. */
+.doc-rich-field {
+  min-height: 9rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  outline: none;
+}
+
+.doc-page ul,
+.doc-page ol {
+  padding-left: 1.6em;
+}
+
+.doc-page ul {
+  list-style: disc;
+}
+.doc-page ol {
+  list-style: decimal;
+}
+/* Các mục trong cùng danh sách cũng nối liền, cùng lý do với hai đoạn văn ở
+   trên: có khe thì vệt bôi đen bị cắt khúc, Word thì liền một mạch. */
+.doc-page li {
+  margin-top: 0;
+}
+.doc-page li > p {
+  margin: 0;
+}
+
+/* Ảnh chèn vào không được vượt quá bề ngang trang giấy. */
+.doc-page img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Ảnh là một node độc lập: bấm chọn mới hiện bốn tay nắm, caption nằm cùng
+   node nên kéo ảnh / hoàn tác / sao chép không làm rơi chú thích. */
+.doc-page .editor-image-node {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.doc-page .editor-image-resize-wrapper {
+  max-width: 100%;
+  line-height: 0;
+}
+
+.doc-page .editor-image-resize-wrapper img {
+  display: block;
+}
+
+.doc-page .editor-image-resize-handle {
+  z-index: 2;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 1px rgb(37 99 235 / 0.7);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.doc-page .editor-image-resize-handle[data-resize-handle$='right'] {
+  transform: translate(50%, -50%);
+}
+
+.doc-page .editor-image-resize-handle[data-resize-handle^='bottom'] {
+  transform: translate(-50%, 50%);
+}
+
+.doc-page .editor-image-resize-handle[data-resize-handle^='bottom'][data-resize-handle$='right'] {
+  transform: translate(50%, 50%);
+}
+
+.doc-page .editor-image-node.is-selected .editor-image-resize-wrapper {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.doc-page .editor-image-node.is-selected .editor-image-resize-handle,
+.doc-page .editor-image-node.is-resizing .editor-image-resize-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.doc-page .editor-image-caption {
+  width: 100%;
+  min-width: 12rem;
+  margin-top: 0.45rem;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  padding: 0.2rem 0.35rem;
+  color: #4b5563;
+  font-family: 'Times New Roman', serif;
+  font-size: 11pt;
+  font-style: italic;
+  line-height: 1.3;
+  text-align: center;
+  outline: none;
+}
+
+.doc-page .editor-image-caption::placeholder {
+  color: #9ca3af;
+}
+
+.doc-page .editor-image-caption:focus {
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 0.25);
+}
+
+/* HTML đã serialize vẫn có hình thức đúng ở nơi render không dựng NodeView. */
+.doc-page figure[data-editor-image] {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.doc-page figure[data-editor-image] figcaption {
+  margin-top: 0.45rem;
+  color: #4b5563;
+  font-size: 11pt;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+/* Vệt bôi đen vẫn còn khi con trỏ nhảy sang thanh công cụ.
+
+   Trình duyệt thôi tô vùng chọn ngay khi phần tử mất con trỏ, nên bấm vào một ô
+   chọn là vùng đã bôi biến mất trước mắt — người dùng tưởng mất chọn nên không
+   dám bấm tiếp (báo 20/08/2026). Lớp này do
+   `rich-text-editor/keep-selection-visible-extension.ts` gắn vào.
+
+   Dùng ĐÚNG màu chọn mặc định của trình duyệt để không ai nhận ra là hai lớp
+   khác nhau; nhạt hơn một chút cho thấy vùng soạn thảo đang không giữ con trỏ. */
+.doc-page .doc-selection-giu {
+  border-radius: 1px;
+  background: rgb(59 130 246 / 0.22);
+}
+
+.doc-page a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.doc-page blockquote {
+  padding-left: 1em;
+  border-left: 3px solid var(--border);
+  color: #4b5563;
+}
+
+.doc-page hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin-block: 1.2em;
+}
+
+.doc-page code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.doc-page pre {
+  padding: 0.8em 1em;
+  border-radius: 6px;
+  background: var(--muted);
+  overflow-x: auto;
+}
+
+.doc-page table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin-block: 0.8em;
+}
+
+.doc-page th,
+.doc-page td {
+  border: 1px solid #9ca3af;
+  padding: 6px 8px;
+  vertical-align: top;
+  /* Ô bảng phải "ôm" được cột kéo giãn, nếu không cột co lại theo chữ. */
+  position: relative;
+  min-width: 1em;
+}
+
+.doc-page th {
+  background: var(--muted);
+  font-weight: 700;
+  text-align: left;
+}
+
+/* Vùng chọn nhiều ô (kéo chuột qua bảng). */
+.doc-page .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(0 174 239 / 0.12);
+  pointer-events: none;
+}
+
+/* Tay nắm kéo giãn cột bảng. */
+.doc-page .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  width: 4px;
+  background: var(--primary);
+  pointer-events: none;
+}
+
+/* Tiptap bọc mỗi bảng trong `.tableWrapper`. Bảng đã bị ghim đúng bề ngang khổ
+   giấy (xem quy tắc bên dưới) nên không cần chỗ cuộn — để `auto` thì chỉ cần
+   lệch nửa px là hiện một thanh cuộn ngang vô duyên giữa trang văn bản. */
+.doc-page .tableWrapper {
+  overflow-x: visible;
+}
+
+/* Con trỏ đổi thành mũi tên hai chiều khi rê vào mép cột / mép hàng. */
+.doc-page.resize-cursor {
+  cursor: col-resize;
+}
+
+.doc-page.row-resize-cursor {
+  cursor: row-resize;
+}
+
+/*
+ * TRẢ BẢNG VỀ ĐÚNG MỘT THẺ <table>.
+ *
+ * `tiptap-pagination-plus` đặt `display: contents` cho <table> rồi biến <tbody>
+ * thành hộp bảng (kèm `max-height: 300px` cuộn dọc) để bảng dài tự cắt. Hệ quả
+ * là <table> KHÔNG CÒN HỘP, nên:
+ *  - `width: 100%` và `table-layout: fixed` khai ở trên mất tác dụng → bảng co
+ *    lại bằng bề ngang chữ thay vì bằng khổ giấy;
+ *  - <colgroup> — chỗ trình soạn thảo ghi bề rộng từng cột mỗi lần kéo — cũng
+ *    không được đọc nữa → KÉO CỘT bấm được mà không thấy gì thay đổi.
+ *
+ * Đổi lại: bảng dài quá một trang sẽ không tự cắt sang trang sau. Với công văn
+ * thì bảng đúng khổ và kéo cột được quan trọng hơn — bảng dài thì tự tách làm
+ * hai bảng, còn bảng cuộn trong khung 300px thì in ra là mất nội dung.
+ */
+.doc-page.rm-with-pagination table {
+  display: table !important;
+  width: 100% !important;
+  table-layout: fixed !important;
+  /*
+   * BẢNG LUÔN ĐÚNG BỀ NGANG KHỔ GIẤY.
+   *
+   * Kéo giãn cột, ProseMirror ghi bề rộng từng cột rồi đặt `min-width` bằng
+   * tổng chỗ ấy vào `style` của bảng — kéo rộng quá là bảng phình ra khỏi trang
+   * và sinh thanh cuộn ngang. Văn bản in ra giấy thì không có chỗ nào để cuộn:
+   * chặn `min-width` lại, cột nào kéo rộng ra thì các cột còn lại tự co.
+   */
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.doc-page.rm-with-pagination table tbody {
+  display: table-row-group !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.doc-page.rm-with-pagination table td,
+.doc-page.rm-with-pagination table th {
+  max-height: none !important;
+  overflow: visible !important;
+  /* `break-all` của thư viện cắt từ tiếng Việt ngay giữa chừng ("phòn|g ban"). */
+  word-break: normal !important;
+  overflow-wrap: break-word;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ĐỔI NỀN SÁNG / TỐI — vòng loang từ chỗ vừa bấm (View Transitions API).
+
+   Gốc loang neo cứng ở GÓC TRÊN BÊN PHẢI — đúng phía nút đổi giao diện nằm.
+   Trước đây lấy theo toạ độ con trỏ, nhưng từ khi khối chọn dời vào popover ảnh
+   đại diện thì chỗ bấm nằm lửng giữa màn, vòng loang bung ra từ giữa trang trông
+   như lỗi hiển thị.
+
+   Cả hai ảnh chụp cùng nằm một chỗ và KHÔNG hoà trộn (`mix-blend-mode: normal`):
+   để mặc định thì hai màu nền chồng nhau thành một màu thứ ba, nhấp nháy giữa
+   chừng. Ảnh CŨ nằm dưới, ảnh MỚI loang ra đè lên.
+   ───────────────────────────────────────────────────────────────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+  animation: theme-reveal 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes theme-reveal {
+  from {
+    /* Bán kính 0 tại điểm bấm -> phủ kín màn. `140%` để góc xa nhất cũng tới. */
+    clip-path: circle(0% at 100% 0%);
+  }
+  to {
+    /* 150% để góc đối diện (trái-dưới) cũng bị phủ kín. */
+    clip-path: circle(150% at 100% 0%);
+  }
+}
+
+/* Người dùng đã tắt hiệu ứng chuyển động ở hệ điều hành: đổi thẳng, không loang.
+   `theme-toggle.tsx` cũng tự bỏ qua View Transitions, đây là lớp chắn thứ hai
+   phòng khi trình duyệt vẫn chạy hiệu ứng mặc định của chính nó. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+/* ── Vòng đếm thời gian quanh nút X của Toast ──────────────────────────────────
+   Vòng conic cạn dần theo thời gian toast tự tắt (mặc định 4s của sonner), DỪNG
+   khi rê chuột vào toast (sonner cũng tạm dừng đồng hồ tắt lúc hover nên khớp
+   nhau). Bao QUANH nút đóng, không đè lên dấu X (mask chừa rỗng ở giữa). */
+@property --toast-ring {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 360deg;
+}
+
+[data-sonner-toast] [data-close-button]::before {
+  content: '';
+  position: absolute;
+  inset: 0; /* ôm đúng nút X 16px -> vòng đếm 16px */
+  border-radius: 9999px;
+  background: conic-gradient(currentColor var(--toast-ring), transparent 0);
+  /* Chỉ chừa VÀNH ngoài ~2px, rỗng ở giữa -> thành vòng bao quanh nút X. */
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, #0000 calc(100% - 2px), #000 calc(100% - 2px));
+  opacity: 0.6;
+  pointer-events: none;
+  animation: toast-ring-deplete 4s linear forwards;
+}
+
+@keyframes toast-ring-deplete {
+  from { --toast-ring: 360deg; }
+  to { --toast-ring: 0deg; }
+}
+
+/* Rê chuột vào toast -> dừng vòng đếm (khớp với việc sonner dừng đồng hồ tắt). */
+[data-sonner-toast]:hover [data-close-button]::before {
+  animation-play-state: paused;
+}
+
+/* Người dùng tắt hiệu ứng chuyển động thì ẩn vòng đếm cho gọn. */
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast] [data-close-button]::before { animation: none; opacity: 0; }
+}
+
+/* ── Chữ ký đặt tự do trên tờ giấy ─────────────────────────────────────────
+   MỐC NEO cao 0px nằm trong dòng chảy, chữ ký đặt lệch so với nó. Bản in ghi ra
+   đúng cấu trúc này (span.doc-signature-anchor > img) nên soạn sao in vậy.
+
+   `margin: 0` KHÔNG phải cho đẹp: `.doc-page > * + *` đặt `margin-top: 6pt` cho
+   mọi khối con, mà với phần tử `position: absolute` thì `margin-top` KHÔNG bị bỏ
+   qua — nó cộng thẳng vào `top`, làm chữ ký in ra thấp hơn chỗ đặt lúc soạn. */
+.doc-signature-anchor {
+  position: relative;
+  display: block;
+  height: 0;
+  margin: 0 !important;
+}
+
+.doc-page > img.doc-signature {
+  margin: 0 !important;
+}
+
+.doc-signature-holder {
+  position: absolute;
+  z-index: 5;
+  cursor: move;
+  /* Mốc xoay là TÂM ảnh — xoay quanh góc trên trái thì chữ ký văng ra khỏi chỗ
+     vừa đặt, người dùng phải kéo lại sau mỗi lần chỉnh. */
+  transform-origin: center center;
+}
+
+.doc-signature-holder > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/*
+ * BỘ NÚM CHỈ HIỆN KHI ĐÃ CHỌN, không hiện theo rê chuột.
+ *
+ * Rê chuột qua thì chưa chắc đã định làm gì; hiện sẵn bộ núm là tờ giấy nhấp
+ * nháy mỗi lần con trỏ đi ngang, mà núm xoay lại nhô lên đè vào dòng chữ ở trên.
+ * Bấm vào chữ ký mới coi là "đang chỉnh cái này".
+ */
+/* Viền NÉT ĐỨT: phân biệt rõ với đường kẻ thật của bảng biểu trong văn bản —
+   nét liền dễ bị đọc nhầm là một khung đã in ra giấy. */
+.doc-signature-holder.is-selected {
+  outline: 1px dashed var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.doc-signature-handle,
+.doc-signature-toolbar {
+  display: none;
+}
+
+.doc-signature-holder.is-selected .doc-signature-handle,
+.doc-signature-holder.is-selected .doc-signature-toolbar {
+  display: flex;
+}
+
+/* ── Bốn núm góc: co giãn ─────────────────────────────────────────────────── */
+.doc-signature-handle {
+  position: absolute;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  /* Núm góc để TRÒN. */
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.18);
+  /* Cùng màu xám với cụm nút trên: việc phân biệt nằm ở BIỂU TƯỢNG, không ở
+     màu — bốn chấm xanh đặt quanh chữ ký nhìn như lỗi hiển thị. */
+  color: var(--color-muted-foreground, #64748b);
+}
+
+.doc-signature-handle > svg {
+  width: 11px;
+  height: 11px;
+}
+
+.doc-signature-handle:hover {
+  border-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+}
+
+.doc-signature-handle--nw {
+  top: -9px;
+  left: -9px;
+  cursor: nwse-resize;
+}
+.doc-signature-handle--ne {
+  top: -9px;
+  right: -9px;
+  cursor: nesw-resize;
+}
+.doc-signature-handle--sw {
+  bottom: -9px;
+  left: -9px;
+  cursor: nesw-resize;
+}
+.doc-signature-handle--se {
+  right: -9px;
+  bottom: -9px;
+  cursor: nwse-resize;
+}
+
+/* Đang bị hút vào góc vuông — GIỮ NÉT ĐỨT, chỉ dày lên, để cái "khựng" một nhịp
+   lúc xoay có phản hồi nhìn thấy được. Đổi sang nét liền thì trông như vừa nhảy
+   sang một trạng thái khác hẳn, mà thực ra vẫn đang chọn cùng một chữ ký. */
+.doc-signature-holder.is-snapped {
+  outline: 2px dashed var(--color-primary, #2563eb);
+}
+
+/* ── Cụm giữa mép trên: xoay + xoá ────────────────────────────────────────── */
+.doc-signature-toolbar {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.14);
+}
+
+.doc-signature-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  /* Một màu chữ xám cho cả hai nút; việc phân biệt nằm ở biểu tượng, không ở
+     màu. Trước đây núm xoay xanh lá và núm xoá đỏ, nhìn như đèn báo. */
+  color: var(--color-muted-foreground, #64748b);
+  cursor: pointer;
+}
+
+.doc-signature-tool:hover {
+  background: var(--color-accent, #f1f5f9);
+  color: var(--color-foreground, #0f172a);
+}
+
+.doc-signature-tool--rotate {
+  cursor: grab;
+}
+
+.doc-signature-tool > svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Bản in không có khung, không có núm — chỉ còn hình chữ ký; ẩn devtools và các nút nổi toàn cục. */
+@media print {
+  .tsqd-parent-container,
+  [class*="tsqd"],
+  [data-sonner-toaster],
+  .no-print {
+    display: none !important;
+  }
+
+  .doc-signature-holder {
+    outline: none !important;
+  }
+
+  .doc-signature-handle,
+  .doc-signature-toolbar {
+    display: none !important;
+  }
+}
+
+
+/* Núm xoay nhô lên TRÊN ĐẦU — quy ước chung, không lẫn với núm co giãn. */
