@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# Dữ liệu chạy: tệp tải về, mã QR đăng nhập — KHÔNG commit
+data/
+.env
+scratch/
+backups/

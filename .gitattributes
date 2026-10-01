@@ -1,0 +1,4 @@
+# Giữ LF cho mọi tệp chữ — mã chạy trong Docker / VPS Linux; máy Windows đừng đổi sang CRLF
+* text=auto eol=lf
+*.png binary
+*.jpg binary
