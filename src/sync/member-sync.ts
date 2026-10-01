@@ -7,15 +7,17 @@ export interface GroupInfoSource {
     gridInfoMap: Record<string, {
       name: string;
       totalMember: number;
+      avt?: string;
+      fullAvt?: string;
       memberIds?: string[];
       memVerList?: string[];
       adminIds?: string[];
       creatorId?: string;
-      currentMems?: { id: string; dName: string; zaloName: string }[];
+      currentMems?: { id: string; dName: string; zaloName: string; avatar?: string }[];
     }>;
   }>;
   getGroupMembersInfo(memberIds: string[]): Promise<{
-    profiles: Record<string, { displayName: string; zaloName: string }>;
+    profiles: Record<string, { displayName: string; zaloName: string; avatar?: string }>;
   }>;
 }
 
@@ -49,17 +51,25 @@ export async function syncGroupMembers(
 
   const ids = memberIdsOf(info);
   const admins = new Set([...(info.adminIds ?? []), info.creatorId ?? ""].filter(Boolean));
-  const names = new Map<string, { displayName: string; zaloName: string }>();
+  const names = new Map<string, { displayName: string; zaloName: string; avatar: string; globalId: string }>();
   for (const member of info.currentMems ?? []) {
-    names.set(member.id, { displayName: member.dName ?? "", zaloName: member.zaloName ?? "" });
+    names.set(member.id, { displayName: member.dName ?? "", zaloName: member.zaloName ?? "", avatar: member.avatar ?? "", globalId: "" });
   }
-  // currentMems chỉ có một phần với nhóm đông — hỏi thêm hồ sơ cho phần còn thiếu
-  const missing = ids.filter((id) => !names.has(id));
-  for (let start = 0; start < missing.length; start += PROFILE_BATCH_SIZE) {
-    const batch = missing.slice(start, start + PROFILE_BATCH_SIZE);
+  // Hỏi hồ sơ cho MỌI thành viên: currentMems chỉ có một phần với nhóm đông.
+  // ⚠️ KHÔNG lấy globalId ở đây: getGroupMembersInfo trả CÙNG một globalId cho mọi thành viên (đo thật
+  // 01/10/2026) — globalId đúng phải hỏi bằng getUserInfo, nơi gọi lo việc đó.
+  for (let start = 0; start < ids.length; start += PROFILE_BATCH_SIZE) {
+    const batch = ids.slice(start, start + PROFILE_BATCH_SIZE);
     const profiles = await source.getGroupMembersInfo(batch).catch(() => ({ profiles: {} }));
     for (const [rawId, profile] of Object.entries(profiles.profiles ?? {})) {
-      names.set(rawId.split("_")[0], { displayName: profile.displayName ?? "", zaloName: profile.zaloName ?? "" });
+      const id = rawId.split("_")[0];
+      const known = names.get(id);
+      names.set(id, {
+        displayName: known?.displayName || profile.displayName || "",
+        zaloName: profile.zaloName || known?.zaloName || "",
+        avatar: profile.avatar || known?.avatar || "",
+        globalId: "",
+      });
     }
   }
 
@@ -67,11 +77,13 @@ export async function syncGroupMembers(
   try {
     await connection.beginTransaction();
     await connection.query(
-      "UPDATE zalo_group SET name = ?, member_count = ?, members_synced_at = CURRENT_TIMESTAMP(3) WHERE id = ?",
-      [String(info.name ?? "").slice(0, 255), info.totalMember ?? ids.length, groupId],
+      `UPDATE zalo_group SET name = ?, member_count = ?, members_synced_at = CURRENT_TIMESTAMP(3),
+         avatar_url = IF(? = '', avatar_url, ?) WHERE id = ?`,
+      [String(info.name ?? "").slice(0, 255), info.totalMember ?? ids.length,
+       (info.fullAvt || info.avt || "").slice(0, 500), (info.fullAvt || info.avt || "").slice(0, 500), groupId],
     );
     for (const id of ids) {
-      const profile = names.get(id) ?? { displayName: "", zaloName: "" };
+      const profile = names.get(id) ?? { displayName: "", zaloName: "", avatar: "", globalId: "" };
       await connection.query(
         `INSERT INTO group_member (group_id, zalo_uid, display_name, zalo_name, is_admin)
          VALUES (?, ?, ?, ?, ?)
@@ -83,7 +95,7 @@ export async function syncGroupMembers(
         [groupId, id, profile.displayName.slice(0, 255), profile.zaloName.slice(0, 255), admins.has(id) ? 1 : 0],
       );
       // Thành viên nhóm vào Danh bạ luôn — để hỏi «chị A» ra đúng người dù mỗi nhóm một tên
-      await upsertMemberContact(connection, id, profile.displayName, profile.zaloName);
+      await upsertMemberContact(connection, id, profile.displayName, profile.zaloName, profile.avatar, profile.globalId);
     }
     let left = 0;
     if (ids.length) {

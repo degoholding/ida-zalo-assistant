@@ -43,7 +43,7 @@ class R2FileStorage implements FileStorage {
   constructor(private readonly options: AppConfig["r2"]) {
     this.client = new S3Client({
       region: "auto",
-      endpoint: `https://${options.accountId}.r2.cloudflarestorage.com`,
+      endpoint: options.endpoint,
       credentials: { accessKeyId: options.accessKeyId, secretAccessKey: options.secretAccessKey },
     });
   }
@@ -69,9 +69,9 @@ class R2FileStorage implements FileStorage {
 
 export function createFileStorage(config: AppConfig): FileStorage {
   if (config.storageDriver === "r2") {
-    const { accountId, accessKeyId, secretAccessKey, bucket } = config.r2;
-    if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
-      throw new Error("STORAGE_DRIVER=r2 cần đủ R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET");
+    const { endpoint, accessKeyId, secretAccessKey, bucket } = config.r2;
+    if (!endpoint || !accessKeyId || !secretAccessKey || !bucket) {
+      throw new Error("STORAGE_DRIVER=r2 cần đủ R2_ENDPOINT (hoặc R2_ACCOUNT_ID), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET");
     }
     return new R2FileStorage(config.r2);
   }

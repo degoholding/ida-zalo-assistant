@@ -24,9 +24,10 @@ import {
 import { syncGroupMembers, type GroupInfoSource } from "../src/sync/member-sync.js";
 import { ingestGroupMessage, recallGroupMessage, type IncomingGroupMessage } from "../src/sync/message-ingest.js";
 import { purgeExpiredMessages } from "../src/sync/retention.js";
+import { cacheAvatars, isZaloImageUrl } from "../src/sync/avatar-cache.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
-const TABLES = ["attachment", "message", "group_member", "bot_group", "zalo_group", "company", "session_event", "bot_account"];
+const TABLES = ["attachment", "message", "group_member", "bot_group", "zalo_group", "contact_tag", "contact", "company", "session_event", "bot_account"];
 
 class MemoryStorage implements FileStorage {
   readonly files = new Map<string, Buffer>();
@@ -345,5 +346,30 @@ describe("đồng bộ tin nhóm trên MySQL", { skip: !databaseUrl && "chưa đ
     assert.equal((await findGroupByZaloId(db, "g-ban-hang"))?.company_id, companyId);
     await updateGroupSettings(db, group.id, { companyId: null });
     assert.equal((await findGroupByZaloId(db, "g-ban-hang"))?.company_id, null);
+  });
+  test("ảnh đại diện: chỉ tải từ máy chủ Zalo, lưu vào kho; ảnh hỏng không thử lại cho tới khi đổi link", async () => {
+    await db.query(`INSERT INTO contact (zalo_uid, display_name, avatar_url) VALUES
+      ('u-ok', 'Có ảnh', 'https://s120-ava-talk.zadn.vn/a/b.jpg'),
+      ('u-hong', 'Ảnh hỏng', 'https://s120-ava-talk.zadn.vn/x/y.jpg'),
+      ('u-la', 'Link lạ', 'https://ke-xau.example.com/a.jpg')`);
+    const storage = new MemoryStorage();
+    const calls: string[] = [];
+    const fetcher: Fetcher = async (url) => {
+      calls.push(url);
+      return url.includes("/x/") ? fakeResponse(404) : fakeResponse(200, "anh", { "content-type": "image/jpeg" });
+    };
+    assert.equal(await cacheAvatars(db, storage, fetcher), 1);
+    assert.deepEqual(calls, ["https://s120-ava-talk.zadn.vn/a/b.jpg", "https://s120-ava-talk.zadn.vn/x/y.jpg"]); // link lạ: không gọi
+    const [rows] = await db.query<RowDataPacket[]>("SELECT zalo_uid, avatar_key FROM contact ORDER BY zalo_uid");
+    assert.deepEqual(rows.map((row) => [row.zalo_uid, row.avatar_key]), [["u-hong", null], ["u-la", null], ["u-ok", "avatars/c/u-ok.jpg"]]);
+    // Chạy lại: không ai cần tải nữa (kể cả ảnh hỏng — đợi Zalo đổi link)
+    calls.length = 0;
+    assert.equal(await cacheAvatars(db, storage, fetcher), 0);
+    assert.deepEqual(calls, []);
+    // Đổi link ảnh → tải lại
+    await db.query("UPDATE contact SET avatar_url = 'https://s120-ava-talk.zadn.vn/a/moi.jpg' WHERE zalo_uid = 'u-ok'");
+    assert.equal(await cacheAvatars(db, storage, fetcher), 1);
+    assert.equal(isZaloImageUrl("http://s120-ava-talk.zadn.vn/a.jpg"), false); // không https
+    assert.equal(isZaloImageUrl("https://zadn.vn.ke-xau.com/a.jpg"), false);
   });
 });

@@ -1,7 +1,8 @@
-import type { ResultSetHeader } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { AttachmentStatus, MessageKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { parseZaloContent } from "../zalo/content-parser.js";
+import { liveEvents } from "../live-events.js";
 import { countDirectMessage, ensureSenderContact, recordDirectMessageContact, type ContactRow } from "./contact-repository.js";
 import {
   directKey,
@@ -121,6 +122,8 @@ async function storeMessage(deps: IngestDeps, group: GroupRow, incoming: Incomin
   );
   // Hai tài khoản bot cùng ở một nhóm, hoặc Zalo gửi lại tin cũ khi nối lại: bỏ qua bản trùng
   if (result.affectedRows === 0) return null;
+  await bumpThreadCounters(deps.db, group.id, new Date(incoming.sentAtMs));
+  liveEvents.emitMessage({ threadId: group.id, messageId: result.insertId, kind: "new" });
 
   if (parsed.attachment) {
     const status = group.capture_files ? AttachmentStatus.Pending : AttachmentStatus.Skipped;
@@ -153,6 +156,12 @@ export async function recallMessage(db: Db, key: ThreadKey, zaloMsgId: string): 
      WHERE g.thread_type = ? AND g.zalo_group_id = ? AND g.owner_bot_id = ? AND m.zalo_msg_id = ? AND m.recalled_at IS NULL`,
     [key.threadType, key.zaloThreadId, key.ownerBotId, zaloMsgId],
   );
+  if (result.affectedRows > 0) {
+    const [rows] = await db.query<RowDataPacket[]>(
+      "SELECT m.id, m.group_id FROM message m JOIN zalo_group g ON g.id = m.group_id WHERE g.thread_type = ? AND g.zalo_group_id = ? AND g.owner_bot_id = ? AND m.zalo_msg_id = ?",
+      [key.threadType, key.zaloThreadId, key.ownerBotId, zaloMsgId]);
+    if (rows[0]) liveEvents.emitMessage({ threadId: Number(rows[0].group_id), messageId: Number(rows[0].id), kind: "recalled" });
+  }
   return result.affectedRows > 0;
 }
 
@@ -160,9 +169,31 @@ export async function recallGroupMessage(db: Db, zaloGroupId: string, zaloMsgId:
   return recallMessage(db, groupKey(zaloGroupId), zaloMsgId);
 }
 
+/** Bộ đếm trên zalo_group (xem migration 011) — gọi sau MỌI lần ghi tin thành công. */
+export async function bumpThreadCounters(db: Db, threadId: number, sentAt: Date): Promise<void> {
+  await db.query(
+    "UPDATE zalo_group SET message_count = message_count + 1, last_message_at = GREATEST(COALESCE(last_message_at, ?), ?) WHERE id = ?",
+    [sentAt, sentAt, threadId],
+  );
+}
+
+/** Tính lại bộ đếm của một cuộc từ bảng message (sau khi dọn tin quá hạn). */
+export async function recountThread(db: Db, threadId: number): Promise<void> {
+  await db.query(
+    `UPDATE zalo_group g SET g.message_count = (SELECT COUNT(*) FROM message m WHERE m.group_id = g.id),
+       g.last_message_at = (SELECT MAX(m.sent_at) FROM message m WHERE m.group_id = g.id) WHERE g.id = ?`,
+    [threadId],
+  );
+}
+
+/** Nguồn của tin bot gửi ra — lưu ở `zalo_msg_type` để màn Hội thoại phân biệt AI trả lời với quản trị gõ tay. */
+export const OUTGOING_SOURCE = { assistant: "webchat", admin: "admin" } as const;
+
 /**
- * Ghi lại tin BOT vừa gửi (trả lời trợ lý) — listener không nghe tin của chính mình (selfListen tắt),
- * mà màn Hội thoại cần thấy cả hai phía, và trợ lý cần đọc lại câu trả lời trước để hiểu câu hỏi nối tiếp.
+ * Ghi tin bot vừa gửi ra Zalo (AI trả lời hoặc quản trị gõ từ web) — listener không nghe tin của chính
+ * mình (selfListen tắt), mà màn Hội thoại cần thấy cả hai phía, và trợ lý cần đọc lại câu trả lời trước
+ * để hiểu câu hỏi nối tiếp. Trả về id tin, null nếu trùng.
+ * Có `file` thì ghi luôn dòng attachment đã ở trong kho (tệp quản trị tải lên).
  */
 export async function recordOutgoingMessage(
   db: Db,
@@ -170,10 +201,24 @@ export async function recordOutgoingMessage(
   bot: { uid: string; name: string },
   zaloMsgId: string,
   text: string,
-): Promise<void> {
-  await db.query(
+  options: { source?: string; kind?: MessageKind; file?: { name: string; ext: string; storageKey: string; bytes: number } } = {},
+): Promise<number | null> {
+  const sentAt = new Date();
+  const [result] = await db.query<ResultSetHeader>(
     `INSERT IGNORE INTO message (group_id, zalo_msg_id, zalo_msg_type, kind, sender_uid, sender_name, sent_at, text)
-     VALUES (?, ?, 'webchat', ?, ?, ?, CURRENT_TIMESTAMP(3), ?)`,
-    [thread.id, zaloMsgId, MessageKind.Text, bot.uid, bot.name.slice(0, 255), text],
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [thread.id, zaloMsgId, options.source ?? OUTGOING_SOURCE.assistant, options.kind ?? MessageKind.Text, bot.uid, bot.name.slice(0, 255), sentAt, text],
   );
+  if (result.affectedRows === 0) return null;
+  if (options.file) {
+    await db.query(
+      `INSERT INTO attachment (message_id, group_id, file_name, file_ext, declared_size, source_url, storage_key, stored_bytes, status, stored_at)
+       VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?)`,
+      [result.insertId, thread.id, options.file.name.slice(0, 255), options.file.ext.slice(0, 20), options.file.bytes,
+        options.file.storageKey, options.file.bytes, AttachmentStatus.Stored, sentAt],
+    );
+  }
+  await bumpThreadCounters(db, thread.id, sentAt);
+  liveEvents.emitMessage({ threadId: thread.id, messageId: result.insertId, kind: "new" });
+  return result.insertId;
 }

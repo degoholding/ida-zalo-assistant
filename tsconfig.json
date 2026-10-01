@@ -16,5 +16,6 @@
     // nhận import thư mục, nên mọi kiểu biến mất. Trỏ thẳng vào tệp khai kiểu thật.
     "paths": { "zca-js": ["./node_modules/zca-js/dist/index.d.ts"] }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
 }

@@ -5,6 +5,7 @@ import { createLogger, describeError } from "../logger.js";
 import type { SyncService } from "../sync-service.js";
 import { recordSessionEvent, saveLoggedInAccount } from "../zalo/bot-account-repository.js";
 import { SessionEvent } from "../constants.js";
+import { recordAudit } from "./api/audit-log.js";
 
 // Đăng nhập QR từ trình duyệt: máy chủ gọi zca-js, ảnh QR đưa lên trang, trang hỏi trạng thái
 // vài giây một lần. Quét xong thì lưu phiên (mã hóa) và chạy bot ngay, không phải khởi động lại.
@@ -114,6 +115,7 @@ export class QrLoginManager {
     const accountId = await saveLoggedInAccount(db, state.label, ownUid, displayName,
       encryptJson(loginInfo, config.sessionEncryptionKey));
     await recordSessionEvent(db, accountId, SessionEvent.LoginQrOk);
+    await recordAudit(db, { entity: "bot_account", entityId: accountId, action: "qr_login", message: `Quét QR đăng nhập «${displayName}»` });
     // Phiên QR này chỉ dùng để lấy cookie; bot chạy bằng phiên mới nạp từ DB
     api.listener.stop();
 

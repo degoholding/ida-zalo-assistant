@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import type { ReadFileResult } from "./file-reader.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
 
 // Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file — mà send_file cũng chỉ gửi cho
@@ -24,6 +25,10 @@ export interface ToolContext {
   /** Tìm web; không có = trợ lý không được tìm web. Token của lượt tìm cộng vào usage. */
   searchWeb?: (query: string) => Promise<WebSearchResult>;
   usage?: { inputTokens: number; outputTokens: number };
+  /** Đọc chữ của một tệp trong kho (file-reader). Không có = bot không có công cụ read_file. */
+  readFile?: (attachmentId: number) => Promise<ReadFileResult | { error: string }>;
+  /** Báo cho vòng hỏi đáp: dữ liệu vừa kéo về nặng → lượt trả lời nên đi bản mô hình nặng. */
+  markHeavy?: (reason: string) => void;
 }
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
@@ -35,6 +40,18 @@ export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
     type: "object",
     properties: { query: { type: "string", description: "Câu cần tìm, tiếng Việt hoặc tiếng Anh" } },
     required: ["query"],
+  },
+};
+
+export const READ_FILE_DECLARATION: FunctionDeclaration = {
+  name: "read_file",
+  description:
+    "Đọc NỘI DUNG một tệp đã lưu (id lấy từ search_files, hoặc tệp người hỏi vừa gửi): xlsx, docx, pdf, txt, csv và ẢNH (hóa đơn, " +
+    "báo giá chụp màn hình…). Trả về chữ trong tệp để tóm tắt, trả lời câu hỏi về tệp, hoặc so sánh. Tệp quá 5 MB thì không đọc.",
+  parameters: {
+    type: "object",
+    properties: { attachment_id: { type: "integer", description: "id tệp lấy từ search_files" } },
+    required: ["attachment_id"],
   },
 };
 
@@ -91,7 +108,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Từ khóa trong tên tệp, vd 'bao gia Thanh Cong'" },
+        query: { type: "string", description: "Từ khóa trong tên tệp hoặc nội dung tệp đã đọc, vd 'bao gia Thanh Cong'. ĐỂ TRỐNG = liệt kê tệp gần đây của người hỏi (tệp họ gửi, hoặc trong cuộc riêng với bot) — dùng khi người hỏi nói «file này» mà chưa rõ tệp nào" },
         group_id: { type: "integer", description: "Chỉ tìm trong nhóm này (tùy chọn)" },
         from: { type: "string", description: "Từ ngày, ISO 8601 (tùy chọn)" },
         to: { type: "string", description: "Đến ngày, ISO 8601 (tùy chọn)" },
@@ -280,15 +297,20 @@ async function searchFiles(context: ToolContext, args: Record<string, unknown>) 
   // Mỗi từ khóa phải xuất hiện trong tên tệp hoặc chú thích — "bao gia thanh cong" khớp
   // "Báo giá DL Thành Công.xlsx" dù khác thứ tự chữ ở giữa
   const words = query.split(/\s+/).filter((word) => word.length >= 2).slice(0, 6);
-  if (!words.length) return { error: "Thiếu từ khóa" };
-  const conditions = words.map(() => "(a.file_name LIKE ? OR m.text LIKE ?)").join(" AND ");
+  // Không từ khóa = tệp gần đây của CHÍNH người hỏi (họ gửi, hoặc nằm trong cuộc riêng của họ với bot) — để bot liệt kê cho chọn
+  // Có từ khóa: khớp tên tệp, chú thích, hoặc CHỮ ĐÃ BÓC từ tệp (attachment_text) — tệp bot từng đọc thì tìm được theo nội dung
+  const conditions = words.length
+    ? words.map(() => "(a.file_name LIKE ? OR m.text LIKE ? OR t.text LIKE ?)").join(" AND ")
+    : `(m.sender_uid = ? OR (g.thread_type = ${ConversationType.Direct} AND g.zalo_group_id = ?))`;
+  const conditionParams = words.length ? words.flatMap((word) => [`%${word}%`, `%${word}%`, `%${word}%`]) : [context.askerUid, context.askerUid];
   const [rows] = await context.db.query<RowDataPacket[]>(
     `SELECT a.id, a.file_name, a.file_ext, a.status, a.stored_bytes, a.declared_size, m.sent_at, m.sender_name, m.zalo_msg_type,
-            COALESCE(NULLIF(g.label, ''), g.name) AS group_name, g.thread_type
+            COALESCE(NULLIF(g.label, ''), g.name) AS group_name, g.thread_type, t.char_count AS text_chars
      FROM attachment a JOIN message m ON m.id = a.message_id JOIN zalo_group g ON g.id = a.group_id
+     LEFT JOIN attachment_text t ON t.attachment_id = a.id
      WHERE ${conditions} AND (? = 0 OR a.group_id = ?) AND m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL
      ORDER BY m.sent_at DESC LIMIT 20`,
-    [...words.flatMap((word) => [`%${word}%`, `%${word}%`]), groupId, groupId, from, to],
+    [...conditionParams, groupId, groupId, from, to],
   );
   return {
     files: rows.map((row) => ({
@@ -299,7 +321,34 @@ async function searchFiles(context: ToolContext, args: Record<string, unknown>) 
       sent: formatVn(row.sent_at),
       size_kb: Math.round(((row.stored_bytes ?? row.declared_size) || 0) / 1024),
       can_send: row.status === AttachmentStatus.Stored,
+      can_read: row.status === AttachmentStatus.Stored,
+      already_read: row.text_chars !== null && row.text_chars !== undefined,
     })),
+  };
+}
+
+/** Chữ đưa cho mô hình tối đa ngần này ký tự một lượt — hơn thì cắt và nói rõ. */
+const READ_FILE_MAX_CHARS = 60_000;
+
+async function readFile(context: ToolContext, args: Record<string, unknown>) {
+  if (!context.readFile) return { error: "Bot chưa bật đọc tệp" };
+  const attachmentId = Number(args.attachment_id);
+  if (!Number.isSafeInteger(attachmentId) || attachmentId <= 0) return { error: "Thiếu attachment_id" };
+  const result = await context.readFile(attachmentId);
+  if ("error" in result) return result;
+  if (context.usage) {
+    context.usage.inputTokens += result.inputTokens;
+    context.usage.outputTokens += result.outputTokens;
+  }
+  context.markHeavy?.(`đọc tệp ${result.fileName}`);
+  const truncated = result.text.length > READ_FILE_MAX_CHARS;
+  return {
+    file: result.fileName,
+    how: result.method,
+    summary: result.summary,
+    char_count: result.charCount,
+    truncated,
+    content: truncated ? result.text.slice(0, READ_FILE_MAX_CHARS) : result.text,
   };
 }
 
@@ -340,6 +389,7 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   get_conversation_with_person: getConversationWithPerson,
   search_files: searchFiles,
   send_file: sendFile,
+  read_file: readFile,
   web_search: webSearch,
 };
 

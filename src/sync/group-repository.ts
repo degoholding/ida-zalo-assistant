@@ -23,7 +23,7 @@ export interface GroupDefaults {
   captureFiles: boolean;
 }
 
-const GROUP_COLUMNS = "id, thread_type, group_kind, zalo_group_id, owner_bot_id, company_id, name, label, read_messages, capture_files, retention_days";
+export const GROUP_COLUMNS = "id, thread_type, group_kind, zalo_group_id, owner_bot_id, company_id, name, label, read_messages, capture_files, retention_days";
 
 /** Khóa xác định một cuộc trò chuyện: nhóm (owner_bot_id = 0) hoặc riêng (bot nhận tin). */
 export interface ThreadKey {

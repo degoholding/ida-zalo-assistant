@@ -1,8 +1,10 @@
 # bot-tro-ly
 
-Bot trợ lý đọc các nhóm Zalo công việc. **Bản hiện tại: đồng bộ cơ bản** — tài khoản bot đọc
-nhóm, lưu tin + thành viên nhóm, tải file ngay lúc tin tới, kèm giao diện web quản trị (đăng nhập
-QR, cấu hình nhóm, tải file). Phần AI (tóm tắt, tra việc, tìm kiếm) làm ở phase sau.
+Bot trợ lý đọc các nhóm Zalo công việc. **Bản hiện tại: đồng bộ cơ bản + trợ lý AI** — tài khoản
+bot đọc nhóm, lưu tin + thành viên nhóm, tải file ngay lúc tin tới, trả lời tin riêng bằng Gemini,
+kèm giao diện web quản trị (`web/`, khung ERP v2) dưới `/app`: Hội thoại, Danh bạ, Nhóm, Tệp, Công ty,
+Tài khoản bot (đăng nhập QR). Màn Hội thoại nhận tin mới tức thời (kênh đẩy SSE `/api/events`) và có ô
+soạn tin: quản trị gõ chữ / gửi tệp từ web, đi ra Zalo **dưới tên tài khoản bot**, lưu lại với nhãn «quản trị».
 
 Thiết kế: [`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md).
 
@@ -75,13 +77,30 @@ Dòng lệnh trong container: `docker compose exec app node dist/cli.js <lệnh>
 Dữ liệu nằm ở: MySQL → volume `mysql-data`; tệp tải về → thư mục `./data/files`. Chuyển sang VPS khác
 = chép thư mục dự án + `.env` + `./data`, sao lưu/khôi phục MySQL bằng `mysqldump`.
 
+## Giao diện quản trị (`web/`)
+
+Nhân bản khung `frontend-v2` của ERP DEGO (React 19 · Vite · Tailwind 4 · shadcn · TanStack Query):
+mọi màn danh sách là một `CrudConfig` chạy qua `CrudListPage` (lọc nhanh, bộ lọc nâng cao, sắp xếp,
+phân trang, cột kéo / ghim / ẩn), mọi màn chi tiết qua `CrudDetailPage` (thẻ danh tính, biểu mẫu, tab,
+«Lịch sử thao tác» từ bảng `audit_log`). Riêng Hội thoại là màn 3 cột kiểu Zalo. Luật viết mã ở
+`web/.claude/rules/` (chép từ ERP, giữ nguyên).
+
+Máy chủ Node chỉ còn: `/api/*` (JSON, phong bì `{success, message, data}` như ERP — mỗi phân hệ một
+tệp `src/web/api/*-api.ts`, danh sách đi qua `list-query` + `list-runner`), `/avatars/*`, và bản build
+tĩnh của `web/` dưới `/app` (Dockerfile build sẵn, `WEB_DIST_DIR`). Giao diện HTML cũ đã gỡ 01/10/2026.
+
 ## Chạy khi phát triển
 
 ```
 npm install
-npm run dev                 # cần MySQL + .env
+npm run dev                 # máy chủ bot + API, cần MySQL + .env
 npm run typecheck
 npm test                    # bài kiểm tích hợp cần TEST_DATABASE_URL
+
+cd web && npm install
+npm run dev                 # Vite ở cổng 5175, proxy /api và /avatars về localhost:8090
+npm run typecheck && npm run lint
+npx vitest run src/modules/<phân hệ>   # chỉ thư mục vừa sửa, không chạy full
 ```
 
 Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng bộ lệnh như trên, thêm `login <nhãn>` quét QR bằng tệp ảnh).
@@ -95,5 +114,14 @@ Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng b�
 - Mất `SESSION_ENCRYPTION_KEY` = mọi tài khoản bot phải quét QR lại.
 - Người gửi **thu hồi** tin thì bot xóa chữ của tin đó, chỉ giữ dấu vết đã thu hồi.
 - Quá `retention_days` của nhóm thì xóa **cả tin lẫn tệp thật** trong kho.
-- Giao diện theo khuôn ERP DEGO; màu chủ đạo đổi bằng `BRAND_PRIMARY` (lúc thử giữ xanh DEGO).
+- `zalo_group.message_count` / `last_message_at` là bộ đếm cập nhật lúc ghi tin (migration 011) — màn danh
+  sách KHÔNG được quét bảng `message` để đếm; thêm đường ghi tin mới thì gọi `bumpThreadCounters`.
+- Bot xưng «em», gọi người hỏi «anh/chị» — luật nằm trong `buildSystemPrompt` (assistant-service.ts). Câu trả lời
+  chưa về sau 2,5 giây thì bot nhắn «em nhận được rồi» trước (`ACK_DELAY_MS` ở account-runner). Thiếu đối tượng
+  (tệp / nhóm / người nào) thì bot HỎI LẠI kèm danh sách, không đoán; `search_files` query rỗng = tệp gần đây của người hỏi.
+- **Đọc tệp** (`read_file`, `src/assistant/file-reader.ts`): xlsx / docx / txt / csv tự bóc (SheetJS + bộ đọc zip tự viết),
+  pdf / ảnh nhờ Gemini đọc. Chữ bóc ra CẤT ở `attachment_text` (migration 012): bot và màn Tệp tìm được theo
+  nội dung, đọc lại không tốn token. Tối đa `ASSISTANT_MAX_READ_FILE_MB` (5). Lượt có đọc tệp hoặc dữ liệu
+  công cụ > 24.000 ký tự đi mô hình `GEMINI_MODEL_HEAVY` (flash) thay vì lite.
+- Giao diện theo khuôn ERP DEGO (bảng màu trong `web/src/index.css`); mọi màn mới phải đi qua `CrudListPage` / `CrudDetailPage`, không vẽ tay.
 - `zca-js` 2.2.0 đóng gói lỗi kiểu (`index.d.ts` gốc trỏ thư mục) — `tsconfig.json` có `paths` vá chỗ đó.

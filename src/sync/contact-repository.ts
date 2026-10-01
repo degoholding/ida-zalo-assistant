@@ -35,14 +35,40 @@ export async function recordDirectMessageContact(db: Db, zaloUid: string, displa
   return contact;
 }
 
-/** Thành viên nhóm (đồng bộ thành viên): chỉ điền tên khi còn trống / có tên Zalo mới. */
-export async function upsertMemberContact(db: Executor, zaloUid: string, displayName: string, zaloName: string): Promise<void> {
+/** Thành viên nhóm (đồng bộ thành viên): chỉ điền tên khi còn trống / có tên Zalo mới; ảnh lấy bản mới nhất. */
+export async function upsertMemberContact(
+  db: Executor,
+  zaloUid: string,
+  displayName: string,
+  zaloName: string,
+  avatarUrl = "",
+  globalId = "",
+): Promise<void> {
   await db.query(
-    `INSERT INTO contact (zalo_uid, display_name, zalo_name) VALUES (?, ?, ?)
+    `INSERT INTO contact (zalo_uid, global_id, display_name, zalo_name, avatar_url) VALUES (?, NULLIF(?, ''), ?, ?, ?)
      ON DUPLICATE KEY UPDATE
+       global_id = COALESCE(VALUES(global_id), global_id),
        display_name = IF(display_name = '', VALUES(display_name), display_name),
-       zalo_name = IF(VALUES(zalo_name) = '', zalo_name, VALUES(zalo_name))`,
-    [zaloUid, displayName.slice(0, 255), zaloName.slice(0, 255)],
+       zalo_name = IF(VALUES(zalo_name) = '', zalo_name, VALUES(zalo_name)),
+       avatar_url = IF(VALUES(avatar_url) = '', avatar_url, VALUES(avatar_url))`,
+    [zaloUid, globalId.slice(0, 40), displayName.slice(0, 255), zaloName.slice(0, 255), avatarUrl.slice(0, 500)],
+  );
+}
+
+/** Ghi hồ sơ Zalo lấy qua getUserInfo: ảnh đại diện, tên Zalo, globalId (mã chung giữa nhóm và nhắn riêng). */
+export async function setContactZaloProfile(
+  db: Db,
+  zaloUid: string,
+  profile: { avatar?: string; zaloName?: string; globalId?: string },
+): Promise<void> {
+  await db.query(
+    `UPDATE contact SET
+       avatar_url = IF(? = '', avatar_url, ?),
+       zalo_name = IF(? = '', zalo_name, ?),
+       global_id = COALESCE(NULLIF(?, ''), global_id)
+     WHERE zalo_uid = ?`,
+    [profile.avatar ?? "", (profile.avatar ?? "").slice(0, 500), profile.zaloName ?? "", (profile.zaloName ?? "").slice(0, 255),
+     (profile.globalId ?? "").slice(0, 40), zaloUid],
   );
 }
 

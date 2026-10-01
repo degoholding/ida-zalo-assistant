@@ -2,6 +2,7 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { Db } from "../db/pool.js";
 import { createLogger } from "../logger.js";
 import type { FileStorage } from "../storage/file-storage.js";
+import { recountThread } from "./message-ingest.js";
 
 // Hết thời hạn lưu của nhóm (retention_days) thì xóa tin + file thật — thời hạn lưu là cam kết
 // với người trong nhóm (NĐ 13/2023), không phải con số trang trí.
@@ -16,6 +17,7 @@ export async function purgeExpiredMessages(db: Db, storage: FileStorage): Promis
   let messages = 0;
   let files = 0;
   const [groups] = await db.query<RowDataPacket[]>("SELECT id, retention_days FROM zalo_group");
+  const purgedGroups = new Set<number>();
   for (const group of groups) {
     const cutoff = new Date(Date.now() - (group.retention_days as number) * 86_400_000);
     for (;;) {
@@ -36,9 +38,11 @@ export async function purgeExpiredMessages(db: Db, storage: FileStorage): Promis
       }
       const [result] = await db.query<ResultSetHeader>("DELETE FROM message WHERE id IN (?)", [rows.map((row) => row.id)]);
       messages += result.affectedRows;
+      purgedGroups.add(group.id as number);
       if (rows.length < BATCH_SIZE) break;
     }
   }
+  for (const groupId of purgedGroups) await recountThread(db, groupId);
   if (messages) log.info(`đã xóa ${messages} tin quá hạn, ${files} tệp`);
   return { messages, files };
 }

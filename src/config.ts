@@ -22,12 +22,6 @@ function readBool(name: string, fallback: boolean): boolean {
 }
 
 // Màu chủ đạo của giao diện — chèn thẳng vào CSS nên chỉ nhận mã màu #rrggbb
-function readHexColor(name: string, fallback: string): string {
-  const value = readString(name, fallback);
-  if (!/^#[0-9a-fA-F]{6}$/.test(value)) throw new Error(`${name} phải là mã màu dạng #rrggbb, đang là "${value}"`);
-  return value;
-}
-
 // Giao diện web giữ phiên Zalo + tin nhắn riêng tư: mật khẩu ngắn là cửa mở toang
 const MIN_ADMIN_PASSWORD_LENGTH = 12;
 
@@ -46,19 +40,22 @@ export interface AppConfig {
   sessionEncryptionKey: string;
   dataDir: string;
   storageDriver: StorageDriver;
-  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string; prefix: string };
+  r2: { endpoint: string; accessKeyId: string; secretAccessKey: string; bucket: string; prefix: string };
   defaultGroupRead: boolean;
   defaultGroupCaptureFiles: boolean;
   maxFileBytes: number;
   downloadConcurrency: number;
   heartbeatSeconds: number;
-  web: { host: string; port: number; adminPassword: string; cookieSecure: boolean; trustCloudflareIp: boolean; brandPrimary: string };
+  web: { host: string; port: number; adminPassword: string; cookieSecure: boolean; trustCloudflareIp: boolean; spaDistDir: string };
   defaultDirectRead: boolean;
   /** Số tin gần nhất xin Zalo khi lấy tin cũ của một nhóm. */
   backfillCount: number;
   defaultDirectCaptureFiles: boolean;
   /** Không có GEMINI_API_KEY thì trợ lý tắt: bot vẫn lưu tin, không trả lời ai. */
-  assistant: { apiKey: string; model: string; fallbackModels: string[]; maxPerHour: number; dailyTokenCap: number; sendIntervalMs: number };
+  assistant: {
+    apiKey: string; model: string; heavyModel: string; fallbackModels: string[]; maxPerHour: number; dailyTokenCap: number;
+    sendIntervalMs: number; maxReadFileBytes: number;
+  };
 }
 
 export function loadConfig(): AppConfig {
@@ -72,7 +69,9 @@ export function loadConfig(): AppConfig {
     dataDir: readString("DATA_DIR", "./data"),
     storageDriver,
     r2: {
-      accountId: process.env.R2_ACCOUNT_ID ?? "",
+      // R2_ENDPOINT đầy đủ (vd https://<account>.r2.cloudflarestorage.com), hoặc chỉ R2_ACCOUNT_ID
+      endpoint: process.env.R2_ENDPOINT?.trim()
+        || (process.env.R2_ACCOUNT_ID ? `https://${process.env.R2_ACCOUNT_ID.trim()}.r2.cloudflarestorage.com` : ""),
       accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
       bucket: process.env.R2_BUCKET ?? "",
@@ -93,7 +92,8 @@ export function loadConfig(): AppConfig {
       cookieSecure: readBool("COOKIE_SECURE", false),
       // Chỉ bật khi CHẮC CHẮN đứng sau Cloudflare — không thì ai cũng tự gửi tiêu đề này để né khóa đăng nhập
       trustCloudflareIp: readBool("TRUST_CLOUDFLARE_IP", false),
-      brandPrimary: readHexColor("BRAND_PRIMARY", "#00aeef"),
+      // Bản build của giao diện mới (web/dist) — phục vụ dưới /app
+      spaDistDir: readString("WEB_DIST_DIR", "web/dist"),
     },
     // Người ta chủ động nhắn riêng cho bot nên mặc định LƯU (khác nhóm: mặc định không đọc)
     defaultDirectRead: readBool("DEFAULT_DM_READ", true),
@@ -103,12 +103,16 @@ export function loadConfig(): AppConfig {
       apiKey: (process.env.GEMINI_API_KEY ?? "").trim(),
       // Dòng lite: đo thật 01/10/2026 nhanh gấp ~10 lần bản Flash (1 giây so với 11 giây), tóm tắt vẫn đúng
       model: readString("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+      // Lượt nặng (tóm tắt dài, đọc tệp / ảnh) đi bản này; để trống = dùng GEMINI_MODEL cho mọi việc
+      heavyModel: readString("GEMINI_MODEL_HEAVY", "gemini-3.5-flash"),
       // Mô hình chính quá tải (503) thì chuyển lần lượt sang các mô hình này
       fallbackModels: readString("GEMINI_FALLBACK_MODELS", "gemini-3.5-flash,gemini-flash-latest").split(",").map((name) => name.trim()).filter(Boolean),
       maxPerHour: readInt("ASSISTANT_MAX_PER_HOUR", 30),
       dailyTokenCap: readInt("ASSISTANT_DAILY_TOKEN_CAP", 3_000_000),
       // Giãn cách giữa hai tin bot gửi — gửi dồn dập là cách nhanh nhất để Zalo khóa tài khoản
       sendIntervalMs: readInt("ASSISTANT_SEND_INTERVAL_MS", 1500),
+      // Tệp lớn hơn thì bot từ chối đọc (chốt 01/10/2026: 5 MB; ảnh cũng đọc)
+      maxReadFileBytes: readInt("ASSISTANT_MAX_READ_FILE_MB", 5) * 1024 * 1024,
     },
   };
 }

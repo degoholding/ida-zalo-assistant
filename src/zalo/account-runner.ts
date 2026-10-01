@@ -12,14 +12,14 @@ import {
 import type { AssistantService } from "../assistant/assistant-service.js";
 import { splitForZalo } from "../assistant/assistant-service.js";
 import type { AppConfig } from "../config.js";
-import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactRole, MessageKind, SessionEvent } from "../constants.js";
+import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
 import { decryptJson } from "../crypto/session-cipher.js";
 import type { RowDataPacket } from "mysql2";
 import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
-import type { AttachmentDownloader } from "../sync/attachment-downloader.js";
+import { sanitizeFileName, type AttachmentDownloader } from "../sync/attachment-downloader.js";
 import type { FileStorage } from "../storage/file-storage.js";
-import type { ContactRow } from "../sync/contact-repository.js";
+import { setContactZaloProfile, upsertMemberContact, type ContactRow } from "../sync/contact-repository.js";
 import {
   directKey,
   ensureGroup,
@@ -33,6 +33,7 @@ import {
   ingestGroupMessage,
   recallGroupMessage,
   recallMessage,
+  OUTGOING_SOURCE,
   recordOutgoingMessage,
   type IncomingGroupMessage,
 } from "../sync/message-ingest.js";
@@ -59,6 +60,13 @@ const MEMBER_CHANGING_EVENTS = new Set<string>([
 // Nghỉ giữa hai lần hỏi Zalo lúc quét cả loạt nhóm — đừng dồn dập kẻo bị đánh dấu là máy
 const GROUP_SCAN_PAUSE_MS = 1500;
 // Lấy tin cũ từng trang: tối đa ngần này trang, mỗi trang chờ tối đa / nghỉ giữa hai trang
+/** Câu trả lời chưa về sau ngần này thì nhắn «em nhận được rồi» — hỏi dễ (1 giây) thì khỏi, hai tin liền nhau rườm. */
+const ACK_DELAY_MS = 2500;
+const ACK_TEXTS = [
+  "Dạ em nhận được rồi, để em xem một chút ạ…",
+  "Dạ, em đang xem, anh/chị chờ em chút nhé…",
+  "Em nhận được rồi ạ, đang làm, có ngay thôi…",
+];
 const BACKFILL_MAX_PAGES = 20;
 const BACKFILL_PAGE_TIMEOUT_MS = 10_000;
 const BACKFILL_PAGE_PAUSE_MS = 1500;
@@ -99,6 +107,8 @@ export class AccountRunner {
   private oldGroupPageWaiter: ((messages: GroupMessage[]) => void) | null = null;
   // Mỗi cuộc riêng trả lời lần lượt — hai câu hỏi liền tay không chạy song song, câu sau đọc được câu trước
   private readonly replyChains = new Map<number, Promise<void>>();
+  // Người nhắn riêng đã hỏi Zalo ảnh đại diện trong phiên này — mỗi người hỏi một lần
+  private readonly avatarAsked = new Set<string>();
 
   constructor(
     private readonly account: BotAccountRow,
@@ -126,6 +136,14 @@ export class AccountRunner {
     }
     this.ownUid = this.api.getOwnId();
     await recordSessionEvent(this.db, this.account.id, SessionEvent.LoginCookieOk);
+    // Chính tài khoản bot cũng vào Danh bạ kèm ảnh — để màn Hội thoại hiện đúng ảnh của bot
+    this.api.fetchAccountInfo()
+      .then((info) => {
+        const profile = (info as { profile?: { displayName?: string; zaloName?: string; avatar?: string; globalId?: string } }).profile ?? {};
+        return upsertMemberContact(this.db, this.ownUid, profile.displayName ?? this.account.display_name, profile.zaloName ?? "",
+          profile.avatar ?? "", profile.globalId ?? "");
+      })
+      .catch((error) => this.log.warn("lấy hồ sơ tài khoản bot lỗi", error));
     this.attachListener(this.api);
     this.heartbeat = setInterval(() => {
       touchHeartbeat(this.db, this.account.id).catch((error) => this.log.warn("ghi nhịp tim lỗi", error));
@@ -340,6 +358,7 @@ export class AccountRunner {
       incoming,
     );
     const who = `«${result.contact.display_name || incoming.senderUid}»`;
+    void this.ensureContactAvatar(incoming.senderUid);
     // Người lạ (chưa có vai trò): chỉ lưu, không trả lời — đại ca chốt 01/10/2026
     if (!this.assistant || result.contact.role === ContactRole.None) {
       this.log.info(`tin riêng từ ${who}: đã lưu, không trả lời (${this.assistant ? "chưa có vai trò" : "trợ lý tắt"})`);
@@ -360,13 +379,66 @@ export class AccountRunner {
     });
   }
 
+  /** Người nhắn riêng chưa có ảnh / globalId: hỏi Zalo một lần mỗi phiên. */
+  private async ensureContactAvatar(zaloUid: string): Promise<void> {
+    if (this.avatarAsked.has(zaloUid) || !this.api) return;
+    this.avatarAsked.add(zaloUid);
+    try {
+      const [rows] = await this.db.query<RowDataPacket[]>("SELECT avatar_url, global_id FROM contact WHERE zalo_uid = ?", [zaloUid]);
+      if (rows[0]?.avatar_url && rows[0]?.global_id) return;
+      await this.fetchUserProfiles([zaloUid]);
+    } catch (error) {
+      this.log.warn(`lấy hồ sơ ${zaloUid} lỗi`, error);
+    }
+  }
+
+  /** Hỏi Zalo hồ sơ (ảnh, tên Zalo, globalId) của một loạt người. */
+  private async fetchUserProfiles(uids: string[]): Promise<void> {
+    if (!uids.length || !this.api) return;
+    const info = await this.api.getUserInfo(uids);
+    for (const uid of uids) {
+      const profile = info.changed_profiles?.[uid] ?? info.changed_profiles?.[`${uid}_0`];
+      if (profile) await setContactZaloProfile(this.db, uid, { avatar: profile.avatar, zaloName: profile.zaloName, globalId: profile.globalId });
+    }
+  }
+
+  /**
+   * Khởi động: hỏi bù hồ sơ (ảnh, globalId) cho người nhắn riêng và thành viên nhóm còn thiếu globalId.
+   * globalId là mã chung để nối một người giữa nhóm và nhắn riêng — Zalo cấp hai mã khác nhau.
+   */
+  private async refreshContactProfiles(): Promise<void> {
+    const [rows] = await this.db.query<RowDataPacket[]>(
+      `SELECT c.zalo_uid FROM contact c
+       WHERE c.global_id IS NULL OR (c.avatar_url = '' AND c.last_dm_at IS NOT NULL)
+       ORDER BY c.last_dm_at IS NULL, c.id LIMIT 500`,
+    );
+    const uids = rows.map((row) => String(row.zalo_uid));
+    for (const uid of uids) this.avatarAsked.add(uid);
+    for (let start = 0; start < uids.length; start += 50) {
+      await this.fetchUserProfiles(uids.slice(start, start + 50));
+      await sleep(GROUP_SCAN_PAUSE_MS);
+    }
+    if (uids.length) this.log.info(`hỏi bù hồ sơ ${uids.length} người`);
+  }
+
   private async answerQuestion(thread: GroupRow, contact: ContactRow, messageId: number | null, question: string): Promise<void> {
+    let answered = false;
+    let ackTimer: NodeJS.Timeout | null = null;
     const reply = await this.assistant!.answer({
       botAccountId: this.account.id,
       contact,
       threadId: thread.id,
       questionMessageId: messageId,
       question,
+    }, {
+      onAccepted: () => {
+        ackTimer = setTimeout(() => {
+          if (!answered) void this.sendAck(thread, contact, () => answered).catch((error) => this.log.warn("nhắn xác nhận lỗi", error));
+        }, ACK_DELAY_MS);
+      },
+    }).finally(() => {
+      answered = true;
+      if (ackTimer) clearTimeout(ackTimer);
     });
     // Không ghi nội dung câu hỏi / câu trả lời vào log — chỉ ai, kết quả, bao lâu; nội dung xem ở màn Hội thoại
     this.log.info(`trả lời «${contact.display_name || contact.zalo_uid}»: ${AssistantTurnStatus[reply.status]}` +
@@ -387,6 +459,60 @@ export class AccountRunner {
         await this.sender.send(() => api.sendMessage(notice, contact.zalo_uid, ThreadType.User)).catch(() => undefined);
       });
     }
+  }
+
+  /** Thread Zalo (riêng / nhóm) của một cuộc trong kho. */
+  private threadTarget(thread: GroupRow): { peer: string; type: ThreadType } {
+    return { peer: thread.zalo_group_id, type: thread.thread_type === ConversationType.Group ? ThreadType.Group : ThreadType.User };
+  }
+
+  /** Quản trị gõ chữ từ màn Hội thoại: gửi dưới tên tài khoản bot này, lưu lại ngay (nguồn «admin»). */
+  async sendAdminText(thread: GroupRow, text: string): Promise<number | null> {
+    const api = this.api;
+    if (!api) throw new Error("bot chưa kết nối");
+    const { peer, type } = this.threadTarget(thread);
+    const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
+    let lastId: number | null = null;
+    for (const chunk of splitForZalo(text)) {
+      const response = await this.sender.send(() => api.sendMessage(chunk, peer, type));
+      const msgId = response.message?.msgId;
+      if (msgId) lastId = await recordOutgoingMessage(this.db, thread, bot, String(msgId), chunk, { source: OUTGOING_SOURCE.admin });
+    }
+    return lastId;
+  }
+
+  /**
+   * Quản trị gửi tệp / ảnh từ màn Hội thoại: đẩy sang Zalo rồi cất vào kho (để màn Tệp và nút tải về
+   * thấy được như tệp người khác gửi). Tên tệp giữ đúng tên gốc.
+   */
+  async sendAdminFile(thread: GroupRow, data: Buffer, fileName: string, contentType: string): Promise<number | null> {
+    const api = this.api;
+    if (!api) throw new Error("bot chưa kết nối");
+    const { peer, type } = this.threadTarget(thread);
+    const safeName = sanitizeFileName(fileName) || "tep";
+    const ext = (/\.([a-z0-9]{1,10})$/i.exec(safeName)?.[1] ?? "").toLowerCase();
+    const filename = (ext ? safeName : `${safeName}.bin`) as `${string}.${string}`;
+    const response = await this.sender.send(() =>
+      api.sendMessage({ msg: "", attachments: [{ data, filename, metadata: { totalSize: data.length } }] }, peer, type));
+    // Tin chỉ có đính kèm: zca-js trả mã tin trong `attachment[]`, `message` là null
+    const msgId = response.message?.msgId ?? response.attachment?.[0]?.msgId;
+    if (!msgId) return null;
+    const storageKey = await this.storage.put(`${thread.zalo_group_id}/${new Date().toISOString().slice(0, 7)}/admin-${Date.now()}-${filename}`, data, contentType);
+    const kind = contentType.startsWith("image/") ? MessageKind.Image : contentType.startsWith("video/") ? MessageKind.Video : MessageKind.File;
+    const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
+    return recordOutgoingMessage(this.db, thread, bot, String(msgId), filename, {
+      source: OUTGOING_SOURCE.admin, kind, file: { name: filename, ext: ext || "bin", storageKey, bytes: data.length },
+    });
+  }
+
+  /** «Em nhận được rồi» — đổi câu cho đỡ máy móc; vào hàng gửi rồi vẫn kiểm lại, trả lời xong trước thì thôi. */
+  private async sendAck(thread: GroupRow, contact: ContactRow, isAnswered: () => boolean): Promise<void> {
+    const api = this.api;
+    if (!api) return;
+    const text = ACK_TEXTS[Math.floor(Math.random() * ACK_TEXTS.length)];
+    const response = await this.sender.send(() => (isAnswered() ? Promise.resolve(null) : api.sendMessage(text, contact.zalo_uid, ThreadType.User)));
+    const msgId = response?.message?.msgId;
+    if (msgId) await recordOutgoingMessage(this.db, thread, { uid: this.ownUid, name: this.account.display_name || this.account.label }, String(msgId), text);
   }
 
   private async sendStoredFile(peerUid: string, attachmentId: number): Promise<void> {
@@ -464,6 +590,7 @@ export class AccountRunner {
     // Nhóm bot từng ở mà nay không còn trong danh sách: bot bị mời ra lúc dịch vụ đang tắt.
     const left = await markBotLeftMissingGroups(this.db, this.account.id, groupIds);
     if (left) this.log.info(`bot đã rời ${left} nhóm trong lúc dịch vụ tắt`);
+    await this.refreshContactProfiles().catch((error) => this.log.warn("hỏi bù hồ sơ lỗi", error));
   }
 }
 
