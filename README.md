@@ -9,6 +9,16 @@ Thiết kế: [`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md).
 Công nghệ: Node 22 + TypeScript · `zca-js` 2.2.0 (thư viện Zalo **không chính thức**, ghim cứng) ·
 MySQL 8.4 · tệp lưu đĩa hoặc Cloudflare R2.
 
+## Nhánh và môi trường
+
+| Nhánh | Môi trường | Ghi chú |
+|---|---|---|
+| `dev1` | local | Code hằng ngày ở đây |
+| `dev` | dev | Gộp `dev1` → `dev` khi muốn thử trên máy dev |
+| `main` | prod | Chỉ gộp từ `dev` sau khi đã chạy ổn trên dev |
+
+Chiều gộp một chiều: `dev1` → `dev` → `main`. Vá gấp trên prod thì vá ở `main` rồi gộp ngược xuống `dev`, `dev1`.
+
 ## Chạy bằng Docker (cách chạy chính)
 
 Máy chỉ cần Docker, không cần cài Node. Hai container: `app` (đồng bộ + giao diện, ~35 MB RAM) và
