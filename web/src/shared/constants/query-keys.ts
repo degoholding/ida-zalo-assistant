@@ -22,6 +22,10 @@ export const queryKeys = {
     thread: (id: number) => ['conversations', 'thread', id] as const,
     messages: (id: number) => ['conversations', 'messages', id] as const,
   },
+  groups: {
+    all: ['groups'] as const,
+    backfill: (id: number) => ['groups', 'backfill', id] as const,
+  },
   files: {
     all: ['files'] as const,
     text: (id: number) => ['files', 'text', id] as const,
@@ -29,6 +33,10 @@ export const queryKeys = {
   accounts: {
     all: ['accounts'] as const,
     qrLogin: (attemptId: string) => ['accounts', 'qr-login', attemptId] as const,
+  },
+  imports: {
+    all: ['imports'] as const,
+    targets: () => ['imports', 'targets'] as const,
   },
   lookups: {
     all: ['lookups'] as const,

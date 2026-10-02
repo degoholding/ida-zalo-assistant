@@ -8,6 +8,7 @@ import { contactsModule } from '@/modules/contacts/routes'
 import { conversationsModule } from '@/modules/conversations/routes'
 import { filesModule } from '@/modules/files/routes'
 import { groupsModule } from '@/modules/groups/routes'
+import { importsModule } from '@/modules/imports/routes'
 import { appRoutes } from '@/shared/constants/app-routes'
 import { NotFoundPage } from '@/shared/ui/not-found-page'
 import { RouteErrorPage } from '@/shared/ui/route-error-page'
@@ -16,7 +17,7 @@ import { RouteErrorPage } from '@/shared/ui/route-error-page'
 export const APP_BASENAME = '/app'
 
 /** Mỗi phân hệ khai route ở `modules/<tên>/routes.tsx`; thêm phân hệ = thêm một dòng ở đây và một mục ở `nav-items.ts`. */
-const MODULE_ROUTES = [conversationsModule, contactsModule, groupsModule, filesModule, companiesModule, accountsModule]
+const MODULE_ROUTES = [conversationsModule, contactsModule, groupsModule, filesModule, importsModule, companiesModule, accountsModule]
 
 /**
  * Cây route: đăng nhập công khai, còn lại nằm trong `AppLayout` (tự gác đăng nhập).

@@ -38,6 +38,8 @@ import {
   type IncomingGroupMessage,
 } from "../sync/message-ingest.js";
 import { parseZaloContent } from "./content-parser.js";
+import { describeGroupEvent, namesToLookup } from "./group-event-text.js";
+import { registerGroupHistoryApi, type HistoryPage } from "./group-history.js";
 import { ZaloSender } from "./zalo-sender.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
 import {
@@ -68,6 +70,25 @@ const ACK_TEXTS = [
   "Em nhận được rồi ạ, đang làm, có ngay thôi…",
 ];
 const BACKFILL_MAX_PAGES = 20;
+
+export interface BackfillProgress {
+  pages: number;
+  fetched: number;
+  stored: number;
+  oldest: Date | null;
+}
+
+export interface BackfillResult extends BackfillProgress {
+  method: string;
+}
+
+export interface BackfillOptions {
+  /** Trần số trang (50 tin / trang). */
+  maxPages: number;
+  /** Dừng khi hai trang liền nhau không có tin mới (đã lấy từ trước). */
+  stopWhenKnown: boolean;
+  onProgress?: (progress: BackfillProgress) => void;
+}
 const BACKFILL_PAGE_TIMEOUT_MS = 10_000;
 const BACKFILL_PAGE_PAUSE_MS = 1500;
 
@@ -222,6 +243,9 @@ export class AccountRunner {
     });
 
     listener.on("old_messages", (messages, threadType) => {
+      // Ghi số tin + mốc để biết Zalo đẩy cửa sổ đồng bộ bao xa (không ghi nội dung)
+      const oldest = oldestOf(messages);
+      this.log.info(`old_messages ${threadType === ThreadType.Group ? "nhóm" : "riêng"}: ${messages.length} tin${oldest ? `, cũ nhất ${oldest.toISOString()}` : ""}`);
       if (threadType === ThreadType.Group && this.oldGroupPageWaiter) {
         this.oldGroupPageWaiter(messages as GroupMessage[]);
         this.oldGroupPageWaiter = null;
@@ -274,26 +298,67 @@ export class AccountRunner {
   /**
    * Lấy tin cũ của một nhóm từ Zalo về kho (nút «Lấy tin cũ», hoặc lúc vừa bật đọc nhóm).
    *
-   * ⚠️ Đường lịch sử nhóm của Zalo (getGroupChatHistory) trả 404 từ ~06/2026 — Zalo đổi/đóng, thư viện
-   * chưa sửa (zca-js issue #374). Hỏng thì lách như openzca: xin TỪNG TRANG tin cũ qua kết nối trực tiếp
-   * (requestOldMessages). Trang này là tin cũ của MỌI nhóm — lưu hết (nhóm nào không bật đọc thì tự
-   * bỏ), rồi đếm riêng phần của nhóm đang lấy.
+   * Đường chính: `/api/cm/getrecentv2` — đường Zalo Web đang dùng, phân trang bằng lastMsgId (xem
+   * `group-history.ts`). Đường cũ của zca-js (`getGroupChatHistory`) trả 404 từ ~06/2026. Hỏng cả hai thì
+   * lách như openzca: xin TỪNG TRANG tin cũ qua kết nối trực tiếp (requestOldMessages).
+   *
+   * Lặp lại lần sau: `stopWhenKnown` — hai trang liền nhau không có tin mới thì dừng (đã có trong kho rồi).
    */
-  async backfillGroup(zaloGroupId: string, count: number): Promise<{ fetched: number; stored: number; oldest: Date | null; method: string }> {
+  async backfillGroup(zaloGroupId: string, options: BackfillOptions): Promise<BackfillResult> {
     if (!this.api) throw new Error("bot chưa kết nối");
+    let fetchPage: ReturnType<typeof registerGroupHistoryApi>;
     try {
-      const history = await this.api.getGroupChatHistory(zaloGroupId, count);
-      const messages = history.groupMsgs ?? [];
-      const stored = await this.ingestOldMessages(messages, true);
-      this.log.info(`lấy tin cũ nhóm ${zaloGroupId} (lịch sử nhóm): ${messages.length} tin, lưu mới ${stored}`);
-      return { fetched: messages.length, stored, oldest: oldestOf(messages), method: "lịch sử nhóm" };
+      fetchPage = registerGroupHistoryApi(this.api);
     } catch (error) {
-      this.log.warn(`đường lịch sử nhóm hỏng (${describeError(error)}) — chuyển sang xin từng trang`);
+      this.log.warn(`không đăng ký được đường lịch sử nhóm (${describeError(error)}) — chuyển sang xin từng trang`);
+      return this.backfillByPages(zaloGroupId);
     }
-    return this.backfillByPages(zaloGroupId);
+    let cursor = 0;
+    let fetched = 0;
+    let stored = 0;
+    let oldest: Date | null = null;
+    let pages = 0;
+    let pagesWithoutNew = 0;
+    for (; pages < options.maxPages; pages += 1) {
+      let page: HistoryPage;
+      try {
+        page = await fetchPage(zaloGroupId, cursor);
+      } catch (error) {
+        if (pages === 0) {
+          const code = (error as { code?: unknown }).code;
+          this.log.warn(`đường lịch sử nhóm (getrecentv2) hỏng (${describeError(error)}${code ? `, mã ${String(code)}` : ""}) — chuyển sang xin từng trang`);
+          return this.backfillByPages(zaloGroupId);
+        }
+        this.log.warn(`trang lịch sử ${pages + 1} lỗi, dừng ở đây: ${describeError(error)}`);
+        break;
+      }
+      // Mốc 0 Zalo chỉ trả KHOẢNG mã tin (minMsgId…maxMsgId) kèm isFiltered, không trả tin — đi lại từ maxMsgId
+      if (!page.messages.length && cursor === 0 && Number(page.maxMsgId)) {
+        cursor = Number(page.maxMsgId) + 1;
+        pages -= 1;
+        continue;
+      }
+      if (!page.messages.length) break;
+      const storedNow = await this.ingestOldMessages(page.messages, true);
+      fetched += page.messages.length;
+      stored += storedNow;
+      const pageOldest = oldestOf(page.messages);
+      if (pageOldest && (!oldest || pageOldest < oldest)) oldest = pageOldest;
+      options.onProgress?.({ pages: pages + 1, fetched, stored, oldest });
+      pagesWithoutNew = storedNow ? 0 : pagesWithoutNew + 1;
+      if (options.stopWhenKnown && pagesWithoutNew >= 2) break;
+      const next = Number(page.lastMsgId);
+      if (!page.hasMore || !next || next === cursor) break;
+      cursor = next;
+      await new Promise((resolve) => setTimeout(resolve, BACKFILL_PAGE_PAUSE_MS));
+    }
+    this.log.info(`lấy tin cũ nhóm ${zaloGroupId} (getrecentv2): ${pages} trang, ${fetched} tin, lưu mới ${stored}, cũ nhất ${oldest?.toISOString() ?? "?"}`);
+    // Mây Zalo rỗng («empty cloud msg») thì còn đường đồng bộ qua kết nối trực tiếp — thử nốt
+    if (fetched === 0) return this.backfillByPages(zaloGroupId);
+    return { fetched, stored, oldest, pages, method: `lịch sử nhóm (${pages} trang)` };
   }
 
-  private async backfillByPages(zaloGroupId: string): Promise<{ fetched: number; stored: number; oldest: Date | null; method: string }> {
+  private async backfillByPages(zaloGroupId: string): Promise<BackfillResult> {
     const listener = this.api!.listener;
     let cursor: string | null = null;
     let fetched = 0;
@@ -328,7 +393,7 @@ export class AccountRunner {
       await new Promise((resolve) => setTimeout(resolve, BACKFILL_PAGE_PAUSE_MS));
     }
     this.log.info(`lấy tin cũ nhóm ${zaloGroupId} (từng trang): ${pages} trang, nhóm này ${fetched} tin, lưu mới ${stored}`);
-    return { fetched, stored, oldest, method: `từng trang (${pages} trang)` };
+    return { fetched, stored, oldest, pages, method: `từng trang (${pages} trang)` };
   }
 
   /** Tin của trang đã được handler old_messages lưu; đếm xem bao nhiêu tin đang có trong kho. */
@@ -536,6 +601,7 @@ export class AccountRunner {
   }
 
   private async handleGroupEvent(event: GroupEvent): Promise<void> {
+    await this.recordGroupEvent(event).catch((error) => this.log.warn(`ghi tin hệ thống ${event.type} lỗi`, error));
     if (!MEMBER_CHANGING_EVENTS.has(event.type)) return;
     const updated = "updateMembers" in event.data ? event.data.updateMembers ?? [] : [];
     const touchesBot = updated.some((member) => (typeof member === "string" ? member : member.id) === this.ownUid);
@@ -556,6 +622,38 @@ export class AccountRunner {
       return;
     }
     await syncGroupMembers(this.db, this.groupSource, group.id, group.zalo_group_id);
+  }
+
+  /**
+   * Sự kiện nhóm → một dòng tin hệ thống trong khung chat («Duy đã thêm Hân vào nhóm»). Ghi TRƯỚC khi đồng bộ
+   * thành viên để tên người vừa rời vẫn tra được trong kho. Nhóm chưa bật đọc thì ingest tự bỏ.
+   */
+  private async recordGroupEvent(event: GroupEvent): Promise<void> {
+    const uids = namesToLookup(event);
+    const [rows] = await this.db.query<RowDataPacket[]>(
+      `SELECT gm.zalo_uid, COALESCE(NULLIF(gm.display_name, ''), NULLIF(gm.zalo_name, ''), c.display_name) AS name, g.name AS group_name
+       FROM zalo_group g
+       LEFT JOIN group_member gm ON gm.group_id = g.id AND gm.zalo_uid IN (?)
+       LEFT JOIN contact c ON c.zalo_uid = gm.zalo_uid
+       WHERE g.thread_type = ? AND g.zalo_group_id = ?`,
+      [uids.length ? uids : [""], ConversationType.Group, event.threadId]);
+    const names = new Map(rows.filter((row) => row.zalo_uid).map((row) => [String(row.zalo_uid), String(row.name ?? "")]));
+    if (this.ownUid) names.set(this.ownUid, names.get(this.ownUid) || this.account.display_name);
+    const summary = describeGroupEvent(event, (uid) => names.get(uid) || "Một thành viên", String(rows[0]?.group_name ?? ""));
+    if (!summary) return;
+    await ingestGroupMessage(
+      {
+        db: this.db,
+        defaults: { readMessages: this.config.defaultGroupRead, captureFiles: this.config.defaultGroupCaptureFiles },
+        onNewGroup: (group: GroupRow) => this.onNewGroup(group.id, group.zalo_group_id),
+      },
+      this.account.id,
+      {
+        zaloGroupId: event.threadId, msgId: summary.msgId, cliMsgId: "", msgType: "system",
+        senderUid: summary.actorUid, senderName: names.get(summary.actorUid) ?? "", sentAtMs: summary.sentAtMs,
+        content: { title: summary.text, href: "" }, quote: null, mentions: null,
+      },
+    );
   }
 
   private onNewGroup(groupId: number, zaloGroupId: string): void {

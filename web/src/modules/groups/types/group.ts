@@ -49,3 +49,18 @@ export interface GroupDetail extends Group {
   members: GroupMember[]
   bots: GroupBot[]
 }
+
+/** `POST/GET /api/groups/:id/backfill` — việc lấy tin cũ chạy nền. */
+export interface BackfillStatus {
+  group_id: number
+  running: boolean
+  full: boolean
+  pages: number
+  fetched: number
+  stored: number
+  oldest: string | null
+  started_at: string
+  finished_at: string | null
+  error: string
+  message: string
+}

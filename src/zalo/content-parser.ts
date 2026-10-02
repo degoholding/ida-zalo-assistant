@@ -31,6 +31,8 @@ const KIND_BY_TYPE_PREFIX: [string, MessageKind][] = [
   ["chat.sticker", MessageKind.Sticker],
   ["chat.link", MessageKind.Link],
   ["chat.location", MessageKind.Location],
+  // Không phải loại của Zalo: bot tự đặt cho dòng sự kiện nhóm (group-event-text.ts) và tin hệ thống nhập từ Zalo Web
+  ["system", MessageKind.System],
 ];
 
 // Loại có tệp đáng tải về kho. Sticker không tính — đó là ảnh của Zalo, không phải tài liệu.

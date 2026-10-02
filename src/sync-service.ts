@@ -3,16 +3,29 @@ import { AssistantService } from "./assistant/assistant-service.js";
 import { GeminiClient } from "./assistant/gemini-client.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/pool.js";
-import { createLogger } from "./logger.js";
+import { createLogger, describeError } from "./logger.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
 import { ConversationType } from "./constants.js";
 import { GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
-import { AccountRunner } from "./zalo/account-runner.js";
+import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
 
 const log = createLogger("service");
+/** «Lấy hết»: 400 trang × 50 = 20.000 tin — đủ cho nhóm lớn mà không kéo vô tận. */
+const BACKFILL_FULL_MAX_PAGES = 400;
+/** Lúc vừa bật đọc: vài trang gần nhất cho nhóm có nội dung ngay. */
+const BACKFILL_QUICK_MAX_PAGES = 4;
+
+export interface BackfillJob extends BackfillProgress {
+  groupId: number;
+  full: boolean;
+  startedAt: Date;
+  finishedAt: Date | null;
+  method: string;
+  error: string;
+}
 const AVATAR_INTERVAL_MS = 2 * 60 * 1000;
 
 /** Giữ các tài khoản bot đang chạy — cho phép bật thêm/tắt bớt lúc đang chạy (đăng nhập QR trên web). */
@@ -72,8 +85,20 @@ export class SyncService {
     await runner.stop();
   }
 
-  /** Lấy tin cũ của một nhóm qua một bot đang chạy và đang ở trong nhóm đó. */
-  async backfillGroup(groupId: number): Promise<{ fetched: number; stored: number; oldest: Date | null; method: string }> {
+  /** Việc lấy tin cũ đang chạy / vừa xong của từng nhóm (trong bộ nhớ; khởi động lại là mất, không sao). */
+  private readonly backfillJobs = new Map<number, BackfillJob>();
+
+  getBackfillJob(groupId: number): BackfillJob | null {
+    return this.backfillJobs.get(groupId) ?? null;
+  }
+
+  /**
+   * Bắt đầu lấy tin cũ của một nhóm ở NỀN (nhóm nghìn tin kéo vài phút — không giữ HTTP chờ).
+   * `full` = kéo tới hết (trần BACKFILL_FULL_MAX_PAGES); không thì vài trang gần nhất, dừng sớm khi gặp tin đã có.
+   */
+  async startBackfill(groupId: number, options: { full: boolean }): Promise<BackfillJob> {
+    const running = this.backfillJobs.get(groupId);
+    if (running && !running.finishedAt) return running;
     const [rows] = await this.db.query<RowDataPacket[]>(
       `SELECT g.zalo_group_id, bg.bot_account_id FROM zalo_group g
        JOIN bot_group bg ON bg.group_id = g.id AND bg.left_at IS NULL
@@ -82,7 +107,19 @@ export class SyncService {
     );
     const pick = rows.find((row) => this.runners.has(row.bot_account_id as number));
     if (!pick) throw new Error("Không có bot nào đang chạy trong nhóm này");
-    return this.runners.get(pick.bot_account_id as number)!.backfillGroup(pick.zalo_group_id as string, this.config.backfillCount);
+    const job: BackfillJob = { groupId, full: options.full, startedAt: new Date(), finishedAt: null, pages: 0, fetched: 0, stored: 0, oldest: null, method: "", error: "" };
+    this.backfillJobs.set(groupId, job);
+    const runner = this.runners.get(pick.bot_account_id as number)!;
+    void runner
+      .backfillGroup(pick.zalo_group_id as string, {
+        maxPages: options.full ? BACKFILL_FULL_MAX_PAGES : BACKFILL_QUICK_MAX_PAGES,
+        stopWhenKnown: !options.full,
+        onProgress: (progress) => Object.assign(job, progress),
+      })
+      .then((result) => Object.assign(job, result))
+      .catch((error) => { job.error = describeError(error); })
+      .finally(() => { job.finishedAt = new Date(); });
+    return job;
   }
 
   /**

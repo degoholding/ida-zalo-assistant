@@ -12,6 +12,7 @@ import { eventRoutes } from "./events-api.js";
 import { conversationRoutes } from "./conversations-api.js";
 import { fileRoutes } from "./files-api.js";
 import { groupRoutes } from "./groups-api.js";
+import { importRoutes } from "./imports-api.js";
 import { lookupRoutes } from "./lookups-api.js";
 import { buildAdminPermissions } from "./permissions.js";
 
@@ -21,7 +22,7 @@ import { buildAdminPermissions } from "./permissions.js";
 const log = createLogger("api");
 
 const routes: ApiRoute[] = [
-  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes,
+  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes,
 ];
 
 export interface ApiDeps {

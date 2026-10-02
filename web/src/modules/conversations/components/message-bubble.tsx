@@ -1,4 +1,7 @@
+import { ImageOff } from 'lucide-react'
+
 import { EntityAvatar } from '@/shared/contact-card/entity-avatar'
+import { ImageLightbox, useImageLightbox } from '@/shared/ui/image-lightbox'
 import { cn } from '@/shared/utils/cn'
 import { formatFileSize } from '@/shared/utils/format-file-size'
 import { formatTime } from '@/shared/utils/format-date'
@@ -8,6 +11,7 @@ const ATTACHMENT_STORED = 1
 const ATTACHMENT_PENDING = 0
 
 const KNOWN_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'txt', 'csv']
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp'])
 
 function fileIconClass(ext: string): string {
   const e = ext.toLowerCase()
@@ -26,14 +30,35 @@ function attachmentLabel(message: ChatMessage, attachment: MessageAttachment): s
   return 'Tệp'
 }
 
+function extensionOf(attachment: MessageAttachment): string {
+  return (attachment.file_ext || attachment.file_name.split('.').pop() || '').toLowerCase()
+}
+
+/** Ảnh đã có trong kho: hiện thẳng trong bong bóng, bấm phóng to (lightbox dùng chung của ERP). */
+function InlineImage({ attachment, caption }: { attachment: MessageAttachment; caption: string }) {
+  const lightbox = useImageLightbox()
+  const url = `${attachment.download_url}?inline=1`
+  return (
+    <>
+      <button type="button" onClick={() => lightbox.openAt(0)} className="block overflow-hidden rounded-lg" title="Phóng to">
+        <img src={url} alt={caption || 'Hình ảnh'} loading="lazy" className="max-h-80 max-w-xs object-cover" />
+      </button>
+      <ImageLightbox images={[{ url, name: attachment.file_name || caption || 'anh' }]} {...lightbox.bind} />
+    </>
+  )
+}
+
 function AttachmentCard({ message, attachment }: { message: ChatMessage; attachment: MessageAttachment }) {
-  const ext = attachment.file_ext || attachment.file_name.split('.').pop() || ''
+  const ext = extensionOf(attachment)
   const stored = attachment.status === ATTACHMENT_STORED
+  if (stored && attachment.download_url && (message.kind === MESSAGE_KIND.image || IMAGE_EXTENSIONS.has(ext))) {
+    return <InlineImage attachment={attachment} caption={message.text ?? ''} />
+  }
   const status = stored ? formatFileSize(attachment.size) : attachment.status === ATTACHMENT_PENDING ? 'đang tải về kho…' : 'chưa có trong kho'
   const inner = (
     <>
       <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-md text-[10px] font-bold text-white', fileIconClass(ext))}>
-        {KNOWN_EXTENSIONS.includes(ext.toLowerCase()) ? ext.toUpperCase().slice(0, 4) : 'TỆP'}
+        {KNOWN_EXTENSIONS.includes(ext) ? ext.toUpperCase().slice(0, 4) : 'TỆP'}
       </span>
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium">{attachmentLabel(message, attachment)}</span>
@@ -49,6 +74,17 @@ function AttachmentCard({ message, attachment }: { message: ChatMessage; attachm
   )
 }
 
+/** Tin ảnh / tệp mà kho không có gì (tin cũ nhập từ Zalo Web, dữ liệu đã trôi) — vẫn giữ chỗ cho dòng thời gian không thủng. */
+function MissingMedia({ message }: { message: ChatMessage }) {
+  const label = message.kind === MESSAGE_KIND.image ? 'Hình ảnh' : message.kind === MESSAGE_KIND.video ? 'Video' : 'Tệp'
+  return (
+    <span className="flex items-center gap-1.5 text-xs opacity-70">
+      <ImageOff className="size-3.5" />
+      {label} — Zalo không còn dữ liệu
+    </span>
+  )
+}
+
 interface MessageBubbleProps {
   message: ChatMessage
   isGroup: boolean
@@ -58,10 +94,23 @@ interface MessageBubbleProps {
   lastOfRun: boolean
 }
 
+/** Tin hệ thống («Duy đã thêm Hân vào nhóm»): một dòng chữ nhỏ giữa khung chat như Zalo, không bong bóng. */
+function SystemNotice({ message }: { message: ChatMessage }) {
+  return (
+    <div className="flex justify-center py-1">
+      <span className="max-w-[80%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground" title={formatTime(message.sent_at)}>
+        {message.text}
+      </span>
+    </div>
+  )
+}
+
 /** Một bong bóng: bot bên phải (màu chủ đạo), người khác bên trái. Ảnh / tên chỉ hiện ở tin đầu / cuối của đợt. */
 export function MessageBubble({ message, isGroup, firstOfRun, lastOfRun }: MessageBubbleProps) {
+  if (message.kind === MESSAGE_KIND.system) return <SystemNotice message={message} />
   const fromBot = message.from_bot
   const textIsFileName = message.attachment && message.text === message.attachment.file_name
+  const mediaKind = message.kind === MESSAGE_KIND.image || message.kind === MESSAGE_KIND.video || message.kind === MESSAGE_KIND.file
   return (
     <div className={cn('flex items-end gap-2', fromBot ? 'justify-end' : 'justify-start')}>
       {!fromBot && isGroup && (
@@ -88,6 +137,7 @@ export function MessageBubble({ message, isGroup, firstOfRun, lastOfRun }: Messa
               </div>
             )}
             {message.attachment && <AttachmentCard message={message} attachment={message.attachment} />}
+            {!message.attachment && mediaKind && !message.text && <MissingMedia message={message} />}
             {message.text && !textIsFileName && <div className="whitespace-pre-wrap break-words">{message.text}</div>}
             {message.kind === MESSAGE_KIND.sticker && !message.text && <div className="opacity-70">[Sticker]</div>}
           </>

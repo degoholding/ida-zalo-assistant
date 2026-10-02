@@ -13,6 +13,7 @@ const ACTION_LABEL: Record<string, string> = {
   create: "Tạo mới",
   update: "Cập nhật",
   backfill: "Lấy tin cũ",
+  import: "Nhập lịch sử",
   retry: "Tải lại tệp",
   extract: "Đọc chữ trong tệp",
   activate: "Bật",

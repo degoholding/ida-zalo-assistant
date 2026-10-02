@@ -64,7 +64,7 @@ export interface MessageAttachment {
 }
 
 /** Khớp `MessageKind` ở `src/constants.ts` của máy chủ. */
-export const MESSAGE_KIND = { text: 0, image: 1, file: 2, video: 3, voice: 4, sticker: 5, link: 6, location: 7, contact: 8, other: 99 } as const
+export const MESSAGE_KIND = { text: 0, image: 1, file: 2, video: 3, voice: 4, sticker: 5, link: 6, location: 7, contact: 8, system: 9, other: 99 } as const
 
 export interface ChatMessage {
   id: number

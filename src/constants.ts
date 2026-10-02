@@ -17,6 +17,8 @@ export enum MessageKind {
   Link = 6,
   Location = 7,
   Contact = 8,
+  // Dòng sự kiện nhóm (vào / rời / thêm người / đổi tên) — không có người gửi thật, vẽ giữa khung chat
+  System = 9,
   Other = 99,
 }
 

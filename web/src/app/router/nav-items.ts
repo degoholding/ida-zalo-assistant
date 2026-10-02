@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Bot, Building2, Contact, FileText, MessageCircle, Users } from 'lucide-react'
+import { Bot, Building2, Contact, FileText, History, MessageCircle, Users } from 'lucide-react'
 
 import type { PermissionEntity } from '@/core/authorization/permission-types'
 import { appRoutes } from '@/shared/constants/app-routes'
@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Danh bạ', path: appRoutes.contacts.list, icon: Contact, entity: 'contact' },
   { label: 'Nhóm', path: appRoutes.groups.list, icon: Users, entity: 'group' },
   { label: 'Tệp', path: appRoutes.files.list, icon: FileText, entity: 'file' },
+  { label: 'Nhập lịch sử', path: appRoutes.imports.zaloWeb, icon: History, entity: 'group' },
   { label: 'Công ty', path: appRoutes.companies.list, icon: Building2, entity: 'company' },
   { label: 'Tài khoản bot', path: appRoutes.accounts.list, icon: Bot, entity: 'bot_account' },
 ]

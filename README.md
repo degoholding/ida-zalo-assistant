@@ -2,11 +2,13 @@
 
 Bot trợ lý đọc các nhóm Zalo công việc. **Bản hiện tại: đồng bộ cơ bản + trợ lý AI** — tài khoản
 bot đọc nhóm, lưu tin + thành viên nhóm, tải file ngay lúc tin tới, trả lời tin riêng bằng Gemini,
-kèm giao diện web quản trị (`web/`, khung ERP v2) dưới `/app`: Hội thoại, Danh bạ, Nhóm, Tệp, Công ty,
-Tài khoản bot (đăng nhập QR). Màn Hội thoại nhận tin mới tức thời (kênh đẩy SSE `/api/events`) và có ô
+kèm giao diện web quản trị (`web/`, khung ERP v2) dưới `/app`: Hội thoại, Danh bạ, Nhóm, Tệp, Nhập lịch sử,
+Công ty, Tài khoản bot (đăng nhập QR). Sự kiện nhóm (vào / rời / thêm người / đổi tên) lưu thành tin hệ thống. Màn Hội thoại nhận tin mới tức thời (kênh đẩy SSE `/api/events`) và có ô
 soạn tin: quản trị gõ chữ / gửi tệp từ web, đi ra Zalo **dưới tên tài khoản bot**, lưu lại với nhãn «quản trị».
 
-Thiết kế: [`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md).
+Tài liệu: **mô tả chức năng + lộ trình** [`doc/03-mo-ta-chuc-nang.md`](doc/03-mo-ta-chuc-nang.md) ·
+đối chiếu đặc tả IDA [`doc/02-doi-chieu-nhu-cau.md`](doc/02-doi-chieu-nhu-cau.md) · thiết kế gốc
+[`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md).
 
 Công nghệ: Node 22 + TypeScript · `zca-js` 2.2.0 (thư viện Zalo **không chính thức**, ghim cứng) ·
 MySQL 8.4 · tệp lưu đĩa hoặc Cloudflare R2.
@@ -114,6 +116,18 @@ Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng b�
 - Mất `SESSION_ENCRYPTION_KEY` = mọi tài khoản bot phải quét QR lại.
 - Người gửi **thu hồi** tin thì bot xóa chữ của tin đó, chỉ giữ dấu vết đã thu hồi.
 - Quá `retention_days` của nhóm thì xóa **cả tin lẫn tệp thật** trong kho.
+- **Tin cũ trước ngày bot vào nhóm**: Zalo không có API (mây trả `isFiltered`, đo 02/10/2026); Zalo Web chỉ có ~2 tuần do điện
+  thoại đồng bộ sang, nội dung trong IndexedDB đã mã hóa; tệp «Xuất dữ liệu» của Zalo PC mã hóa toàn bộ (không đọc được).
+  Màn **Nhập lịch sử** (`/app/imports/zalo-web`) đưa hai bookmarklet: «Xuất N nhóm của bot» (nhúng sẵn danh sách nhóm
+  `read_messages = 1` từ `GET /api/imports/zalo-web/targets`, tự tìm từng nhóm ở cột trái `#conversationList`
+  `[anim-data-id="g<mã>"]`, bấm mở, cuộn lên đầu, mỗi nhóm một tệp) và «Xuất nhóm đang mở». Gom chữ / ảnh (blob → data
+  URL) + siêu dữ liệu IndexedDB → JSON → nạp nhiều tệp một lượt qua `POST /api/imports/zalo-web` (chỉ nhóm bot đã ở, trùng
+  msgId thì bổ sung ảnh / chữ còn thiếu). Sửa bookmarklet thì chạy thử trên trang giả lập `npx tsx scratch/mock-zalo/run.ts`.
+  `src/web/api/imports-api.ts`, `web/src/modules/imports/utils/zalo-web-exporter.ts`. Đăng nhập Zalo Web bằng TÀI KHOẢN BOT
+  là bot bị đá (3003).
+- Tin hệ thống (`MessageKind.System = 9`, `zalo_msg_type = 'system'`): bot dịch sự kiện nhóm thành câu ở
+  `src/zalo/group-event-text.ts` (mã tin tự dựng `sys…` để nhiều bot cùng nhóm không ghi trùng); tin hệ thống nhập từ
+  Zalo Web không có mã thật, trùng câu chữ trong 90 giây thì coi là trùng.
 - `zalo_group.message_count` / `last_message_at` là bộ đếm cập nhật lúc ghi tin (migration 011) — màn danh
   sách KHÔNG được quét bảng `message` để đếm; thêm đường ghi tin mới thì gọi `bumpThreadCounters`.
 - Bot xưng «em», gọi người hỏi «anh/chị» — luật nằm trong `buildSystemPrompt` (assistant-service.ts). Câu trả lời

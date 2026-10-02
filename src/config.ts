@@ -49,7 +49,6 @@ export interface AppConfig {
   web: { host: string; port: number; adminPassword: string; cookieSecure: boolean; trustCloudflareIp: boolean; spaDistDir: string };
   defaultDirectRead: boolean;
   /** Số tin gần nhất xin Zalo khi lấy tin cũ của một nhóm. */
-  backfillCount: number;
   defaultDirectCaptureFiles: boolean;
   /** Không có GEMINI_API_KEY thì trợ lý tắt: bot vẫn lưu tin, không trả lời ai. */
   assistant: {
@@ -97,7 +96,6 @@ export function loadConfig(): AppConfig {
     },
     // Người ta chủ động nhắn riêng cho bot nên mặc định LƯU (khác nhóm: mặc định không đọc)
     defaultDirectRead: readBool("DEFAULT_DM_READ", true),
-    backfillCount: readInt("BACKFILL_COUNT", 200),
     defaultDirectCaptureFiles: readBool("DEFAULT_DM_CAPTURE_FILES", true),
     assistant: {
       apiKey: (process.env.GEMINI_API_KEY ?? "").trim(),

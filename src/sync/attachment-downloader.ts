@@ -116,9 +116,11 @@ export class AttachmentDownloader {
     try {
       const { body, contentType } = await this.download(job.source_url);
       const storageKey = await this.storage.put(buildStorageKey(job, contentType), body, contentType);
+      // Ảnh nhập từ Zalo Web nằm nguyên trong source_url (data URL, tới vài MB) — cất xong thì bỏ, khỏi phình bảng
       await this.db.query(
         `UPDATE attachment SET status = ?, storage_key = ?, stored_bytes = ?, attempts = attempts + 1,
-           last_error = '', stored_at = CURRENT_TIMESTAMP(3) WHERE id = ?`,
+           last_error = '', stored_at = CURRENT_TIMESTAMP(3),
+           source_url = IF(source_url LIKE 'data:%', '', source_url) WHERE id = ?`,
         [AttachmentStatus.Stored, storageKey, body.length, job.id],
       );
     } catch (error) {

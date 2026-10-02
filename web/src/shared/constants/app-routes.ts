@@ -20,6 +20,7 @@ export const appRoutes = {
     detail: (id: number | string) => `/groups/${id}`,
   },
   files: { list: '/files' },
+  imports: { zaloWeb: '/imports/zalo-web' },
   companies: {
     list: '/companies',
     detail: (id: number | string) => `/companies/${id}`,

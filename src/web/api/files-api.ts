@@ -10,6 +10,8 @@ import { runList } from "./list-runner.js";
 
 // API Tệp: danh sách tệp / ảnh / video đã thấy trong các cuộc trò chuyện, tải về, tải lại vào kho.
 
+const IMAGE_TYPES: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
+
 export const FILE_LIST_SPEC: ListSpec = {
   fields: {
     group_id: { sql: "a.group_id", type: "number" },
@@ -88,17 +90,21 @@ export const fileRoutes: ApiRoute[] = [
   }],
   ["GET", /^\/api\/files$/, async ({ response, url, service }) => sendOk(response, await listFiles(service.db, url.searchParams))],
   ["GET", /^\/api\/files\/(\d+)$/, async ({ response, match, service }) => sendOk(response, await getFile(service.db, parseId(match[1])))],
-  ["GET", /^\/api\/files\/(\d+)\/download$/, async ({ response, match, service }) => {
+  // ?inline=1 → ảnh hiện thẳng trong khung chat (đúng Content-Type ảnh; máy chủ bật nosniff nên octet-stream sẽ không vẽ được)
+  ["GET", /^\/api\/files\/(\d+)\/download$/, async ({ response, match, url, service }) => {
     const [rows] = await service.db.query<RowDataPacket[]>(
       "SELECT storage_key FROM attachment WHERE id = ? AND status = ?", [parseId(match[1]), AttachmentStatus.Stored]);
     const key = rows[0]?.storage_key as string | undefined;
     if (!key) throw new ApiError(404, "not_found", "Tệp chưa có trong kho");
     const stream = await service.storage.read(key);
     const downloadName = key.split("/").pop() ?? "tep";
+    const imageType = IMAGE_TYPES[(/\.([a-z0-9]{1,10})$/i.exec(downloadName)?.[1] ?? "").toLowerCase()];
+    const inline = url.searchParams.get("inline") === "1" && Boolean(imageType);
     response.writeHead(200, {
-      "Content-Type": "application/octet-stream",
+      "Content-Type": inline ? imageType : "application/octet-stream",
+      "Cache-Control": inline ? "private, max-age=3600" : "no-store",
       // Tên tệp tiếng Việt: filename* theo RFC 5987, kèm bản ASCII cho trình duyệt cũ
-      "Content-Disposition": `attachment; filename="${downloadName.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${downloadName.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
     });
     stream.pipe(response);
   }],

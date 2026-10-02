@@ -2,7 +2,7 @@ import type { RowDataPacket } from "mysql2";
 import { ConversationType, GroupKind } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { describeError } from "../../logger.js";
-import type { SyncService } from "../../sync-service.js";
+import type { BackfillJob, SyncService } from "../../sync-service.js";
 import { updateGroupSettings, type GroupSettingsPatch } from "../../sync/group-repository.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
@@ -152,13 +152,11 @@ export async function patchGroup(service: SyncService, id: number, body: Record<
   };
   await recordAudit(db, { entity: "group", entityId: id, action: "update", changedFields: diffFields(before, after, FIELD_LABELS) });
 
-  // Vừa bật đọc: lấy luôn tin gần nhất, khỏi chờ có tin mới mới thấy nhóm có nội dung
+  // Vừa bật đọc: kéo vài trang tin gần nhất ở nền, khỏi chờ có tin mới mới thấy nhóm có nội dung
   if (patch.readMessages && !before.read_messages) {
     try {
-      const result = await service.backfillGroup(id);
-      return result.fetched
-        ? `Đã lưu và bật đọc; lấy được ${result.stored} tin gần nhất.`
-        : "Đã lưu và bật đọc. Zalo không cho lấy tin cũ của nhóm (đường lịch sử nhóm đã đóng) — bot lưu từ bây giờ trở đi.";
+      await service.startBackfill(id, { full: false });
+      return "Đã lưu và bật đọc; đang lấy tin gần nhất của nhóm ở nền (bấm «Lấy tin cũ» để kéo toàn bộ lịch sử).";
     } catch (error) {
       return `Đã lưu và bật đọc; lấy tin cũ không được: ${describeError(error)}`;
     }
@@ -166,20 +164,21 @@ export async function patchGroup(service: SyncService, id: number, body: Record<
   return "Đã lưu cấu hình nhóm";
 }
 
-export async function backfillGroup(service: SyncService, id: number): Promise<string> {
-  await loadGroup(service.db, id);
-  let message: string;
-  try {
-    const result = await service.backfillGroup(id);
-    message = result.fetched === 0
-      ? "Zalo không trả tin cũ nào cho nhóm này: Zalo đã đóng đường lấy lịch sử nhóm từ khoảng 06/2026 " +
-        "(thư viện zca-js chưa có cách thay). Bot chỉ lưu được tin từ lúc bật «Đọc tin» trở đi."
-      : `Cách lấy: ${result.method}. Zalo trả ${result.fetched} tin của nhóm, đang có trong kho ${result.stored} tin trong số đó.`;
-  } catch (error) {
-    throw new ApiError(502, "backfill_failed", `Lấy tin cũ không được: ${describeError(error)}`);
-  }
-  await recordAudit(service.db, { entity: "group", entityId: id, action: "backfill", message });
-  return message;
+/** Trạng thái việc lấy tin cũ cho giao diện: tiến độ + câu kết luận khi xong. */
+function describeBackfill(job: BackfillJob): Record<string, unknown> {
+  const running = !job.finishedAt;
+  const message = running
+    ? `Đang lấy… ${job.pages} trang, ${job.fetched} tin, mới ${job.stored}`
+    : job.error
+      ? `Lấy tin cũ không được: ${job.error}`
+      : job.fetched === 0
+        ? "Zalo không trả tin cũ nào cho nhóm này (nhóm trống, hoặc Zalo đã đóng đường lịch sử)."
+        : `Xong: ${job.method}, Zalo trả ${job.fetched} tin, lưu mới ${job.stored}` +
+          `${job.oldest ? `, cũ nhất ${job.oldest.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false })}` : ""}.`;
+  return {
+    group_id: job.groupId, running, full: job.full, pages: job.pages, fetched: job.fetched, stored: job.stored,
+    oldest: job.oldest, started_at: job.startedAt, finished_at: job.finishedAt, error: job.error, message,
+  };
 }
 
 export const groupRoutes: ApiRoute[] = [
@@ -190,9 +189,25 @@ export const groupRoutes: ApiRoute[] = [
     const message = await patchGroup(service, id, await readJson(request));
     sendOk(response, await getGroupDetail(service.db, id), message);
   }],
-  ["POST", /^\/api\/groups\/(\d+)\/backfill$/, async ({ response, match, service }) => {
+  // Lấy tin cũ: chạy nền, trả ngay trạng thái; giao diện hỏi GET tới khi `running` = false
+  ["POST", /^\/api\/groups\/(\d+)\/backfill$/, async ({ request, response, match, service }) => {
     const id = parseId(match[1]);
-    const message = await backfillGroup(service, id);
-    sendOk(response, await getGroupDetail(service.db, id), message);
+    await loadGroup(service.db, id);
+    const body = await readJson(request);
+    const running = service.getBackfillJob(id);
+    if (running && !running.finishedAt) throw new ApiError(409, "backfill_running", "Đang lấy tin cũ của nhóm này rồi, chờ xong đã");
+    let job: BackfillJob;
+    try {
+      job = await service.startBackfill(id, { full: body.full !== false });
+    } catch (error) {
+      throw new ApiError(409, "backfill_failed", `Lấy tin cũ không được: ${describeError(error)}`);
+    }
+    await recordAudit(service.db, { entity: "group", entityId: id, action: "backfill", message: job.full ? "Bắt đầu lấy toàn bộ tin cũ" : "Bắt đầu lấy tin gần nhất" });
+    sendOk(response, describeBackfill(job), "Đang lấy tin cũ ở nền");
+  }],
+  ["GET", /^\/api\/groups\/(\d+)\/backfill$/, async ({ response, match, service }) => {
+    const job = service.getBackfillJob(parseId(match[1]));
+    if (!job) throw new ApiError(404, "not_found", "Chưa lấy tin cũ lần nào từ lúc máy chủ khởi động");
+    sendOk(response, describeBackfill(job));
   }],
 ];
