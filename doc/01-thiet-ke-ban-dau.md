@@ -1,5 +1,9 @@
 # Trợ lý Zalo cho IDA — thiết kế bản đầu
 
+> **02/10/2026:** tình trạng thực tế + lộ trình đã chuyển sang [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md);
+> tài liệu này giữ làm thiết kế gốc. Khác thiết kế: không dùng lệnh gạch chéo (câu tự nhiên); Telegram chưa
+> làm; tin cũ trước ngày bot vào nhóm chỉ bù được ~2 tuần qua Zalo Web.
+>
 > Bản 0.3.1 · 01/10/2026: thêm `company` (nhiều công ty trong một bộ cài — nhóm gắn công ty, quản lý công ty
 > nào chỉ thấy nhóm công ty đó; khách KHÁC thì bộ cài riêng) + `bot_group`; tin KHÔNG mã hóa (đại ca chốt).
 > Bản 0.3 · 01/10/2026 · trạng thái: **đang làm** — đã có mã bản đồng bộ cơ bản (mục 7). Bản 0.3: chốt công nghệ, dựng mới
