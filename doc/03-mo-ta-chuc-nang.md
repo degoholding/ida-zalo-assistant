@@ -114,7 +114,7 @@ trùng; giờ gửi lấy từ kho Zalo Web, không có thì suy từ `cliMsgId`
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | **A — Nền** | Đồng bộ Zalo đa tài khoản, lưu tin / tệp / thành viên, Danh bạ, trợ lý Gemini qua tin riêng, giao diện web khung ERP v2, gửi tin từ web, SSE, đọc tệp + cất chữ, nhật ký thao tác, bộ đếm, nhập lịch sử Zalo Web, tin hệ thống | **Xong** (dev1, 02/10/2026) |
-| **B — Cài đặt + Google Sheets** | Bảng `app_setting` + màn **Cài đặt**: khóa Gemini, mô hình nhẹ / nặng, giờ gửi bản tin, ngưỡng X giờ «chưa trả lời», giá trị mặc định nhóm — sửa trên web, không build lại; khóa bí mật mã hóa, không hiện lại nguyên văn. **Google Sheets** bằng service account (dán JSON vào Cài đặt, nút «Kiểm tra kết nối» ghi thử một dòng) | **Làm tiếp theo** (~1 ngày) |
+| **B — Cài đặt + Google Sheets** ([plan thi công](04-plan-phase-b-cai-dat-google-sheets.md)) | Bảng `app_setting` + màn **Cài đặt**: khóa Gemini, mô hình nhẹ / nặng, giờ gửi bản tin, ngưỡng X giờ «chưa trả lời», giá trị mặc định nhóm — sửa trên web, không build lại; khóa bí mật mã hóa, không hiện lại nguyên văn. **Google Sheets** bằng service account (dán JSON vào Cài đặt, nút «Kiểm tra kết nối» ghi thử một dòng) | **Làm tiếp theo** (~1 ngày) |
 | **C — Hạ tầng GĐ1** | Bộ lập lịch trong tiến trình; bảng cờ trên tin (`message_flag`: loại, ưu tiên, đã xử lý, ai xử lý); chủ sở hữu của mỗi bot; che SĐT / STK / CCCD trước khi gửi AI | chờ B |
 | **D — Check tin nhắn (N1)** | @mention / hỏi thẳng chủ, VIP từ Danh bạ, phân loại Khẩn / Quan trọng / Thường, câu hỏi chưa trả lời quá X giờ, «có gì cần xử lý», đẩy tin khẩn | chờ C |
 | **E — Tìm kiếm (N4)** | `search_messages` (từ khóa + người + nhóm + ngày + loại), màn tìm tin trên web, link về tin gốc | chờ C |

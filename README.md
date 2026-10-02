@@ -7,7 +7,8 @@ Công ty, Tài khoản bot (đăng nhập QR). Sự kiện nhóm (vào / rời /
 soạn tin: quản trị gõ chữ / gửi tệp từ web, đi ra Zalo **dưới tên tài khoản bot**, lưu lại với nhãn «quản trị».
 
 Tài liệu: **mô tả chức năng + lộ trình** [`doc/03-mo-ta-chuc-nang.md`](doc/03-mo-ta-chuc-nang.md) ·
-đối chiếu đặc tả IDA [`doc/02-doi-chieu-nhu-cau.md`](doc/02-doi-chieu-nhu-cau.md) · thiết kế gốc
+đối chiếu đặc tả IDA [`doc/02-doi-chieu-nhu-cau.md`](doc/02-doi-chieu-nhu-cau.md) · plan phase B (Cài đặt +
+Google Sheets) [`doc/04-plan-phase-b-cai-dat-google-sheets.md`](doc/04-plan-phase-b-cai-dat-google-sheets.md) · thiết kế gốc
 [`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md).
 
 Công nghệ: Node 22 + TypeScript · `zca-js` 2.2.0 (thư viện Zalo **không chính thức**, ghim cứng) ·
