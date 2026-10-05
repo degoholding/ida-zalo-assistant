@@ -81,6 +81,14 @@ nên dự phòng toàn mô hình khác nhau thì một cái hết lượt vẫn 
 nội dung gửi lên (tin nhắn, tệp) để cải thiện sản phẩm, người của Google có thể đọc** — chạy thật với dữ liệu
 công ty thì bật thanh toán cho khóa.
 
+**Báo cáo ra file** (`export_report`, 05/10/2026): người hỏi nói «xuất báo cáo … ra Excel / Google Sheets / file»
+thì trợ lý lấy dữ liệu, soạn thành một bảng rồi xuất. Google Sheets đã kết nối (màn Cài đặt) → mỗi báo cáo một
+tab mới trên trang tính, bot gửi link mở thẳng tab; chưa kết nối, hoặc người hỏi nói «Excel» → tệp `.xlsx` cất
+kho (`reports/<yyyymm>/…`), bot gửi tệp qua Zalo, màn Tệp tải lại được. Sheets lỗi (chưa chia sẻ, hết hạn mức…)
+thì tự lùi về Excel. Một lượt hỏi một báo cáo, tối đa 20 cột × 1.000 dòng. Mã: `src/reports/`,
+`src/assistant/export-report-tool.ts`. Thử trên máy dev: `npm run ask -- "xuất file Excel báo cáo các nhóm 3 ngày qua"`.
+Báo cáo có số liệu tiền thì đối chiếu tin gốc — mô hình có lúc ghi nhầm giá trước / sau giảm.
+
 ## Cài đặt trên web + Google Sheets
 
 Màn **Cài đặt** (`/app/settings`) sửa khóa Gemini, mô hình, các trần của trợ lý, giãn cách gửi, mặc định
@@ -156,6 +164,19 @@ npm run dev                 # Vite ở cổng 5175, proxy /api và /avatars về
 npm run typecheck && npm run lint
 npx vitest run src/modules/<phân hệ>   # chỉ thư mục vừa sửa, không chạy full
 ```
+
+**Dữ liệu mẫu để thử** (DB dev trống, chưa có tài khoản bot):
+
+```
+npm run seed:demo                                   # 2 công ty, 3 nhóm «DEMO · …», 6 người, ~30 tin, 3 tệp
+npm run ask -- "tóm tắt nhóm K52 hôm nay"           # hỏi trợ lý dưới tên quản lý demo, không cần Zalo
+```
+
+`seed:demo` đi qua đúng các hàm đồng bộ thật (bộ đếm, danh bạ khớp), chạy lại không nhân đôi, mã Zalo đều
+bắt đầu `demo-`, bị chặn khi `NODE_ENV=production`. Bot demo tắt sẵn, không có phiên — gửi tin từ web vào
+cuộc demo sẽ báo «bot đang tắt», đúng như thật. `ask` dùng đúng cài đặt / công cụ / giới hạn như tin Zalo;
+câu hỏi + trả lời lưu vào cuộc riêng của «Nguyễn Văn Duy» (màn Hội thoại, tải lại trang để thấy). Tệp demo
+chỉ có tên, không có nội dung — `read_file` báo lỗi là đúng. Dữ liệu: `src/dev/demo-conversations.ts`.
 
 Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng bộ lệnh như trên, thêm `login <nhãn>` quét QR bằng tệp ảnh).
 

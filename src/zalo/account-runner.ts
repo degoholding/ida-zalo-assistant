@@ -10,6 +10,7 @@ import {
   type UserMessage,
 } from "zca-js";
 import type { AssistantService } from "../assistant/assistant-service.js";
+import type { GeneratedReportFile } from "../reports/report-exporter.js";
 import { splitForZalo } from "../assistant/assistant-service.js";
 import type { AppConfig } from "../config.js";
 import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
@@ -519,7 +520,8 @@ export class AccountRunner {
     });
     // Không ghi nội dung câu hỏi / câu trả lời vào log — chỉ ai, kết quả, bao lâu; nội dung xem ở màn Hội thoại
     this.log.info(`trả lời «${contact.display_name || contact.zalo_uid}»: ${AssistantTurnStatus[reply.status]}` +
-      `${reply.text ? `, ${reply.text.length} ký tự` : ", không gửi"}${reply.attachmentIds.length ? `, ${reply.attachmentIds.length} tệp` : ""}`);
+      `${reply.text ? `, ${reply.text.length} ký tự` : ", không gửi"}${reply.attachmentIds.length ? `, ${reply.attachmentIds.length} tệp` : ""}` +
+      `${reply.reportFiles?.length ? `, ${reply.reportFiles.length} báo cáo Excel` : ""}`);
     const api = this.api!;
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
     if (reply.text) {
@@ -536,6 +538,30 @@ export class AccountRunner {
         await this.sender.send(() => api.sendMessage(notice, contact.zalo_uid, ThreadType.User)).catch(() => undefined);
       });
     }
+    for (const file of reply.reportFiles ?? []) {
+      await this.sendReportFile(thread, contact.zalo_uid, file).catch(async (error) => {
+        this.log.warn(`gửi báo cáo ${file.fileName} lỗi`, error);
+        const notice = `Không gửi được tệp báo cáo ${file.fileName}: ${describeError(error)}`.slice(0, 300);
+        await this.sender.send(() => api.sendMessage(notice, contact.zalo_uid, ThreadType.User)).catch(() => undefined);
+      });
+    }
+  }
+
+  /** Tệp báo cáo Excel trợ lý vừa tạo (đã cất kho): gửi cho người hỏi rồi ghi vào cuộc — màn Tệp thấy, tải lại được. */
+  private async sendReportFile(thread: GroupRow, peerUid: string, file: GeneratedReportFile): Promise<void> {
+    const stream = await this.storage.read(file.storageKey);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+    const data = Buffer.concat(chunks);
+    const filename = file.fileName as `${string}.${string}`;
+    const response = await this.sender.send(() =>
+      this.api!.sendMessage({ msg: "", attachments: [{ data, filename, metadata: { totalSize: data.length } }] }, peerUid, ThreadType.User));
+    const msgId = response.message?.msgId ?? response.attachment?.[0]?.msgId;
+    if (!msgId) return;
+    const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
+    await recordOutgoingMessage(this.db, thread, bot, String(msgId), file.fileName, {
+      kind: MessageKind.File, file: { name: file.fileName, ext: "xlsx", storageKey: file.storageKey, bytes: file.bytes },
+    });
   }
 
   /** Thread Zalo (riêng / nhóm) của một cuộc trong kho. */

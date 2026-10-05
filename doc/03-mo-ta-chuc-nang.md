@@ -66,6 +66,7 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
 | `read_file` | đọc tệp: xlsx / docx / pdf / txt / csv / ảnh, tối đa 5 MB; chữ bóc ra được cất lại |
 | `send_file` | gửi lại một tệp trong kho cho người hỏi |
 | `web_search` | tìm trên mạng |
+| `export_report` | xuất báo cáo dạng bảng: Google Sheets (tab mới, gửi link) nếu đã kết nối, không thì tệp Excel gửi qua Zalo |
 
 - **Mô hình:** Gemini bản nhẹ cho câu thường; tự chuyển bản mạnh (`GEMINI_MODEL_HEAVY`) khi ngữ cảnh dài
   (đọc tệp lớn, tóm tắt dài); mô hình chính quá tải / hết hạn mức thì chuyển lần lượt sang danh sách dự phòng.
@@ -128,7 +129,7 @@ trùng; giờ gửi lấy từ kho Zalo Web, không có thì suy từ `cliMsgId`
 | **D — Check tin nhắn (N1)** | @mention / hỏi thẳng chủ, VIP từ Danh bạ, phân loại Khẩn / Quan trọng / Thường, câu hỏi chưa trả lời quá X giờ, «có gì cần xử lý», đẩy tin khẩn | chờ C |
 | **E — Tìm kiếm (N4)** | `search_messages` (từ khóa + người + nhóm + ngày + loại), màn tìm tin trên web, link về tin gốc | chờ C |
 | **F — Checklist (N5)** | Bảng việc, bot đề xuất việc từ tin → chủ xác nhận, nhắc 3 mốc hạn | chờ C |
-| **G — Bản tin & báo cáo (N6)** | Morning / End-of-day Brief đúng giờ, mẫu Executive Summary, mẫu tóm tắt tệp đủ mọi sheet, báo cáo theo mẫu, **xuất Excel / Google Sheets** | chờ B, C |
+| **G — Bản tin & báo cáo (N6)** | Morning / End-of-day Brief đúng giờ, mẫu Executive Summary, mẫu tóm tắt tệp đủ mọi sheet, báo cáo theo mẫu, **xuất Excel / Google Sheets** | Xuất Excel / Sheets **làm trước, xong 05/10** (`export_report`, theo yêu cầu khi hỏi); phần còn lại chờ C |
 | **H — Gửi theo lệnh (N7)** | Câu lệnh tự nhiên → xem trước → xác nhận → gửi → báo kết quả; hẹn giờ; tắt bot khẩn | chờ C |
 | **I — Thống kê (N3), Gợi ý trả lời (N2), nền tảng còn lại** | Trích số từ tin báo cáo, 2–3 bản nháp trả lời, khoanh quyền trưởng phòng theo nhóm, nhãn Mật, cảnh báo phiên văng, tài liệu PDPL | chờ D–H |
 

@@ -6,6 +6,7 @@ import type { Db } from "./db/pool.js";
 import { createLogger, describeError } from "./logger.js";
 import type { SettingsStore } from "./settings/settings-store.js";
 import type { FileStorage } from "./storage/file-storage.js";
+import { ReportExporter } from "./reports/report-exporter.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
 import { ConversationType } from "./constants.js";
@@ -58,7 +59,8 @@ export class SyncService {
     const { apiKey, model, heavyModel, fallbackModels, maxPerHour, dailyTokenCap, maxReadFileBytes } = this.config.assistant;
     const assistant = apiKey
       ? new AssistantService(this.db, new GeminiClient(apiKey, model, fallbackModels), model, { maxPerHour, dailyTokenCap }, () => new Date(),
-          { storage: this.storage, heavyModel: heavyModel || undefined, maxReadFileBytes })
+          { storage: this.storage, heavyModel: heavyModel || undefined, maxReadFileBytes,
+            reportExporter: new ReportExporter(this.storage, () => this.config.google) })
       : null;
     log.info(assistant ? `trợ lý AI bật (${model}; việc nặng: ${heavyModel || model})` : "trợ lý AI tắt — chưa có khóa Gemini");
     return assistant;

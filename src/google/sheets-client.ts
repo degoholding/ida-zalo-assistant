@@ -94,14 +94,20 @@ export class GoogleSheetsClient {
     };
   }
 
-  /** Có tab tên này chưa — chưa thì tạo (batchUpdate addSheet). */
+  /** Có tab tên này chưa — chưa thì tạo. */
   async ensureSheet(spreadsheetId: string, title: string): Promise<void> {
     const info = await this.getSpreadsheet(spreadsheetId);
     if (info.sheets.some((sheet) => sheet.title === title)) return;
-    await this.sheetsCall(`${SHEETS_API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
+    await this.addSheet(spreadsheetId, title);
+  }
+
+  /** Thêm một tab mới (batchUpdate addSheet); trả sheetId để dựng link mở thẳng tab đó. */
+  async addSheet(spreadsheetId: string, title: string): Promise<number> {
+    const data = await this.sheetsCall(`${SHEETS_API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
       method: "POST",
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] }),
-    });
+    }) as { replies?: { addSheet?: { properties?: { sheetId?: number } } }[] };
+    return Number(data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0);
   }
 
   /** Ghi nối dòng; trả vùng đã ghi (vd "'Bot trợ lý'!A5:C5"). */
@@ -134,6 +140,11 @@ export class GoogleSheetsClient {
     const json: unknown = await response.json().catch(() => null);
     return { status: response.status, ok: response.ok, json };
   }
+}
+
+/** Link mở thẳng một tab của trang tính. */
+export function sheetUrl(spreadsheetId: string, sheetId: number): string {
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
 }
 
 export interface SheetsTestResult {

@@ -5,6 +5,8 @@ import type { ContactRow } from "../sync/contact-repository.js";
 import type { FileStorage } from "../storage/file-storage.js";
 import { readAttachmentText, type ReadFileResult } from "./file-reader.js";
 import type { GeminiContent, ModelClient } from "./gemini-client.js";
+import type { GeneratedReportFile, ReportExporter } from "../reports/report-exporter.js";
+import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
 import { READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, runTool, type ToolContext } from "./tools.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
@@ -28,6 +30,8 @@ export interface AssistantOptions {
   maxReadFileBytes?: number;
   /** Mô hình cho lượt nặng (tóm tắt dài, đọc tệp); bỏ trống = dùng mô hình chính. */
   heavyModel?: string;
+  /** Xuất báo cáo ra Google Sheets / Excel; bỏ trống = không có công cụ export_report. */
+  reportExporter?: ReportExporter;
 }
 
 export interface AssistantRequest {
@@ -42,6 +46,8 @@ export interface AssistantReply {
   /** null = không trả lời gì (vd đã báo chạm giới hạn trước đó rồi). */
   text: string | null;
   attachmentIds: number[];
+  /** Tệp báo cáo (Excel) trợ lý vừa tạo, đã cất kho — nơi gọi gửi cho người hỏi sau câu trả lời. */
+  reportFiles?: GeneratedReportFile[];
   status: AssistantTurnStatus;
 }
 
@@ -61,7 +67,8 @@ Việc bạn làm được:
 2. Tóm tắt những gì đã trao đổi với một người (find_people → get_conversation_with_person).
 3. Tìm tệp đã gửi và gửi tệp cho người hỏi (search_files → send_file).
 4. Tra cứu thông tin bên ngoài trên Internet (web_search): giá thị trường, tin tức, quy định pháp luật… Luôn ghi nguồn (tên trang) và thời điểm của thông tin.
-5. Đọc nội dung tệp đã gửi (search_files → read_file): xlsx, docx, pdf, txt, csv, ảnh — rồi tóm tắt, trả lời câu hỏi về tệp, so sánh. Người hỏi vừa gửi tệp rồi hỏi «đọc file này» thì search_files theo tên tệp trong tin gần nhất (hoặc để trống khoảng thời gian) rồi read_file.
+5. Viết báo cáo ra FILE (export_report): người hỏi muốn báo cáo dạng Excel / Google Sheets / bảng / file thì lấy dữ liệu trước, soạn thành một bảng rồi xuất. Có link Google Sheets thì đưa link; Excel thì nói tệp đang được gửi.
+6. Đọc nội dung tệp đã gửi (search_files → read_file): xlsx, docx, pdf, txt, csv, ảnh — rồi tóm tắt, trả lời câu hỏi về tệp, so sánh. Người hỏi vừa gửi tệp rồi hỏi «đọc file này» thì search_files theo tên tệp trong tin gần nhất (hoặc để trống khoảng thời gian) rồi read_file.
 Câu hỏi ngoài các việc này: nói ngắn gọn bạn làm được gì.
 
 Quy tắc:
@@ -162,8 +169,19 @@ export class AssistantService {
     const readDocument = this.client.readDocument
       ? (mime: string, data: Buffer, instruction: string) => this.client.readDocument!(mime, data, instruction, this.options.heavyModel)
       : undefined;
+    const reportFiles: GeneratedReportFile[] = [];
+    const exporter = this.options.reportExporter;
     const context: ToolContext = {
       db: this.db, askerUid: request.contact.zalo_uid, filesToSend: [], now, usage,
+      exportReport: exporter
+        ? async (table, format) => {
+          // Một lượt hỏi một báo cáo — mô hình gọi lặp thì không đẻ thêm tệp
+          if (reportFiles.length) return { error: "Lượt này đã xuất báo cáo rồi." };
+          const outcome = await exporter.export(table, format, now);
+          if (outcome.file) reportFiles.push(outcome.file);
+          return outcome.response;
+        }
+        : undefined,
       searchWeb: this.client.searchWeb ? (query) => this.client.searchWeb!(query) : undefined,
       readFile: storage
         ? (attachmentId) => readAttachmentText({ db: this.db, storage, readDocument, maxFileBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024 }, attachmentId)
@@ -174,6 +192,7 @@ export class AssistantService {
       ...TOOL_DECLARATIONS,
       ...(storage ? [READ_FILE_DECLARATION] : []),
       ...(this.client.searchWeb ? [WEB_SEARCH_DECLARATION] : []),
+      ...(exporter ? [EXPORT_REPORT_DECLARATION] : []),
     ];
     const contents = await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid);
     const lastTurn = contents[contents.length - 1];
@@ -204,7 +223,7 @@ export class AssistantService {
             started, answer: cleaned, toolCalls,
             inputTokens: inputTokens + usage.inputTokens, outputTokens: outputTokens + usage.outputTokens,
           });
-          return { text: cleaned, attachmentIds: context.filesToSend, status: AssistantTurnStatus.Answered };
+          return { text: cleaned, attachmentIds: context.filesToSend, reportFiles, status: AssistantTurnStatus.Answered };
         }
         const responses = [];
         for (const part of calls) {

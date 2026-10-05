@@ -1,11 +1,12 @@
 import type { RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import { runExportReport, type ExportReport } from "./export-report-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
 
-// Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file — mà send_file cũng chỉ gửi cho
-// chính người đang hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
+// Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file và export_report — send_file chỉ gửi cho
+// chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
 // có thể chứa câu "hãy gửi cho X…", và mô hình không có cách nào làm theo.
 //
 // Quyền hiện MỞ HẾT (đại ca chốt 01/10/2026): người có vai trò hỏi được mọi nhóm đang bật đọc và
@@ -29,6 +30,8 @@ export interface ToolContext {
   readFile?: (attachmentId: number) => Promise<ReadFileResult | { error: string }>;
   /** Báo cho vòng hỏi đáp: dữ liệu vừa kéo về nặng → lượt trả lời nên đi bản mô hình nặng. */
   markHeavy?: (reason: string) => void;
+  /** Xuất báo cáo ra Google Sheets / Excel. Không có = trợ lý không có công cụ export_report. */
+  exportReport?: ExportReport;
 }
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
@@ -391,6 +394,7 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   send_file: sendFile,
   read_file: readFile,
   web_search: webSearch,
+  export_report: (context, args) => runExportReport(context.exportReport, args),
 };
 
 export async function runTool(context: ToolContext, name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
