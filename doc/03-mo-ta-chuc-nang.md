@@ -1,6 +1,6 @@
 # Bot trợ lý — mô tả chức năng và lộ trình
 
-> Bản 1.0 · 02/10/2026 · mô tả đúng mã trên nhánh `dev1` sau commit gom ngày 02/10. Thiết kế gốc:
+> Bản 1.1 · 03/10/2026 · mô tả đúng mã trên nhánh `phase-b-cai-dat` (= `dev1` + phase B: màn Cài đặt, Google Sheets). Thiết kế gốc:
 > [`01-thiet-ke-ban-dau.md`](01-thiet-ke-ban-dau.md) · đối chiếu đặc tả IDA (180 tính năng):
 > [`02-doi-chieu-nhu-cau.md`](02-doi-chieu-nhu-cau.md). Tài liệu này trả lời hai câu: **bây giờ hệ thống
 > làm được gì** (mục 1–6) và **làm gì tiếp theo, theo thứ tự nào** (mục 7).
@@ -40,6 +40,7 @@ màn chi tiết có thẻ danh tính, biểu mẫu, các tab và «Lịch sử t
 | **Nhập lịch sử** | Lấy tin trước ngày bot vào nhóm từ Zalo Web — mục 5. |
 | **Công ty** | Danh mục công ty; nhóm và người gắn công ty. |
 | **Tài khoản bot** | Thêm bot bằng QR, bật / tắt, trạng thái phiên, số nhóm / số cuộc riêng. |
+| **Cài đặt** | Sửa trên web, **có hiệu lực ngay** (không khởi động lại): khóa Gemini, mô hình chính / nặng / dự phòng, các trần của trợ lý, giãn cách gửi, mặc định nhóm / cuộc riêng mới, cỡ tệp tối đa. Giá trị web phủ lên `.env`; mỗi ô ghi rõ đang lấy từ web / `.env` / mặc định, có nút «Khôi phục mặc định». Khóa bí mật lưu mã hóa, không bao giờ hiện lại nguyên văn. Thẻ **Google Sheets**: dán khóa service account + link trang tính, nút «Kiểm tra kết nối» ghi thử một dòng vào tab «Bot trợ lý». Tab «Lịch sử thay đổi». |
 
 Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lịch sử thao tác» của từng bản ghi.
 
@@ -67,7 +68,8 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
 | `web_search` | tìm trên mạng |
 
 - **Mô hình:** Gemini bản nhẹ cho câu thường; tự chuyển bản mạnh (`GEMINI_MODEL_HEAVY`) khi ngữ cảnh dài
-  (đọc tệp lớn, tóm tắt dài). Trần lượt hỏi / giờ và trần token / ngày cấu hình trong `.env`.
+  (đọc tệp lớn, tóm tắt dài); mô hình chính quá tải / hết hạn mức thì chuyển lần lượt sang danh sách dự phòng.
+  Khóa, mô hình, trần lượt hỏi / giờ, trần token / ngày sửa trên màn **Cài đặt** (có hiệu lực ngay) hoặc `.env`.
 
 ## 4. Dữ liệu và quy mô
 
@@ -75,6 +77,8 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
   tệp, có FULLTEXT), `group_member`, `contact`, `company`, `bot_account`, `assistant_turn`, `audit_log`.
 - Số tin và tin gần nhất của mỗi cuộc là **bộ đếm ghi sẵn** lúc lưu tin — màn danh sách không quét bảng
   `message`, chịu được nhiều nhóm nhiều tin.
+- Cài đặt sửa trên web nằm ở `app_setting` (migration 014): không có dòng = dùng `.env` / mặc định; khóa
+  bí mật (khóa Gemini, khóa service account Google) lưu mã hóa bằng `SESSION_ENCRYPTION_KEY`.
 - Loại tin lưu SMALLINT (`MessageKind` ở `src/constants.ts`, có `System = 9` cho tin hệ thống).
 
 ## 5. Nhập lịch sử từ Zalo Web
@@ -108,13 +112,18 @@ trùng; giờ gửi lấy từ kho Zalo Web, không có thì suy từ `cliMsgId`
 - `zca-js` là thư viện **không chính thức**: tài khoản bot có rủi ro bị khóa; giữ giãn cách gửi
   (`ASSISTANT_SEND_INTERVAL_MS`) và không gửi hàng loạt.
 - Ảnh từ Zalo Web lớn hơn 2 MB không xuất được (giới hạn của bookmarklet).
+- **Khóa Gemini gói miễn phí** (đo 03/10/2026 bằng khóa thật): Google **được dùng nội dung gửi lên để cải
+  thiện sản phẩm, người của Google có thể đọc** (điều khoản Gemini API, mục Unpaid Services) — tức tin nhắn
+  nhóm, tên khách, tệp nội bộ. Gói miễn phí không có tìm web, không có bản Pro (429 ngay), các mô hình
+  `gemini-2.5-*` trả 404 với tài khoản mới; hạn mức tính riêng từng mô hình, Google không công bố số — xem
+  ở https://aistudio.google.com/rate-limit. Chạy thật với dữ liệu công ty thì **bật thanh toán cho khóa**.
 
 ## 7. Lộ trình
 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | **A — Nền** | Đồng bộ Zalo đa tài khoản, lưu tin / tệp / thành viên, Danh bạ, trợ lý Gemini qua tin riêng, giao diện web khung ERP v2, gửi tin từ web, SSE, đọc tệp + cất chữ, nhật ký thao tác, bộ đếm, nhập lịch sử Zalo Web, tin hệ thống | **Xong** (dev1, 02/10/2026) |
-| **B — Cài đặt + Google Sheets** ([plan thi công](04-plan-phase-b-cai-dat-google-sheets.md)) | Bảng `app_setting` + màn **Cài đặt**: khóa Gemini, mô hình nhẹ / nặng, giờ gửi bản tin, ngưỡng X giờ «chưa trả lời», giá trị mặc định nhóm — sửa trên web, không build lại; khóa bí mật mã hóa, không hiện lại nguyên văn. **Google Sheets** bằng service account (dán JSON vào Cài đặt, nút «Kiểm tra kết nối» ghi thử một dòng) | **Làm tiếp theo** (~1 ngày) |
+| **B — Cài đặt + Google Sheets** ([plan thi công](04-plan-phase-b-cai-dat-google-sheets.md)) | Bảng `app_setting` + màn **Cài đặt**: khóa Gemini, mô hình nhẹ / nặng / dự phòng, các trần, giá trị mặc định nhóm — sửa trên web, không build lại; khóa bí mật mã hóa, không hiện lại nguyên văn. **Google Sheets** bằng service account (dán JSON vào Cài đặt, nút «Kiểm tra kết nối» ghi thử một dòng). Giờ gửi bản tin, ngưỡng X giờ «chưa trả lời» thêm vào registry khi phase D / G cần | **Xong** (nhánh `phase-b-cai-dat`, 03/10/2026) |
 | **C — Hạ tầng GĐ1** | Bộ lập lịch trong tiến trình; bảng cờ trên tin (`message_flag`: loại, ưu tiên, đã xử lý, ai xử lý); chủ sở hữu của mỗi bot; che SĐT / STK / CCCD trước khi gửi AI | chờ B |
 | **D — Check tin nhắn (N1)** | @mention / hỏi thẳng chủ, VIP từ Danh bạ, phân loại Khẩn / Quan trọng / Thường, câu hỏi chưa trả lời quá X giờ, «có gì cần xử lý», đẩy tin khẩn | chờ C |
 | **E — Tìm kiếm (N4)** | `search_messages` (từ khóa + người + nhóm + ngày + loại), màn tìm tin trên web, link về tin gốc | chờ C |
@@ -130,5 +139,6 @@ cảnh Gemini cho tệp hỏi nhiều lần; bookmarklet tự quét theo lịch.
 
 1. **Nhập chat riêng** của tài khoản người xuất (hộp thư cá nhân, tách khỏi tin của bot) — có cần không?
 2. **Nhập nhóm bot không ở** (chỉ làm kho lưu, bot không đọc tiếp) — có cần không?
-3. Các câu ở mục 4 của doc 02 còn mở: chủ sở hữu của bot, giờ làm việc + ngưỡng X giờ, giờ gửi bản tin, thời
+3. **Bật thanh toán cho khóa Gemini** trước khi chạy thật (mục 6 — dữ liệu gói miễn phí bị Google dùng lại).
+4. Các câu ở mục 4 của doc 02 còn mở: chủ sở hữu của bot, giờ làm việc + ngưỡng X giờ, giờ gửi bản tin, thời
    hạn lưu cho tài liệu PDPL, kênh dự phòng Telegram.

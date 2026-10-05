@@ -107,7 +107,7 @@ Nguyên tắc: làm **hạ tầng chung** trước (một lần, dùng cho 4 c�
 
 | Đợt | Việc | Phục vụ | Cỡ |
 |---|---|---|---|
-| B | **Cài đặt + Google Sheets** (chen trước, chốt 02/10): bảng `app_setting` + màn Cài đặt sửa cấu hình trên web không build lại, khóa bí mật mã hóa; ghi Google Sheets bằng service account | B20, G (bản tin), mọi ngưỡng cấu hình | S |
+| B | **Cài đặt + Google Sheets** (chen trước, chốt 02/10): bảng `app_setting` + màn Cài đặt sửa cấu hình trên web không build lại, khóa bí mật mã hóa; ghi Google Sheets bằng service account — **xong 03/10/2026** (client + nút kiểm tra; xuất báo cáo thật để phase G) | B20, G (bản tin), mọi ngưỡng cấu hình | S |
 | 0 | **Hạ tầng**: bộ lập lịch (beat) trong tiến trình; bảng «cờ» trên tin (`message_flag`: loại, ưu tiên, đã xử lý, ai xử lý); khái niệm **chủ sở hữu** của mỗi tài khoản bot (người nhận bản tin / cảnh báo); che SĐT / STK / CCCD trước khi gửi AI (B36) | mọi cụm | M |
 | 1 | **Check tin nhắn (N1)**: gắn cờ @mention / hỏi thẳng chủ (B04), VIP từ thẻ Danh bạ (B03), từ khóa ưu tiên + AI phân loại (B02, TN001), câu hỏi chưa trả lời quá X giờ (TN097, B05), lệnh /check hoặc câu «có gì cần xử lý» (B01), đẩy tin khẩn (B06) | N1 | L |
 | 2 | **Tìm kiếm (N4)**: công cụ `search_messages` (từ khóa + người + nhóm + ngày + loại), màn tìm tin trên web, link về tin gốc, đoạn trích (TN138, B13, B16) | N4 | M |

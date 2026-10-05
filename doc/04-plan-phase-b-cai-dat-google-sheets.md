@@ -3,6 +3,9 @@
 > Bản 1.0 · 02/10/2026 · người giao: đại ca · người làm: đồng nghiệp (bàn giao) · nền: nhánh `dev1` tại
 > commit `d71c380`. Lộ trình chung: [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md) mục 7.
 > Ước lượng: **1,5–2 ngày** cho người mới vào kho (1 ngày nếu đã quen mã).
+>
+> **Trạng thái: XONG 03/10/2026** trên nhánh `phase-b-cai-dat` (tách từ `dev1`), chưa commit / chưa PR.
+> Kết quả thi công, chỗ lệch so với plan và việc còn lại: **mục 12** cuối tệp.
 
 ## 0. Mục tiêu
 
@@ -386,3 +389,54 @@ Kiểm tay trên `http://localhost:8090/app/settings`:
 - Phase G dùng `GoogleSheetsClient.appendRows` để xuất báo cáo; phase D / G thêm khóa «giờ gửi bản tin», «ngưỡng
   chưa trả lời (giờ)», «giờ làm việc» vào registry — giao diện tự có ô, không phải viết thêm màn.
 - Cập nhật `doc/03-mo-ta-chuc-nang.md`: mục 2 thêm dòng màn **Cài đặt**, mục 7 đánh dấu phase B **Xong**.
+
+## 12. Kết quả thi công (03/10/2026)
+
+### 12.1 Tệp
+
+| Phần | Tệp |
+|---|---|
+| Dữ liệu | `migrations/014_app_setting.sql` (đúng mục 4) |
+| Registry (B1) | `src/settings/setting-registry.ts` (danh mục khóa) · `setting-input-parser.ts` (`parseSettingInput`, `readEnvValue`) |
+| Kho (B2) | `src/settings/settings-store.ts` · `setting-values.ts` (phần thuần: nguồn, hint, so «thật sự đổi», mã hóa / giải mã, dựng `SettingView`) |
+| Nạp lại (B3) | `src/sync-service.ts` (`buildAssistant`, `applySettings`, getter `assistant`) · `account-runner.ts` (`setAssistant`, `setSendInterval`) · `attachment-downloader.ts` (`setMaxFileBytes`) · `zalo-sender.ts` (`setInterval`) · `main.ts` (nạp `SettingsStore` trước `SyncService`) |
+| API (B4) | `src/web/api/settings-api.ts` · `audit-log.ts` (entity `setting`, hành động `reset` / `test_connection`) · `permissions.ts` · `api-router.ts` |
+| Google (6.2, 6.3) | `src/google/service-account.ts` · `sheets-client.ts` · `sheets-error-messages.ts` (bảng dịch lỗi) |
+| Giao diện (7) | `web/src/modules/settings/**` (24 tệp: `api/ hooks/ pages/ components/ types/ utils/ routes.tsx`) · `app-routes.ts` · `query-keys.ts` · `nav-items.ts` · `app-router.tsx`. `'setting'` đã có sẵn trong `permission-types.ts` |
+| Bài kiểm | `src/settings/*.test.ts`, `src/google/*.test.ts` (31 bài) · `web/src/modules/settings/**/*.test.ts(x)` (52 bài) |
+
+### 12.2 Chỗ lệch so với plan (có lý do)
+
+- **Tách tệp** cho dưới ~200 dòng: registry tách phần ép kiểu ra `setting-input-parser.ts`; kho tách phần thuần
+  ra `setting-values.ts`; Google tách bảng dịch lỗi ra `sheets-error-messages.ts`.
+- **`SettingView` thêm** `secret`, `max_length`, `allow_empty` để giao diện dựng schema zod không phải đoán.
+  Với kiểu danh sách, `max` mang trần số phần tử (`maxItems`, vd 5 mô hình dự phòng).
+- **`AppConfig` thêm** `google: { serviceAccount, spreadsheetUrl }` — hai khóa Google chỉ có trên web, phủ vào đây như
+  các khóa khác; `settings-api` đọc giá trị đã lưu qua `settings.getSecret(...)`.
+- **`reset(key)` không nhận `actor`**: xóa dòng thì không còn chỗ ghi `updated_by`; người thao tác nằm ở `audit_log`.
+- **Khóa service account lưu bản đã chuẩn hóa** (`type, client_email, private_key, token_uri, project_id`), bỏ các
+  trường thừa của tệp `.json`.
+- **Ô bí mật đang lấy từ `.env`**: giao diện hiện nhãn «từ .env — muốn tắt thì xóa trong .env» và **không** hiện nút
+  «Xóa» (reset chỉ xóa giá trị web — bấm cũng không tắt được; thấy khi kiểm tay). Nút chép chỉ có ở email service account.
+- **`answerQuestion`** giữ bản trợ lý lúc bắt đầu lượt: khóa bị xóa trên web giữa chừng thì lượt đang dở chạy nốt,
+  không nổ `null`.
+
+### 12.3 Cổng kiểm và kiểm tay
+
+- `npm run typecheck && npm test`: 0 lỗi, 69/69. `web`: typecheck 0 lỗi · lint 0 lỗi (1 cảnh báo cũ ở
+  `data-table-pagination.tsx`) · `npx vitest run src/modules/settings` 52/52.
+- Kiểm tay (mục 9) trên máy chủ thật + trình duyệt: mục 1, 2, 3, 7, 8 đạt — ô hiện đúng nguồn; 30 → 40 → khôi
+  phục; 5000 và tên mô hình có dấu cách báo 422; một khóa sai thì không ghi khóa nào; phản hồi API / trang / log
+  không chứa khóa Gemini hay `PRIVATE KEY`; lịch sử có đủ lưu / khôi phục / kiểm tra, dòng khóa bí mật chỉ ghi nhãn.
+  Mục 4: đổi `gemini_model` → log `trợ lý AI bật (gemini-3.6-flash…)` ngay, không khởi động lại (chưa nhắn bot
+  thật — máy chưa có tài khoản bot). Mục 6: khóa service account tự sinh → Google trả `invalid_grant` → màn báo đúng câu.
+
+### 12.4 Còn lại
+
+- Mục 9.5–9.6 với dữ liệu thật: nhắn bot sau khi xóa / dán lại khóa (cần tài khoản bot đăng nhập QR); ghi thật vào
+  một Google Sheet (cần service account thật đã chia sẻ trang tính).
+- Tên `it(...)` trong bài kiểm giao diện đang viết tiếng Việt, luật `web/.claude/rules/testing.md` đòi tiếng Anh.
+- ~~CSP chặn script nhúng trong `web/index.html`~~ — **đã sửa 03/10/2026**: script sơn bảng màu tách ra
+  `web/public/theme-preload.js` (CSP giữ nguyên `script-src 'self'`); bài kiểm canh ở
+  `web/src/shared/theme/theme-preload-script.test.ts`. Lỗi có từ commit `fc197ca`, không do phase B.
+- Commit + PR `phase-b-cai-dat` → `dev1`.

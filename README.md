@@ -3,7 +3,7 @@
 Bot trợ lý đọc các nhóm Zalo công việc. **Bản hiện tại: đồng bộ cơ bản + trợ lý AI** — tài khoản
 bot đọc nhóm, lưu tin + thành viên nhóm, tải file ngay lúc tin tới, trả lời tin riêng bằng Gemini,
 kèm giao diện web quản trị (`web/`, khung ERP v2) dưới `/app`: Hội thoại, Danh bạ, Nhóm, Tệp, Nhập lịch sử,
-Công ty, Tài khoản bot (đăng nhập QR). Sự kiện nhóm (vào / rời / thêm người / đổi tên) lưu thành tin hệ thống. Màn Hội thoại nhận tin mới tức thời (kênh đẩy SSE `/api/events`) và có ô
+Công ty, Tài khoản bot (đăng nhập QR), Cài đặt (sửa cấu hình trên web + Google Sheets). Sự kiện nhóm (vào / rời / thêm người / đổi tên) lưu thành tin hệ thống. Màn Hội thoại nhận tin mới tức thời (kênh đẩy SSE `/api/events`) và có ô
 soạn tin: quản trị gõ chữ / gửi tệp từ web, đi ra Zalo **dưới tên tài khoản bot**, lưu lại với nhãn «quản trị».
 
 Tài liệu: **mô tả chức năng + lộ trình** [`doc/03-mo-ta-chuc-nang.md`](doc/03-mo-ta-chuc-nang.md) ·
@@ -51,7 +51,7 @@ Giao diện: `http://127.0.0.1:8090` (chỉ mở trong máy; vào từ xa qua đ
 
 ## Trợ lý AI (Gemini)
 
-Đặt `GEMINI_API_KEY` trong `.env` là bật. Người có vai trò nhắn riêng cho bot, hỏi được:
+Đặt `GEMINI_API_KEY` trong `.env` (hoặc dán trên màn **Cài đặt**) là bật. Người có vai trò nhắn riêng cho bot, hỏi được:
 tóm tắt nhóm theo thời gian · đã bàn gì với một người · tìm tệp và nhận tệp. Quyền hiện **mở hết**
 (mọi vai trò hỏi được mọi nhóm). Mô hình chính `gemini-3.5-flash-lite` (đo 01/10/2026: 2–4 giây/câu);
 quá tải hoặc hết hạn mức thì tự chuyển sang `GEMINI_FALLBACK_MODELS`. Mỗi lượt hỏi ghi ở bảng
@@ -62,6 +62,46 @@ quá tải hoặc hết hạn mức thì tự chuyển sang `GEMINI_FALLBACK_MOD
 nguồn. Gói miễn phí của Gemini KHÔNG có tìm web (đo 01/10/2026: 429) — bật thanh toán cho khóa thì chạy
 ngay: 5.000 lượt tìm miễn phí/tháng, sau đó 14 USD/1.000 lượt (bảng giá Google 01/10/2026). Chưa bật thì
 bot trả lời người hỏi là tìm web chưa bật.
+
+**Chọn mô hình** (đo 03/10/2026 bằng khóa gói miễn phí, một câu hỏi tiếng Việt có gọi công cụ):
+
+| Mô hình | Kết quả |
+|---|---|
+| `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` | ~1 giây, gọi công cụ đúng |
+| `gemini-3.6-flash` | 2–3 giây, ổn định |
+| `gemini-3.8-flash` | ~2,5 giây, có lần 503 quá tải |
+| `gemini-3.5-flash` (mặc định việc nặng) | 11–12 giây — chậm |
+| `gemma-4-26b-a4b-it` | ~3 giây |
+| `gemini-2.5-*` | 404 — đã ngừng cho tài khoản mới |
+| `gemini-3.1-pro-preview` | 429 ngay — gói miễn phí không có Pro |
+
+Khóa miễn phí nên đặt: mô hình chính `gemini-3.5-flash-lite`, việc nặng `gemini-3.6-flash`, dự phòng
+`gemini-3.1-flash-lite, gemini-3.8-flash, gemma-4-26b-a4b-it` — hạn mức miễn phí tính **riêng từng mô hình**
+nên dự phòng toàn mô hình khác nhau thì một cái hết lượt vẫn còn cái khác. **Gói miễn phí: Google được dùng
+nội dung gửi lên (tin nhắn, tệp) để cải thiện sản phẩm, người của Google có thể đọc** — chạy thật với dữ liệu
+công ty thì bật thanh toán cho khóa.
+
+## Cài đặt trên web + Google Sheets
+
+Màn **Cài đặt** (`/app/settings`) sửa khóa Gemini, mô hình, các trần của trợ lý, giãn cách gửi, mặc định
+nhóm / cuộc riêng mới, cỡ tệp tối đa — lưu là **có hiệu lực ngay**, không khởi động lại. Thứ tự ưu tiên:
+giá trị trên web (bảng `app_setting`) > `.env` > mặc định trong mã; «Khôi phục mặc định» = xóa giá trị web,
+quay về `.env`. Danh mục khóa khai một chỗ ở `src/settings/setting-registry.ts`. Khóa bí mật (khóa Gemini,
+khóa service account) lưu mã hóa bằng `SESSION_ENCRYPTION_KEY`, API chỉ trả «đã đặt» + 4 ký tự cuối / email.
+Những thứ cần có trước khi vào được web (`DATABASE_URL`, khóa mã hóa, `ADMIN_PASSWORD`, cổng, nơi cất tệp…)
+vẫn chỉ đặt ở `.env`.
+
+**Google Sheets** (service account, không cần đăng nhập Google):
+
+1. Vào https://console.cloud.google.com → chọn / tạo project (vd `bot-tro-ly`).
+2. **APIs & Services → Library** → tìm **Google Sheets API** → **Enable**.
+3. **IAM & Admin → Service Accounts → Create service account** → đặt tên (vd `bot-tro-ly-sheets`) → bỏ qua
+   phần cấp quyền → Done.
+4. Mở service account vừa tạo → tab **Keys → Add key → Create new key → JSON** → tệp `.json` tự tải về.
+   **Không gửi tệp này qua Zalo / email**; mở bằng Notepad, chép toàn bộ, dán vào ô «Khóa service account».
+5. Mở Google Sheet muốn bot ghi vào → **Chia sẻ** → dán email service account (màn Cài đặt hiện sẵn sau khi
+   dán khóa) → quyền **Người chỉnh sửa** → bỏ tick «Thông báo» → Chia sẻ. Chép link trang tính dán vào ô
+   «Link trang tính», lưu, bấm **Kiểm tra kết nối** → có dòng mới trong tab «Bot trợ lý».
 
 ## Xem cơ sở dữ liệu bằng Adminer của ERP (máy dev)
 
@@ -94,6 +134,17 @@ tĩnh của `web/` dưới `/app` (Dockerfile build sẵn, `WEB_DIST_DIR`). Giao
 
 ## Chạy khi phát triển
 
+MySQL của bot nằm trong Docker và **không mở cổng ra máy**; cổng 3306 trên máy dev thường đã bị MySQL của
+dự án khác chiếm (gặp 03/10/2026: `Access denied for user 'bot'@'192.168.65.1'` = đang gõ nhầm cửa MySQL
+của procurement-tool). Muốn `npm run dev` ngoài Docker:
+
+1. Tạo `docker-compose.override.yml` (đã có trong `.gitignore`, chỉ dùng trên máy mình) mở MySQL ra cổng trống:
+   `services: { mysql: { ports: ["127.0.0.1:3308:3306"] } }` → `docker compose up -d mysql`.
+2. `.env`: `DATABASE_URL=mysql://bot:<MYSQL_PASSWORD>@127.0.0.1:3308/bot_tro_ly` (compose tự đặt
+   `DATABASE_URL` riêng cho container nên không ảnh hưởng bản Docker).
+3. `docker compose stop app` trước khi `npm run dev` — trùng cổng 8090, và hai bản cùng chạy là hai phiên Zalo
+   của cùng tài khoản bot đá nhau. Quay lại Docker: tắt `npm run dev` rồi `docker compose up -d --build app`.
+
 ```
 npm install
 npm run dev                 # máy chủ bot + API, cần MySQL + .env
@@ -112,6 +163,16 @@ Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng b�
 
 - **Sửa `.env` xong phải chạy `docker compose up -d`** (tạo lại container), KHÔNG phải `docker compose restart`
   — restart giữ nguyên biến môi trường cũ (gặp thật 01/10/2026: đổi khóa Gemini mà bot vẫn dùng khóa cũ).
+- **Ô đã «đặt trên web» thì sửa `.env` không có tác dụng** — giá trị web đứng trên `.env`. Muốn `.env` ăn lại:
+  bấm «Khôi phục mặc định» ở ô đó. Ngược lại khóa Gemini đang lấy từ `.env` thì nút «Xóa» trên web không hiện
+  (xóa trên web không tắt được) — muốn tắt trợ lý thì xóa trong `.env`.
+- **Cài đặt** (`src/settings/`): danh mục khóa ở `setting-registry.ts` (thêm khóa = thêm một dòng, giao diện tự
+  có ô); `SettingsStore` nạp `app_setting` lúc khởi động, phủ lên `AppConfig` đang chạy; lưu xong
+  `SyncService.applySettings()` dựng lại trợ lý / trần tệp / giãn cách gửi. Chỗ nào chép giá trị config ra biến
+  riêng lúc khởi tạo thì phải thêm đường cập nhật ở `applySettings`. Đổi `SESSION_ENCRYPTION_KEY` = khóa bí mật
+  trên web không giải mã được (không sập, màn báo «nhập lại»).
+- **Google Sheets** (`src/google/`): tự ký JWT RS256 bằng `node:crypto`, không dùng gói `googleapis`. Câu báo lỗi
+  cho quản trị ở `sheets-error-messages.ts` — số bước trong câu khớp «Hướng dẫn 5 bước» trên màn Cài đặt.
 
 - **Không mở Zalo Web bằng tài khoản bot** — mỗi tài khoản một phiên web, mở là bot bị đá (mã 3000).
 - Mất `SESSION_ENCRYPTION_KEY` = mọi tài khoản bot phải quét QR lại.
