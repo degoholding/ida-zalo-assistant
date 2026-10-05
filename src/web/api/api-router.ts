@@ -15,6 +15,7 @@ import { groupRoutes } from "./groups-api.js";
 import { importRoutes } from "./imports-api.js";
 import { lookupRoutes } from "./lookups-api.js";
 import { buildAdminPermissions } from "./permissions.js";
+import { settingRoutes } from "./settings-api.js";
 
 // Lớp API JSON cho giao diện `web/` (khung ERP v2). Mỗi phân hệ một tệp `*-api.ts` khai mảng tuyến;
 // ở đây chỉ gom lại, lo đăng nhập / phiên, và đổi lỗi thành phong bì JSON.
@@ -22,7 +23,7 @@ import { buildAdminPermissions } from "./permissions.js";
 const log = createLogger("api");
 
 const routes: ApiRoute[] = [
-  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes,
+  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes,
 ];
 
 export interface ApiDeps {

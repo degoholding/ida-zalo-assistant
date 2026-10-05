@@ -61,6 +61,11 @@ export class AttachmentDownloader {
     private readonly fetcher: Fetcher = fetch,
   ) {}
 
+  /** Đổi trần cỡ tệp (màn Cài đặt) — áp dụng cho tệp tải từ lúc này. */
+  setMaxFileBytes(maxFileBytes: number): void {
+    this.options.maxFileBytes = maxFileBytes;
+  }
+
   enqueue(attachmentId: number): void {
     if (this.stopped || this.queued.has(attachmentId)) return;
     this.queued.add(attachmentId);

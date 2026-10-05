@@ -7,7 +7,7 @@ import { sendOk } from "./api-http.js";
 // Nhật ký thay đổi — nguồn của mục «Lịch sử» (AuditTimeline) ở mọi trang chi tiết của `web/`.
 // Response giữ đúng hình `AuditLogEntry` của ERP v2 để khung giao diện chép sang chạy nguyên.
 
-export type AuditEntity = "contact" | "group" | "company" | "bot_account" | "file";
+export type AuditEntity = "contact" | "group" | "company" | "bot_account" | "file" | "setting";
 
 const ACTION_LABEL: Record<string, string> = {
   create: "Tạo mới",
@@ -19,9 +19,11 @@ const ACTION_LABEL: Record<string, string> = {
   activate: "Bật",
   deactivate: "Tắt",
   qr_login: "Đăng nhập QR",
+  reset: "Khôi phục mặc định",
+  test_connection: "Kiểm tra kết nối",
 };
 
-const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file"]);
+const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file", "setting"]);
 const MAX_LIMIT = 200;
 
 /**

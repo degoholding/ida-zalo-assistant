@@ -5,7 +5,12 @@ export class ZaloSender {
   private chain: Promise<unknown> = Promise.resolve();
   private lastSentAt = 0;
 
-  constructor(private readonly intervalMs: number) {}
+  constructor(private intervalMs: number) {}
+
+  /** Đổi giãn cách (màn Cài đặt) — áp dụng từ tin kế tiếp. */
+  setInterval(intervalMs: number): void {
+    this.intervalMs = intervalMs;
+  }
 
   send<T>(task: () => Promise<T>): Promise<T> {
     const run = async () => {

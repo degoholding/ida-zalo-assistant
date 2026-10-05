@@ -38,6 +38,10 @@ export const queryKeys = {
     all: ['imports'] as const,
     targets: () => ['imports', 'targets'] as const,
   },
+  settings: {
+    all: ['settings'] as const,
+    list: () => ['settings', 'list'] as const,
+  },
   lookups: {
     all: ['lookups'] as const,
     companies: (withNone: boolean) => ['lookups', 'companies', withNone] as const,

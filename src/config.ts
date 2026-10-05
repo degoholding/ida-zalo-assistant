@@ -55,6 +55,8 @@ export interface AppConfig {
     apiKey: string; model: string; heavyModel: string; fallbackModels: string[]; maxPerHour: number; dailyTokenCap: number;
     sendIntervalMs: number; maxReadFileBytes: number;
   };
+  /** Chỉ đặt được trên màn Cài đặt (bảng app_setting) — không có biến .env. */
+  google: { serviceAccount: unknown; spreadsheetUrl: string };
 }
 
 export function loadConfig(): AppConfig {
@@ -112,5 +114,6 @@ export function loadConfig(): AppConfig {
       // Tệp lớn hơn thì bot từ chối đọc (chốt 01/10/2026: 5 MB; ảnh cũng đọc)
       maxReadFileBytes: readInt("ASSISTANT_MAX_READ_FILE_MB", 5) * 1024 * 1024,
     },
+    google: { serviceAccount: null, spreadsheetUrl: "" },
   };
 }

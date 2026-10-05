@@ -4,6 +4,7 @@ import { GeminiClient } from "./assistant/gemini-client.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { createLogger, describeError } from "./logger.js";
+import type { SettingsStore } from "./settings/settings-store.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
@@ -31,7 +32,7 @@ const AVATAR_INTERVAL_MS = 2 * 60 * 1000;
 /** Giữ các tài khoản bot đang chạy — cho phép bật thêm/tắt bớt lúc đang chạy (đăng nhập QR trên web). */
 export class SyncService {
   readonly downloader: AttachmentDownloader;
-  readonly assistant: AssistantService | null;
+  private currentAssistant: AssistantService | null;
   private readonly runners = new Map<number, AccountRunner>();
   private avatarTimer: NodeJS.Timeout | null = null;
 
@@ -39,17 +40,46 @@ export class SyncService {
     readonly db: Db,
     readonly config: AppConfig,
     readonly storage: FileStorage,
+    readonly settings: SettingsStore,
   ) {
     this.downloader = new AttachmentDownloader(db, storage, {
       concurrency: config.downloadConcurrency,
       maxFileBytes: config.maxFileBytes,
     });
-    const { apiKey, model, heavyModel, fallbackModels, maxPerHour, dailyTokenCap, maxReadFileBytes } = config.assistant;
-    this.assistant = apiKey
-      ? new AssistantService(db, new GeminiClient(apiKey, model, fallbackModels), model, { maxPerHour, dailyTokenCap }, () => new Date(),
-          { storage, heavyModel: heavyModel || undefined, maxReadFileBytes })
+    this.currentAssistant = this.buildAssistant();
+  }
+
+  /** Trợ lý AI đang dùng (null = tắt). Đổi khóa / mô hình trên màn Cài đặt thì dựng lại — xem applySettings. */
+  get assistant(): AssistantService | null {
+    return this.currentAssistant;
+  }
+
+  private buildAssistant(): AssistantService | null {
+    const { apiKey, model, heavyModel, fallbackModels, maxPerHour, dailyTokenCap, maxReadFileBytes } = this.config.assistant;
+    const assistant = apiKey
+      ? new AssistantService(this.db, new GeminiClient(apiKey, model, fallbackModels), model, { maxPerHour, dailyTokenCap }, () => new Date(),
+          { storage: this.storage, heavyModel: heavyModel || undefined, maxReadFileBytes })
       : null;
-    log.info(this.assistant ? `trợ lý AI bật (${model}; việc nặng: ${heavyModel || model})` : "trợ lý AI tắt — chưa có GEMINI_API_KEY");
+    log.info(assistant ? `trợ lý AI bật (${model}; việc nặng: ${heavyModel || model})` : "trợ lý AI tắt — chưa có khóa Gemini");
+    return assistant;
+  }
+
+  /**
+   * Cài đặt vừa đổi trên web (giá trị mới đã phủ lên `config`): dựng lại những thứ chép giá trị lúc khởi
+   * tạo. `default_*` không cần làm gì — runner đọc thẳng `config` mỗi lần dùng.
+   */
+  applySettings(changedKeys: string[]): void {
+    const assistantChanged = changedKeys.some((key) =>
+      key.startsWith("gemini_") || (key.startsWith("assistant_") && key !== "assistant_send_interval_ms"));
+    if (assistantChanged) {
+      this.currentAssistant = this.buildAssistant();
+      // Lượt hỏi đang chạy dở thì chạy nốt bằng bản cũ — không hủy
+      for (const runner of this.runners.values()) runner.setAssistant(this.currentAssistant);
+    }
+    if (changedKeys.includes("max_file_mb")) this.downloader.setMaxFileBytes(this.config.maxFileBytes);
+    if (changedKeys.includes("assistant_send_interval_ms")) {
+      for (const runner of this.runners.values()) runner.setSendInterval(this.config.assistant.sendIntervalMs);
+    }
   }
 
   async startAll(): Promise<void> {

@@ -29,6 +29,7 @@ export const appRoutes = {
     list: '/accounts',
     detail: (id: number | string) => `/accounts/${id}`,
   },
+  settings: '/settings',
 
   /** Khung dùng chung của ERP (dòng thời gian lịch sử) có link sang nhật ký — bot chưa có màn này. */
   system: {

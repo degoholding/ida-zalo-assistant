@@ -137,7 +137,7 @@ export class AccountRunner {
     private readonly config: AppConfig,
     private readonly downloader: AttachmentDownloader,
     private readonly storage: FileStorage,
-    private readonly assistant: AssistantService | null,
+    private assistant: AssistantService | null,
   ) {
     this.log = createLogger(`zalo:${account.label}`);
     this.sender = new ZaloSender(config.assistant.sendIntervalMs);
@@ -172,6 +172,15 @@ export class AccountRunner {
     // Quét danh sách nhóm chạy nền, không chặn việc nghe tin
     this.scanAllGroups().catch((error) => this.log.warn("quét danh sách nhóm lỗi", error));
     return true;
+  }
+
+  /** Trợ lý dựng lại sau khi đổi cài đặt — lượt hỏi đang chạy dở vẫn chạy nốt bằng bản cũ. */
+  setAssistant(assistant: AssistantService | null): void {
+    this.assistant = assistant;
+  }
+
+  setSendInterval(intervalMs: number): void {
+    this.sender.setInterval(intervalMs);
   }
 
   async stop(): Promise<void> {
@@ -487,9 +496,12 @@ export class AccountRunner {
   }
 
   private async answerQuestion(thread: GroupRow, contact: ContactRow, messageId: number | null, question: string): Promise<void> {
+    // Giữ bản trợ lý lúc bắt đầu: khóa bị xóa trên màn Cài đặt giữa chừng thì lượt này vẫn chạy nốt
+    const assistant = this.assistant;
+    if (!assistant) return;
     let answered = false;
     let ackTimer: NodeJS.Timeout | null = null;
-    const reply = await this.assistant!.answer({
+    const reply = await assistant.answer({
       botAccountId: this.account.id,
       contact,
       threadId: thread.id,

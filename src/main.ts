@@ -5,6 +5,7 @@ import { loadConfig } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createLogger } from "./logger.js";
+import { SettingsStore } from "./settings/settings-store.js";
 import { createFileStorage } from "./storage/file-storage.js";
 import { purgeExpiredMessages } from "./sync/retention.js";
 import { SyncService } from "./sync-service.js";
@@ -18,8 +19,11 @@ const applied = await runMigrations(config.databaseUrl);
 if (applied.length) log.info(`đã chạy migration: ${applied.join(", ")}`);
 
 const db = createPool(config.databaseUrl);
+// Cài đặt đặt trên web (bảng app_setting) phủ lên .env — phải nạp TRƯỚC khi dựng trợ lý / runner
+const settings = new SettingsStore(db, config);
+await settings.load();
 const storage = createFileStorage(config);
-const service = new SyncService(db, config, storage);
+const service = new SyncService(db, config, storage, settings);
 await service.startAll();
 const web = await startWebServer(service);
 
