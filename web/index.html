@@ -5,20 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bot trợ lý</title>
-    <!-- Sơn bảng màu TRƯỚC khi gói JS tải xong, không thì mỗi lần mở trang lóe
-         một nhịp màu mặc định rồi mới nhảy sang bảng màu đã chọn. Id dưới đây
-         phải trùng hằng `THEME_STYLE_ELEMENT_ID` trong `shared/theme/apply-theme.ts`. -->
-    <script>
-      try {
-        var themeCss = localStorage.getItem('bot.theme_css')
-        if (themeCss) {
-          var themeStyle = document.createElement('style')
-          themeStyle.id = 'erp-theme-preset'
-          themeStyle.textContent = themeCss
-          document.head.appendChild(themeStyle)
-        }
-      } catch (e) {}
-    </script>
+    <!-- Sơn bảng màu TRƯỚC khi gói JS tải xong (chạy đồng bộ, chặn vẽ trang tới khi xong).
+         Tệp riêng thay vì script nhúng: CSP máy chủ `script-src 'self'` chặn script nhúng. -->
+    <script src="%BASE_URL%theme-preload.js"></script>
   </head>
   <body>
     <div id="root"></div>
