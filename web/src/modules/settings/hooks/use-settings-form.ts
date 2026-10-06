@@ -14,7 +14,7 @@ import type { SettingFormValues, SettingView } from '../types/setting'
  * KHÔNG đồng bộ ngược mỗi khi dữ liệu toàn cục đổi — tab Google Lưu xong thì
  * tab Trợ lý AI đang gõ dở không bị xóa trắng vì cả màn dùng chung một query.
  * Mỗi lần Lưu / Khôi phục mặc định tự `form.reset()` / `form.resetField()`
- * bằng đúng dữ liệu trả về của lượt gọi đó — xem `settings-group-form.tsx`.
+ * bằng đúng dữ liệu trả về của lượt gọi đó — xem `settings-sections-form.tsx`.
  */
 export function useSettingsForm(settings: SettingView[]) {
   const schema = useMemo(() => buildSettingsSchema(settings), [settings])

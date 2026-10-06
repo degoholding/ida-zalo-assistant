@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { GoogleCalendarConnectCard } from './google-calendar-connect-card'
+import { GoogleCalendarConnectPanel } from './google-calendar-connect-panel'
 import type { GoogleOauthStatus } from '../types/setting'
 
 const apiGet = vi.fn()
@@ -30,7 +30,7 @@ function renderCard() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <GoogleCalendarConnectCard />
+      <GoogleCalendarConnectPanel />
     </QueryClientProvider>,
   )
 }
@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('GoogleCalendarConnectCard', () => {
+describe('GoogleCalendarConnectPanel', () => {
   it('shows the connected email and a disconnect button once connected', async () => {
     apiGet.mockResolvedValue(makeStatus({ connected: true, email: 'quanly@gmail.com' }))
     renderCard()

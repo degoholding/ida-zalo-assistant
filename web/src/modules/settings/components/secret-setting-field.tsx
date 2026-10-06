@@ -7,10 +7,10 @@ import { Button } from '@/shared/ui/button'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CopyButton } from '@/shared/ui/copy-button'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
 import { Pill } from '@/shared/ui/pill'
 import { Textarea } from '@/shared/ui/textarea'
 import type { SettingFormValues, SettingView } from '../types/setting'
+import { SettingRow } from './setting-row'
 
 interface SecretSettingFieldProps {
   setting: SettingView
@@ -45,12 +45,22 @@ export function SecretSettingField({ setting, control, disabled, onDelete, delet
   const isWeb = setting.source === 'web'
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={inputId}>{setting.label}</Label>
-
+    <SettingRow
+      label={setting.label}
+      htmlFor={inputId}
+      help={setting.help}
+      stacked={setting.type === 'json' && !showSummary}
+      meta={
+        setting.is_set && (
+          <Pill tone={isWeb ? 'done' : 'neutral'}>{isWeb ? 'đặt trên web' : 'từ .env — muốn tắt thì xóa trong .env'}</Pill>
+        )
+      }
+    >
       {showSummary ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm">Đã đặt{setting.hint && ` · ${setting.hint}`}</span>
+          <span className="inline-flex h-8 items-center rounded-md border bg-muted/40 px-2.5 font-mono text-xs">
+            Đã đặt{setting.hint && ` · ${setting.hint}`}
+          </span>
           {/* Chỉ email service account cần chép (dán vào bước chia sẻ trang tính) */}
           {setting.type === 'json' && setting.hint && <CopyButton value={setting.hint} label={setting.label} />}
           <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => setEditing(true)}>
@@ -108,11 +118,6 @@ export function SecretSettingField({ setting, control, disabled, onDelete, delet
           )}
         </div>
       )}
-
-      <p className="text-xs text-muted-foreground">{setting.help}</p>
-      {setting.is_set && (
-        <Pill tone={isWeb ? 'done' : 'neutral'}>{isWeb ? 'đặt trên web' : 'từ .env — muốn tắt thì xóa trong .env'}</Pill>
-      )}
-    </div>
+    </SettingRow>
   )
 }

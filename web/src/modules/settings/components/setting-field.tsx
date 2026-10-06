@@ -3,12 +3,12 @@ import { useController } from 'react-hook-form'
 
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
 import { Pill } from '@/shared/ui/pill'
 import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { getSettingSourceLabel } from '../utils/get-setting-source-label'
 import { SettingChoiceList } from './setting-choice-list'
+import { SettingRow } from './setting-row'
 import type { SettingFormValues, SettingView } from '../types/setting'
 
 interface SettingFieldProps {
@@ -84,28 +84,35 @@ export function SettingField({ setting, control, disabled, onRestoreDefault, res
   const { field, fieldState } = useController({ control, name: setting.key })
   const sourceLabel = getSettingSourceLabel(setting)
   const inputId = `setting-${setting.key}`
+  const isChoiceList = setting.type === 'list' && Boolean(setting.choices?.length)
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={inputId}>{setting.label}</Label>
+    <SettingRow
+      label={setting.label}
+      htmlFor={inputId}
+      help={setting.help}
+      stacked={isChoiceList || setting.type === 'json'}
+      alignEnd={setting.type === 'bool'}
+      meta={
+        <>
+          <Pill tone={sourceLabel.isWeb ? 'done' : 'neutral'}>{sourceLabel.text}</Pill>
+          {sourceLabel.isWeb && onRestoreDefault && (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs"
+              disabled={disabled || restorePending}
+              onClick={onRestoreDefault}
+            >
+              Khôi phục mặc định
+            </Button>
+          )}
+        </>
+      }
+    >
       {renderInput(setting, field, inputId, disabled)}
-      {fieldState.error && <p className="text-sm text-destructive">{fieldState.error.message}</p>}
-      <p className="text-xs text-muted-foreground">{setting.help}</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Pill tone={sourceLabel.isWeb ? 'done' : 'neutral'}>{sourceLabel.text}</Pill>
-        {sourceLabel.isWeb && onRestoreDefault && (
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="h-auto p-0"
-            disabled={disabled || restorePending}
-            onClick={onRestoreDefault}
-          >
-            Khôi phục mặc định
-          </Button>
-        )}
-      </div>
-    </div>
+      {fieldState.error && <p className="mt-1.5 text-sm text-destructive">{fieldState.error.message}</p>}
+    </SettingRow>
   )
 }

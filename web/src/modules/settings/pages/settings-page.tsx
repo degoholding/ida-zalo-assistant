@@ -1,4 +1,3 @@
-import { Bot, History, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -11,38 +10,40 @@ import { PageHeader } from '@/shared/ui/page-header'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { GoogleSettingsTab } from '../components/google-settings-tab'
-import { SettingsGroupForm } from '../components/settings-group-form'
+import { SettingsSectionsForm } from '../components/settings-sections-form'
+import { ASSISTANT_SECTIONS, SETTINGS_TABS, SYNC_SECTIONS, type SettingsTabId } from '../config/settings-sections'
 import { useGoogleOauthRedirectToast } from '../hooks/use-google-oauth-redirect-toast'
 import { useSettings } from '../hooks/use-settings'
 
-const SETTINGS_TABS = ['assistant', 'sync', 'google', 'history'] as const
-type SettingsTab = (typeof SETTINGS_TABS)[number]
-
-function resolveInitialTab(requested: string | null): SettingsTab {
-  return (SETTINGS_TABS as readonly string[]).includes(requested ?? '') ? (requested as SettingsTab) : 'assistant'
+function resolveInitialTab(requested: string | null): SettingsTabId {
+  return SETTINGS_TABS.find((tab) => tab.id === requested)?.id ?? 'assistant'
 }
 
-/** Màn Cài đặt — đổi trên web có hiệu lực ngay, không cần khởi động lại (doc 04 mục 7). */
+/**
+ * Màn Cài đặt — đổi trên web có hiệu lực ngay, không cần khởi động lại (doc 04 mục 7). Tab NGANG kiểu gạch chân (đại ca
+ * chê tab dọc 06/10/2026): rãnh xám `bg-muted` của TabsList trùng màu nền trang nên dải phân đoạn trông rời rạc — xem
+ * `shared/ui/tab-underline.ts`; đường kẻ chân trải hết bề ngang làm neo, vạch màu chính chỉ tab đang mở.
+ */
 export function SettingsPage() {
   const { data, isLoading, isError, refetch } = useSettings()
   const { can } = usePermission()
   const canWrite = can('setting', 'write')
   const [searchParams] = useSearchParams()
   // Google xác thực xong đưa trình duyệt về `?tab=google&google_oauth=...` — mở thẳng tab đó.
-  const [tab, setTab] = useState<SettingsTab>(() => resolveInitialTab(searchParams.get('tab')))
+  const [tab, setTab] = useState<SettingsTabId>(() => resolveInitialTab(searchParams.get('tab')))
   useGoogleOauthRedirectToast()
 
   return (
-    <PageContainer className="mx-auto w-full max-w-4xl">
+    <PageContainer className="mx-auto w-full max-w-5xl">
       <PageHeader
         title="Cài đặt"
         description="Sửa ở đây có hiệu lực ngay, không cần khởi động lại. Ô để trống trên web thì dùng giá trị trong .env."
       />
 
       {isLoading && (
-        <div className="space-y-3">
-          <Skeleton className="h-9 w-80" />
-          <Skeleton className="h-64 w-full" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-96 w-full" />
         </div>
       )}
 
@@ -53,43 +54,40 @@ export function SettingsPage() {
       )}
 
       {data && (
-        <Tabs value={tab} onValueChange={(value) => setTab(value as SettingsTab)}>
-          <TabsList>
-            <TabsTrigger value="assistant">
-              <Bot /> Trợ lý AI
-            </TabsTrigger>
-            <TabsTrigger value="sync">
-              <RefreshCw /> Đồng bộ Zalo
-            </TabsTrigger>
-            <TabsTrigger value="google">Google Sheets</TabsTrigger>
-            <TabsTrigger value="history">
-              <History /> Lịch sử thay đổi
-            </TabsTrigger>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as SettingsTabId)} className="gap-5">
+          <TabsList className="h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-b bg-transparent p-0">
+            {SETTINGS_TABS.map(({ id, label, icon: Icon }) => (
+              <TabsTrigger
+                key={id}
+                value={id}
+                className="-mb-px h-10 flex-none rounded-none border-0 border-b-2 border-transparent px-1 text-muted-foreground hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+              >
+                <Icon /> {label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="assistant">
-            <SettingsGroupForm
-              title="Trợ lý AI"
-              icon={Bot}
+          <TabsContent value="assistant" className="mt-0">
+            <SettingsSectionsForm
               settings={data.filter((item) => item.group === 'assistant')}
+              sections={ASSISTANT_SECTIONS}
               disabled={!canWrite}
             />
           </TabsContent>
 
-          <TabsContent value="sync">
-            <SettingsGroupForm
-              title="Đồng bộ Zalo"
-              icon={RefreshCw}
+          <TabsContent value="sync" className="mt-0">
+            <SettingsSectionsForm
               settings={data.filter((item) => item.group === 'sync')}
+              sections={SYNC_SECTIONS}
               disabled={!canWrite}
             />
           </TabsContent>
 
-          <TabsContent value="google">
+          <TabsContent value="google" className="mt-0">
             <GoogleSettingsTab settings={data.filter((item) => item.group === 'google')} disabled={!canWrite} />
           </TabsContent>
 
-          <TabsContent value="history">
+          <TabsContent value="history" className="mt-0">
             <AuditTimeline entity="setting" entityId={1} showMessage />
           </TabsContent>
         </Tabs>
