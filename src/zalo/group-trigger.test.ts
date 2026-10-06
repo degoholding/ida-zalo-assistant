@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EMPTY_CALL_QUESTION, detectGroupTrigger, foldForMatch } from "./group-trigger.js";
+import { ContactKind, ContactRole } from "../constants.js";
+import { EMPTY_CALL_QUESTION, canCallBotInGroup, detectGroupTrigger, foldForMatch } from "./group-trigger.js";
+
+test("canCallBotInGroup: nhân sự / có vai trò gọi được, khách hàng thì không", () => {
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Staff }, true), true);
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Staff }, false), false);
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Customer }, true), false);
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Unclassified }, true), false);
+  assert.equal(canCallBotInGroup({ role: ContactRole.Manager, kind: ContactKind.Customer }, true), true);
+});
 
 const KEYWORDS = ["bot", "bot ơi", "trợ lý ơi", "@bot"];
 const detect = (text: string, mentions: { uid: string; pos: number; len: number }[] | null = null, keywords = KEYWORDS) =>

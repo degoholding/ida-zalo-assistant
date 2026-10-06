@@ -89,7 +89,7 @@ const DAILY_CAP_TEXT = "Em đã dùng hết hạn mức hôm nay. Ngày mai anh/
 const FAILURE_TEXT = "Dạ em đang gặp lỗi khi trả lời, anh/chị thử lại sau ít phút giúp em nhé.";
 
 function buildSystemPrompt(contact: ContactRow, now: Date): string {
-  // Trong nhóm, người chưa có vai trò cũng gọi được bot (cài đặt «Trong nhóm: ai cũng gọi được bot»)
+  // Trong nhóm, người chưa có vai trò cũng gọi được bot nếu là nhân sự (cài đặt «Trong nhóm: nhân sự gọi được bot»)
   const roleName = contact.role === ContactRole.Manager ? "quản lý" : contact.role === ContactRole.DepartmentHead ? "trưởng phòng" : "thành viên nhóm";
   return `Bạn là "Bot trợ lý" — trợ lý đọc các nhóm Zalo công việc của công ty và trả lời qua tin nhắn Zalo.
 Thời điểm hiện tại (giờ Việt Nam, UTC+7): ${formatVn(now)} năm ${now.getUTCFullYear()}, ISO ${now.toISOString()}.

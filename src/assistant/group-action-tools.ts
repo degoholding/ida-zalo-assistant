@@ -3,7 +3,7 @@ import type { FunctionDeclaration } from "./gemini-client.js";
 // Công cụ HÀNH ĐỘNG trong nhóm (chốt 06/10/2026): tạo nhắc hẹn Zalo, ghim ghi chú lên nhóm, tạo bình chọn; xem / bỏ
 // ghim ghi chú, xem / hủy nhắc hẹn. Chỉ có khi
 // bot được gọi TRONG NHÓM, và chỉ tác động lên chính nhóm đó (nơi gọi đưa `GroupActions` đã gắn sẵn mã nhóm). Ai làm
-// được = ai gọi được bot trong nhóm (cài đặt «Trong nhóm: ai cũng gọi được bot»). Zalo không có API ghim một tin có
+// được = ai gọi được bot trong nhóm (người có vai trò / nhân sự — xem canCallBotInGroup). Zalo không có API ghim một tin có
 // sẵn — «ghim» = tạo ghi chú có ghim. Nhắc hẹn là nhắc hẹn THẬT của Zalo: tới giờ chính Zalo báo, bot tắt vẫn nhắc.
 
 export const MAX_ACTIONS_PER_TURN = 3;

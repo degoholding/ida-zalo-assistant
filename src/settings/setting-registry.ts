@@ -138,8 +138,8 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     applyTo: (config, value) => { config.assistant.groupReplyEnabled = value === true; },
   },
   {
-    key: "group_reply_anyone", group: "assistant", label: "Trong nhóm: ai cũng gọi được bot", type: "bool", secret: false,
-    help: "Bật: mọi thành viên nhóm đang «Đọc tin» gọi được bot — bot vẫn chỉ dùng dữ liệu của chính nhóm đó. Tắt: chỉ người có vai trò (Quản lý / Trưởng phòng). Tin nhắn riêng luôn cần vai trò.",
+    key: "group_reply_anyone", group: "assistant", label: "Trong nhóm: nhân sự gọi được bot", type: "bool", secret: false,
+    help: "Bật: người có loại «Nhân sự» (Danh bạ) gọi được bot trong nhóm đang «Đọc tin» — bot chỉ dùng dữ liệu của chính nhóm đó. Tắt: chỉ người có vai trò (Quản lý / Trưởng phòng). Khách hàng và người chưa phân loại KHÔNG BAO GIỜ gọi được bot — bot im lặng. Tin nhắn riêng luôn cần vai trò.",
     envName: null, defaultValue: true,
     applyTo: (config, value) => { config.assistant.groupReplyAnyone = value === true; },
   },

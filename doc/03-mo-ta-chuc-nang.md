@@ -51,8 +51,8 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
   tin, không trả lời. **Trong nhóm** bot chỉ trả lời khi được gọi (06/10/2026): @nhắc tên bot hoặc có từ khóa
   gọi bot (mặc định «bot», «bot ơi», «trợ lý ơi», «@bot» — sửa ở Cài đặt, không phân biệt dấu, nguyên chữ / nguyên cụm, ở
   bất kỳ chỗ nào trong tin — «robot», «chatbot» không tính; gọi ở đầu tin thì bỏ phần gọi khỏi câu hỏi), hoặc bấm «Trả lời» vào tin của bot; bot đọc kèm ~10 tin gần nhất
-  của nhóm làm ngữ cảnh nên hỏi nối tiếp («chi tiết báo cáo đó») hiểu được; ai gọi được: mọi thành viên (cài đặt «Trong nhóm: ai cũng gọi được
-  bot», mặc định bật) hoặc chỉ người có vai trò; trợ lý chỉ dùng dữ liệu **của chính nhóm đó** (chặn ở tầng công cụ — không lộ nhóm khác,
+  của nhóm làm ngữ cảnh nên hỏi nối tiếp («chi tiết báo cáo đó») hiểu được; ai gọi được: người có vai trò + **nhân sự** (loại «Nhân sự» ở Danh bạ; cài đặt
+  «Trong nhóm: nhân sự gọi được bot», mặc định bật) — **khách hàng / người chưa phân loại gọi thì bot im lặng**; trợ lý chỉ dùng dữ liệu **của chính nhóm đó** (chặn ở tầng công cụ — không lộ nhóm khác,
   Danh bạ, tin riêng); câu trả lời trích dẫn tin được hỏi. Nhiều tài khoản bot cùng nhóm: chỉ bot được ghi nhận ở
   nhóm trả lời, mỗi tin một bot. Tắt bằng «Trả lời trong nhóm khi được gọi» ở Cài đặt.
 - **Cách hỏi:** câu tự nhiên, không dùng lệnh gạch chéo (đã chốt 02/10). Ví dụ: «tóm tắt nhóm K52 tuần

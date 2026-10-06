@@ -3,7 +3,7 @@ import { BoardType, ThreadType, type API, type GroupMessage, type NoteDetail } f
 import { splitForZalo, type AssistantService } from "../assistant/assistant-service.js";
 import type { GroupActions } from "../assistant/group-action-tools.js";
 import type { AppConfig } from "../config.js";
-import { AssistantTurnStatus, ContactRole, MessageKind } from "../constants.js";
+import { AssistantTurnStatus, MessageKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import type { Logger } from "../logger.js";
 import { findContactByUid } from "../sync/contact-repository.js";
@@ -13,11 +13,12 @@ import { recordOutgoingMessage, type IncomingGroupMessage } from "../sync/messag
 import { parseZaloContent } from "./content-parser.js";
 import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { buildMentions, type MentionableMember } from "./group-mentions.js";
-import { detectGroupTrigger } from "./group-trigger.js";
+import { canCallBotInGroup, detectGroupTrigger } from "./group-trigger.js";
 import type { ZaloSender } from "./zalo-sender.js";
 
 // Trả lời TRONG NHÓM khi bot được gọi (@nhắc tên bot hoặc từ khóa ở màn Cài đặt). Luật an toàn:
-// - ai gọi được: mọi thành viên (cài đặt «Trong nhóm: ai cũng gọi được bot», mặc định bật) hoặc chỉ người có vai trò;
+// - ai gọi được: người có vai trò + NHÂN SỰ (cài đặt «Trong nhóm: nhân sự gọi được bot», mặc định bật); khách hàng /
+//   người chưa phân loại thì bot im lặng (canCallBotInGroup);
 // - chỉ nhóm đang bật «Đọc tin»; trợ lý chỉ đọc dữ liệu CỦA NHÓM ĐÓ (groupScope — chặn ở tầng công cụ);
 // - câu trả lời trích dẫn tin được hỏi, gửi qua hàng gửi chung (giãn cách chống khóa tài khoản);
 // - mỗi nhóm trả lời lần lượt, không chạy song song;
@@ -169,8 +170,8 @@ export class GroupAssistantReplier {
     const contact = await findContactByUid(db, incoming.senderUid);
     const groupName = group.label || group.name;
     if (!contact) return;
-    if (contact.role === ContactRole.None && !this.deps.config.assistant.groupReplyAnyone) {
-      log.info(`«${incoming.senderName}» gọi bot trong nhóm «${groupName}» nhưng chưa có vai trò — không trả lời`);
+    if (!canCallBotInGroup(contact, this.deps.config.assistant.groupReplyAnyone)) {
+      log.info(`«${incoming.senderName}» gọi bot trong nhóm «${groupName}» nhưng không phải nhân sự / chưa có vai trò — không trả lời`);
       return;
     }
     const [rows] = await db.query<RowDataPacket[]>("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [group.id, incoming.msgId]);
