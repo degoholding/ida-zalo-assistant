@@ -21,6 +21,8 @@ const ACTION_LABEL: Record<string, string> = {
   qr_login: "Đăng nhập QR",
   reset: "Khôi phục mặc định",
   test_connection: "Kiểm tra kết nối",
+  google_connect: "Kết nối Google",
+  google_disconnect: "Ngắt kết nối Google",
 };
 
 const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file", "setting"]);

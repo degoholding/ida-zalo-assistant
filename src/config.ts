@@ -54,9 +54,23 @@ export interface AppConfig {
   assistant: {
     apiKey: string; model: string; heavyModel: string; fallbackModels: string[]; maxPerHour: number; dailyTokenCap: number;
     sendIntervalMs: number; maxReadFileBytes: number;
+    /** Trả lời trong nhóm khi được gọi (@nhắc bot hoặc từ khóa). Chỉ đặt trên màn Cài đặt. */
+    groupReplyEnabled: boolean; groupTriggerKeywords: string[];
+    /** Trong nhóm: mọi thành viên gọi được bot (true) hay chỉ người có vai trò (false). Tin riêng luôn cần vai trò. */
+    groupReplyAnyone: boolean;
+    /** Đuôi tệp bot được đọc (cài đặt «Loại tệp bot được đọc»). Rỗng = mọi loại đọc được. */
+    readableFileTypes: string[];
+    /** Gắn dòng đo token dưới mỗi câu trả lời (thử mô hình / ước chi phí). */
+    showTokenUsage: boolean;
   };
   /** Chỉ đặt được trên màn Cài đặt (bảng app_setting) — không có biến .env. */
-  google: { serviceAccount: unknown; spreadsheetUrl: string };
+  google: {
+    serviceAccount: unknown; spreadsheetUrl: string;
+    /** OAuth client (Kết nối Google: chép Client ID + Client secret từ Google Cloud) + tài khoản đã kết nối — để tạo cuộc họp Meet. */
+    oauthClientId: string;
+    oauthClientSecret: string;
+    calendarAccount: { email: string; refresh_token: string } | null;
+  };
 }
 
 export function loadConfig(): AppConfig {
@@ -113,7 +127,12 @@ export function loadConfig(): AppConfig {
       sendIntervalMs: readInt("ASSISTANT_SEND_INTERVAL_MS", 1500),
       // Tệp lớn hơn thì bot từ chối đọc (chốt 01/10/2026: 5 MB; ảnh cũng đọc)
       maxReadFileBytes: readInt("ASSISTANT_MAX_READ_FILE_MB", 5) * 1024 * 1024,
+      groupReplyEnabled: true,
+      groupTriggerKeywords: ["bot", "bot ơi", "trợ lý ơi", "@bot"],
+      groupReplyAnyone: true,
+      showTokenUsage: false,
+      readableFileTypes: ["pdf", "docx", "xlsx", "xls", "csv", "txt", "md", "jpg", "jpeg", "png", "webp", "mp3", "m4a", "wav", "aac"],
     },
-    google: { serviceAccount: null, spreadsheetUrl: "" },
+    google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null },
   };
 }

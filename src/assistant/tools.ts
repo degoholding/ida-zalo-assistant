@@ -1,7 +1,11 @@
 import type { RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import { runListContacts } from "./contact-directory-tool.js";
 import { runExportReport, type ExportReport } from "./export-report-tool.js";
+import { GROUP_ACTION_TOOL_NAMES, runGroupAction, type GroupActions } from "./group-action-tools.js";
+import { runCreateRecapPdf, type CreateRecapPdf } from "./meeting-recap-tool.js";
+import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings, type MeetingCreator } from "./meeting-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
 
@@ -32,7 +36,23 @@ export interface ToolContext {
   markHeavy?: (reason: string) => void;
   /** Xuất báo cáo ra Google Sheets / Excel. Không có = trợ lý không có công cụ export_report. */
   exportReport?: ExportReport;
+  /** Xuất PDF recap cuộc họp (mẫu công ty). Không có = không có công cụ create_meeting_recap_pdf. */
+  createRecapPdf?: CreateRecapPdf;
+  /**
+   * Hỏi TRONG NHÓM (mọi thành viên đọc câu trả lời): chỉ được đọc dữ liệu của nhóm này. Chặn ở đây — không chỉ ở
+   * danh sách công cụ — để mô hình có truyền id nhóm khác / gọi công cụ khác cũng không lấy được.
+   */
+  scopeGroupId?: number;
+  /** Việc làm trên Zalo trong nhóm đang hỏi (nhắc hẹn, ghim, bình chọn) — chỉ có khi được gọi trong nhóm. */
+  groupActions?: GroupActions;
+  /** Số việc hành động đã làm trong lượt (trần MAX_ACTIONS_PER_TURN). */
+  actionCounter?: { done: number };
+  /** Tạo cuộc họp Google Meet (tài khoản «Kết nối Google»). Không có / chưa kết nối = không có công cụ create_meeting. */
+  meetings?: MeetingCreator;
 }
+
+/** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
+export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_files", "read_file", "create_meeting_recap_pdf", "create_meeting", "list_meetings", "cancel_meeting", ...GROUP_ACTION_TOOL_NAMES]);
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
   name: "web_search",
@@ -49,7 +69,7 @@ export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
 export const READ_FILE_DECLARATION: FunctionDeclaration = {
   name: "read_file",
   description:
-    "Đọc NỘI DUNG một tệp đã lưu (id lấy từ search_files, hoặc tệp người hỏi vừa gửi): xlsx, docx, pdf, txt, csv và ẢNH (hóa đơn, " +
+    "Đọc NỘI DUNG một tệp đã lưu (id lấy từ search_files, hoặc tệp người hỏi vừa gửi): xlsx, docx, pdf, txt, csv, GHI ÂM mp3 / m4a (trả bản gỡ băng + tóm tắt) và ẢNH (hóa đơn, " +
     "báo giá chụp màn hình…). Trả về chữ trong tệp để tóm tắt, trả lời câu hỏi về tệp, hoặc so sánh. Tệp quá 5 MB thì không đọc.",
   parameters: {
     type: "object",
@@ -188,9 +208,9 @@ async function listGroups(context: ToolContext, args: Record<string, unknown>) {
             (SELECT COUNT(*) FROM message m WHERE m.group_id = g.id) AS message_count,
             (SELECT MAX(m.sent_at) FROM message m WHERE m.group_id = g.id) AS last_message_at
      FROM zalo_group g LEFT JOIN company c ON c.id = g.company_id
-     WHERE g.thread_type = ? AND g.read_messages = 1 AND (? = '' OR g.name LIKE ? OR g.label LIKE ?)
+     WHERE g.thread_type = ? AND g.read_messages = 1 AND (? = '' OR g.name LIKE ? OR g.label LIKE ?) AND (? = 0 OR g.id = ?)
      ORDER BY last_message_at DESC LIMIT 50`,
-    [ConversationType.Group, query, `%${query}%`, `%${query}%`],
+    [ConversationType.Group, query, `%${query}%`, `%${query}%`, context.scopeGroupId ?? 0, context.scopeGroupId ?? 0],
   );
   return {
     groups: rows.map((row) => ({
@@ -205,7 +225,7 @@ async function listGroups(context: ToolContext, args: Record<string, unknown>) {
 }
 
 async function getGroupMessages(context: ToolContext, args: Record<string, unknown>) {
-  const groupId = Number(args.group_id);
+  const groupId = context.scopeGroupId ?? Number(args.group_id);
   const to = parseTime(args.to, context.now);
   const from = parseTime(args.from, new Date(to.getTime() - 86_400_000));
   const [groups] = await context.db.query<RowDataPacket[]>(
@@ -294,7 +314,7 @@ async function getConversationWithPerson(context: ToolContext, args: Record<stri
 
 async function searchFiles(context: ToolContext, args: Record<string, unknown>) {
   const query = typeof args.query === "string" ? args.query.trim() : "";
-  const groupId = Number(args.group_id) || 0;
+  const groupId = context.scopeGroupId ?? (Number(args.group_id) || 0);
   const from = parseTime(args.from, new Date(0));
   const to = parseTime(args.to, new Date(context.now.getTime() + 86_400_000));
   // Mỗi từ khóa phải xuất hiện trong tên tệp hoặc chú thích — "bao gia thanh cong" khớp
@@ -302,10 +322,13 @@ async function searchFiles(context: ToolContext, args: Record<string, unknown>) 
   const words = query.split(/\s+/).filter((word) => word.length >= 2).slice(0, 6);
   // Không từ khóa = tệp gần đây của CHÍNH người hỏi (họ gửi, hoặc nằm trong cuộc riêng của họ với bot) — để bot liệt kê cho chọn
   // Có từ khóa: khớp tên tệp, chú thích, hoặc CHỮ ĐÃ BÓC từ tệp (attachment_text) — tệp bot từng đọc thì tìm được theo nội dung
+  // Trong nhóm, không từ khóa = tệp gần đây của nhóm đó
   const conditions = words.length
     ? words.map(() => "(a.file_name LIKE ? OR m.text LIKE ? OR t.text LIKE ?)").join(" AND ")
-    : `(m.sender_uid = ? OR (g.thread_type = ${ConversationType.Direct} AND g.zalo_group_id = ?))`;
-  const conditionParams = words.length ? words.flatMap((word) => [`%${word}%`, `%${word}%`, `%${word}%`]) : [context.askerUid, context.askerUid];
+    : context.scopeGroupId ? "1 = 1" : `(m.sender_uid = ? OR (g.thread_type = ${ConversationType.Direct} AND g.zalo_group_id = ?))`;
+  const conditionParams = words.length
+    ? words.flatMap((word) => [`%${word}%`, `%${word}%`, `%${word}%`])
+    : context.scopeGroupId ? [] : [context.askerUid, context.askerUid];
   const [rows] = await context.db.query<RowDataPacket[]>(
     `SELECT a.id, a.file_name, a.file_ext, a.status, a.stored_bytes, a.declared_size, m.sent_at, m.sender_name, m.zalo_msg_type,
             COALESCE(NULLIF(g.label, ''), g.name) AS group_name, g.thread_type, t.char_count AS text_chars
@@ -337,6 +360,10 @@ async function readFile(context: ToolContext, args: Record<string, unknown>) {
   if (!context.readFile) return { error: "Bot chưa bật đọc tệp" };
   const attachmentId = Number(args.attachment_id);
   if (!Number.isSafeInteger(attachmentId) || attachmentId <= 0) return { error: "Thiếu attachment_id" };
+  if (context.scopeGroupId) {
+    const [owner] = await context.db.query<RowDataPacket[]>("SELECT group_id FROM attachment WHERE id = ?", [attachmentId]);
+    if (Number(owner[0]?.group_id) !== context.scopeGroupId) return { error: "Tệp này không thuộc nhóm đang hỏi." };
+  }
   const result = await context.readFile(attachmentId);
   if ("error" in result) return result;
   if (context.usage) {
@@ -395,11 +422,22 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   read_file: readFile,
   web_search: webSearch,
   export_report: (context, args) => runExportReport(context.exportReport, args),
+  list_contacts: (context, args) => runListContacts(context.db, args),
+  create_meeting_recap_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now),
+  create_meeting: (context, args) =>
+    runCreateMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, context.now, meetingScopeTag(context.scopeGroupId)),
+  list_meetings: (context) => runListMeetings(context.meetings, meetingScopeTag(context.scopeGroupId)),
+  cancel_meeting: (context, args) =>
+    runCancelMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, meetingScopeTag(context.scopeGroupId)),
+  ...Object.fromEntries([...GROUP_ACTION_TOOL_NAMES].map((name) => [name,
+    (context: ToolContext, args: Record<string, unknown>) =>
+      runGroupAction(context.groupActions, (context.actionCounter ??= { done: 0 }), name, args, context.now)])),
 };
 
 export async function runTool(context: ToolContext, name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   const executor = EXECUTORS[name];
   if (!executor) return { error: `Không có công cụ ${name}` };
+  if (context.scopeGroupId && !GROUP_SCOPE_TOOL_NAMES.has(name)) return { error: "Hỏi trong nhóm chỉ dùng được dữ liệu của nhóm này." };
   try {
     return (await executor(context, args ?? {})) as Record<string, unknown>;
   } catch (error) {

@@ -87,3 +87,23 @@ test("every envName in the registry is documented in .env.example", () => {
     assert.match(example, new RegExp(`^${definition.envName}=`, "m"), `${definition.envName} thiếu trong .env.example`);
   }
 });
+
+// 06/10/2026: loại tệp đọc được chọn bằng ô tick — chỉ nhận đuôi có trong danh sách chọn
+test("readable file types accept only listed extensions, normalised", () => {
+  const definition = setting("assistant_readable_file_types");
+  assert.ok(definition.choices?.some((choice) => choice.value === "mp3"));
+  assert.ok(!definition.choices?.some((choice) => choice.value === "mp4"));
+  assert.deepEqual(parseSettingInput(definition, ".PDF, mp3, pdf"), ["pdf", "mp3"]);
+  assert.deepEqual(parseSettingInput(definition, ""), []);
+  rejects("assistant_readable_file_types", "pdf, mp4");
+  rejects("assistant_readable_file_types", ["exe"]);
+});
+
+// 06/10/2026: «Kết nối Google» chỉ cần chép Client ID + Client secret (không dán tệp JSON)
+test("Google OAuth boxes accept the copied Client ID and secret, and reject a pasted JSON file", () => {
+  assert.equal(parseSettingInput(setting("google_oauth_client_id"), " 1264-0sdak.apps.googleusercontent.com "), "1264-0sdak.apps.googleusercontent.com");
+  assert.equal(parseSettingInput(setting("google_oauth_client_secret"), " GOCSPX-abc "), "GOCSPX-abc");
+  rejects("google_oauth_client_id", '{"web":{"client_id":"1.apps.googleusercontent.com"}}');
+  rejects("google_oauth_client_id", "GOCSPX-abc");
+  rejects("google_oauth_client_secret", "có khoảng trắng");
+});

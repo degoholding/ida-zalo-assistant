@@ -62,7 +62,7 @@ export const settingRoutes: ApiRoute[] = [
   ["POST", /^\/api\/settings\/([a-z0-9_]{1,80})\/reset$/, async ({ response, service, match }) => {
     const key = match[1];
     const definition = findSetting(key);
-    if (!definition) throw new ApiError(404, "not_found", `Không có cài đặt ${key}`);
+    if (!definition || definition.hidden) throw new ApiError(404, "not_found", `Không có cài đặt ${key}`);
     const existed = await service.settings.reset(key);
     if (existed) {
       service.applySettings([key]);

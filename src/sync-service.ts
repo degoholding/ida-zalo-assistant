@@ -7,14 +7,18 @@ import { createLogger, describeError } from "./logger.js";
 import type { SettingsStore } from "./settings/settings-store.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { ReportExporter } from "./reports/report-exporter.js";
+import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
 import { ConversationType } from "./constants.js";
 import { GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
+import { WEB_CHAT_ID_PREFIX } from "./web/api/assistant-chat-api.js";
 
 const log = createLogger("service");
+/** Mã Zalo của dữ liệu mẫu (src/dev/demo-conversations.ts) — không gửi ra Zalo được. */
+const DEMO_ZALO_ID_PREFIX = "demo-";
 /** «Lấy hết»: 400 trang × 50 = 20.000 tin — đủ cho nhóm lớn mà không kéo vô tận. */
 const BACKFILL_FULL_MAX_PAGES = 400;
 /** Lúc vừa bật đọc: vài trang gần nhất cho nhóm có nội dung ngay. */
@@ -56,11 +60,12 @@ export class SyncService {
   }
 
   private buildAssistant(): AssistantService | null {
-    const { apiKey, model, heavyModel, fallbackModels, maxPerHour, dailyTokenCap, maxReadFileBytes } = this.config.assistant;
+    const { apiKey, model, heavyModel, fallbackModels, maxPerHour, dailyTokenCap, maxReadFileBytes, readableFileTypes, showTokenUsage } = this.config.assistant;
     const assistant = apiKey
       ? new AssistantService(this.db, new GeminiClient(apiKey, model, fallbackModels), model, { maxPerHour, dailyTokenCap }, () => new Date(),
-          { storage: this.storage, heavyModel: heavyModel || undefined, maxReadFileBytes,
-            reportExporter: new ReportExporter(this.storage, () => this.config.google) })
+          { storage: this.storage, heavyModel: heavyModel || undefined, maxReadFileBytes, readableFileTypes, showTokenUsage,
+            reportExporter: new ReportExporter(this.storage, () => this.config.google),
+            meetingScheduler: new MeetingScheduler(() => this.config.google) })
       : null;
     log.info(assistant ? `trợ lý AI bật (${model}; việc nặng: ${heavyModel || model})` : "trợ lý AI tắt — chưa có khóa Gemini");
     return assistant;
@@ -162,6 +167,14 @@ export class SyncService {
     const [rows] = await this.db.query<RowDataPacket[]>(`SELECT ${GROUP_COLUMNS} FROM zalo_group WHERE id = ?`, [threadId]);
     const thread = rows[0] as GroupRow | undefined;
     if (!thread) throw new Error("Không có cuộc trò chuyện này");
+    // Dữ liệu mẫu (npm run seed:demo) mang mã giả `demo-…` — đẩy sang Zalo chỉ nhận lại «Tham số không hợp lệ»
+    if (thread.zalo_group_id.startsWith(DEMO_ZALO_ID_PREFIX)) {
+      throw new Error("đây là cuộc DEMO (dữ liệu mẫu), không có thật trên Zalo. Gửi thử vào một nhóm hoặc cuộc riêng thật.");
+    }
+    // Cuộc «Hỏi trợ lý» trên web (mã web-…) chỉ có trong kho — hỏi tiếp ở màn Hỏi trợ lý
+    if (thread.zalo_group_id.startsWith(WEB_CHAT_ID_PREFIX)) {
+      throw new Error("đây là cuộc Hỏi trợ lý trên web, không có trên Zalo — hỏi tiếp ở màn «Hỏi trợ lý».");
+    }
     if (thread.thread_type === ConversationType.Direct) {
       const runner = this.runners.get(thread.owner_bot_id);
       if (!runner) throw new Error("Tài khoản bot của cuộc này đang tắt hoặc chưa kết nối");

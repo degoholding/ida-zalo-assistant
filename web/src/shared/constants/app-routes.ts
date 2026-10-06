@@ -30,6 +30,7 @@ export const appRoutes = {
     detail: (id: number | string) => `/accounts/${id}`,
   },
   settings: '/settings',
+  assistantChat: '/assistant-chat',
 
   /** Khung dùng chung của ERP (dòng thời gian lịch sử) có link sang nhật ký — bot chưa có màn này. */
   system: {

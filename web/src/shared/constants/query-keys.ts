@@ -42,6 +42,15 @@ export const queryKeys = {
     all: ['settings'] as const,
     list: () => ['settings', 'list'] as const,
   },
+  googleOauth: {
+    all: ['google-oauth'] as const,
+    status: () => ['google-oauth', 'status'] as const,
+  },
+  assistantChat: {
+    all: ['assistant-chat'] as const,
+    askers: () => ['assistant-chat', 'askers'] as const,
+    messages: (contactId: number) => ['assistant-chat', 'messages', contactId] as const,
+  },
   lookups: {
     all: ['lookups'] as const,
     companies: (withNone: boolean) => ['lookups', 'companies', withNone] as const,

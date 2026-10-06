@@ -8,6 +8,7 @@ import { Pill } from '@/shared/ui/pill'
 import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { getSettingSourceLabel } from '../utils/get-setting-source-label'
+import { SettingChoiceList } from './setting-choice-list'
 import type { SettingFormValues, SettingView } from '../types/setting'
 
 interface SettingFieldProps {
@@ -58,6 +59,11 @@ function renderInput(setting: SettingView, field: FieldValue, id: string, disabl
         onBlur={field.onBlur}
         disabled={disabled}
       />
+    )
+  }
+  if (setting.type === 'list' && setting.choices?.length) {
+    return (
+      <SettingChoiceList id={id} choices={setting.choices} value={field.value} onChange={field.onChange} disabled={disabled} />
     )
   }
   // 'string' và 'list' đều là một dòng chữ — khác nhau ở placeholder gợi ý cách nhau dấu phẩy.

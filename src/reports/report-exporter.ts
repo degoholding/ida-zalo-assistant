@@ -3,6 +3,8 @@ import { parseServiceAccount, parseSpreadsheetId } from "../google/service-accou
 import { GoogleSheetsClient, sheetUrl } from "../google/sheets-client.js";
 import { GoogleSheetsError } from "../google/sheets-error-messages.js";
 import type { FileStorage } from "../storage/file-storage.js";
+import { compactDate, type MeetingRecap } from "./meeting-recap-input.js";
+import { renderRecapPdf } from "./meeting-recap-pdf.js";
 import { buildReportMatrix, buildReportWorkbook, excelSheetName, reportFileName, type ReportTable } from "./report-table.js";
 
 // Xuất báo cáo của trợ lý ra Google Sheets (tab mới trên trang tính đã kết nối ở màn Cài đặt) hoặc tệp Excel
@@ -11,7 +13,7 @@ import { buildReportMatrix, buildReportWorkbook, excelSheetName, reportFileName,
 
 export type ReportFormat = "auto" | "excel" | "sheets";
 
-/** Tệp Excel đã cất vào kho, chờ gửi cho người hỏi. */
+/** Tệp (Excel / PDF recap) đã cất vào kho, chờ gửi cho người hỏi. */
 export interface GeneratedReportFile {
   fileName: string;
   storageKey: string;
@@ -26,6 +28,21 @@ export interface ReportExportOutcome {
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 const EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/** Đuôi tệp (không dấu chấm, chữ thường) để ghi tin tệp — «xlsx», «pdf». */
+export function reportFileExtension(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  return dot > 0 ? fileName.slice(dot + 1).toLowerCase() : "";
+}
+
+/** «Meeting-Recap-Giao-ban-du-an-K52-2026.10.06-v1.0.pdf» — theo cách đặt tên của tệp mẫu, bỏ dấu cho Zalo / kho. */
+export function recapFileName(recap: MeetingRecap, now: Date): string {
+  const base = recap.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D")
+    .replace(/^\s*(recap|meeting recap)(\s+h[oọ]p)?\b[\s:-]*/i, "")
+    .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "Cuoc-hop";
+  const version = recap.version.replace(/[^A-Za-z0-9.]+/g, "") || "v1";
+  return `Meeting-Recap-${base}-${compactDate(recap.meetingDate, now)}-${version}.pdf`;
+}
 
 /** Giờ Việt Nam: chữ để hiện («05/10/2026 17:20») và dấu để đặt tên («20261005-172045»). */
 export function vnTimestamp(now: Date): { text: string; stamp: string } {
@@ -63,6 +80,19 @@ export class ReportExporter {
       const fallback = await this.exportExcel(table, now);
       return { ...fallback, response: { ...fallback.response, note: `Ghi Google Sheets lỗi (${error.message}) nên đã xuất Excel thay.` } };
     }
+  }
+
+  /** Dựng PDF recap cuộc họp theo mẫu công ty, cất kho — nơi gọi gửi tệp cho người hỏi / vào nhóm. */
+  async exportRecapPdf(recap: MeetingRecap, now: Date): Promise<ReportExportOutcome> {
+    const data = await renderRecapPdf(recap);
+    const fileName = recapFileName(recap, now);
+    const { stamp } = vnTimestamp(now);
+    // Dấu giờ trong khóa kho: hai bản recap cùng tên cuộc họp không đè nhau
+    const storageKey = await this.storage.put(`reports/${stamp.slice(0, 6)}/${stamp}-${fileName}`, data, "application/pdf");
+    return {
+      response: { format: "pdf", file_name: fileName, tasks: recap.tasks.length, will_send_file: true },
+      file: { fileName, storageKey, bytes: data.length },
+    };
   }
 
   private async exportExcel(table: ReportTable, now: Date): Promise<ReportExportOutcome> {

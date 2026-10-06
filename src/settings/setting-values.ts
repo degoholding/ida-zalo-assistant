@@ -24,6 +24,8 @@ export interface SettingView {
   max: number | null;
   max_length: number | null;
   allow_empty: boolean;
+  /** Danh sách chọn sẵn (ô tick theo nhóm) — null khi nhập tự do. */
+  choices: { value: string; label: string; group: string }[] | null;
 }
 
 /** Trạng thái của một khóa trong kho: giá trị web (nếu có dòng), giải mã hỏng, giá trị .env. */
@@ -62,8 +64,10 @@ export function buildHint(definition: SettingDefinition, value: SettingValue, br
   if (!definition.secret || !isValueSet(value)) return "";
   if (typeof value === "string") return `…${value.slice(-4)}`;
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    const email = (value as Record<string, unknown>).client_email;
-    return typeof email === "string" ? email : "";
+    // Khóa service account: client_email; OAuth client: client_id (đều không bí mật); tài khoản: email
+    const record = value as Record<string, unknown>;
+    const shown = record.client_email ?? record.email ?? record.client_id;
+    return typeof shown === "string" ? shown : "";
   }
   return "";
 }
@@ -105,5 +109,6 @@ export function buildSettingView(definition: SettingDefinition, state: SettingSt
     max: definition.max ?? definition.maxItems ?? null,
     max_length: definition.maxLength ?? null,
     allow_empty: definition.allowEmpty ?? false,
+    choices: definition.choices ?? null,
   };
 }

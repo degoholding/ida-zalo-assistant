@@ -28,7 +28,8 @@ export interface IncomingGroupMessage {
   senderName: string;
   sentAtMs: number;
   content: unknown;
-  quote: { globalMsgId: number | string; msg: string } | null;
+  /** ownerUid = người viết tin được trích (để biết người dùng đang trả lời tin của bot). */
+  quote: { globalMsgId: number | string; msg: string; ownerUid?: string } | null;
   mentions: { uid: string; pos: number; len: number }[] | null;
 }
 

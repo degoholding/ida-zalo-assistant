@@ -33,6 +33,10 @@ export function parseServiceAccount(raw: unknown): ServiceAccount {
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid("nội dung không phải một object JSON");
   const source = value as Record<string, unknown>;
+  // Hay gặp (06/10/2026): dán tệp OAuth client (khóa «web» / «installed») vào ô service account — chỉ đúng ô cần dán
+  if (source.web || source.installed) {
+    throw new ApiError(422, "validation_error", "Đây là tệp OAuth client, không phải khóa service account — không cần dán tệp này: chỉ chép Client ID và Client secret vào hai ô «Kết nối Google» bên dưới");
+  }
   if (source.type !== "service_account") throw invalid('trường "type" phải là "service_account"');
   const clientEmail = typeof source.client_email === "string" ? source.client_email.trim() : "";
   if (!clientEmail) throw invalid("thiếu client_email");

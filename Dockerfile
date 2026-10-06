@@ -21,5 +21,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=web /web/dist ./web/dist
 COPY package.json ./
 COPY migrations ./migrations
+# Font + logo cho PDF recap cuộc họp (src/reports/meeting-recap-pdf.ts)
+COPY assets ./assets
 VOLUME /data
 CMD ["node", "dist/main.js"]

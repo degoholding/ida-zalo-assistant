@@ -1,5 +1,7 @@
 import type { AppConfig } from "../config.js";
+import type { GoogleAccountLink } from "../google/google-oauth.js";
 import { parseServiceAccount, parseSpreadsheetId } from "../google/service-account.js";
+import { ApiError } from "../web/api/api-http.js";
 
 // Danh mục cài đặt sửa được trên màn Cài đặt — khai MỘT chỗ ở đây. Thêm khóa = thêm một dòng vào mảng;
 // API, kho lưu và giao diện tự có ô. Thứ tự ưu tiên: giá trị trên web (app_setting) > .env > mặc định.
@@ -29,6 +31,10 @@ export interface SettingDefinition {
   allowEmpty?: boolean;
   /** Danh sách: tối đa ngần này phần tử. */
   maxItems?: number;
+  /** Không hiện ở màn Cài đặt, không sửa qua PATCH — chỉ máy chủ ghi (vd refresh token sau «Kết nối Google»). */
+  hidden?: boolean;
+  /** Danh sách chọn sẵn (giao diện vẽ ô tick theo nhóm); có thì chỉ nhận giá trị trong đây. */
+  choices?: { value: string; label: string; group: string }[];
   /** Kiểm thêm + chuẩn hóa sau khi ép kiểu (vd JSON service account). */
   normalize?: (value: SettingValue) => SettingValue;
   /** Phủ giá trị đang hiệu lực lên AppConfig (vd MB → byte). */
@@ -42,6 +48,23 @@ const MODEL_HINT = "tên mô hình chỉ gồm chữ thường, số, dấu ch�
 const asString = (value: SettingValue) => (typeof value === "string" ? value : "");
 const asNumber = (value: SettingValue) => Number(value);
 const asList = (value: SettingValue) => (Array.isArray(value) ? value : []);
+
+/** Loại tệp bot đọc / nghe được — mỗi mục một ô tick ở màn Cài đặt. Video không có ở đây: bot không đọc video. */
+const READABLE_FILE_CHOICES = [
+  ...["pdf", "docx", "txt", "md", "csv"].map((value) => ({ value, label: value, group: "Văn bản" })),
+  ...["xlsx", "xls"].map((value) => ({ value, label: value, group: "Bảng tính" })),
+  ...["jpg", "jpeg", "png", "webp", "gif"].map((value) => ({ value, label: value, group: "Ảnh" })),
+  ...["mp3", "m4a", "wav", "aac", "ogg"].map((value) => ({ value, label: value, group: "Ghi âm (gỡ băng + tóm tắt)" })),
+];
+
+/** Chuẩn hóa đuôi tệp («.MP3» → «mp3»), bỏ trùng, và chỉ nhận đuôi có trong danh sách chọn. */
+function normalizeFileTypes(value: SettingValue): SettingValue {
+  const allowed = new Set(READABLE_FILE_CHOICES.map((choice) => choice.value));
+  const types = [...new Set(asList(value).map((ext) => ext.replace(/^\./, "").toLowerCase()))];
+  const unknown = types.filter((ext) => !allowed.has(ext));
+  if (unknown.length) throw new ApiError(422, "validation_error", `«${unknown.join(", ")}» không có trong danh sách loại tệp bot đọc được`);
+  return types;
+}
 
 export const SETTING_DEFINITIONS: SettingDefinition[] = [
   {
@@ -83,15 +106,49 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
   },
   {
     key: "assistant_max_read_file_mb", group: "assistant", label: "Cỡ tệp tối đa bot đọc (MB)", type: "int", secret: false,
-    help: "Tệp lớn hơn thì bot từ chối đọc (xlsx, docx, pdf, txt, csv, ảnh).",
-    envName: "ASSISTANT_MAX_READ_FILE_MB", defaultValue: 5, min: 1, max: 20,
+    help: "Tệp lớn hơn thì bot từ chối đọc. Ghi âm cuộc họp: ~1 MB mỗi phút mp3 — họp 1 giờ cần ~60 MB (tệp > 14 MB được tải lên Gemini Files API).",
+    envName: "ASSISTANT_MAX_READ_FILE_MB", defaultValue: 5, min: 1, max: 200,
     applyTo: (config, value) => { config.assistant.maxReadFileBytes = asNumber(value) * MB; },
+  },
+  {
+    key: "assistant_readable_file_types", group: "assistant", label: "Loại tệp bot được đọc", type: "list", secret: false,
+    help: "Tick loại tệp bot được đọc / nghe. Ghi âm thì bot gỡ băng + tóm tắt. Video (mp4…) không đọc. Bỏ tick hết = mọi loại bot đọc được.",
+    envName: null, defaultValue: ["pdf", "docx", "xlsx", "xls", "csv", "txt", "md", "jpg", "jpeg", "png", "webp", "mp3", "m4a", "wav", "aac"],
+    maxItems: 40, allowEmpty: true, pattern: /^\.?[A-Za-z0-9]{1,10}$/, patternHint: "mỗi mục là đuôi tệp 1–10 chữ / số, vd pdf hoặc .mp3",
+    choices: READABLE_FILE_CHOICES,
+    normalize: normalizeFileTypes,
+    applyTo: (config, value) => { config.assistant.readableFileTypes = asList(value); },
+  },
+  {
+    key: "assistant_show_token_usage", group: "assistant", label: "Hiện số token dưới câu trả lời", type: "bool", secret: false,
+    help: "Bật thì mỗi câu trả lời kèm tổng token làm tròn nghìn, vd «[3k token]» — để thử mô hình, ước chi phí. Chi tiết từng lượt xem ở bảng assistant_turn. Chạy thật thì nên tắt.",
+    envName: null, defaultValue: false,
+    applyTo: (config, value) => { config.assistant.showTokenUsage = value === true; },
   },
   {
     key: "assistant_send_interval_ms", group: "assistant", label: "Giãn cách gửi tin (mili giây)", type: "int", secret: false,
     help: "Khoảng nghỉ giữa hai tin bot gửi. Dưới 500 dễ bị Zalo khóa tài khoản.",
     envName: "ASSISTANT_SEND_INTERVAL_MS", defaultValue: 1500, min: 500, max: 10_000,
     applyTo: (config, value) => { config.assistant.sendIntervalMs = asNumber(value); },
+  },
+  {
+    key: "group_reply_enabled", group: "assistant", label: "Trả lời trong nhóm khi được gọi", type: "bool", secret: false,
+    help: "Bật thì bot trả lời trong nhóm khi được @nhắc tên hoặc có từ khóa gọi bot — chỉ với người có vai trò, chỉ dùng dữ liệu của chính nhóm đó. Mọi thành viên nhóm đều đọc được câu trả lời.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.assistant.groupReplyEnabled = value === true; },
+  },
+  {
+    key: "group_reply_anyone", group: "assistant", label: "Trong nhóm: ai cũng gọi được bot", type: "bool", secret: false,
+    help: "Bật: mọi thành viên nhóm đang «Đọc tin» gọi được bot — bot vẫn chỉ dùng dữ liệu của chính nhóm đó. Tắt: chỉ người có vai trò (Quản lý / Trưởng phòng). Tin nhắn riêng luôn cần vai trò.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.assistant.groupReplyAnyone = value === true; },
+  },
+  {
+    key: "group_trigger_keywords", group: "assistant", label: "Từ khóa gọi bot trong nhóm", type: "list", secret: false,
+    help: "Tin nhóm có một trong các cụm này là gọi bot (không phân biệt dấu / hoa thường, phải nguyên cụm). Khớp ở bất kỳ chỗ nào trong tin nhưng phải nguyên chữ («robot», «chatbot» không tính). Để trống = chỉ @nhắc tên mới gọi được.",
+    envName: null, defaultValue: ["bot", "bot ơi", "trợ lý ơi", "@bot"], maxItems: 10, allowEmpty: true,
+    pattern: /^[^\n]{2,40}$/, patternHint: "mỗi từ khóa 2–40 ký tự",
+    applyTo: (config, value) => { config.assistant.groupTriggerKeywords = asList(value); },
   },
   {
     key: "default_group_read", group: "sync", label: "Nhóm mới: đọc tin", type: "bool", secret: false,
@@ -129,6 +186,25 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     envName: null, defaultValue: null,
     normalize: (value) => parseServiceAccount(value) as unknown as Record<string, unknown>,
     applyTo: (config, value) => { config.google.serviceAccount = value; },
+  },
+  {
+    key: "google_oauth_client_id", group: "google", label: "Client ID (Kết nối Google)", type: "string", secret: false,
+    help: "Chép dòng «Client ID» (…apps.googleusercontent.com) ở hộp thoại OAuth client của Google Cloud — để bot tạo cuộc họp Google Meet.",
+    envName: null, defaultValue: "", allowEmpty: true, maxLength: 200,
+    pattern: /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/, patternHint: "chỉ chép dòng Client ID, dạng …apps.googleusercontent.com",
+    applyTo: (config, value) => { config.google.oauthClientId = asString(value).trim(); },
+  },
+  {
+    key: "google_oauth_client_secret", group: "google", label: "Client secret (Kết nối Google)", type: "string", secret: true,
+    help: "Chép dòng «Client secret» (GOCSPX-…) ở cùng hộp thoại. Lưu mã hóa, không hiện lại.",
+    envName: null, defaultValue: "", maxLength: 200, pattern: /^\S+$/, patternHint: "client secret không có khoảng trắng",
+    applyTo: (config, value) => { config.google.oauthClientSecret = asString(value).trim(); },
+  },
+  {
+    key: "google_calendar_account", group: "google", label: "Tài khoản Google đã kết nối", type: "json", secret: true, hidden: true,
+    help: "Refresh token sau «Kết nối Google» — máy chủ tự ghi.",
+    envName: null, defaultValue: null,
+    applyTo: (config, value) => { config.google.calendarAccount = (value as unknown as GoogleAccountLink | null) ?? null; },
   },
   {
     key: "google_spreadsheet_url", group: "google", label: "Link trang tính", type: "string", secret: false,

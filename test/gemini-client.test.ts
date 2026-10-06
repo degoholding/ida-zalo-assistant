@@ -112,3 +112,17 @@ test("dự phòng vừa chạy được thì 10 phút sau đi thẳng sang nó; 
   await client.generate(request);
   assert.equal(third[0].model, "chinh");
 });
+
+// Gặp 06/10/2026: vòng cuối chỉ bỏ danh sách công cụ thì Gemini vẫn trả lệnh gọi → «Quá số vòng gọi công cụ».
+// Vòng cuối phải gửi kèm công cụ + functionCallingConfig NONE để mô hình buộc trả lời bằng chữ.
+test("forceText sends the tools with function calling disabled; normal turns leave tool choice to the model", async () => {
+  const tools = [{ name: "list_groups", description: "d", parameters: { type: "object", properties: {} } }];
+  const calls = stubFetch([{ model: "chinh", status: 200 }, { model: "chinh", status: 200 }]);
+  const client = new GeminiClient("k", "chinh", [], async () => undefined);
+  await client.generate({ ...request, tools, forceText: true });
+  await client.generate({ ...request, tools });
+  const [forced, normal] = calls.map((call) => call.body as unknown as { tools?: unknown[]; toolConfig?: unknown });
+  assert.deepEqual(forced.toolConfig, { functionCallingConfig: { mode: "NONE" } });
+  assert.equal(forced.tools?.length, 1);
+  assert.equal(normal.toolConfig, undefined);
+});

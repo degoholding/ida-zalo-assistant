@@ -5,7 +5,9 @@ import type { Db } from "../db/pool.js";
 import type { FileStorage } from "../storage/file-storage.js";
 import { readZipEntry } from "./zip-reader.js";
 
-// Bóc chữ từ tệp trong kho cho bot đọc: txt / csv / xlsx / docx tự bóc; pdf / ảnh nhờ mô hình đọc.
+// Bóc chữ từ tệp trong kho cho bot đọc: txt / csv / xlsx / docx tự bóc; pdf / ảnh nhờ mô hình đọc; ghi âm (mp3, m4a…)
+// nhờ mô hình nghe — gỡ băng + tóm tắt (06/10/2026). Video (mp4…) không đọc. Loại nào được đọc do cài đặt «Loại tệp bot
+// được đọc» quyết (FileReaderDeps.allowedExtensions).
 // Kết quả CẤT vào attachment_text — đọc một lần, lần sau tìm và tóm tắt dùng lại (và màn Tệp tìm được).
 
 export type ExtractMethod = "text" | "xlsx" | "docx" | "gemini" | "unsupported";
@@ -26,6 +28,8 @@ export interface FileReaderDeps {
   storage: FileStorage;
   readDocument?: DocumentReader;
   maxFileBytes: number;
+  /** Đuôi tệp được phép đọc (chữ thường, không dấu chấm). Bỏ trống / undefined = mọi loại bot đọc được. */
+  allowedExtensions?: string[];
 }
 
 /** Số dòng bảng tính tối đa đưa cho mô hình — quá là tốn token mà không đọc hết được. */
@@ -36,10 +40,29 @@ export const MAX_TEXT_CHARS = 200_000;
 const TEXT_EXTENSIONS = new Set(["txt", "csv", "md", "json", "xml", "html", "htm", "log", "tsv"]);
 const SHEET_EXTENSIONS = new Set(["xlsx", "xlsm", "xls", "ods"]);
 const IMAGE_MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
+const AUDIO_MIME: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac" };
+const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "avi", "mkv", "webm", "3gp", "wmv", "flv"]);
+
+export type FileKind = "text" | "sheet" | "docx" | "pdf" | "image" | "audio" | "video" | "unknown";
+
+/** Loại tệp theo đuôi + bot có được phép đọc không (theo cài đặt). Hàm thuần. */
+export function classifyForReading(ext: string, allowed?: string[]): { kind: FileKind; allowed: boolean } {
+  const kind: FileKind = TEXT_EXTENSIONS.has(ext) ? "text" : SHEET_EXTENSIONS.has(ext) ? "sheet" : ext === "docx" ? "docx"
+    : ext === "pdf" ? "pdf" : IMAGE_MIME[ext] ? "image" : AUDIO_MIME[ext] ? "audio" : VIDEO_EXTENSIONS.has(ext) ? "video" : "unknown";
+  return { kind, allowed: !allowed?.length || allowed.includes(ext) };
+}
 
 const DOCUMENT_INSTRUCTION =
   "Chép lại TOÀN BỘ chữ có trong tài liệu này theo đúng thứ tự, giữ bảng dưới dạng từng dòng, các ô cách nhau bằng ' | '. " +
   "Không tóm tắt, không bình luận, không thêm chữ nào ngoài nội dung tài liệu. Chữ viết tay / mờ không đọc được thì ghi [không đọc được].";
+// Phần tóm tắt + phân công đặt TRƯỚC bản gỡ băng: cuộc họp dài thì chữ đưa cho mô hình bị cắt ở cuối — vẫn còn phần quan trọng
+export const AUDIO_INSTRUCTION =
+  "Đây là ghi âm gửi trong nhóm làm việc (thường là cuộc họp). Trả lời bằng tiếng Việt, đúng 4 phần theo thứ tự:\n" +
+  "TÓM TẮT: 3–6 câu nêu nội dung chính.\n" +
+  "QUYẾT ĐỊNH: các điều đã chốt (không có thì ghi 'không có').\n" +
+  "PHÂN CÔNG: mỗi dòng 'Người — việc — hạn'; chỉ ghi người / hạn khi trong ghi âm có nói, không rõ thì ghi '(chưa rõ)'.\n" +
+  "GỠ BĂNG: toàn bộ lời nói theo thứ tự; phân biệt được nhiều người thì ghi tên (nếu được gọi tên) hoặc 'Người 1:', 'Người 2:'; " +
+  "đoạn không nghe rõ ghi [không nghe rõ].\nKhông bịa lời không có trong ghi âm.";
 const IMAGE_INSTRUCTION =
   "Đây là ảnh gửi trong nhóm làm việc. Nếu ảnh có chữ (hóa đơn, báo giá, chụp màn hình, biển hiệu…) thì chép lại toàn bộ chữ theo đúng thứ tự, " +
   "bảng giữ dạng từng dòng, các ô cách nhau bằng ' | '. Sau đó thêm một dòng 'Mô tả: …' tả ngắn gọn ảnh có gì (bằng tiếng Việt). Không bịa chữ không có trong ảnh.";
@@ -109,10 +132,14 @@ async function extract(deps: FileReaderDeps, file: { file_name: string; file_ext
     return { method: "xlsx", text, summary, ...zero };
   }
   if (ext === "docx") return { method: "docx", text: extractDocx(file.data), summary: "docx", ...zero };
-  const mime = ext === "pdf" ? "application/pdf" : IMAGE_MIME[ext];
+  if (VIDEO_EXTENSIONS.has(ext)) return { method: "unsupported", text: "", summary: `không đọc video (.${ext})`, ...zero };
+  const mime = ext === "pdf" ? "application/pdf" : IMAGE_MIME[ext] ?? AUDIO_MIME[ext];
   if (mime && deps.readDocument) {
-    const result = await deps.readDocument(mime, file.data, ext === "pdf" ? DOCUMENT_INSTRUCTION : IMAGE_INSTRUCTION);
-    return { method: "gemini", text: result.text.trim(), summary: ext === "pdf" ? "pdf (mô hình đọc)" : "ảnh (mô hình đọc)", inputTokens: result.inputTokens, outputTokens: result.outputTokens };
+    const audio = Boolean(AUDIO_MIME[ext]);
+    const instruction = ext === "pdf" ? DOCUMENT_INSTRUCTION : audio ? AUDIO_INSTRUCTION : IMAGE_INSTRUCTION;
+    const result = await deps.readDocument(mime, file.data, instruction);
+    const summary = ext === "pdf" ? "pdf (mô hình đọc)" : audio ? `ghi âm .${ext} (mô hình nghe, gỡ băng + tóm tắt)` : "ảnh (mô hình đọc)";
+    return { method: "gemini", text: result.text.trim(), summary, inputTokens: result.inputTokens, outputTokens: result.outputTokens };
   }
   return { method: "unsupported", text: "", summary: `chưa đọc được đuôi .${ext || "?"}`, ...zero };
 }
@@ -142,6 +169,13 @@ export async function readAttachmentText(deps: FileReaderDeps, attachmentId: num
   const row = rows[0];
   if (!row) return { error: `Không có tệp #${attachmentId}` };
   const fileName = String(row.file_name || `tep.${row.file_ext || "bin"}`);
+  // Kiểm quyền TRƯỚC cả chữ đã bóc sẵn — quản trị vừa bỏ một loại khỏi danh sách thì bot thôi đọc ngay
+  const ext = extensionOf(fileName, String(row.file_ext ?? ""));
+  const access = classifyForReading(ext, deps.allowedExtensions);
+  if (access.kind === "video") return { error: `Bot không đọc video (${fileName}).` };
+  if (!access.allowed) {
+    return { error: `Bot chưa được phép đọc tệp .${ext || "?"} (${fileName}) — quản trị bật ở Cài đặt → «Loại tệp bot được đọc». Đang cho đọc: ${deps.allowedExtensions!.join(", ")}.` };
+  }
   if (row.text !== null && row.text !== undefined) {
     return { attachmentId, fileName, method: row.method, summary: String(row.summary), text: String(row.text), charCount: Number(row.char_count), cached: true, inputTokens: 0, outputTokens: 0 };
   }
@@ -167,7 +201,9 @@ export async function readAttachmentText(deps: FileReaderDeps, attachmentId: num
        input_tokens = VALUES(input_tokens), output_tokens = VALUES(output_tokens), extracted_at = CURRENT_TIMESTAMP(3)`,
     [attachmentId, extracted.method, text.length, extracted.summary.slice(0, 500), extracted.method === "unsupported" ? null : text,
       extracted.inputTokens, extracted.outputTokens]);
-  if (extracted.method === "unsupported") return { error: `Bot ${extracted.summary} (${fileName}). Đọc được: xlsx, docx, pdf, txt, csv, ảnh.` };
+  if (extracted.method === "unsupported") {
+    return { error: `Bot ${extracted.summary} (${fileName}). Đọc được: ${deps.allowedExtensions?.length ? deps.allowedExtensions.join(", ") : "xlsx, docx, pdf, txt, csv, ảnh, ghi âm (mp3, m4a…)"}.` };
+  }
   return { attachmentId, fileName, method: extracted.method, summary: extracted.summary, text, charCount: text.length, cached: false,
     inputTokens: extracted.inputTokens, outputTokens: extracted.outputTokens };
 }

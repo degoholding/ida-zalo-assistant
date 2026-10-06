@@ -2,6 +2,7 @@
 //
 // ⚠️ Lượt của mô hình phải đưa NGUYÊN VẸN trở lại lịch sử (kể cả các phần thoughtSignature của
 // dòng Gemini 3): bóc riêng functionCall ra rồi dựng lại là API từ chối lượt gọi hàm kế tiếp.
+import { INLINE_MAX_BYTES, deleteGeminiFile, uploadGeminiFile } from "./gemini-files.js";
 
 export interface GeminiPart {
   text?: string;
@@ -40,6 +41,8 @@ export interface GenerateRequest {
   tools: FunctionDeclaration[];
   /** Mô hình muốn dùng cho lượt này (vd bản nặng khi tóm tắt dài); bỏ trống = mô hình chính. */
   model?: string;
+  /** Cấm gọi công cụ lượt này (functionCallingConfig NONE) — buộc trả lời bằng chữ với dữ liệu đã có. */
+  forceText?: boolean;
 }
 
 export interface DocumentReadResult {
@@ -215,6 +218,21 @@ export class GeminiClient implements ModelClient {
   async readDocument(mime: string, data: Buffer, instruction: string, model?: string): Promise<DocumentReadResult> {
     const base = [this.model, ...this.fallbackModels.filter((name) => name && name !== this.model)];
     const models = model ? [model, ...base.filter((name) => name !== model)] : base;
+    // Tệp lớn (ghi âm cuộc họp dài…) không gửi inline được — tải lên Files API một lần, mọi mô hình dùng chung
+    const uploaded = data.length > INLINE_MAX_BYTES ? await uploadGeminiFile(this.apiKey, mime, data, `bot-tro-ly-${Date.now()}`) : null;
+    const filePart = uploaded
+      ? { fileData: { mimeType: mime, fileUri: uploaded.uri } }
+      : { inlineData: { mimeType: mime, data: data.toString("base64") } };
+    // Âm thanh dài: gỡ băng một giờ họp có thể mất vài phút
+    const timeoutMs = mime.startsWith("audio/") ? 10 * 60_000 : REQUEST_TIMEOUT_MS * 2;
+    try {
+      return await this.readWithModels(models, filePart, instruction, timeoutMs);
+    } finally {
+      if (uploaded) await deleteGeminiFile(this.apiKey, uploaded.name);
+    }
+  }
+
+  private async readWithModels(models: string[], filePart: Record<string, unknown>, instruction: string, timeoutMs: number): Promise<DocumentReadResult> {
     let lastError: unknown = null;
     for (const name of models) {
       try {
@@ -223,9 +241,9 @@ export class GeminiClient implements ModelClient {
           {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS * 2),
+            signal: AbortSignal.timeout(timeoutMs),
             body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ inlineData: { mimeType: mime, data: data.toString("base64") } }, { text: instruction }] }],
+              contents: [{ role: "user", parts: [filePart, { text: instruction }] }],
               generationConfig: { temperature: 0 },
             }),
           },
@@ -262,6 +280,7 @@ export class GeminiClient implements ModelClient {
           systemInstruction: { parts: [{ text: request.system }] },
           contents: request.contents,
           tools: request.tools.length ? [{ functionDeclarations: request.tools }] : undefined,
+          toolConfig: request.forceText && request.tools.length ? { functionCallingConfig: { mode: "NONE" } } : undefined,
           generationConfig: { temperature: 0.3 },
         }),
       },

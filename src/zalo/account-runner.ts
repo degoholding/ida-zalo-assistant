@@ -10,7 +10,7 @@ import {
   type UserMessage,
 } from "zca-js";
 import type { AssistantService } from "../assistant/assistant-service.js";
-import type { GeneratedReportFile } from "../reports/report-exporter.js";
+import { reportFileExtension, type GeneratedReportFile } from "../reports/report-exporter.js";
 import { splitForZalo } from "../assistant/assistant-service.js";
 import type { AppConfig } from "../config.js";
 import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
@@ -42,6 +42,8 @@ import { parseZaloContent } from "./content-parser.js";
 import { describeGroupEvent, namesToLookup } from "./group-event-text.js";
 import { registerGroupHistoryApi, type HistoryPage } from "./group-history.js";
 import { ZaloSender } from "./zalo-sender.js";
+import { GroupAssistantReplier } from "./group-assistant-replier.js";
+import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
 import {
   recordSessionEvent,
@@ -63,13 +65,6 @@ const MEMBER_CHANGING_EVENTS = new Set<string>([
 // Nghỉ giữa hai lần hỏi Zalo lúc quét cả loạt nhóm — đừng dồn dập kẻo bị đánh dấu là máy
 const GROUP_SCAN_PAUSE_MS = 1500;
 // Lấy tin cũ từng trang: tối đa ngần này trang, mỗi trang chờ tối đa / nghỉ giữa hai trang
-/** Câu trả lời chưa về sau ngần này thì nhắn «em nhận được rồi» — hỏi dễ (1 giây) thì khỏi, hai tin liền nhau rườm. */
-const ACK_DELAY_MS = 2500;
-const ACK_TEXTS = [
-  "Dạ em nhận được rồi, để em xem một chút ạ…",
-  "Dạ, em đang xem, anh/chị chờ em chút nhé…",
-  "Em nhận được rồi ạ, đang làm, có ngay thôi…",
-];
 const BACKFILL_MAX_PAGES = 20;
 
 export interface BackfillProgress {
@@ -109,7 +104,7 @@ export function toIncomingGroupMessage(message: GroupMessage | UserMessage): Inc
     senderName: data.dName ?? "",
     sentAtMs: Number(data.ts) || Date.now(),
     content: data.content,
-    quote: data.quote ? { globalMsgId: data.quote.globalMsgId, msg: data.quote.msg ?? "" } : null,
+    quote: data.quote ? { globalMsgId: data.quote.globalMsgId, msg: data.quote.msg ?? "", ownerUid: String(data.quote.ownerId ?? "") } : null,
     mentions: "mentions" in data
       ? data.mentions?.map((mention) => ({ uid: mention.uid, pos: mention.pos, len: mention.len })) ?? null
       : null,
@@ -125,6 +120,7 @@ export class AccountRunner {
   private readonly log;
 
   private readonly sender: ZaloSender;
+  private readonly groupReplier: GroupAssistantReplier;
   // Đang chờ một trang tin cũ của nhóm (lấy tin cũ kiểu từng trang qua kết nối trực tiếp)
   private oldGroupPageWaiter: ((messages: GroupMessage[]) => void) | null = null;
   // Mỗi cuộc riêng trả lời lần lượt — hai câu hỏi liền tay không chạy song song, câu sau đọc được câu trước
@@ -142,6 +138,13 @@ export class AccountRunner {
   ) {
     this.log = createLogger(`zalo:${account.label}`);
     this.sender = new ZaloSender(config.assistant.sendIntervalMs);
+    this.groupReplier = new GroupAssistantReplier({
+      db, config, sender: this.sender, log: this.log, accountId: account.id,
+      getApi: () => this.api,
+      getAssistant: () => this.assistant,
+      getBot: () => ({ uid: this.ownUid, name: this.account.display_name || this.account.label }),
+      sendReportFile: (thread, file) => this.sendReportFile(thread, file),
+    });
   }
 
   async start(): Promise<boolean> {
@@ -240,6 +243,7 @@ export class AccountRunner {
         this.handleDirectMessage(message).catch((error) => this.log.error(`lưu tin riêng ${message.threadId} lỗi`, error));
         return;
       }
+      const incoming = toIncomingGroupMessage(message);
       ingestGroupMessage(
         {
           db: this.db,
@@ -248,8 +252,12 @@ export class AccountRunner {
           onAttachmentQueued: (attachmentId) => this.downloader.enqueue(attachmentId),
         },
         accountId,
-        toIncomingGroupMessage(message),
-      ).catch((error) => this.log.error(`lưu tin nhóm ${message.threadId} lỗi`, error));
+        incoming,
+      )
+        // Tin nhóm đang đọc (bot này lưu, hoặc bot khác cùng nhóm lưu trước = "duplicate") mới xét gọi bot.
+        // Tin cũ bù lại đi đường old_messages, không qua đây — không làm bot trả lời chuyện cũ.
+        .then((outcome) => { if (outcome !== "group_not_read") this.groupReplier.handle(message as GroupMessage, incoming); })
+        .catch((error) => this.log.error(`lưu tin nhóm ${message.threadId} lỗi`, error));
     });
 
     listener.on("old_messages", (messages, threadType) => {
@@ -521,7 +529,7 @@ export class AccountRunner {
     // Không ghi nội dung câu hỏi / câu trả lời vào log — chỉ ai, kết quả, bao lâu; nội dung xem ở màn Hội thoại
     this.log.info(`trả lời «${contact.display_name || contact.zalo_uid}»: ${AssistantTurnStatus[reply.status]}` +
       `${reply.text ? `, ${reply.text.length} ký tự` : ", không gửi"}${reply.attachmentIds.length ? `, ${reply.attachmentIds.length} tệp` : ""}` +
-      `${reply.reportFiles?.length ? `, ${reply.reportFiles.length} báo cáo Excel` : ""}`);
+      `${reply.reportFiles?.length ? `, ${reply.reportFiles.length} tệp báo cáo` : ""}`);
     const api = this.api!;
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
     if (reply.text) {
@@ -539,7 +547,7 @@ export class AccountRunner {
       });
     }
     for (const file of reply.reportFiles ?? []) {
-      await this.sendReportFile(thread, contact.zalo_uid, file).catch(async (error) => {
+      await this.sendReportFile(thread, file).catch(async (error) => {
         this.log.warn(`gửi báo cáo ${file.fileName} lỗi`, error);
         const notice = `Không gửi được tệp báo cáo ${file.fileName}: ${describeError(error)}`.slice(0, 300);
         await this.sender.send(() => api.sendMessage(notice, contact.zalo_uid, ThreadType.User)).catch(() => undefined);
@@ -547,20 +555,26 @@ export class AccountRunner {
     }
   }
 
-  /** Tệp báo cáo Excel trợ lý vừa tạo (đã cất kho): gửi cho người hỏi rồi ghi vào cuộc — màn Tệp thấy, tải lại được. */
-  private async sendReportFile(thread: GroupRow, peerUid: string, file: GeneratedReportFile): Promise<void> {
+  /**
+   * Tệp trợ lý vừa tạo (Excel báo cáo / PDF recap, đã cất kho): gửi vào cuộc đang hỏi (tin riêng hoặc nhóm) rồi ghi vào
+   * cuộc — màn Tệp thấy, tải lại được.
+   */
+  async sendReportFile(thread: GroupRow, file: GeneratedReportFile): Promise<void> {
+    const api = this.api;
+    if (!api) throw new Error("bot chưa kết nối");
+    const { peer, type } = this.threadTarget(thread);
     const stream = await this.storage.read(file.storageKey);
     const chunks: Buffer[] = [];
     for await (const chunk of stream) chunks.push(chunk as Buffer);
     const data = Buffer.concat(chunks);
     const filename = file.fileName as `${string}.${string}`;
     const response = await this.sender.send(() =>
-      this.api!.sendMessage({ msg: "", attachments: [{ data, filename, metadata: { totalSize: data.length } }] }, peerUid, ThreadType.User));
+      api.sendMessage({ msg: "", attachments: [{ data, filename, metadata: { totalSize: data.length } }] }, peer, type));
     const msgId = response.message?.msgId ?? response.attachment?.[0]?.msgId;
     if (!msgId) return;
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
     await recordOutgoingMessage(this.db, thread, bot, String(msgId), file.fileName, {
-      kind: MessageKind.File, file: { name: file.fileName, ext: "xlsx", storageKey: file.storageKey, bytes: file.bytes },
+      kind: MessageKind.File, file: { name: file.fileName, ext: reportFileExtension(file.fileName), storageKey: file.storageKey, bytes: file.bytes },
     });
   }
 
@@ -612,7 +626,7 @@ export class AccountRunner {
   private async sendAck(thread: GroupRow, contact: ContactRow, isAnswered: () => boolean): Promise<void> {
     const api = this.api;
     if (!api) return;
-    const text = ACK_TEXTS[Math.floor(Math.random() * ACK_TEXTS.length)];
+    const text = pickAckText();
     const response = await this.sender.send(() => (isAnswered() ? Promise.resolve(null) : api.sendMessage(text, contact.zalo_uid, ThreadType.User)));
     const msgId = response?.message?.msgId;
     if (msgId) await recordOutgoingMessage(this.db, thread, { uid: this.ownUid, name: this.account.display_name || this.account.label }, String(msgId), text);

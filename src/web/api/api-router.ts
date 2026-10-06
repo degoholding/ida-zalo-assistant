@@ -16,6 +16,8 @@ import { importRoutes } from "./imports-api.js";
 import { lookupRoutes } from "./lookups-api.js";
 import { buildAdminPermissions } from "./permissions.js";
 import { settingRoutes } from "./settings-api.js";
+import { assistantChatRoutes } from "./assistant-chat-api.js";
+import { OAUTH_CALLBACK_PATH, googleOAuthRoutes, handleOAuthCallback } from "./google-oauth-api.js";
 
 // Lớp API JSON cho giao diện `web/` (khung ERP v2). Mỗi phân hệ một tệp `*-api.ts` khai mảng tuyến;
 // ở đây chỉ gom lại, lo đăng nhập / phiên, và đổi lỗi thành phong bì JSON.
@@ -23,7 +25,7 @@ import { settingRoutes } from "./settings-api.js";
 const log = createLogger("api");
 
 const routes: ApiRoute[] = [
-  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes,
+  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
 ];
 
 export interface ApiDeps {
@@ -55,6 +57,11 @@ export async function handleApiRequest(ctx: Omit<ApiContext, "match" | "service"
       }
       response.setHeader("Set-Cookie", session.setCookie(token));
       sendOk(response, { user: { ...ADMIN_USER, permissions: buildAdminPermissions() } }, "Đăng nhập thành công");
+      return true;
+    }
+    // Google chuyển về sau khi đồng ý: không có cookie phiên (SameSite=Strict) — chống giả mạo bằng `state` một lần
+    if (path === OAUTH_CALLBACK_PATH && method === "GET") {
+      await handleOAuthCallback(url, response, deps.service);
       return true;
     }
     const route = routes.find(([routeMethod, pattern]) => routeMethod === method && pattern.test(path));

@@ -81,6 +81,40 @@ nên dự phòng toàn mô hình khác nhau thì một cái hết lượt vẫn 
 nội dung gửi lên (tin nhắn, tệp) để cải thiện sản phẩm, người của Google có thể đọc** — chạy thật với dữ liệu
 công ty thì bật thanh toán cho khóa.
 
+**Gọi bot trong nhóm** (06/10/2026): tin nhóm @nhắc tên bot hoặc có từ khóa (Cài đặt → «Từ khóa gọi bot trong
+nhóm», mặc định «bot», «bot ơi», «trợ lý ơi», «@bot»; khớp nguyên chữ ở bất kỳ chỗ nào trong tin) thì bot trả lời ngay trong nhóm, trích dẫn tin được hỏi — mọi thành viên gọi được (tắt «Trong nhóm: ai cũng gọi
+được bot» thì chỉ người có vai trò; tin riêng luôn cần vai trò), chỉ nhóm đang «Đọc tin», trợ lý chỉ đọc dữ liệu của chính nhóm đó (`scopeGroupId` chặn trong
+`src/assistant/tools.ts`). Trong nhóm bot còn **làm** được (06/10/2026): tạo nhắc hẹn Zalo, ghim nội dung (ghi chú có ghim), tạo bình chọn, bỏ ghim, hủy nhắc hẹn —
+«bot nhắc cả nhóm 8h sáng mai nộp báo cáo», «bot ghim tóm tắt báo cáo tháng 8» (`src/assistant/group-action-tools.ts`;
+việc gắn cứng vào nhóm đang hỏi, tối đa 3 việc / lần hỏi). Bấm «Trả lời» vào tin của bot cũng là gọi bot; bot đọc kèm ~10 tin gần nhất của nhóm (`src/assistant/group-context.ts`)
+để hiểu câu hỏi nối tiếp. Mã: `src/zalo/group-trigger.ts` (nhận biết gọi bot), `src/zalo/group-assistant-replier.ts`.
+
+**Hỏi trợ lý trên web** (màn «Hỏi trợ lý», `/app/assistant-chat`, 06/10/2026): chọn một người có vai trò rồi hỏi
+như nhắn Zalo cho bot — đi đúng đường thật (cùng cài đặt, công cụ, giới hạn, nhật ký `assistant_turn`), không cần
+Zalo. Mỗi người hỏi một cuộc «Hỏi trợ lý · <tên>» (mã `web-<uid>`) để trợ lý hiểu câu nối tiếp; cuộc này hiện ở
+màn Hội thoại nhưng không gửi ra Zalo được (cuộc DEMO `demo-…` cũng vậy — chặn ở `SyncService.pickRunnerForThread`).
+Báo cáo Excel hiện thành nút tải trong khung chat. API: `src/web/api/assistant-chat-api.ts`.
+
+**Cuộc họp Google Meet + recap** (06/10/2026): «bot tạo cuộc họp google meet 9h mai» → sự kiện Google Calendar kèm link
+Meet trên tài khoản đã **Kết nối Google** (Cài đặt → Google: tạo OAuth client loại «Web application», chép Client ID + Client
+secret vào hai ô, bấm «Kết nối Google» — Gmail cá nhân được; app ở chế độ Testing thì 7 ngày kết nối lại một lần). Redirect URI:
+`http://localhost:8090/api/google/oauth/callback` (mở trang quản trị bằng localhost — Google chỉ nhận http với
+localhost). Callback không có cookie phiên → chống giả mạo bằng `state` một lần. Refresh token lưu mã hóa ở khóa ẩn
+`google_calendar_account`. Recap họp: gửi file ghi âm vào nhóm, «bot recap cuộc họp» → TÓM TẮT / QUYẾT ĐỊNH / PHÂN
+CÔNG (người — việc — hạn) / GỠ BĂNG; tệp > 14 MB tải lên Gemini Files API (đo: WAV 21,6 MB ~2 phút họp → 33 giây).
+Gmail miễn phí không có transcript Meet nên recap tự động từ Meet cần Google Workspace (chưa làm). Mã:
+`src/google/google-oauth.ts`, `calendar-meetings.ts`, `src/assistant/meeting-tool.ts`, `gemini-files.ts`.
+
+**Recap họp ra PDF** (06/10/2026): đọc ghi âm xong bot gọi `create_meeting_recap_pdf` → PDF theo mẫu «Meeting Recap» của
+DEGO (logo, bảng thông tin, TL;DR, các phần, định hướng, công việc người / hạn / ưu tiên, mốc thời gian, vấn đề mở) gửi vào
+nhóm (hoặc tin riêng). Câu trả lời trên Zalo: TL;DR + phân công theo người với «@Tên» — bot đổi thành thẻ nhắc Zalo thật cho
+thành viên khớp tên — rồi hỏi «có muốn em nhắc các việc này hằng ngày không»; đồng ý → một nhắc hẹn lặp hằng ngày. Dựng bằng
+pdfmake (JS thuần) + font Be Vietnam Pro / Noto Symbols trong `assets/` (Dockerfile chép `assets`). Mã: `src/reports/meeting-recap-*.ts`,
+`pdf-text-runs.ts`, `src/assistant/meeting-recap-tool.ts`, `src/zalo/group-mentions.ts`.
+
+**Đo token** (06/10/2026): bật Cài đặt → «Hiện số token dưới câu trả lời» thì mỗi câu trả lời kèm tổng token làm tròn
+nghìn «[3k token]» — mặc định TẮT. `src/assistant/token-usage-footer.ts`; dòng này bị bỏ khi đưa lịch sử cho mô hình.
+
 **Báo cáo ra file** (`export_report`, 05/10/2026): người hỏi nói «xuất báo cáo … ra Excel / Google Sheets / file»
 thì trợ lý lấy dữ liệu, soạn thành một bảng rồi xuất. Google Sheets đã kết nối (màn Cài đặt) → mỗi báo cáo một
 tab mới trên trang tính, bot gửi link mở thẳng tab; chưa kết nối, hoặc người hỏi nói «Excel» → tệp `.xlsx` cất
@@ -214,10 +248,11 @@ Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng b�
 - `zalo_group.message_count` / `last_message_at` là bộ đếm cập nhật lúc ghi tin (migration 011) — màn danh
   sách KHÔNG được quét bảng `message` để đếm; thêm đường ghi tin mới thì gọi `bumpThreadCounters`.
 - Bot xưng «em», gọi người hỏi «anh/chị» — luật nằm trong `buildSystemPrompt` (assistant-service.ts). Câu trả lời
-  chưa về sau 2,5 giây thì bot nhắn «em nhận được rồi» trước (`ACK_DELAY_MS` ở account-runner). Thiếu đối tượng
+  chưa về sau 1 giây thì bot nhắn «chờ em một xíu» trước — tin riêng lẫn nhóm (`src/zalo/assistant-ack.ts`). Thiếu đối tượng
   (tệp / nhóm / người nào) thì bot HỎI LẠI kèm danh sách, không đoán; `search_files` query rỗng = tệp gần đây của người hỏi.
 - **Đọc tệp** (`read_file`, `src/assistant/file-reader.ts`): xlsx / docx / txt / csv tự bóc (SheetJS + bộ đọc zip tự viết),
-  pdf / ảnh nhờ Gemini đọc. Chữ bóc ra CẤT ở `attachment_text` (migration 012): bot và màn Tệp tìm được theo
+  pdf / ảnh nhờ Gemini đọc, ghi âm (mp3, m4a, wav, aac) nhờ Gemini nghe — gỡ băng + tóm tắt (đo 06/10/2026: bản lite
+  3,6 giây / đoạn 15 giây); video không đọc. Loại được đọc: Cài đặt → «Loại tệp bot được đọc» (chặn cả chữ đã bóc sẵn). Chữ bóc ra CẤT ở `attachment_text` (migration 012): bot và màn Tệp tìm được theo
   nội dung, đọc lại không tốn token. Tối đa `ASSISTANT_MAX_READ_FILE_MB` (5). Lượt có đọc tệp hoặc dữ liệu
   công cụ > 24.000 ký tự đi mô hình `GEMINI_MODEL_HEAVY` (flash) thay vì lite.
 - Giao diện theo khuôn ERP DEGO (bảng màu trong `web/src/index.css`); mọi màn mới phải đi qua `CrudListPage` / `CrudDetailPage`, không vẽ tay.

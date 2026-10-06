@@ -39,6 +39,7 @@ màn chi tiết có thẻ danh tính, biểu mẫu, các tab và «Lịch sử t
 | **Tệp** | Mọi tệp / ảnh đã lưu: lọc theo cuộc, loại, trạng thái; tải về; xem **chữ đã bóc** (bot đọc tệp xong thì cất chữ để tìm và làm báo cáo); «Bóc chữ» thủ công; «Tải lại» tệp lỗi. |
 | **Nhập lịch sử** | Lấy tin trước ngày bot vào nhóm từ Zalo Web — mục 5. |
 | **Công ty** | Danh mục công ty; nhóm và người gắn công ty. |
+| **Hỏi trợ lý** | Quản trị hỏi trợ lý AI ngay trên web dưới tên một người có vai trò (không cần Zalo): cùng cài đặt, công cụ, giới hạn như tin Zalo thật; báo cáo Excel có nút tải. Mỗi người một cuộc «Hỏi trợ lý · <tên>», không gửi ra Zalo. |
 | **Tài khoản bot** | Thêm bot bằng QR, bật / tắt, trạng thái phiên, số nhóm / số cuộc riêng. |
 | **Cài đặt** | Sửa trên web, **có hiệu lực ngay** (không khởi động lại): khóa Gemini, mô hình chính / nặng / dự phòng, các trần của trợ lý, giãn cách gửi, mặc định nhóm / cuộc riêng mới, cỡ tệp tối đa. Giá trị web phủ lên `.env`; mỗi ô ghi rõ đang lấy từ web / `.env` / mặc định, có nút «Khôi phục mặc định». Khóa bí mật lưu mã hóa, không bao giờ hiện lại nguyên văn. Thẻ **Google Sheets**: dán khóa service account + link trang tính, nút «Kiểm tra kết nối» ghi thử một dòng vào tab «Bot trợ lý». Tab «Lịch sử thay đổi». |
 
@@ -47,11 +48,20 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
 ## 3. Trợ lý AI (nhắn riêng cho bot)
 
 - **Ai hỏi được:** người được gán vai trò trong Danh bạ (quản lý, trưởng phòng). Người lạ nhắn vào: lưu
-  tin, không trả lời. Bot **không tự trả lời trong nhóm**.
+  tin, không trả lời. **Trong nhóm** bot chỉ trả lời khi được gọi (06/10/2026): @nhắc tên bot hoặc có từ khóa
+  gọi bot (mặc định «bot», «bot ơi», «trợ lý ơi», «@bot» — sửa ở Cài đặt, không phân biệt dấu, nguyên chữ / nguyên cụm, ở
+  bất kỳ chỗ nào trong tin — «robot», «chatbot» không tính; gọi ở đầu tin thì bỏ phần gọi khỏi câu hỏi), hoặc bấm «Trả lời» vào tin của bot; bot đọc kèm ~10 tin gần nhất
+  của nhóm làm ngữ cảnh nên hỏi nối tiếp («chi tiết báo cáo đó») hiểu được; ai gọi được: mọi thành viên (cài đặt «Trong nhóm: ai cũng gọi được
+  bot», mặc định bật) hoặc chỉ người có vai trò; trợ lý chỉ dùng dữ liệu **của chính nhóm đó** (chặn ở tầng công cụ — không lộ nhóm khác,
+  Danh bạ, tin riêng); câu trả lời trích dẫn tin được hỏi. Nhiều tài khoản bot cùng nhóm: chỉ bot được ghi nhận ở
+  nhóm trả lời, mỗi tin một bot. Tắt bằng «Trả lời trong nhóm khi được gọi» ở Cài đặt.
 - **Cách hỏi:** câu tự nhiên, không dùng lệnh gạch chéo (đã chốt 02/10). Ví dụ: «tóm tắt nhóm K52 tuần
   này», «hôm qua anh Duy nói gì với em», «tìm file báo giá tháng 9», «đọc file vừa gửi rồi tóm tắt».
 - **Xưng hô:** bot xưng «em», gọi «anh / chị».
-- **Báo đã nhận:** câu trả lời chưa xong sau 2,5 giây thì bot nhắn trước «Dạ em nhận được rồi…».
+- **Đo token:** mỗi câu trả lời kèm tổng token làm tròn nghìn, vd «[3k token]» (cả lượt, gồm gọi công cụ / đọc tệp);
+  tắt ở Cài đặt → «Hiện số token dưới câu trả lời». Dòng này không đưa lại vào ngữ cảnh cho mô hình.
+- **Báo đã nhận:** câu trả lời chưa xong sau 1 giây thì bot nhắn trước «Dạ em nhận được rồi, chờ em một xíu…» — cả tin
+  riêng lẫn trong nhóm (trong nhóm có trích dẫn câu hỏi).
 - **Hỏi lại khi chưa rõ:** thiếu đối tượng (tệp nào, nhóm nào, ai) thì bot hỏi lại kèm danh sách để chọn,
   không đoán.
 - **Công cụ bot tự gọi:**
@@ -63,9 +73,12 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
 | `find_people` | tìm người theo tên |
 | `get_conversation_with_person` | trao đổi với một người (riêng + trong nhóm) |
 | `search_files` | tìm tệp theo tên **và nội dung đã bóc**; hỏi rỗng = tệp gần đây của người hỏi |
-| `read_file` | đọc tệp: xlsx / docx / pdf / txt / csv / ảnh, tối đa 5 MB; chữ bóc ra được cất lại |
+| `read_file` | đọc tệp: xlsx / docx / pdf / txt / csv / ảnh, **nghe ghi âm** (mp3, m4a, wav, aac — gỡ băng + tóm tắt), tối đa 5 MB (sửa được tới 20 MB); video (mp4) không đọc. Loại nào được đọc do Cài đặt → «Loại tệp bot được đọc»; chữ bóc ra được cất lại |
 | `send_file` | gửi lại một tệp trong kho cho người hỏi |
 | `web_search` | tìm trên mạng |
+| `create_reminder` · `create_pinned_note` · `create_poll` · `unpin_note` · `cancel_reminder` | **chỉ khi được gọi trong nhóm, chỉ tác động nhóm đó**: tạo nhắc hẹn Zalo (tới giờ Zalo tự báo cả nhóm, lặp ngày / tuần / tháng), ghim nội dung lên nhóm (ghi chú có ghim — Zalo không ghim được tin có sẵn), tạo bình chọn; bỏ ghim ghi chú, hủy nhắc hẹn (chỉ id có thật trong nhóm). Ai làm được = ai gọi được bot trong nhóm; tối đa 3 việc mỗi lần hỏi |
+| `create_meeting` · `list_meetings` · `cancel_meeting` | tạo / xem / hủy cuộc họp **Google Meet** (chỉ cuộc họp bot tạo — đánh dấu trên Google Calendar; trong nhóm chỉ của nhóm đó); (sự kiện Google Calendar có link Meet) trên tài khoản đã «Kết nối Google» ở Cài đặt, gửi link vào chat — tin riêng lẫn nhóm |
+| `create_meeting_recap_pdf` | xuất **PDF recap cuộc họp** theo mẫu công ty (TL;DR, nội dung, định hướng, công việc người / hạn / ưu tiên, mốc thời gian, vấn đề mở) sau khi đọc ghi âm; gửi tệp vào nhóm / tin riêng. Trả lời trong nhóm ghi «@Tên» → gắn thẻ thành viên thật, cuối câu hỏi có muốn nhắc việc hằng ngày (đồng ý → một nhắc hẹn lặp hằng ngày) |
 | `export_report` | xuất báo cáo dạng bảng: Google Sheets (tab mới, gửi link) nếu đã kết nối, không thì tệp Excel gửi qua Zalo |
 
 - **Mô hình:** Gemini bản nhẹ cho câu thường; tự chuyển bản mạnh (`GEMINI_MODEL_HEAVY`) khi ngữ cảnh dài

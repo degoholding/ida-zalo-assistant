@@ -7,13 +7,13 @@ import { queryKeys } from '@/shared/constants/query-keys'
 interface LiveMessageEvent {
   threadId: number
   messageId: number
-  kind: 'new' | 'recalled'
+  kind: 'new' | 'recalled' | 'thread_updated'
 }
 
 const EVENTS_URL = '/api/events'
 
 /**
- * Nghe kênh đẩy của máy chủ (SSE): tin vừa lưu / thu hồi → nạp lại dòng tin của cuộc đó và cột trái
+ * Nghe kênh đẩy của máy chủ (SSE): tin vừa lưu / thu hồi / cuộc đổi tên → nạp lại dòng tin, thẻ cuộc và cột trái
  * ngay, không chờ hỏi vòng. Mất kết nối thì trình duyệt tự nối lại (EventSource có sẵn), hỏi vòng
  * 60 giây trong `use-conversations.ts` là lưới đỡ.
  */
@@ -23,8 +23,12 @@ export function useLiveEvents() {
     const source = new EventSource(EVENTS_URL, { withCredentials: true })
     const handle = (event: Event) => {
       const data = JSON.parse((event as MessageEvent).data) as LiveMessageEvent
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.messages(data.threadId) })
+      // thread_updated (đổi tên nhóm, người vào/ra): không có tin mới, chỉ thông tin cuộc đổi
+      if (data.kind !== 'thread_updated') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.messages(data.threadId) })
+      }
       void queryClient.invalidateQueries({ queryKey: ['conversations', 'list'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.thread(data.threadId) })
     }
     source.addEventListener('message', handle)
     return () => {

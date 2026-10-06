@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deflateRawSync } from "node:zlib";
 import * as XLSX from "xlsx";
-import { extensionOf, extractDocx, extractSheet, MAX_SHEET_ROWS } from "./file-reader.js";
+import { classifyForReading, extensionOf, extractDocx, extractSheet, MAX_SHEET_ROWS } from "./file-reader.js";
 
 function docxOf(xml: string): Buffer {
   const name = Buffer.from("word/document.xml");
@@ -49,4 +49,18 @@ test("đuôi tệp: ưu tiên cột file_ext, rơi về tên tệp, không phân
 test("tệp .xlsx nhưng ruột là chữ thường: SheetJS đọc như CSV — vẫn ra chữ chứ không ném lỗi", () => {
   const { text } = extractSheet(Buffer.from("a,b\n1,2"));
   assert.match(text, /a \| b\n1 \| 2/);
+});
+
+// 06/10/2026: quản trị chọn loại tệp bot được đọc; ghi âm thì nghe (gỡ băng), video thì không đọc
+test("classifies audio, video and documents, and applies the admin's allow list", () => {
+  const allowed = ["pdf", "docx", "mp3"];
+  assert.deepEqual(classifyForReading("mp3", allowed), { kind: "audio", allowed: true });
+  assert.deepEqual(classifyForReading("m4a", allowed), { kind: "audio", allowed: false });
+  assert.deepEqual(classifyForReading("mp4", allowed), { kind: "video", allowed: false });
+  assert.deepEqual(classifyForReading("mp4", ["mp4"]), { kind: "video", allowed: true }); // vẫn bị chặn ở readAttachmentText vì là video
+  assert.deepEqual(classifyForReading("xlsx", allowed), { kind: "sheet", allowed: false });
+  assert.deepEqual(classifyForReading("docx", allowed), { kind: "docx", allowed: true });
+  assert.deepEqual(classifyForReading("jpg", []), { kind: "image", allowed: true }); // danh sách rỗng = mọi loại
+  assert.deepEqual(classifyForReading("exe", undefined), { kind: "unknown", allowed: true });
+  assert.deepEqual(classifyForReading("", allowed), { kind: "unknown", allowed: false });
 });

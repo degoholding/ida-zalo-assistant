@@ -51,7 +51,20 @@ export class SettingsStore {
   }
 
   describe(): SettingView[] {
-    return SETTING_DEFINITIONS.map((definition) => buildSettingView(definition, this.state(definition)));
+    return SETTING_DEFINITIONS.filter((definition) => !definition.hidden).map((definition) => buildSettingView(definition, this.state(definition)));
+  }
+
+  /** Máy chủ tự ghi một khóa ẩn (vd tài khoản Google sau «Kết nối Google») — không qua kiểm giá trị của PATCH. */
+  async saveInternal(key: string, value: SettingValue, actor: string): Promise<void> {
+    const definition = findSetting(key);
+    if (!definition?.hidden) throw new Error(`saveInternal chỉ dành cho khóa ẩn, không phải ${key}`);
+    await this.db.query(
+      `INSERT INTO app_setting (setting_key, value, is_secret, updated_by) VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE value = VALUES(value), is_secret = VALUES(is_secret), updated_by = VALUES(updated_by)`,
+      [key, encodeStoredValue(definition, value, this.config.sessionEncryptionKey), definition.secret ? 1 : 0, actor.slice(0, 100)],
+    );
+    this.webEntries.set(key, { value, broken: false });
+    this.apply(definition);
   }
 
   /**
@@ -62,7 +75,8 @@ export class SettingsStore {
     const pending: { definition: SettingDefinition; value: SettingValue }[] = [];
     for (const [key, raw] of Object.entries(changes)) {
       const definition = findSetting(key);
-      if (!definition) throw new ApiError(422, "validation_error", `Không có cài đặt ${key}`);
+      // Khóa ẩn coi như không có — chỉ máy chủ ghi (saveInternal)
+      if (!definition || definition.hidden) throw new ApiError(422, "validation_error", `Không có cài đặt ${key}`);
       if (definition.secret && (raw === "" || raw === null || raw === undefined)) continue;
       const value = parseSettingInput(definition, raw);
       const current = effectiveValue(definition, this.state(definition));

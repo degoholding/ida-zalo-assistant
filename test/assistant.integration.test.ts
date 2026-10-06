@@ -195,6 +195,49 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
     assert.match(unknown.error, /Không có nhóm/);
   });
 
+  // Hỏi trong nhóm (06/10/2026): câu trả lời cả nhóm đọc — mô hình CỐ đọc nhóm khác / Danh bạ cũng không được
+  test("group-scoped questions only reach the asked group, even when the model asks for another group", async () => {
+    const group = await seedGroup();
+    const { group: secret } = await ensureGroup(db, "g-mat", { readMessages: true, captureFiles: false });
+    const deps = { db, defaults: { readMessages: false, captureFiles: false } };
+    await ingestGroupMessage(deps, botId, message({ msgId: "1" }));
+    await ingestGroupMessage(deps, botId, message({ zaloGroupId: "g-mat", msgId: "m1", content: "giá vốn bí mật 9 tỷ" }));
+    await ingestGroupMessage(deps, botId, message({ zaloGroupId: "g-mat", msgId: "m2", msgType: "share.file",
+      content: { title: "Hop dong mat.pdf", href: "https://f/y", params: "{}" } }));
+    const [secretFile] = await db.query<RowDataPacket[]>("SELECT id FROM attachment WHERE group_id = ?", [secret.id]);
+    const context: ToolContext = {
+      db, askerUid: "u-lan", filesToSend: [], now: NOW, scopeGroupId: group.id,
+      readFile: async () => ({ error: "không được tới bước đọc" }),
+    };
+    const window = { from: "2026-10-01T00:00:00+07:00", to: "2026-10-01T23:59:59+07:00" };
+
+    const groups = await runTool(context, "list_groups", {}) as any;
+    assert.deepEqual(groups.groups.map((g: { id: number }) => g.id), [group.id]);
+    const stolen = await runTool(context, "get_group_messages", { group_id: secret.id, ...window }) as any;
+    assert.equal(stolen.group, "Bán hàng miền Nam");
+    assert.doesNotMatch(stolen.messages, /bí mật/);
+    const files = await runTool(context, "search_files", { query: "hop dong" }) as any;
+    assert.equal(files.files.length, 0);
+    const read = await runTool(context, "read_file", { attachment_id: secretFile[0].id }) as any;
+    assert.match(read.error, /không thuộc nhóm/);
+    for (const blocked of ["find_people", "get_conversation_with_person", "list_contacts", "send_file", "export_report"]) {
+      const result = await runTool(context, blocked, { name: "Lan", person_uid: "u-lan", from: window.from, to: window.to }) as any;
+      assert.match(result.error, /chỉ dùng được dữ liệu của nhóm/, blocked);
+    }
+
+    // Tầng trợ lý: chỉ đưa công cụ của nhóm, không nạp lịch sử chat của nhóm như hội thoại user/model
+    const model = new ScriptedModel([[{ text: "Dạ ok" }]]);
+    const contact = (await findContactByUid(db, "u-lan"))!;
+    const service = new AssistantService(db, model, "gia-lap", { maxPerHour: 30, dailyTokenCap: 1_000_000 }, () => NOW);
+    const reply = await service.answer({
+      botAccountId: botId, contact, threadId: group.id, questionMessageId: null, question: "tóm tắt nhóm",
+      groupScope: { groupId: group.id, groupName: "bán hàng" },
+    });
+    assert.equal(reply.status, AssistantTurnStatus.Answered);
+    assert.equal(model.requests[0].toolCount, 3);
+    assert.equal(model.requests[0].contents.length, 1);
+  });
+
   test("trao đổi với một người: tin của họ + tin nhắc tên họ + tin riêng giữa họ và bot", async () => {
     await seedGroup();
     const deps = { db, defaults: { readMessages: false, captureFiles: false } };
@@ -309,7 +352,8 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
     const service = new AssistantService(db, new ScriptedModel([]), "gia-lap", { maxPerHour: 30, dailyTokenCap: 1_000_000 }, () => NOW);
     const reply = await service.answer({ botAccountId: botId, contact, threadId: asked.thread.id, questionMessageId: asked.messageId, question: "hỏi" });
     assert.equal(reply.status, AssistantTurnStatus.Failed);
-    assert.match(reply.text ?? "", /Xin lỗi/);
+    // Câu báo lỗi đổi sang xưng «em» ở commit 3b4170d — bài kiểm này chỉ chạy khi có TEST_DATABASE_URL nên sót
+    assert.match(reply.text ?? "", /gặp lỗi khi trả lời/);
     const [turns] = await db.query<RowDataPacket[]>("SELECT error FROM assistant_turn");
     assert.match(turns[0].error, /hết kịch bản/);
   });

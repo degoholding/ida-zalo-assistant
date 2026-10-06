@@ -139,7 +139,7 @@ export const contactCrudConfig: CrudConfig<ContactDetail> = {
       options: [{ value: KIND_MODE_AUTO, label: 'Theo nhóm (tự động)' }, ...CONTACT_KIND_OPTIONS],
       hint: 'Theo nhóm: nhóm nội bộ → nhân sự, còn lại → khách hàng. Chọn tay thì tự động không ghi đè nữa.',
     },
-    { name: 'role', label: 'Vai trò với bot', type: 'select', options: CONTACT_ROLE_OPTIONS, hint: 'Có vai trò thì bot trả lời khi người này nhắn riêng.' },
+    { name: 'role', label: 'Vai trò với bot', type: 'select', options: CONTACT_ROLE_OPTIONS, hint: 'Có vai trò thì bot trả lời khi người này nhắn riêng. Trong nhóm: theo cài đặt «Trong nhóm: ai cũng gọi được bot».' },
     { name: 'company_id', label: 'Công ty', type: 'select', source: { url: LOOKUP_URLS.companiesWithNone } },
     { name: 'tags', label: 'Thẻ', type: 'custom', render: (ctx) => <ContactTagsField control={ctx.control} name={ctx.name} disabled={ctx.disabled} /> },
     { name: 'note', label: 'Ghi chú', type: 'textarea', fullWidth: true, placeholder: 'Số điện thoại, nhu cầu, lưu ý khi chăm sóc…' },

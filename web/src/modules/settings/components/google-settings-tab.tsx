@@ -10,6 +10,7 @@ import { buildSettingsDefaultValues, toSettingFieldValue } from '../utils/build-
 import { getGoogleTestAvailability } from '../utils/google-test-availability'
 import { pickDirtySettings } from '../utils/pick-dirty-settings'
 import type { GoogleTestResult, SettingView } from '../types/setting'
+import { GoogleCalendarConnectCard } from './google-calendar-connect-card'
 import { SecretSettingField } from './secret-setting-field'
 import { SettingField } from './setting-field'
 
@@ -41,6 +42,8 @@ export function GoogleSettingsTab({ settings, disabled }: GoogleSettingsTabProps
 
   const serviceAccount = settings.find((item) => item.key === 'google_service_account_json')
   const spreadsheetUrl = settings.find((item) => item.key === 'google_spreadsheet_url')
+  const oauthClientId = settings.find((item) => item.key === 'google_oauth_client_id')
+  const oauthClientSecret = settings.find((item) => item.key === 'google_oauth_client_secret')
   const availability = getGoogleTestAvailability({
     serviceAccountSet: Boolean(serviceAccount?.is_set),
     spreadsheetUrlSet: Boolean(spreadsheetUrl?.is_set),
@@ -99,7 +102,7 @@ export function GoogleSettingsTab({ settings, disabled }: GoogleSettingsTabProps
       </FormCard>
 
       <form onSubmit={(event) => void onSubmit(event)}>
-        <FormCard title="Kết nối" icon={FileSpreadsheet}>
+        <FormCard title="Khóa & link (Google Sheets + Kết nối Google)" icon={FileSpreadsheet}>
           <div className="space-y-5">
             {serviceAccount && (
               <SecretSettingField
@@ -120,6 +123,26 @@ export function GoogleSettingsTab({ settings, disabled }: GoogleSettingsTabProps
                 restorePending={resetSetting.isPending && resetSetting.variables === spreadsheetUrl.key}
               />
             )}
+            {/* «Kết nối Google» (tạo cuộc họp Meet): chỉ cần chép Client ID + Client secret, không dán tệp JSON */}
+            {oauthClientId && (
+              <SettingField
+                setting={oauthClientId}
+                control={form.control}
+                disabled={fieldsDisabled}
+                onRestoreDefault={() => handleReset(oauthClientId.key)}
+                restorePending={resetSetting.isPending && resetSetting.variables === oauthClientId.key}
+              />
+            )}
+            {oauthClientSecret && (
+              <SecretSettingField
+                key={`${oauthClientSecret.key}:${version}`}
+                setting={oauthClientSecret}
+                control={form.control}
+                disabled={fieldsDisabled}
+                onDelete={() => handleReset(oauthClientSecret.key)}
+                deletePending={resetSetting.isPending && resetSetting.variables === oauthClientSecret.key}
+              />
+            )}
           </div>
           <Button type="submit" className="mt-5" disabled={fieldsDisabled || !form.formState.isDirty}>
             {saveSettings.isPending ? <Loader2 className="animate-spin" /> : <Save />}
@@ -128,7 +151,9 @@ export function GoogleSettingsTab({ settings, disabled }: GoogleSettingsTabProps
         </FormCard>
       </form>
 
-      <FormCard title="Kiểm tra kết nối">
+      <GoogleCalendarConnectCard disabled={disabled} />
+
+      <FormCard title="Kiểm tra kết nối Google Sheets">
         <div className="space-y-3">
           <Button
             type="button"
@@ -136,7 +161,7 @@ export function GoogleSettingsTab({ settings, disabled }: GoogleSettingsTabProps
             disabled={disabled || availability.disabled || testConnection.isPending}
           >
             {testConnection.isPending && <Loader2 className="animate-spin" />}
-            Kiểm tra kết nối
+            Kiểm tra Google Sheets
           </Button>
           {availability.disabled && availability.reason && (
             <p className="text-xs text-muted-foreground">{availability.reason}</p>

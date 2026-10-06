@@ -30,6 +30,11 @@ test("restores escaped newlines in the private key", () => {
   assert.equal(parseServiceAccount(escaped).private_key, VALID.private_key);
 });
 
+test("an OAuth client JSON pasted into the service account box points to the right box", () => {
+  rejects(() => parseServiceAccount({ web: { client_id: "1.apps.googleusercontent.com", client_secret: "x" } }), /chỉ chép Client ID và Client secret/);
+  rejects(() => parseServiceAccount({ installed: { client_id: "1.apps.googleusercontent.com" } }), /OAuth client/);
+});
+
 test("rejects broken JSON and wrong shapes with a clear reason", () => {
   rejects(() => parseServiceAccount("{not json"), /không phải JSON/);
   rejects(() => parseServiceAccount("[1,2]"), /object/);

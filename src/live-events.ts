@@ -6,8 +6,11 @@ import { EventEmitter } from "node:events";
 export interface MessageEvent {
   threadId: number;
   messageId: number;
-  /** "new" = vừa lưu; "recalled" = người gửi thu hồi. */
-  kind: "new" | "recalled";
+  /**
+   * "new" = vừa lưu; "recalled" = người gửi thu hồi; "thread_updated" = thông tin cuộc đổi (tên nhóm, thành viên),
+   * messageId = 0 — giao diện nạp lại cột trái + thẻ cuộc, không phải dòng tin.
+   */
+  kind: "new" | "recalled" | "thread_updated";
 }
 
 class LiveEvents extends EventEmitter {

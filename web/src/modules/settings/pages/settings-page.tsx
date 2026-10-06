@@ -1,4 +1,6 @@
 import { Bot, History, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { usePermission } from '@/core/authorization/use-permission'
 import { AuditTimeline } from '@/shared/audit'
@@ -10,13 +12,25 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { GoogleSettingsTab } from '../components/google-settings-tab'
 import { SettingsGroupForm } from '../components/settings-group-form'
+import { useGoogleOauthRedirectToast } from '../hooks/use-google-oauth-redirect-toast'
 import { useSettings } from '../hooks/use-settings'
+
+const SETTINGS_TABS = ['assistant', 'sync', 'google', 'history'] as const
+type SettingsTab = (typeof SETTINGS_TABS)[number]
+
+function resolveInitialTab(requested: string | null): SettingsTab {
+  return (SETTINGS_TABS as readonly string[]).includes(requested ?? '') ? (requested as SettingsTab) : 'assistant'
+}
 
 /** Màn Cài đặt — đổi trên web có hiệu lực ngay, không cần khởi động lại (doc 04 mục 7). */
 export function SettingsPage() {
   const { data, isLoading, isError, refetch } = useSettings()
   const { can } = usePermission()
   const canWrite = can('setting', 'write')
+  const [searchParams] = useSearchParams()
+  // Google xác thực xong đưa trình duyệt về `?tab=google&google_oauth=...` — mở thẳng tab đó.
+  const [tab, setTab] = useState<SettingsTab>(() => resolveInitialTab(searchParams.get('tab')))
+  useGoogleOauthRedirectToast()
 
   return (
     <PageContainer className="mx-auto w-full max-w-4xl">
@@ -39,7 +53,7 @@ export function SettingsPage() {
       )}
 
       {data && (
-        <Tabs defaultValue="assistant">
+        <Tabs value={tab} onValueChange={(value) => setTab(value as SettingsTab)}>
           <TabsList>
             <TabsTrigger value="assistant">
               <Bot /> Trợ lý AI

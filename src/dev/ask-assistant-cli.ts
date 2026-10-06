@@ -8,6 +8,7 @@ import { loadConfig } from "../config.js";
 import path from "node:path";
 import { AssistantTurnStatus, MessageKind } from "../constants.js";
 import { createPool } from "../db/pool.js";
+import { reportFileExtension } from "../reports/report-exporter.js";
 import { SettingsStore } from "../settings/settings-store.js";
 import { createFileStorage } from "../storage/file-storage.js";
 import { ingestDirectMessage, recordOutgoingMessage } from "../sync/message-ingest.js";
@@ -50,7 +51,7 @@ try {
   for (const file of reply.reportFiles ?? []) {
     // Như bot thật: ghi tin gửi tệp vào cuộc riêng → màn Tệp / Hội thoại thấy, tải về được
     await recordOutgoingMessage(db, asked.thread, { uid: DEMO_BOT.uid, name: DEMO_BOT.name }, `demo-report-${Date.now()}`, file.fileName, {
-      kind: MessageKind.File, file: { name: file.fileName, ext: "xlsx", storageKey: file.storageKey, bytes: file.bytes },
+      kind: MessageKind.File, file: { name: file.fileName, ext: reportFileExtension(file.fileName), storageKey: file.storageKey, bytes: file.bytes },
     });
     const where = config.storageDriver === "local" ? path.resolve(config.dataDir, "files", file.storageKey) : `R2: ${file.storageKey}`;
     console.log(`Báo cáo Excel: ${where} (${Math.round(file.bytes / 1024)} KB) — trên Zalo thật bot gửi tệp này cho người hỏi`);

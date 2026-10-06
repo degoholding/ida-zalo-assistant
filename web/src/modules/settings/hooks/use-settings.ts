@@ -18,6 +18,8 @@ export function useSaveSettings() {
     onSuccess: ({ message }) => {
       toast.success(message)
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.all })
+      // Client ID / secret vừa lưu / xóa đổi luôn trạng thái «Kết nối Google» — không nạp lại thì nút Kết nối vẫn khóa
+      void queryClient.invalidateQueries({ queryKey: queryKeys.googleOauth.all })
     },
     onError: (error) => toast.error(extractErrorMessage(error)),
   })
@@ -31,6 +33,8 @@ export function useResetSetting() {
     onSuccess: ({ message }) => {
       toast.success(message)
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.all })
+      // Client ID / secret vừa lưu / xóa đổi luôn trạng thái «Kết nối Google» — không nạp lại thì nút Kết nối vẫn khóa
+      void queryClient.invalidateQueries({ queryKey: queryKeys.googleOauth.all })
     },
     onError: (error) => toast.error(extractErrorMessage(error)),
   })

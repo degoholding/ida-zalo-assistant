@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import type { RowDataPacket } from "mysql2";
 import { LoginQRCallbackEventType, Zalo } from "zca-js";
 import { encryptJson } from "../crypto/session-cipher.js";
 import { createLogger, describeError } from "../logger.js";
@@ -121,9 +122,14 @@ export class QrLoginManager {
 
     const started = await this.service.restartAccount(accountId);
     state.phase = started ? "success" : "failed";
+    // Tài khoản đang TẮT thì restartAccount bỏ qua có chủ ý — nói rõ việc cần làm thay vì câu lỗi chung
+    const [rows] = started ? [[]] : await db.query<RowDataPacket[]>("SELECT is_active FROM bot_account WHERE id = ?", [accountId]);
+    const inactive = !started && rows[0] && !rows[0].is_active;
     state.message = started
       ? `Đã đăng nhập «${displayName}» và bắt đầu nghe các nhóm.`
-      : "Đã lưu phiên nhưng không khởi động được bot — xem log máy chủ.";
+      : inactive
+        ? `Đã lưu phiên «${displayName}», nhưng tài khoản này đang TẮT — bật «Đang dùng» ở màn Tài khoản bot để bot chạy.`
+        : "Đã lưu phiên nhưng không khởi động được bot — xem log máy chủ.";
     log.info(`«${state.label}» đăng nhập QR xong (uid ${ownUid})`);
   }
 }

@@ -10,6 +10,13 @@ export type SettingSource = 'web' | 'env' | 'default'
 /** Giá trị cài đặt — danh sách luôn là mảng chuỗi, không có object lồng. */
 export type SettingPrimitive = string | number | boolean | string[] | null
 
+/** Một lựa chọn sẵn của ô danh sách (vẽ thành ô tick, gom theo `group`). */
+export interface SettingChoice {
+  value: string
+  label: string
+  group: string
+}
+
 /** Một khóa như `GET /api/settings` trả về (doc 04 mục 7). */
 export interface SettingView {
   key: string
@@ -34,6 +41,8 @@ export interface SettingView {
   max_length: number | null
   /** `string` / `list` được phép để trống. */
   allow_empty: boolean
+  /** Lựa chọn sẵn của ô danh sách — có thì vẽ ô tick thay cho ô nhập chữ. */
+  choices?: SettingChoice[] | null
 }
 
 /** `POST /api/settings/google/test` thành công — ghi thử một dòng vào trang tính. */
@@ -42,6 +51,23 @@ export interface GoogleTestResult {
   spreadsheet_title: string
   sheet_title: string
   appended_range: string
+}
+
+/**
+ * `GET /api/google/oauth/status` — trạng thái kết nối Google Calendar / Meet
+ * (OAuth người dùng, khác hẳn khóa service account của Google Sheets).
+ */
+export interface GoogleOauthStatus {
+  client_configured: boolean
+  connected: boolean
+  email: string
+  /** URL chính xác phải khai ở "Authorized redirect URIs" trên Google Cloud. */
+  redirect_uri: string
+}
+
+/** `POST /api/google/oauth/start` thành công — URL đưa trình duyệt sang màn xin quyền của Google. */
+export interface GoogleOauthStartResult {
+  auth_url: string
 }
 
 /**
