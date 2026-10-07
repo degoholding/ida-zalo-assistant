@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ContactKind, ContactRole } from "../constants.js";
+import { ContactKind, ContactRole, GroupKind } from "../constants.js";
 import { EMPTY_CALL_QUESTION, canCallBotInGroup, detectGroupTrigger, foldForMatch } from "./group-trigger.js";
+
+test("canCallBotInGroup: nhóm nội bộ thì ai cũng gọi được, kể cả khách hàng / chưa phân loại / tắt cài đặt nhân sự", () => {
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Customer }, false, GroupKind.Internal), true);
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Unclassified }, false, GroupKind.Internal), true);
+  // Nhóm khách hàng (và lời gọi cũ không truyền loại nhóm) giữ luật cũ
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Customer }, true, GroupKind.Customer), false);
+  assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Customer }, true), false);
+});
 
 test("canCallBotInGroup: nhân sự / có vai trò gọi được, khách hàng thì không", () => {
   assert.equal(canCallBotInGroup({ role: ContactRole.None, kind: ContactKind.Staff }, true), true);
@@ -85,4 +93,13 @@ test("folding keeps one character per input character so match positions map bac
     assert.equal(foldForMatch(text).length, Array.from(text).length);
   }
   assert.equal(foldForMatch("Đ Ơ Ư"), "d o u");
+});
+
+test("applyInternalGroupDefaults: chuyển sang nhóm nội bộ thì tự bật đọc, trừ khi nói rõ tắt", async () => {
+  const { applyInternalGroupDefaults } = await import("../sync/group-repository.js");
+  assert.deepEqual(applyInternalGroupDefaults({ groupKind: GroupKind.Internal }), { groupKind: GroupKind.Internal, readMessages: true });
+  assert.deepEqual(applyInternalGroupDefaults({ groupKind: GroupKind.Internal, readMessages: false }),
+    { groupKind: GroupKind.Internal, readMessages: false });
+  assert.deepEqual(applyInternalGroupDefaults({ groupKind: GroupKind.Customer }), { groupKind: GroupKind.Customer });
+  assert.deepEqual(applyInternalGroupDefaults({ label: "x" }), { label: "x" });
 });

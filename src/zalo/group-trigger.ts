@@ -4,7 +4,7 @@
 // là gọi bot»). Phần gọi ở ĐẦU tin (kể cả sau câu chào «hey bot») được bỏ khỏi câu hỏi; nằm giữa / cuối tin thì giữ
 // nguyên cả câu để mô hình hiểu đúng ý. Từ khóa dài xét trước («bot ơi …» bỏ cả «bot ơi»). Hàm thuần.
 
-import { ContactKind, ContactRole } from "../constants.js";
+import { ContactKind, ContactRole, GroupKind } from "../constants.js";
 
 export interface GroupTriggerInput {
   text: string;
@@ -18,9 +18,15 @@ export interface GroupTriggerInput {
 /**
  * Ai gọi được bot trong nhóm (chốt 06/10/2026: «nội bộ gọi được, khách hàng thì bot không chạy»): người có vai trò
  * (Quản lý / Trưởng phòng) luôn được; còn lại chỉ NHÂN SỰ, khi bật cài đặt «Trong nhóm: nhân sự gọi được bot». Khách
- * hàng và người chưa phân loại không bao giờ gọi được — bot im lặng, không trả lời.
+ * hàng và người chưa phân loại không gọi được — bot im lặng, không trả lời.
+ *
+ * Chốt 07/10/2026: trong nhóm đánh dấu NỘI BỘ thì AI CŨNG gọi được bot, không cần vai trò hay loại người (người mới
+ * vào nhóm chưa kịp phân loại vẫn hỏi được). Nhóm khách hàng giữ luật cũ.
  */
-export function canCallBotInGroup(contact: { role: number; kind: number }, staffMayCall: boolean): boolean {
+export function canCallBotInGroup(
+  contact: { role: number; kind: number }, staffMayCall: boolean, groupKind: number = GroupKind.Customer,
+): boolean {
+  if (groupKind === GroupKind.Internal) return true;
   if (contact.role !== ContactRole.None) return true;
   return staffMayCall && contact.kind === ContactKind.Staff;
 }

@@ -173,8 +173,8 @@ export class GroupAssistantReplier {
     const contact = await findContactByUid(db, incoming.senderUid);
     const groupName = group.label || group.name;
     if (!contact) return;
-    if (!canCallBotInGroup(contact, this.deps.config.assistant.groupReplyAnyone)) {
-      log.info(`«${incoming.senderName}» gọi bot trong nhóm «${groupName}» nhưng không phải nhân sự / chưa có vai trò — không trả lời`);
+    if (!canCallBotInGroup(contact, this.deps.config.assistant.groupReplyAnyone, group.group_kind)) {
+      log.info(`«${incoming.senderName}» gọi bot trong nhóm khách hàng «${groupName}» nhưng không phải nhân sự / chưa có vai trò — không trả lời`);
       return;
     }
     const [rows] = await db.query<RowDataPacket[]>("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [group.id, incoming.msgId]);

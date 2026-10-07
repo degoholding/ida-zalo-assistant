@@ -1,5 +1,5 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { ConversationType } from "../constants.js";
+import { ConversationType, GroupKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { recomputeGroupMemberKinds } from "./contact-repository.js";
 
@@ -129,7 +129,17 @@ export interface GroupSettingsPatch {
   groupKind?: number;
 }
 
-export async function updateGroupSettings(db: Db, groupId: number, patch: GroupSettingsPatch): Promise<void> {
+/**
+ * Chốt 07/10/2026: nhóm đánh dấu NỘI BỘ thì tự bật đọc tin — trừ khi cùng lượt sửa nói rõ tắt đọc. Hàm thuần, dùng
+ * chung cho API web và dòng lệnh để hai đường cho cùng một kết quả.
+ */
+export function applyInternalGroupDefaults(patch: GroupSettingsPatch): GroupSettingsPatch {
+  if (patch.groupKind === GroupKind.Internal && patch.readMessages === undefined) return { ...patch, readMessages: true };
+  return patch;
+}
+
+export async function updateGroupSettings(db: Db, groupId: number, input: GroupSettingsPatch): Promise<void> {
+  const patch = applyInternalGroupDefaults(input);
   const sets: string[] = [];
   const values: unknown[] = [];
   if (patch.readMessages !== undefined) {

@@ -3,7 +3,7 @@ import { ConversationType, GroupKind } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { describeError } from "../../logger.js";
 import type { BackfillJob, SyncService } from "../../sync-service.js";
-import { updateGroupSettings, type GroupSettingsPatch } from "../../sync/group-repository.js";
+import { applyInternalGroupDefaults, updateGroupSettings, type GroupSettingsPatch } from "../../sync/group-repository.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { diffFields, recordAudit } from "./audit-log.js";
@@ -143,6 +143,8 @@ export async function patchGroup(service: SyncService, id: number, body: Record<
     }
     patch.retentionDays = days;
   }
+  //  Chốt 07/10/2026: chuyển sang nhóm NỘI BỘ thì tự bật đọc (gán vào `patch` để nhật ký + lấy tin gần nhất chạy như bật tay)
+  Object.assign(patch, applyInternalGroupDefaults(patch));
   await updateGroupSettings(db, id, patch);
   const after = {
     label: patch.label ?? before.label, group_kind: patch.groupKind ?? before.group_kind,
