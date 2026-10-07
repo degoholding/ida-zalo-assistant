@@ -9,7 +9,8 @@ soạn tin: quản trị gõ chữ / gửi tệp từ web, đi ra Zalo **dưới
 Tài liệu: **mô tả chức năng + lộ trình** [`doc/03-mo-ta-chuc-nang.md`](doc/03-mo-ta-chuc-nang.md) ·
 đối chiếu đặc tả IDA [`doc/02-doi-chieu-nhu-cau.md`](doc/02-doi-chieu-nhu-cau.md) · plan phase B (Cài đặt +
 Google Sheets) [`doc/04-plan-phase-b-cai-dat-google-sheets.md`](doc/04-plan-phase-b-cai-dat-google-sheets.md) · thiết kế gốc
-[`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md).
+[`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md) · đối chiếu yêu cầu IDA Global v0.2 với bot hiện tại (07/10/2026)
+[`doc/05-doi-chieu-yeu-cau-ida-global.md`](doc/05-doi-chieu-yeu-cau-ida-global.md).
 
 Công nghệ: Node 22 + TypeScript · `zca-js` 2.2.0 (thư viện Zalo **không chính thức**, ghim cứng) ·
 MySQL 8.4 · tệp lưu đĩa hoặc Cloudflare R2.
