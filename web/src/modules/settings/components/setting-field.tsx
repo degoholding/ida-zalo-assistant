@@ -4,6 +4,7 @@ import { useController } from 'react-hook-form'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Pill } from '@/shared/ui/pill'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Switch } from '@/shared/ui/switch'
 import { Textarea } from '@/shared/ui/textarea'
 import { getSettingSourceLabel } from '../utils/get-setting-source-label'
@@ -59,6 +60,23 @@ function renderInput(setting: SettingView, field: FieldValue, id: string, disabl
         onBlur={field.onBlur}
         disabled={disabled}
       />
+    )
+  }
+  // Chuỗi có lựa chọn sẵn (vd «Nhà cung cấp AI») → chọn một giá trị
+  if (setting.type === 'string' && setting.choices?.length) {
+    return (
+      <Select value={(field.value as string) ?? ''} onValueChange={field.onChange} disabled={disabled}>
+        <SelectTrigger id={id} className="w-full" onBlur={field.onBlur}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {setting.choices.map((choice) => (
+            <SelectItem key={choice.value} value={choice.value}>
+              {choice.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     )
   }
   if (setting.type === 'list' && setting.choices?.length) {

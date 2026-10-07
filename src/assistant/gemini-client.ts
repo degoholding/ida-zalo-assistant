@@ -89,7 +89,8 @@ function adaptHistory(contents: GeminiContent[], model: string): GeminiContent[]
   let convertNextResponses = false;
   for (const content of contents) {
     const author = producedBy.get(content);
-    if (content.role === "model" && author && author !== model && content.parts.some((part) => part.functionCall)) {
+    // Không có nhãn = lượt do nhà cung cấp khác sinh (OpenAI, chế độ «ưu tiên OpenAI» lùi về Gemini giữa chừng)
+    if (content.role === "model" && author !== model && content.parts.some((part) => part.functionCall)) {
       const lines = content.parts.map((part) => part.functionCall
         ? `(Đã gọi công cụ ${part.functionCall.name} với tham số ${JSON.stringify(part.functionCall.args ?? {})})`
         : part.text ?? "").filter(Boolean);
@@ -142,8 +143,9 @@ export class GeminiClient implements ModelClient {
           this.lastModel = model;
           if (model === this.model) this.preferred = null;
           // Chỉ đặt mốc lúc vừa CHUYỂN sang dự phòng; đang dùng sẵn thì không gia hạn — hết hạn là
-          // phải thử lại mô hình chính, kẻo kẹt ở dự phòng mãi
-          else if (model !== preferred) this.preferred = { model, until: this.clock() + PREFER_FALLBACK_MS };
+          // phải thử lại mô hình chính, kẻo kẹt ở dự phòng mãi. Bản nặng được YÊU CẦU chạy được thì không phải
+          // dự phòng (lỗi cũ 07/10/2026: một lượt đọc tệp xong, 10 phút sau mọi câu hỏi thường đều chạy bản nặng).
+          else if (model !== preferred && model !== request.model) this.preferred = { model, until: this.clock() + PREFER_FALLBACK_MS };
           return result;
         } catch (error) {
           lastError = error;

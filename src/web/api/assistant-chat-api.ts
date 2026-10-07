@@ -93,7 +93,7 @@ export const assistantChatRoutes: ApiRoute[] = [
     if (!question) throw new ApiError(422, "validation_error", "Chưa có câu hỏi");
     if (question.length > MAX_QUESTION_CHARS) throw new ApiError(422, "validation_error", `Câu hỏi tối đa ${MAX_QUESTION_CHARS} ký tự`);
     const assistant = service.assistant;
-    if (!assistant) throw new ApiError(409, "assistant_off", "Trợ lý AI đang tắt — đặt khóa Gemini ở màn Cài đặt");
+    if (!assistant) throw new ApiError(409, "assistant_off", "Trợ lý AI đang tắt — đặt khóa Gemini hoặc OpenAI (khớp mô hình chính) ở màn Cài đặt");
     const contact = await loadAsker(service.db, body.contact_id);
     const { thread, botAccountId } = await ensureWebThread(service.db, contact);
     const db = service.db;

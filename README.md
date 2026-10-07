@@ -112,6 +112,20 @@ thành viên khớp tên — rồi hỏi «có muốn em nhắc các việc này
 pdfmake (JS thuần) + font Be Vietnam Pro / Noto Symbols trong `assets/` (Dockerfile chép `assets`). Mã: `src/reports/meeting-recap-*.ts`,
 `pdf-text-runs.ts`, `src/assistant/meeting-recap-tool.ts`, `src/zalo/group-mentions.ts`.
 
+**Đọc link** (07/10/2026): «bot đọc link của X rồi recap» → công cụ `read_link` tải link Google Sheets (xuất xlsx — mọi sheet),
+Docs / Slides (xuất txt), tệp Drive, hoặc trang web (lấy chữ HTML). Link Google chỉ cần chia sẻ «Bất kỳ ai có đường liên kết».
+Chỉ đọc link đã có trong tin nhắn / câu hỏi (chống mô hình bị dụ nhét dữ liệu vào đường dẫn); chặn địa chỉ nội bộ ở mọi bước
+chuyển hướng. Tóm tắt tài liệu: đủ mọi phần, mỗi phần 2–4 ý có số, nhận xét gom cuối. Mã: `src/assistant/link-reader.ts`,
+`read-link-tool.ts`. Đọc xong muốn «xuất file» → `create_summary_pdf` (PDF «Tóm tắt tài liệu», cùng khung mẫu recap họp, biến
+thể `document` trong `meeting-recap-input.ts`) hoặc `export_report` (Excel / Sheets — mở cho cả hỏi trong nhóm).
+
+**Gemini hoặc OpenAI** (07/10/2026): Cài đặt → «Nhà cung cấp AI»: `gemini` · `openai` (tắt Gemini) · `openai_then_gemini`
+(trả lời bằng GPT, OpenAI lỗi bất kỳ — khóa sai, hết tiền, quá tải — thì làm lại lượt đó bằng Gemini và nghỉ OpenAI 10 phút).
+Mỗi bên một bộ mô hình (chính / việc nặng / dự phòng): OpenAI mặc định `gpt-6-luna` / `gpt-6.1-sol`. «Địa chỉ API OpenAI» cho
+khóa mua qua bên bán lại. Chỉ OpenAI: không tìm web, ghi âm gỡ băng qua `/audio/transcriptions` (tối đa 25 MB). Khóa «sk-…»
+dán nhầm vào ô Gemini được hiểu là khóa OpenAI; lỗi OpenAI ghi log đã che khóa. Mã: `src/assistant/openai-client.ts` (SDK
+chính thức `openai`), `model-router-client.ts`.
+
 **Đo token** (06/10/2026): bật Cài đặt → «Hiện số token dưới câu trả lời» thì mỗi câu trả lời kèm tổng token làm tròn
 nghìn «[3k token]» — mặc định TẮT. `src/assistant/token-usage-footer.ts`; dòng này bị bỏ khi đưa lịch sử cho mô hình.
 

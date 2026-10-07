@@ -44,6 +44,16 @@ describe('SettingField', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
+  it('renders a single-choice select for a string setting with choices, showing the current label', () => {
+    const choices = [
+      { value: 'gemini', label: 'Gemini (Google)', group: '' },
+      { value: 'openai', label: 'OpenAI (Codex / GPT)', group: '' },
+    ]
+    render(<Harness setting={makeSetting({ key: 'ai_provider', label: 'Nhà cung cấp AI', value: 'openai', choices })} />)
+    expect(screen.getByRole('combobox')).toHaveTextContent('OpenAI (Codex / GPT)')
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
   it('ô kiểu int vẽ ô số kèm min/max', () => {
     render(<Harness setting={makeSetting({ key: 'assistant_max_per_hour', type: 'int', value: 30, min: 1, max: 1000 })} />)
     const input = screen.getByRole('spinbutton') as HTMLInputElement

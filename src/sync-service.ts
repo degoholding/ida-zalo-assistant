@@ -1,6 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { AssistantService } from "./assistant/assistant-service.js";
-import { GeminiClient } from "./assistant/gemini-client.js";
+import { ModelRouterClient, missingKeyProblem, primaryModels, resolveModelKeys, type ModelPlan } from "./assistant/model-router-client.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { createLogger, describeError } from "./logger.js";
@@ -60,14 +60,26 @@ export class SyncService {
   }
 
   private buildAssistant(): AssistantService | null {
-    const { apiKey, model, heavyModel, fallbackModels, maxPerHour, dailyTokenCap, maxReadFileBytes, readableFileTypes, showTokenUsage } = this.config.assistant;
-    const assistant = apiKey
-      ? new AssistantService(this.db, new GeminiClient(apiKey, model, fallbackModels), model, { maxPerHour, dailyTokenCap }, () => new Date(),
+    const settings = this.config.assistant;
+    const { apiKey, openaiApiKey, maxPerHour, dailyTokenCap, maxReadFileBytes, readableFileTypes, showTokenUsage } = settings;
+    const keys = resolveModelKeys({ geminiKey: apiKey, openaiKey: openaiApiKey, openaiBaseUrl: settings.openaiBaseUrl });
+    const plan: ModelPlan = {
+      provider: settings.provider,
+      gemini: { model: settings.model, heavyModel: settings.heavyModel, fallbackModels: settings.fallbackModels },
+      openai: { model: settings.openaiModel, heavyModel: settings.openaiHeavyModel, fallbackModels: settings.openaiFallbackModels },
+    };
+    // Bên trả lời chính quyết định tên mô hình chính / bản nặng mà AssistantService dùng
+    const { model, heavyModel } = primaryModels(plan, keys);
+    const problem = missingKeyProblem(plan.provider, keys);
+    const assistant = !problem
+      ? new AssistantService(this.db, new ModelRouterClient(keys, plan), model, { maxPerHour, dailyTokenCap }, () => new Date(),
           { storage: this.storage, heavyModel: heavyModel || undefined, maxReadFileBytes, readableFileTypes, showTokenUsage,
             reportExporter: new ReportExporter(this.storage, () => this.config.google),
             meetingScheduler: new MeetingScheduler(() => this.config.google) })
       : null;
-    log.info(assistant ? `trợ lý AI bật (${model}; việc nặng: ${heavyModel || model})` : "trợ lý AI tắt — chưa có khóa Gemini");
+    log.info(assistant
+      ? `trợ lý AI bật (${plan.provider}: ${model}; việc nặng: ${heavyModel || model}${plan.provider === "openai_then_gemini" && keys.geminiKey ? `; lỗi thì lùi về ${plan.gemini.model}` : ""})`
+      : `trợ lý AI tắt — ${problem}`);
     return assistant;
   }
 
@@ -77,7 +89,7 @@ export class SyncService {
    */
   applySettings(changedKeys: string[]): void {
     const assistantChanged = changedKeys.some((key) =>
-      key.startsWith("gemini_") || (key.startsWith("assistant_") && key !== "assistant_send_interval_ms"));
+      key.startsWith("gemini_") || key.startsWith("openai_") || key === "ai_provider" || (key.startsWith("assistant_") && key !== "assistant_send_interval_ms"));
     if (assistantChanged) {
       this.currentAssistant = this.buildAssistant();
       // Lượt hỏi đang chạy dở thì chạy nốt bằng bản cũ — không hủy

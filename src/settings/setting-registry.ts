@@ -33,7 +33,7 @@ export interface SettingDefinition {
   maxItems?: number;
   /** Không hiện ở màn Cài đặt, không sửa qua PATCH — chỉ máy chủ ghi (vd refresh token sau «Kết nối Google»). */
   hidden?: boolean;
-  /** Danh sách chọn sẵn (giao diện vẽ ô tick theo nhóm); có thì chỉ nhận giá trị trong đây. */
+  /** Lựa chọn sẵn — danh sách: ô tick theo nhóm; chuỗi: ô chọn một giá trị. Có thì chỉ nhận giá trị trong đây. */
   choices?: { value: string; label: string; group: string }[];
   /** Kiểm thêm + chuẩn hóa sau khi ép kiểu (vd JSON service account). */
   normalize?: (value: SettingValue) => SettingValue;
@@ -66,27 +66,70 @@ function normalizeFileTypes(value: SettingValue): SettingValue {
   return types;
 }
 
+/** Nhà cung cấp AI (07/10/2026) — chọn một bên, hoặc ưu tiên OpenAI và tự lùi về Gemini khi OpenAI lỗi. */
+export const AI_PROVIDER_CHOICES = [
+  { value: "gemini", label: "Gemini (Google)", group: "" },
+  { value: "openai", label: "OpenAI (Codex / GPT) — tắt Gemini", group: "" },
+  { value: "openai_then_gemini", label: "Ưu tiên OpenAI, lỗi thì dùng Gemini", group: "" },
+];
+
 export const SETTING_DEFINITIONS: SettingDefinition[] = [
   {
+    key: "ai_provider", group: "assistant", label: "Nhà cung cấp AI", type: "string", secret: false,
+    help: "Bot dùng AI của ai. «Ưu tiên OpenAI…»: trả lời bằng GPT, OpenAI lỗi (khóa sai, hết tiền, quá tải) thì tự chuyển sang Gemini — bot không bị chết.",
+    envName: "AI_PROVIDER", defaultValue: "gemini", choices: AI_PROVIDER_CHOICES,
+    applyTo: (config, value) => { config.assistant.provider = (asString(value) || "gemini") as AppConfig["assistant"]["provider"]; },
+  },
+  {
     key: "gemini_api_key", group: "assistant", label: "Khóa Gemini", type: "string", secret: true,
-    help: "Khóa API Google Gemini. Để trống = trợ lý tắt: bot vẫn lưu tin, không trả lời ai.",
+    help: "Khóa API Google Gemini (nghe ghi âm dài, tìm Google). Thiếu khóa của nhà cung cấp đang chọn = trợ lý tắt: bot vẫn lưu tin, không trả lời ai.",
     envName: "GEMINI_API_KEY", defaultValue: "", maxLength: 200, pattern: /^\S+$/, patternHint: "khóa không được có khoảng trắng",
     applyTo: (config, value) => { config.assistant.apiKey = asString(value).trim(); },
   },
   {
-    key: "gemini_model", group: "assistant", label: "Mô hình chính", type: "string", secret: false,
-    help: "Mô hình trả lời câu hỏi thường ngày.",
+    key: "openai_api_key", group: "assistant", label: "Khóa OpenAI", type: "string", secret: true,
+    help: "Khóa API OpenAI (tạo ở platform.openai.com → API keys, thường bắt đầu «sk-proj-»). Dùng khi «Nhà cung cấp AI» là OpenAI.",
+    envName: "OPENAI_API_KEY", defaultValue: "", maxLength: 300, pattern: /^\S+$/, patternHint: "khóa không được có khoảng trắng",
+    applyTo: (config, value) => { config.assistant.openaiApiKey = asString(value).trim(); },
+  },
+  {
+    key: "openai_model", group: "assistant", label: "OpenAI — mô hình chính", type: "string", secret: false,
+    help: "Mô hình GPT trả lời câu hỏi thường ngày, vd gpt-6-luna (rẻ nhất).",
+    envName: "OPENAI_MODEL", defaultValue: "gpt-6-luna", pattern: MODEL_PATTERN, patternHint: MODEL_HINT,
+    applyTo: (config, value) => { config.assistant.openaiModel = asString(value); },
+  },
+  {
+    key: "openai_model_heavy", group: "assistant", label: "OpenAI — mô hình việc nặng", type: "string", secret: false,
+    help: "Tóm tắt dài, đọc tệp / ảnh / link, recap, xuất PDF, vd gpt-6.1-sol. Để trống = dùng mô hình chính.",
+    envName: "OPENAI_MODEL_HEAVY", defaultValue: "gpt-6.1-sol", pattern: MODEL_PATTERN, patternHint: MODEL_HINT, allowEmpty: true,
+    applyTo: (config, value) => { config.assistant.openaiHeavyModel = asString(value); },
+  },
+  {
+    key: "openai_fallback_models", group: "assistant", label: "OpenAI — mô hình dự phòng", type: "list", secret: false,
+    help: "Mô hình GPT chính quá tải / hết hạn mức thì chuyển lần lượt sang các mô hình này (cách nhau dấu phẩy).",
+    envName: "OPENAI_FALLBACK_MODELS", defaultValue: ["gpt-6.1-sol"], pattern: MODEL_PATTERN, patternHint: MODEL_HINT, maxItems: 5, allowEmpty: true,
+    applyTo: (config, value) => { config.assistant.openaiFallbackModels = asList(value); },
+  },
+  {
+    key: "openai_base_url", group: "assistant", label: "Địa chỉ API OpenAI", type: "string", secret: false,
+    help: "Mặc định https://api.openai.com/v1 (khóa mua trực tiếp ở platform.openai.com). Khóa mua qua bên bán lại / proxy thì dán địa chỉ API họ đưa (thường kết thúc bằng /v1).",
+    envName: "OPENAI_BASE_URL", defaultValue: "https://api.openai.com/v1", maxLength: 300, pattern: /^https?:\/\/\S+$/, patternHint: "địa chỉ bắt đầu bằng http:// hoặc https://",
+    applyTo: (config, value) => { config.assistant.openaiBaseUrl = asString(value).trim().replace(/\/+$/, ""); },
+  },
+  {
+    key: "gemini_model", group: "assistant", label: "Gemini — mô hình chính", type: "string", secret: false,
+    help: "Mô hình Gemini trả lời câu hỏi thường ngày.",
     envName: "GEMINI_MODEL", defaultValue: "gemini-3.5-flash-lite", pattern: MODEL_PATTERN, patternHint: MODEL_HINT,
     applyTo: (config, value) => { config.assistant.model = asString(value); },
   },
   {
-    key: "gemini_model_heavy", group: "assistant", label: "Mô hình việc nặng", type: "string", secret: false,
-    help: "Tóm tắt dài, đọc tệp / ảnh đi mô hình này. Để trống = dùng mô hình chính.",
+    key: "gemini_model_heavy", group: "assistant", label: "Gemini — mô hình việc nặng", type: "string", secret: false,
+    help: "Tóm tắt dài, đọc tệp / ảnh / link đi mô hình này. Để trống = dùng mô hình chính.",
     envName: "GEMINI_MODEL_HEAVY", defaultValue: "gemini-3.5-flash", pattern: MODEL_PATTERN, patternHint: MODEL_HINT, allowEmpty: true,
     applyTo: (config, value) => { config.assistant.heavyModel = asString(value); },
   },
   {
-    key: "gemini_fallback_models", group: "assistant", label: "Mô hình dự phòng", type: "list", secret: false,
+    key: "gemini_fallback_models", group: "assistant", label: "Gemini — mô hình dự phòng", type: "list", secret: false,
     help: "Mô hình chính quá tải / hết hạn mức thì chuyển lần lượt sang các mô hình này (cách nhau dấu phẩy).",
     envName: "GEMINI_FALLBACK_MODELS", defaultValue: ["gemini-3.5-flash", "gemini-flash-latest"],
     pattern: MODEL_PATTERN, patternHint: MODEL_HINT, maxItems: 5, allowEmpty: true,

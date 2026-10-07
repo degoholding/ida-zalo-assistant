@@ -52,7 +52,15 @@ export interface AppConfig {
   defaultDirectCaptureFiles: boolean;
   /** Không có GEMINI_API_KEY thì trợ lý tắt: bot vẫn lưu tin, không trả lời ai. */
   assistant: {
-    apiKey: string; model: string; heavyModel: string; fallbackModels: string[]; maxPerHour: number; dailyTokenCap: number;
+    apiKey: string;
+    /** Khóa OpenAI (mô hình «gpt-…», «o3…») — 07/10/2026. Trống = chỉ dùng được mô hình Gemini. */
+    openaiApiKey: string;
+    /** Địa chỉ API kiểu OpenAI — khóa mua qua bên bán lại (proxy) thì dùng địa chỉ của họ. */
+    openaiBaseUrl: string;
+    /** Nhà cung cấp AI: gemini / openai / ưu tiên openai rồi lùi về gemini khi lỗi. */
+    provider: "gemini" | "openai" | "openai_then_gemini";
+    openaiModel: string; openaiHeavyModel: string; openaiFallbackModels: string[];
+    model: string; heavyModel: string; fallbackModels: string[]; maxPerHour: number; dailyTokenCap: number;
     sendIntervalMs: number; maxReadFileBytes: number;
     /** Trả lời trong nhóm khi được gọi (@nhắc bot hoặc từ khóa). Chỉ đặt trên màn Cài đặt. */
     groupReplyEnabled: boolean; groupTriggerKeywords: string[];
@@ -115,6 +123,12 @@ export function loadConfig(): AppConfig {
     defaultDirectCaptureFiles: readBool("DEFAULT_DM_CAPTURE_FILES", true),
     assistant: {
       apiKey: (process.env.GEMINI_API_KEY ?? "").trim(),
+      openaiApiKey: (process.env.OPENAI_API_KEY ?? "").trim(),
+      openaiBaseUrl: readString("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+      provider: (["gemini", "openai", "openai_then_gemini"].includes(readString("AI_PROVIDER", "gemini")) ? readString("AI_PROVIDER", "gemini") : "gemini") as "gemini",
+      openaiModel: readString("OPENAI_MODEL", "gpt-6-luna"),
+      openaiHeavyModel: readString("OPENAI_MODEL_HEAVY", "gpt-6.1-sol"),
+      openaiFallbackModels: readString("OPENAI_FALLBACK_MODELS", "gpt-6.1-sol").split(",").map((name) => name.trim()).filter(Boolean),
       // Dòng lite: đo thật 01/10/2026 nhanh gấp ~10 lần bản Flash (1 giây so với 11 giây), tóm tắt vẫn đúng
       model: readString("GEMINI_MODEL", "gemini-3.5-flash-lite"),
       // Lượt nặng (tóm tắt dài, đọc tệp / ảnh) đi bản này; để trống = dùng GEMINI_MODEL cho mọi việc

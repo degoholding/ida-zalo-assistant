@@ -38,6 +38,10 @@ function parseString(definition: SettingDefinition, raw: unknown): string {
     throw fail(definition, "không được để trống");
   }
   checkText(definition, text);
+  // Ô chọn một giá trị (vd «Nhà cung cấp AI»): chỉ nhận đúng giá trị trong danh sách
+  if (definition.choices && !definition.choices.some((choice) => choice.value === text)) {
+    throw fail(definition, `«${text.slice(0, 40)}» không có trong danh sách chọn`);
+  }
   return text;
 }
 

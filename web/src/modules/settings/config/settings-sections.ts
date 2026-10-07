@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Bot,
   CalendarClock,
+  Gem,
   FileSpreadsheet,
   FileText,
   Gauge,
@@ -10,6 +11,7 @@ import {
   KeyRound,
   MessageCircle,
   RefreshCw,
+  Sparkles,
   Users,
   UsersRound,
 } from 'lucide-react'
@@ -26,11 +28,25 @@ export interface SettingsSection {
 
 export const ASSISTANT_SECTIONS: SettingsSection[] = [
   {
-    id: 'ai-model',
-    title: 'Khóa & mô hình AI',
-    description: 'Khóa Gemini và mô hình trả lời — mô hình nặng cho việc đọc tệp, tóm tắt dài.',
+    id: 'ai-provider',
+    title: 'Nhà cung cấp & khóa AI',
+    description: 'Chọn Gemini hoặc OpenAI (Codex / GPT) — hoặc ưu tiên OpenAI, lỗi thì tự chuyển sang Gemini.',
     icon: KeyRound,
-    keys: ['gemini_api_key', 'gemini_model', 'gemini_model_heavy', 'gemini_fallback_models'],
+    keys: ['ai_provider', 'openai_api_key', 'openai_base_url', 'gemini_api_key'],
+  },
+  {
+    id: 'openai-models',
+    title: 'Mô hình OpenAI',
+    description: 'Dùng khi nhà cung cấp là OpenAI. Rẻ: gpt-6-luna · tầm trung: gpt-6.1-sol · mạnh nhất: gpt-6-astra.',
+    icon: Sparkles,
+    keys: ['openai_model', 'openai_model_heavy', 'openai_fallback_models'],
+  },
+  {
+    id: 'gemini-models',
+    title: 'Mô hình Gemini',
+    description: 'Dùng khi nhà cung cấp là Gemini, hoặc khi OpenAI lỗi ở chế độ ưu tiên OpenAI.',
+    icon: Gem,
+    keys: ['gemini_model', 'gemini_model_heavy', 'gemini_fallback_models'],
   },
   {
     id: 'group',
