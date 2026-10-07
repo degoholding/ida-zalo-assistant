@@ -91,9 +91,12 @@ export class GroupAssistantReplier {
     const { config, log } = this.deps;
     if (!config.assistant.groupReplyEnabled || !this.deps.getAssistant()) return;
     const parsed = parseZaloContent(incoming.msgType, incoming.content);
-    if (parsed.kind !== MessageKind.Text) return;
+    // Tin chữ, và tin LINK (dán link kèm câu «… bot https://…» — Zalo xếp vào loại link; gặp thật 07/10/2026: bot bỏ qua)
+    if (parsed.kind !== MessageKind.Text && parsed.kind !== MessageKind.Link) return;
+    // Tin link: chỉ xét chữ người gửi tự gõ (dòng đầu) — mô tả xem trước của trang (vd «… IDA-Bot») không tính là gọi bot
+    const typedText = parsed.kind === MessageKind.Link ? parsed.text.split("\n")[0] : parsed.text;
     const trigger = detectGroupTrigger({
-      text: parsed.text, mentions: incoming.mentions, botUid: this.deps.getBot().uid, keywords: config.assistant.groupTriggerKeywords,
+      text: typedText, mentions: incoming.mentions, botUid: this.deps.getBot().uid, keywords: config.assistant.groupTriggerKeywords,
       quotedUid: incoming.quote?.ownerUid,
     });
     if (!trigger) return;

@@ -9,8 +9,11 @@ import type { DocumentReadResult, FunctionDeclaration, GeminiContent, GeminiResu
 export const OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const REQUEST_TIMEOUT_MS = 120_000;
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
-/** SDK tự thử lại 1 lần lỗi tạm thời; hết thì vòng dự phòng của lớp này đổi sang mô hình khác. */
-const SDK_MAX_RETRIES = 1;
+/**
+ * SDK KHÔNG tự thử lại: lỗi tạm thời (429, 5xx) đã có vòng mô hình dự phòng của lớp này + lùi về Gemini. Để SDK thử lại thì
+ * một lượt quá thời gian thành 2 × REQUEST_TIMEOUT_MS (gặp thật 07/10/2026: đọc bảng tính to mất 288 giây mới lùi về Gemini).
+ */
+const SDK_MAX_RETRIES = 0;
 /** Giới hạn tệp của endpoint gỡ băng. */
 export const OPENAI_AUDIO_MAX_BYTES = 25 * 1024 * 1024;
 const TRANSCRIBE_MODEL = "gpt-4o-transcribe";
