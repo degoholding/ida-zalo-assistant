@@ -5,6 +5,7 @@ import { runListContacts } from "./contact-directory-tool.js";
 import { runExportReport, type ExportReport } from "./export-report-tool.js";
 import { GROUP_ACTION_TOOL_NAMES, runGroupAction, type GroupActions } from "./group-action-tools.js";
 import { runCreateRecapPdf, type CreateRecapPdf } from "./meeting-recap-tool.js";
+import { runReadLink, type ReadLink } from "./read-link-tool.js";
 import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings, type MeetingCreator } from "./meeting-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
@@ -38,6 +39,10 @@ export interface ToolContext {
   exportReport?: ExportReport;
   /** Xuất PDF recap cuộc họp (mẫu công ty). Không có = không có công cụ create_meeting_recap_pdf. */
   createRecapPdf?: CreateRecapPdf;
+  /** Đọc nội dung link (Google Sheets / Docs / trang web). Không có = không có công cụ read_link. */
+  readLink?: ReadLink;
+  /** Câu hỏi của lượt này — read_link chỉ đọc link có trong câu hỏi hoặc trong tin nhắn đã lưu. */
+  question?: string;
   /**
    * Hỏi TRONG NHÓM (mọi thành viên đọc câu trả lời): chỉ được đọc dữ liệu của nhóm này. Chặn ở đây — không chỉ ở
    * danh sách công cụ — để mô hình có truyền id nhóm khác / gọi công cụ khác cũng không lấy được.
@@ -52,7 +57,7 @@ export interface ToolContext {
 }
 
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
-export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_files", "read_file", "create_meeting_recap_pdf", "create_meeting", "list_meetings", "cancel_meeting", ...GROUP_ACTION_TOOL_NAMES]);
+export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", ...GROUP_ACTION_TOOL_NAMES]);
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
   name: "web_search",
@@ -157,6 +162,18 @@ function parseTime(raw: unknown, fallback: Date): Date {
 }
 
 /** Giờ Việt Nam dạng dd/MM HH:mm — mô hình đọc giờ địa phương, không phải UTC. */
+const VN_WEEKDAYS = ["Chủ nhật", "thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy"];
+
+/**
+ * «thứ Tư, 07/10/2026» theo giờ Việt Nam. Đưa sẵn cho mô hình — không có thì mô hình tự đoán thứ và đoán sai (gặp thật
+ * 07/10/2026: bot nói «hôm nay thứ Ba» vào thứ Tư).
+ */
+export function formatVnDay(date: Date): string {
+  const local = new Date(date.getTime() + VN_OFFSET_MS);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${VN_WEEKDAYS[local.getUTCDay()]}, ${pad(local.getUTCDate())}/${pad(local.getUTCMonth() + 1)}/${local.getUTCFullYear()}`;
+}
+
 export function formatVn(date: Date): string {
   const local = new Date(date.getTime() + VN_OFFSET_MS);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -421,9 +438,21 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   send_file: sendFile,
   read_file: readFile,
   web_search: webSearch,
+  read_link: async (context, args) => {
+    const { response, content } = await runReadLink(context, args);
+    if (content) {
+      if (context.usage) {
+        context.usage.inputTokens += content.inputTokens;
+        context.usage.outputTokens += content.outputTokens;
+      }
+      context.markHeavy?.("đọc link");
+    }
+    return response;
+  },
   export_report: (context, args) => runExportReport(context.exportReport, args),
   list_contacts: (context, args) => runListContacts(context.db, args),
   create_meeting_recap_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now),
+  create_summary_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now, "document"),
   create_meeting: (context, args) =>
     runCreateMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, context.now, meetingScopeTag(context.scopeGroupId)),
   list_meetings: (context) => runListMeetings(context.meetings, meetingScopeTag(context.scopeGroupId)),

@@ -54,3 +54,27 @@ test("renderRecapPdf: ra tệp PDF thật", async () => {
   assert.equal(data.subarray(0, 5).toString("latin1"), "%PDF-");
   assert.ok(data.length > 10_000);
 });
+
+test("bản tóm tắt tài liệu: mã TT-, tên Tom-tat-, kết luận lấy từ conclusions, ra PDF", async () => {
+  let captured: import("./meeting-recap-input.js").MeetingRecap | null = null;
+  const { runCreateRecapPdf } = await import("../assistant/meeting-recap-tool.js");
+  const response = await runCreateRecapPdf(async (recap) => { captured = recap; return { ok: true }; }, {
+    title: "Tóm tắt Báo cáo nhân sự 2026", date: "07/10/2026", source: "Google Sheets của Gia Bảo",
+    tldr: ["Doanh thu **347,2 tỷ**"], sections: [{ heading: "Kết quả KD", bullets: ["Lãi ròng 18,2 tỷ"] }], conclusions: ["Nợ quá hạn cao"],
+  }, NOW, "document");
+  assert.deepEqual(response, { ok: true });
+  const recap = captured!;
+  assert.equal(recap.variant, "document");
+  assert.equal(recap.docCode, "TT-BAO-CAO-NHAN-SU-2026-2026.10.07");
+  assert.deepEqual(recap.decisions, ["Nợ quá hạn cao"]);
+  assert.equal(recap.format, "");
+  assert.equal(recapFileName(recap, NOW), "Tom-tat-Bao-cao-nhan-su-2026-2026.10.07-v1.0.pdf");
+  const data = await renderRecapPdf(recap);
+  assert.equal(data.subarray(0, 5).toString("latin1"), "%PDF-");
+});
+
+test("normalizeRecap: tên dài bị cắt không để dư gạch trong mã; tóm tắt tài liệu bắt buộc TL;DR", () => {
+  const recap = normalizeRecap({ title: "Báo cáo tổng hợp nhân sự kinh doanh năm 2026 DEGO", tldr: ["x"] }, NOW, "document");
+  assert.doesNotMatch(recap.docCode, /--/);
+  assert.throws(() => normalizeRecap({ title: "Tài liệu", tasks: [{ task: "Việc" }] }, NOW, "document"), RecapInputError);
+});

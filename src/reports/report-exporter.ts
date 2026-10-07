@@ -35,13 +35,16 @@ export function reportFileExtension(fileName: string): string {
   return dot > 0 ? fileName.slice(dot + 1).toLowerCase() : "";
 }
 
-/** «Meeting-Recap-Giao-ban-du-an-K52-2026.10.06-v1.0.pdf» — theo cách đặt tên của tệp mẫu, bỏ dấu cho Zalo / kho. */
+/**
+ * «Meeting-Recap-Giao-ban-du-an-K52-2026.10.06-v1.0.pdf» (tóm tắt tài liệu: «Tom-tat-…») — theo cách đặt tên của tệp mẫu,
+ * bỏ dấu cho Zalo / kho.
+ */
 export function recapFileName(recap: MeetingRecap, now: Date): string {
   const base = recap.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D")
-    .replace(/^\s*(recap|meeting recap)(\s+h[oọ]p)?\b[\s:-]*/i, "")
+    .replace(/^\s*(recap|meeting recap|tom tat)(\s+h[oọ]p)?\b[\s:-]*/i, "")
     .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "Cuoc-hop";
   const version = recap.version.replace(/[^A-Za-z0-9.]+/g, "") || "v1";
-  return `Meeting-Recap-${base}-${compactDate(recap.meetingDate, now)}-${version}.pdf`;
+  return `${recap.variant === "meeting" ? "Meeting-Recap" : "Tom-tat"}-${base}-${compactDate(recap.meetingDate, now)}-${version}.pdf`;
 }
 
 /** Giờ Việt Nam: chữ để hiện («05/10/2026 17:20») và dấu để đặt tên («20261005-172045»). */

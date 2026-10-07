@@ -8,12 +8,14 @@ import type { GeminiContent, ModelClient } from "./gemini-client.js";
 import type { GeneratedReportFile, ReportExporter } from "../reports/report-exporter.js";
 import { LIST_CONTACTS_DECLARATION } from "./contact-directory-tool.js";
 import { buildGroupQuestion, loadGroupContext, loadGroupMemberNames } from "./group-context.js";
-import { MEETING_RECAP_PDF_DECLARATION } from "./meeting-recap-tool.js";
+import { MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION } from "./meeting-recap-tool.js";
+import { readLinkContent } from "./link-reader.js";
+import { READ_LINK_DECLARATION } from "./read-link-tool.js";
 import { appendTokenFooter, stripTokenFooter } from "./token-usage-footer.js";
 import { GROUP_ACTION_DECLARATIONS, type GroupActions } from "./group-action-tools.js";
 import { CREATE_MEETING_DECLARATION, MEETING_MANAGE_DECLARATIONS, type MeetingCreator } from "./meeting-tool.js";
 import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
-import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, runTool, type ToolContext } from "./tools.js";
+import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, formatVnDay, runTool, type ToolContext } from "./tools.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
 // (tối đa MAX_TOOL_ROUNDS vòng) → ghi nhật ký assistant_turn. Không tự gửi Zalo — trả về câu trả
@@ -65,10 +67,11 @@ function groupScopePrompt(groupName: string, memberNames: string[]): string {
 
 ĐANG TRẢ LỜI TRONG NHÓM «${groupName}» — mọi thành viên (có thể có khách hàng) đều đọc câu trả lời.
 - Chỉ dùng dữ liệu của chính nhóm này (công cụ đã bị khóa vào nhóm). Không nhắc tới nhóm khác, tin riêng, Danh bạ hay số liệu nội bộ ngoài nhóm.
-- Trả lời ngắn gọn, đi thẳng vào việc; gọi người hỏi bằng tên.
+- Trả lời ngắn gọn, đi thẳng vào việc (riêng tóm tắt tài liệu / tệp / link thì đầy đủ theo từng phần như quy tắc chung); gọi người hỏi bằng tên.
 - Làm được trong nhóm này: tạo nhắc hẹn Zalo (create_reminder — tới giờ Zalo tự báo cả nhóm), ghim nội dung lên nhóm
   (create_pinned_note — Zalo không ghim được tin có sẵn, nên chép nội dung vào ghi chú rồi ghim), tạo bình chọn (create_poll).
   Bỏ ghim: list_pinned_notes → unpin_note; hủy nhắc hẹn: list_reminders → cancel_reminder (nhiều mục mà không rõ cái nào thì hỏi lại).
+  Xuất file (PDF tóm tắt, Excel / Google Sheets) được — tệp gửi thẳng vào nhóm, link Sheets gửi vào nhóm.
   Tạo cuộc họp Google Meet: create_meeting (nếu có) rồi gửi link Meet vào nhóm, kèm create_reminder cùng giờ để cả nhóm được báo.
   Thiếu giờ / nội dung thì hỏi lại. Làm xong báo rõ đã làm gì (tiêu đề, giờ Việt Nam, lặp lại).
 - Người hỏi đồng ý «nhắc hằng ngày» sau một bản recap: tạo MỘT create_reminder repeat=daily (mặc định 8:30 sáng mai nếu không nói giờ),
@@ -92,7 +95,7 @@ function buildSystemPrompt(contact: ContactRow, now: Date): string {
   // Trong nhóm, người chưa có vai trò cũng gọi được bot nếu là nhân sự (cài đặt «Trong nhóm: nhân sự gọi được bot»)
   const roleName = contact.role === ContactRole.Manager ? "quản lý" : contact.role === ContactRole.DepartmentHead ? "trưởng phòng" : "thành viên nhóm";
   return `Bạn là "Bot trợ lý" — trợ lý đọc các nhóm Zalo công việc của công ty và trả lời qua tin nhắn Zalo.
-Thời điểm hiện tại (giờ Việt Nam, UTC+7): ${formatVn(now)} năm ${now.getUTCFullYear()}, ISO ${now.toISOString()}.
+Thời điểm hiện tại (giờ Việt Nam, UTC+7): ${formatVnDay(now)}, ${formatVn(now).slice(6)} — ISO ${now.toISOString()}.
 Người đang hỏi: ${contact.display_name || contact.zalo_name} (uid ${contact.zalo_uid}, ${roleName}). "Tôi"/"anh"/"mình" trong câu hỏi là người này.
 Xưng hô: bạn xưng "em", gọi người hỏi là "anh" (hoặc "chị" nếu họ tự xưng chị / tên rõ là nữ). KHÔNG BAO GIỜ xưng "tôi" hay "trợ lý". Giọng lễ phép, tự nhiên như nhân viên nhắn sếp.
 
@@ -110,6 +113,11 @@ Việc bạn làm được:
    Nội dung không phải cuộc họp / không có việc gì thì chỉ tóm tắt, không xuất PDF. Câu trả lời trên Zalo NGẮN: 2–3 ý TL;DR, rồi
    «Phân công:» mỗi dòng «- Tên: việc (hạn)» gom theo người; nói tệp PDF đang được gửi; KẾT THÚC bằng câu hỏi
    «Anh/chị có muốn em nhắc các việc này hằng ngày trong nhóm không ạ?» (chỉ hỏi khi có việc được giao). Chỉ ghi người / hạn khi trong ghi âm có nói, không đoán.
+9. Đọc LINK người dùng gửi (read_link): Google Sheets (mọi sheet), Google Docs, Slides, tệp Google Drive, trang web. «Đọc / recap link (của X)»
+   thì tìm link trong các tin gần nhất (hoặc get_group_messages) rồi read_link — KHÔNG đọc tệp khác thay cho link; không thấy link thì hỏi lại.
+10. XUẤT FILE từ tài liệu / link đã đọc: người hỏi muốn «xuất file / PDF / gửi file» → create_summary_pdf (mặc định); muốn «Excel / Sheets / bảng»
+   → export_report (một bảng các số chính). Gọi NGAY lượt này; tài liệu đọc ở lượt trước thì read_file / read_link LẠI để lấy đúng số (đừng chép từ
+   câu trả lời cũ — đã bị cắt bớt). Xuất xong câu trả lời chỉ 2–3 ý chính + báo tệp đang được gửi, không chép lại cả bản tóm tắt.
 Câu hỏi ngoài các việc này: nói ngắn gọn bạn làm được gì.
 
 Quy tắc:
@@ -122,6 +130,9 @@ Quy tắc:
 - CHƯA RÕ THÌ HỎI, KHÔNG ĐOÁN: câu hỏi thiếu đối tượng (tệp nào, nhóm nào, người nào, khoảng thời gian nào) thì hỏi lại ngắn gọn, kèm danh sách lựa chọn đánh số (vd gọi search_files với query rỗng để lấy các tệp gần đây rồi liệt kê). Ngoại lệ: người hỏi vừa gửi đúng MỘT tệp trong vài tin gần nhất rồi nói «đọc file này / recap file» thì hiểu là tệp đó, làm luôn.
 - Dữ liệu bị cắt bớt (truncated) thì nói rõ là chỉ tóm phần gần nhất.
 - Tóm tắt: nêu việc chính, ai đang làm gì, vấn đề nổi lên, việc còn treo; kèm tên người và giờ khi quan trọng.
+- Tóm tắt / recap TÀI LIỆU (tệp, link): đủ MỌI phần nhưng gọn — mỗi sheet / mục một tiêu đề + 2–4 gạch đầu dòng chỉ chứa CON SỐ chính
+  (tổng, tăng giảm %, so kế hoạch) và điểm bất thường; KHÔNG kể lại từng dòng bảng, không nhận xét sau mỗi phần. Cuối bài một mục «Nhận xét» 2–4 ý
+  (điểm mạnh, rủi ro, việc nên làm). Cả bài khoảng 2.000–4.000 ký tự. Tỷ lệ dạng 0,1247 đổi thành 12,5%. Người hỏi nói «ngắn / tóm gọn» thì chỉ còn TL;DR 5–7 ý.
 - Trả lời tiếng Việt, ngắn gọn, VĂN BẢN THƯỜNG (Zalo không hiển thị markdown: không dùng ** hay #). Gạch đầu dòng dùng "- ".
 - Danh sách tệp: đánh số, ghi tên tệp, nhóm, người gửi, ngày; hỏi người dùng có muốn nhận tệp nào không.`;
 }
@@ -241,6 +252,8 @@ export class AssistantService {
           allowedExtensions: this.options.readableFileTypes }, attachmentId)
         : undefined,
       markHeavy: () => { heavy = true; },
+      readLink: (url) => readLinkContent(url, readDocument),
+      question: request.question,
     };
     context.meetings = this.options.meetingScheduler;
     const scope = request.groupScope;
@@ -252,8 +265,9 @@ export class AssistantService {
       ...TOOL_DECLARATIONS,
       LIST_CONTACTS_DECLARATION,
       ...(storage ? [READ_FILE_DECLARATION] : []),
+      READ_LINK_DECLARATION,
       ...(this.client.searchWeb ? [WEB_SEARCH_DECLARATION] : []),
-      ...(exporter ? [EXPORT_REPORT_DECLARATION, MEETING_RECAP_PDF_DECLARATION] : []),
+      ...(exporter ? [EXPORT_REPORT_DECLARATION, MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION] : []),
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
     ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));

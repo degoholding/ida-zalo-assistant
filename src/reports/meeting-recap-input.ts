@@ -18,7 +18,11 @@ export interface RecapSection {
   table: { columns: string[]; rows: string[][] } | null;
 }
 
+/** meeting = recap cuộc họp (ghi âm); document = tóm tắt tài liệu / link (07/10/2026) — cùng khung PDF, khác nhãn. */
+export type RecapVariant = "meeting" | "document";
+
 export interface MeetingRecap {
+  variant: RecapVariant;
   title: string;
   subtitle: string;
   docCode: string;
@@ -73,28 +77,32 @@ export function compactDate(meetingDate: string, now: Date): string {
   return new Date(now.getTime() + 7 * 3_600_000).toISOString().slice(0, 10).replace(/-/g, ".");
 }
 
-export function normalizeRecap(args: Record<string, unknown>, now: Date): MeetingRecap {
+export function normalizeRecap(args: Record<string, unknown>, now: Date, variant: RecapVariant = "meeting"): MeetingRecap {
+  const meeting = variant === "meeting";
   const title = text(args.title, 140);
-  if (!title) throw new RecapInputError("Thiếu title (tên cuộc họp, vd 'RECAP HỌP GIAO BAN DỰ ÁN K52')");
+  if (!title) throw new RecapInputError(meeting ? "Thiếu title (tên cuộc họp, vd 'RECAP HỌP GIAO BAN DỰ ÁN K52')" : "Thiếu title (tên tài liệu)");
   const tldr = list(args.tldr, 8);
   const tasks = objects(args.tasks, 30)
     .map((item) => ({ task: text(item.task, 400), owner: text(item.owner, 120) || "(chưa rõ)", due: text(item.due, 60), priority: normalizePriority(item.priority) }))
     .filter((item) => item.task);
-  if (!tldr.length && !tasks.length) throw new RecapInputError("Thiếu tldr (tóm tắt nhanh) và tasks — recap phải có ít nhất một trong hai");
+  if (!tldr.length && !tasks.length) throw new RecapInputError("Thiếu tldr (tóm tắt nhanh) và tasks — phải có ít nhất một trong hai");
+  if (!meeting && !tldr.length) throw new RecapInputError("Thiếu tldr — bản tóm tắt tài liệu cần 4–7 ý TL;DR có số, gọi lại kèm tldr");
   const meetingDate = text(args.meeting_date, 40);
-  const slug = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").replace(/^RECAP-(HOP-)?/, "").slice(0, 40);
+  const slug = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").replace(/^(RECAP-(HOP-)?|TOM-TAT-)/, "").slice(0, 40).replace(/-+$/, "");
   return {
+    variant,
     title,
     subtitle: text(args.subtitle, 200),
-    docCode: text(args.doc_code, 80) || `RECAP-${slug || "HOP"}-${compactDate(meetingDate, now)}`,
+    docCode: text(args.doc_code, 80) || `${meeting ? "RECAP" : "TT"}-${slug || (meeting ? "HOP" : "TAI-LIEU")}-${compactDate(meetingDate, now)}`,
     version: text(args.version, 20) || "v1.0",
     meetingDate,
     duration: text(args.duration, 40),
-    format: text(args.format, 60) || "Google Meet",
+    format: text(args.format, 60) || (meeting ? "Google Meet" : ""),
     secretary: text(args.secretary, 60) || "Bot trợ lý (AI)",
     attendees: objects(args.attendees, 20).map((item) => ({ role: text(item.role, 80), name: text(item.name, 120) })).filter((item) => item.name),
-    disclaimer: text(args.disclaimer, 300) ||
-      "Recap tổng hợp từ bản gỡ băng tự động — có thể sai sót thuật ngữ, tên riêng & con số; đề nghị đối chiếu lại khi cần.",
+    disclaimer: text(args.disclaimer, 300) || (meeting
+      ? "Recap tổng hợp từ bản gỡ băng tự động — có thể sai sót thuật ngữ, tên riêng & con số; đề nghị đối chiếu lại khi cần."
+      : "Tóm tắt tự động bằng AI từ tài liệu gốc — số liệu quan trọng đề nghị đối chiếu lại tài liệu gốc."),
     tldr,
     sections: objects(args.sections, 10).map((item) => ({
       heading: text(item.heading, 120),

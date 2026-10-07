@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { MeetingRecap, RecapSection, TaskPriority } from "./meeting-recap-input.js";
+import type { MeetingRecap, RecapSection, RecapVariant, TaskPriority } from "./meeting-recap-input.js";
 import { GlyphCoverage, toTextRuns } from "./pdf-text-runs.js";
 
 // Dựng PDF recap cuộc họp theo mẫu «Meeting Recap» của DEGO (06/10/2026): logo + «RECAP HỌP» · tiêu đề lớn · bảng
@@ -19,6 +19,18 @@ const COLOR = {
 };
 const PRIORITY_STYLE: Record<TaskPriority, { fill: string; color: string }> = {
   Cao: { fill: "#fde4e4", color: "#c0392b" }, TB: { fill: "#fff3d6", color: "#b7791f" }, Thấp: { fill: "#e5f5ea", color: "#2f855a" },
+};
+
+/** Nhãn theo loại bản: recap họp (mẫu gốc) / tóm tắt tài liệu. */
+const LABELS: Record<RecapVariant, { kicker: string; kickerEn: string; decisions: string; sources: string; sourcePrefix: string; footer: string; subject: string }> = {
+  meeting: {
+    kicker: "RECAP HỌP", kickerEn: "MEETING RECAP", decisions: "ĐỊNH HƯỚNG ĐÃ THỐNG NHẤT", sources: "Người tham dự & nguồn",
+    sourcePrefix: "Ghi âm gốc", footer: "Bản recap nội bộ", subject: "Meeting Recap",
+  },
+  document: {
+    kicker: "TÓM TẮT TÀI LIỆU", kickerEn: "DOCUMENT SUMMARY", decisions: "NHẬN XÉT & KẾT LUẬN", sources: "Nguồn",
+    sourcePrefix: "Tài liệu gốc", footer: "Bản tóm tắt nội bộ", subject: "Document Summary",
+  },
 };
 
 interface PdfMake {
@@ -52,6 +64,7 @@ function getEngine() {
 
 export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCoverage, "fontFor">, logoPath: string | null = LOGO): object {
   const rich = (value: string) => toTextRuns(value, coverage, COLOR.tealText, MAIN_FONT);
+  const labels = LABELS[recap.variant];
   const bullets = (items: string[]) => ({ ul: items.map((item) => ({ text: rich(item) })), markerColor: COLOR.teal, margin: [0, 2, 0, 6] });
   const sectionBar = (heading: string) => ({
     table: { widths: ["*"], body: [[{ text: rich(heading.toUpperCase()), color: "white", fontSize: 11 }]] },
@@ -80,7 +93,7 @@ export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCove
     sectionBar(item.heading),
     ...(item.bullets.length ? [bullets(item.bullets)] : []),
     ...item.subsections.flatMap((sub) => [subBar(sub.heading), bullets(sub.bullets)]),
-    ...(item.table ? [dataTable(item.table.columns, item.table.rows.map((row) => row.map((cell) => ({ text: rich(cell) }))), item.table.columns.map((_, i) => (i === 0 && item.table!.columns.length > 2 ? 30 : "*")))] : []),
+    ...(item.table ? [dataTable(item.table.columns, item.table.rows.map((row) => row.map((cell) => ({ text: rich(cell) }))), item.table.columns.map((column) => (/^(stt|tt|#)$/i.test(column.trim()) ? 26 : "*")))] : []),
   ];
   const label = (value: string) => ({ text: value, color: COLOR.tealText, fillColor: COLOR.tealLight });
   const attendeeLines = recap.attendees.map((person) => ({ text: [{ text: person.role ? `${person.role}: ` : "", color: COLOR.tealText }, ...rich(person.name)] }));
@@ -90,8 +103,8 @@ export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCove
       columns: [
         logoPath ? { image: logoPath, width: 120 } : { text: "DEGO HOLDING", fontSize: 18, bold: true, color: COLOR.green },
         { stack: [
-          { text: "RECAP HỌP", fontSize: 13, color: COLOR.tealText },
-          { text: "MEETING RECAP", fontSize: 8, italics: true, color: COLOR.muted },
+          { text: labels.kicker, fontSize: 13, color: COLOR.tealText },
+          { text: labels.kickerEn, fontSize: 8, italics: true, color: COLOR.muted },
           { text: `Mã văn bản: ${recap.docCode}`, fontSize: 7.5, color: COLOR.text },
           { text: `Phiên bản: ${recap.version}`, fontSize: 7.5, color: COLOR.text },
         ], alignment: "right" },
@@ -101,10 +114,13 @@ export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCove
     { text: rich(recap.title.toUpperCase()), fontSize: 19, color: COLOR.tealText, alignment: "center", margin: [30, 0, 30, 4] },
     ...(recap.subtitle ? [{ text: rich(recap.subtitle), italics: true, color: COLOR.muted, alignment: "center", margin: [0, 0, 0, 10] }] : []),
     {
-      table: { widths: [70, "*", 70, "*"], body: [
+      table: { widths: [70, "*", 70, "*"], body: recap.variant === "meeting" ? [
         [label("Ngày họp"), recap.meetingDate || "—", label("Thời lượng"), recap.duration || "—"],
         [label("Hình thức"), recap.format, label("Thư ký"), recap.secretary],
         ...(attendeeLines.length ? [[label("Thành phần"), { stack: attendeeLines, colSpan: 3 }, {}, {}]] : []),
+      ] : [
+        [label("Ngày"), recap.meetingDate || "—", label("Thực hiện"), recap.secretary],
+        [label("Nguồn"), { text: rich(recap.source || "—"), colSpan: 3 }, {}, {}],
       ] },
       layout: { hLineColor: () => COLOR.border, vLineColor: () => COLOR.border, hLineWidth: () => 0.5, vLineWidth: (i: number) => (i === 0 ? 3 : 0.5), paddingTop: () => 4, paddingBottom: () => 4 },
       fontSize: 9.5,
@@ -120,7 +136,7 @@ export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCove
   }
   recap.sections.forEach((item, index) => content.push(...section({ ...item, heading: /^\d+\./.test(item.heading) ? item.heading : `${index + 1}. ${item.heading}` })));
   if (recap.decisions.length) {
-    content.push({ text: "ĐỊNH HƯỚNG ĐÃ THỐNG NHẤT", color: COLOR.tealText, fontSize: 10, margin: [0, 10, 0, 4] });
+    content.push({ text: labels.decisions, color: COLOR.tealText, fontSize: 10, margin: [0, 10, 0, 4] });
     // Dấu ✓ không có trong Be Vietnam Pro — rich() tự chuyển sang font ký hiệu
     content.push({ stack: recap.decisions.map((item) => ({ text: [...rich("✓  ").map((run) => ({ ...run, color: COLOR.teal })), ...rich(item)], margin: [0, 1, 0, 2] })), margin: [0, 0, 0, 6] });
   }
@@ -137,16 +153,17 @@ export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCove
   }
   if (recap.openIssues.length) content.push(...keepTogether([sectionBar("Vấn đề còn mở"), bullets(recap.openIssues)], recap.openIssues.length));
   if (recap.sideNotes.length) content.push({ text: "GHI CHÚ NGOÀI LỀ", color: COLOR.tealText, fontSize: 10, margin: [0, 6, 0, 2] }, bullets(recap.sideNotes));
-  if (recap.attendees.length || recap.source) {
-    const people = [...recap.attendees.map((person) => (person.role ? `${person.name} — ${person.role}` : person.name)), ...(recap.source ? [`Ghi âm gốc: ${recap.source}`] : [])];
-    content.push(...keepTogether([sectionBar("Người tham dự & nguồn"), bullets(people)], people.length));
+  // Bản tóm tắt tài liệu đã ghi nguồn ở bảng thông tin đầu trang
+  if (recap.variant === "meeting" && (recap.attendees.length || recap.source)) {
+    const people = [...recap.attendees.map((person) => (person.role ? `${person.name} — ${person.role}` : person.name)), ...(recap.source ? [`${labels.sourcePrefix}: ${recap.source}`] : [])];
+    content.push(...keepTogether([sectionBar(labels.sources), bullets(people)], people.length));
   }
 
   return {
     pageSize: "A4",
     pageMargins: [40, 36, 40, 56],
     defaultStyle: { font: MAIN_FONT, fontSize: 10, color: COLOR.text, lineHeight: 1.25 },
-    info: { title: recap.title, author: "Bot trợ lý — DEGO HOLDING", subject: "Meeting Recap" },
+    info: { title: recap.title, author: "Bot trợ lý — DEGO HOLDING", subject: labels.subject },
     footer: (currentPage: number, pageCount: number) => ({
       margin: [40, 14, 40, 0],
       stack: [
@@ -155,7 +172,7 @@ export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCove
           { text: "Tài liệu nội bộ · Lưu hành hạn chế", fontSize: 7, color: COLOR.muted, alignment: "center" },
           { text: `Bot trợ lý · ${currentPage}/${pageCount}`, fontSize: 7, color: COLOR.muted, alignment: "right" },
         ] },
-        { text: `Bản recap nội bộ · ${recap.title} · Lưu hành hạn chế`, fontSize: 6.5, italics: true, color: COLOR.muted, alignment: "center" },
+        { text: `${labels.footer} · ${recap.title} · Lưu hành hạn chế`, fontSize: 6.5, italics: true, color: COLOR.muted, alignment: "center" },
       ],
     }),
     content,
