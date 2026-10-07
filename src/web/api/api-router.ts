@@ -3,6 +3,7 @@ import type { SyncService } from "../../sync-service.js";
 import type { AdminAuth } from "../auth.js";
 import type { QrLoginManager } from "../qr-login.js";
 import { accountRoutes } from "./accounts-api.js";
+import { aiKeyRoutes } from "./ai-keys-api.js";
 import { ApiError, readJson, sendFail, sendOk } from "./api-http.js";
 import { ADMIN_USER, type ApiContext, type ApiRoute } from "./api-route.js";
 import { auditRoutes } from "./audit-log.js";
@@ -25,7 +26,7 @@ import { OAUTH_CALLBACK_PATH, googleOAuthRoutes, handleOAuthCallback } from "./g
 const log = createLogger("api");
 
 const routes: ApiRoute[] = [
-  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
+  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
 ];
 
 export interface ApiDeps {

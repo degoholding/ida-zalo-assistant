@@ -1,5 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { AssistantService } from "./assistant/assistant-service.js";
+import type { AiKeyStore } from "./assistant/ai-key-store.js";
+import { HEAVY_MODEL_ALIAS, KeyChainClient } from "./assistant/key-chain-client.js";
 import { ModelRouterClient, missingKeyProblem, primaryModels, resolveModelKeys, type ModelPlan } from "./assistant/model-router-client.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/pool.js";
@@ -46,6 +48,8 @@ export class SyncService {
     readonly config: AppConfig,
     readonly storage: FileStorage,
     readonly settings: SettingsStore,
+    /** Bảng «Khóa AI»: còn khóa dùng được thì bot chạy bằng chuỗi khóa, bỏ qua các ô AI cũ của tab Trợ lý. */
+    readonly aiKeys: AiKeyStore | null = null,
   ) {
     this.downloader = new AttachmentDownloader(db, storage, {
       concurrency: config.downloadConcurrency,
@@ -62,6 +66,19 @@ export class SyncService {
   private buildAssistant(): AssistantService | null {
     const settings = this.config.assistant;
     const { apiKey, openaiApiKey, maxPerHour, dailyTokenCap, maxReadFileBytes, readableFileTypes, showTokenUsage } = settings;
+    const options = {
+      storage: this.storage, maxReadFileBytes, readableFileTypes, showTokenUsage,
+      reportExporter: new ReportExporter(this.storage, () => this.config.google),
+      meetingScheduler: new MeetingScheduler(() => this.config.google),
+    };
+    // Bảng Khóa AI có khóa → chuỗi khóa (khóa số 1 trước, hỏng thì khóa kế); bảng rỗng → cài đặt cũ như trước 07/10/2026
+    const chainKeys = this.aiKeys?.buildChainKeys() ?? [];
+    if (this.aiKeys && chainKeys.length) {
+      log.info(`trợ lý AI bật — bảng Khóa AI: ${chainKeys.map((key) => `${key.label} ${key.model}`).join(" → ")}`);
+      // Việc nặng: mỗi khóa tự đổi HEAVY_MODEL_ALIAS thành mô hình việc nặng của nó (không khai thì chính mô hình chính)
+      return new AssistantService(this.db, new KeyChainClient(chainKeys, this.aiKeys.ledger), chainKeys[0].model, { maxPerHour, dailyTokenCap },
+        () => new Date(), { ...options, heavyModel: HEAVY_MODEL_ALIAS });
+    }
     const keys = resolveModelKeys({ geminiKey: apiKey, openaiKey: openaiApiKey, openaiBaseUrl: settings.openaiBaseUrl });
     const plan: ModelPlan = {
       provider: settings.provider,
@@ -73,9 +90,7 @@ export class SyncService {
     const problem = missingKeyProblem(plan.provider, keys);
     const assistant = !problem
       ? new AssistantService(this.db, new ModelRouterClient(keys, plan), model, { maxPerHour, dailyTokenCap }, () => new Date(),
-          { storage: this.storage, heavyModel: heavyModel || undefined, maxReadFileBytes, readableFileTypes, showTokenUsage,
-            reportExporter: new ReportExporter(this.storage, () => this.config.google),
-            meetingScheduler: new MeetingScheduler(() => this.config.google) })
+          { ...options, heavyModel: heavyModel || undefined })
       : null;
     log.info(assistant
       ? `trợ lý AI bật (${plan.provider}: ${model}; việc nặng: ${heavyModel || model}${plan.provider === "openai_then_gemini" && keys.geminiKey ? `; lỗi thì lùi về ${plan.gemini.model}` : ""})`
@@ -90,15 +105,22 @@ export class SyncService {
   applySettings(changedKeys: string[]): void {
     const assistantChanged = changedKeys.some((key) =>
       key.startsWith("gemini_") || key.startsWith("openai_") || key === "ai_provider" || (key.startsWith("assistant_") && key !== "assistant_send_interval_ms"));
-    if (assistantChanged) {
-      this.currentAssistant = this.buildAssistant();
-      // Lượt hỏi đang chạy dở thì chạy nốt bằng bản cũ — không hủy
-      for (const runner of this.runners.values()) runner.setAssistant(this.currentAssistant);
-    }
+    if (assistantChanged) this.rebuildAssistant();
     if (changedKeys.includes("max_file_mb")) this.downloader.setMaxFileBytes(this.config.maxFileBytes);
     if (changedKeys.includes("assistant_send_interval_ms")) {
       for (const runner of this.runners.values()) runner.setSendInterval(this.config.assistant.sendIntervalMs);
     }
+  }
+
+  /** Bảng Khóa AI vừa đổi (thêm / sửa / đưa lên / gỡ) — dựng lại trợ lý theo chuỗi khóa mới. */
+  applyAiKeys(): void {
+    this.rebuildAssistant();
+  }
+
+  private rebuildAssistant(): void {
+    this.currentAssistant = this.buildAssistant();
+    // Lượt hỏi đang chạy dở thì chạy nốt bằng bản cũ — không hủy
+    for (const runner of this.runners.values()) runner.setAssistant(this.currentAssistant);
   }
 
   async startAll(): Promise<void> {

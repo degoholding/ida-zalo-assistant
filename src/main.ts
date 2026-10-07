@@ -1,6 +1,7 @@
 // Dịch vụ đồng bộ: chạy mọi tài khoản bot đã đăng nhập, lưu tin nhóm + thành viên + file,
 // kèm giao diện web quản trị (đăng nhập QR, cấu hình nhóm, tải file).
 
+import { AiKeyStore } from "./assistant/ai-key-store.js";
 import { loadConfig } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
@@ -9,6 +10,7 @@ import { SettingsStore } from "./settings/settings-store.js";
 import { createFileStorage } from "./storage/file-storage.js";
 import { purgeExpiredMessages } from "./sync/retention.js";
 import { SyncService } from "./sync-service.js";
+import { recordAudit } from "./web/api/audit-log.js";
 import { startWebServer } from "./web/server.js";
 
 const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -22,8 +24,16 @@ const db = createPool(config.databaseUrl);
 // Cài đặt đặt trên web (bảng app_setting) phủ lên .env — phải nạp TRƯỚC khi dựng trợ lý / runner
 const settings = new SettingsStore(db, config);
 await settings.load();
+// Bảng Khóa AI: lần đầu (bảng chưa từng có dòng) chép khóa từ cài đặt cũ theo đúng thứ tự đang dùng — phải sau settings.load()
+const aiKeys = new AiKeyStore(db, config.sessionEncryptionKey);
+const migratedKeys = await aiKeys.migrateLegacyKeys(config.assistant);
+if (migratedKeys.length) {
+  log.info(`đã chép ${migratedKeys.length} khóa AI từ cài đặt cũ sang bảng Khóa AI`);
+  await recordAudit(db, { entity: "setting", entityId: 1, action: "create", message: `Khóa AI: chép ${migratedKeys.length} khóa từ cài đặt cũ (giữ thứ tự đang dùng)` });
+}
+await aiKeys.load();
 const storage = createFileStorage(config);
-const service = new SyncService(db, config, storage, settings);
+const service = new SyncService(db, config, storage, settings, aiKeys);
 await service.startAll();
 const web = await startWebServer(service);
 

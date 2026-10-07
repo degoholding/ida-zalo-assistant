@@ -4,6 +4,7 @@
 // Hội thoại, và câu sau hiểu được câu trước («gửi tệp số 2»).
 
 import type { RowDataPacket } from "mysql2";
+import { AiKeyStore } from "../assistant/ai-key-store.js";
 import { loadConfig } from "../config.js";
 import path from "node:path";
 import { AssistantTurnStatus, MessageKind } from "../constants.js";
@@ -26,8 +27,11 @@ const db = createPool(config.databaseUrl);
 try {
   const settings = new SettingsStore(db, config);
   await settings.load();
+  // Đọc bảng Khóa AI như dịch vụ thật (không chép từ cài đặt cũ — việc đó chỉ dịch vụ làm lúc khởi động)
+  const aiKeys = new AiKeyStore(db, config.sessionEncryptionKey);
+  await aiKeys.load();
   // Chỉ mượn SyncService để dựng trợ lý đúng như dịch vụ thật — không bật tài khoản bot nào
-  const assistant = new SyncService(db, config, createFileStorage(config), settings).assistant;
+  const assistant = new SyncService(db, config, createFileStorage(config), settings, aiKeys).assistant;
   if (!assistant) throw new Error("Trợ lý AI đang tắt — đặt khóa Gemini trong .env hoặc màn Cài đặt");
   const [bots] = await db.query<RowDataPacket[]>("SELECT id FROM bot_account WHERE label = ?", [DEMO_BOT.label]);
   if (!bots[0]) throw new Error("Chưa có dữ liệu demo — chạy: npm run seed:demo");

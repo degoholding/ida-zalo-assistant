@@ -80,3 +80,17 @@ export enum ContactKindSource {
   Auto = 0, // suy theo nhóm
   Manual = 1, // quản trị chỉnh tay — tự động không ghi đè
 }
+
+/**
+ * Hãng của một dòng «Khóa AI» (bảng ai_key, 07/10/2026). Giao diện chép sang `web/src/modules/settings/types/ai-key.ts`.
+ * Mọi hãng trừ Gemini nói API kiểu OpenAI (Chat Completions) — chạy qua OpenAIClient với địa chỉ trạm của hãng.
+ */
+export enum AiKeyProvider {
+  Gemini = 1,
+  OpenAI = 2,
+  // Trạm trung gian / máy chủ tự dựng nói API kiểu OpenAI (vd modelapi.vn) — địa chỉ trạm nhập theo từng khóa
+  OpenAICompatible = 3,
+  DeepSeek = 4,
+  Xai = 5,
+  OpenRouter = 6,
+}

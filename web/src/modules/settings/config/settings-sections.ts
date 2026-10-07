@@ -113,6 +113,8 @@ export const GOOGLE_SECTIONS: SettingsSection[] = [
 ]
 
 export const SETTINGS_TABS = [
+  // Đứng đầu cho dễ thấy (đại ca 07/10/2026: ~19 ô AI rời khó dùng) — mở màn Cài đặt là vào thẳng tab này
+  { id: 'ai-keys', label: 'Khóa AI', icon: KeyRound },
   { id: 'assistant', label: 'Trợ lý AI', icon: Bot },
   { id: 'sync', label: 'Đồng bộ Zalo', icon: RefreshCw },
   { id: 'google', label: 'Google', icon: FileSpreadsheet },

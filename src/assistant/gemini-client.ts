@@ -70,7 +70,8 @@ const RETRY_DELAYS_MS = [1000];
 // Đo thật 01/10/2026: không có chỗ nhớ này, mỗi câu hỏi mất 50–100 giây chờ mô hình chính quá tải.
 const PREFER_FALLBACK_MS = 10 * 60 * 1000;
 
-class GeminiHttpError extends Error {
+/** Lỗi HTTP của Gemini — chuỗi «Khóa AI» đọc mã để biết khóa hết tiền / hết hạn mức / sai mà nhảy sang khóa kế. */
+export class GeminiHttpError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);
   }

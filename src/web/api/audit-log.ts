@@ -23,6 +23,8 @@ const ACTION_LABEL: Record<string, string> = {
   test_connection: "Kiểm tra kết nối",
   google_connect: "Kết nối Google",
   google_disconnect: "Ngắt kết nối Google",
+  delete: "Gỡ",
+  reorder: "Đổi thứ tự",
 };
 
 const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file", "setting"]);

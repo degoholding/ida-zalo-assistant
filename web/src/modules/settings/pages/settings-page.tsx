@@ -9,14 +9,16 @@ import { PageContainer } from '@/shared/ui/page-container'
 import { PageHeader } from '@/shared/ui/page-header'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
+import { AiKeysTab } from '../components/ai-keys-tab'
+import { AssistantSettingsTab } from '../components/assistant-settings-tab'
 import { GoogleSettingsTab } from '../components/google-settings-tab'
 import { SettingsSectionsForm } from '../components/settings-sections-form'
-import { ASSISTANT_SECTIONS, SETTINGS_TABS, SYNC_SECTIONS, type SettingsTabId } from '../config/settings-sections'
+import { SETTINGS_TABS, SYNC_SECTIONS, type SettingsTabId } from '../config/settings-sections'
 import { useGoogleOauthRedirectToast } from '../hooks/use-google-oauth-redirect-toast'
 import { useSettings } from '../hooks/use-settings'
 
 function resolveInitialTab(requested: string | null): SettingsTabId {
-  return SETTINGS_TABS.find((tab) => tab.id === requested)?.id ?? 'assistant'
+  return SETTINGS_TABS.find((tab) => tab.id === requested)?.id ?? 'ai-keys'
 }
 
 /**
@@ -67,12 +69,12 @@ export function SettingsPage() {
             ))}
           </TabsList>
 
+          <TabsContent value="ai-keys" className="mt-0">
+            <AiKeysTab />
+          </TabsContent>
+
           <TabsContent value="assistant" className="mt-0">
-            <SettingsSectionsForm
-              settings={data.filter((item) => item.group === 'assistant')}
-              sections={ASSISTANT_SECTIONS}
-              disabled={!canWrite}
-            />
+            <AssistantSettingsTab settings={data.filter((item) => item.group === 'assistant')} disabled={!canWrite} />
           </TabsContent>
 
           <TabsContent value="sync" className="mt-0">

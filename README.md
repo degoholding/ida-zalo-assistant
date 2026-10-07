@@ -133,6 +133,16 @@ khóa mua qua bên bán lại. Chỉ OpenAI: không tìm web, ghi âm gỡ băng
 dán nhầm vào ô Gemini được hiểu là khóa OpenAI; lỗi OpenAI ghi log đã che khóa. Mã: `src/assistant/openai-client.ts` (SDK
 chính thức `openai`), `model-router-client.ts`.
 
+**Khóa AI** (07/10/2026, tab đầu của Cài đặt — thay ~19 ô AI rời): danh sách khóa có thứ tự 1, 2, 3… (Gemini · OpenAI · DeepSeek ·
+Grok · OpenRouter · «Tương thích OpenAI (tùy chỉnh)» với địa chỉ trạm riêng). Bot dùng khóa số 1; khóa đó hết tiền (402), hết hạn
+mức (429), sai / hết quyền (401/403), quá tải (5xx), quá thời gian hay lỗi bất kỳ thì làm lại lượt đó bằng khóa kế, im lặng — khóa
+lỗi xuống cuối hàng 10 phút, màn hình hiện «Lỗi lúc hh:mm: hết tiền (402)». Trần lượt / ngày (giờ Việt Nam) từng khóa, chạm trần thì
+nhảy khóa kế. Thêm khóa: máy chủ gọi thử hãng (liệt kê mô hình, không tốn token) rồi mới lưu mã hóa; trạm chỉ nhận https + tên miền
+công khai (chặn localhost / IP nội bộ, kể cả tên miền trỏ về IP nội bộ). Bảng `ai_key` rỗng = chạy bằng cài đặt cũ như trước; khởi
+động lần đầu với bảng chưa từng có dòng thì tự chép khóa từ cài đặt cũ theo đúng thứ tự đang dùng. Có khóa thì các ô AI cũ của tab
+«Trợ lý AI» gập vào «Nâng cao (cách cũ)». Mã: `src/assistant/key-chain-client.ts`, `ai-key-store.ts`, `ai-key-providers.ts`,
+`src/web/api/ai-keys-api.ts`, migration `015_ai_key.sql`.
+
 **Đo token** (06/10/2026): bật Cài đặt → «Hiện số token dưới câu trả lời» thì mỗi câu trả lời kèm tổng token làm tròn
 nghìn «[3k token]» — mặc định TẮT. `src/assistant/token-usage-footer.ts`; dòng này bị bỏ khi đưa lịch sử cho mô hình.
 

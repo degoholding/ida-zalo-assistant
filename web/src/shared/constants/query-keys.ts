@@ -42,6 +42,10 @@ export const queryKeys = {
     all: ['settings'] as const,
     list: () => ['settings', 'list'] as const,
   },
+  aiKeys: {
+    all: ['ai-keys'] as const,
+    list: () => ['ai-keys', 'list'] as const,
+  },
   googleOauth: {
     all: ['google-oauth'] as const,
     status: () => ['google-oauth', 'status'] as const,
