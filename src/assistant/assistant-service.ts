@@ -11,6 +11,7 @@ import { buildGroupQuestion, loadGroupContext, loadGroupMemberNames } from "./gr
 import { MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION } from "./meeting-recap-tool.js";
 import { readLinkContent } from "./link-reader.js";
 import { READ_LINK_DECLARATION } from "./read-link-tool.js";
+import { REPORT_MAX_TOOL_ROUNDS, REPORT_PLAYBOOK_PROMPT, isReportRequest } from "./report-playbook.js";
 import { appendTokenFooter, stripTokenFooter } from "./token-usage-footer.js";
 import { GROUP_ACTION_DECLARATIONS, type GroupActions } from "./group-action-tools.js";
 import { CREATE_MEETING_DECLARATION, MEETING_MANAGE_DECLARATIONS, type MeetingCreator } from "./meeting-tool.js";
@@ -219,7 +220,10 @@ export class AssistantService {
     hooks.onAccepted?.();
     const usage = { inputTokens: 0, outputTokens: 0 };
     // Lượt «nặng»: đã đọc tệp, hoặc dữ liệu công cụ kéo về nhiều → câu trả lời cuối đi bản mô hình nặng
-    let heavy = false;
+    // Yêu cầu báo cáo / xuất file: đi bản NẶNG ngay từ đầu — lượt quyết định nội dung báo cáo (soạn bảng, gọi công cụ xuất)
+    // là lượt quan trọng nhất, không để bản lite làm rồi mới đổi
+    const reportTurn = isReportRequest(request.question);
+    let heavy = reportTurn;
     let toolChars = 0;
     const storage = this.options.storage;
     const readDocument = this.client.readDocument
@@ -233,7 +237,7 @@ export class AssistantService {
         ? async (table, format) => {
           // Một lượt hỏi một báo cáo — mô hình gọi lặp thì không đẻ thêm tệp
           if (reportFiles.length) return { error: "Lượt này đã xuất báo cáo rồi." };
-          const outcome = await exporter.export(table, format, now);
+          const outcome = await exporter.export(table, format, now, request.contact.display_name || request.contact.zalo_name);
           if (outcome.file) reportFiles.push(outcome.file);
           return outcome.response;
         }
@@ -273,7 +277,9 @@ export class AssistantService {
     ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
-    const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "");
+    const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
+      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "");
+    const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
     const contents = scope ? [] : await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid);
     const question = scope
       ? buildGroupQuestion(await loadGroupContext(this.db, scope.groupId, request.questionMessageId), request.question)
@@ -286,14 +292,14 @@ export class AssistantService {
     let inputTokens = 0;
     let outputTokens = 0;
     try {
-      for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
+      for (let round = 0; round <= maxRounds; round += 1) {
         const result = await this.client.generate({
           system,
           contents,
           tools,
           // Vòng cuối CẤM gọi công cụ — buộc trả lời bằng dữ liệu đã có. Chỉ bỏ danh sách công cụ thì không đủ:
           // Gemini vẫn trả lệnh gọi (gặp 06/10/2026, câu «có bao nhiêu khách hàng» → lỗi «Quá số vòng»)
-          forceText: round === MAX_TOOL_ROUNDS,
+          forceText: round === maxRounds,
           model: heavy && this.options.heavyModel ? this.options.heavyModel : undefined,
         });
         inputTokens += result.inputTokens;

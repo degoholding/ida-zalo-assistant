@@ -120,6 +120,12 @@ chuyển hướng. Tóm tắt tài liệu: đủ mọi phần, mỗi phần 2–
 `read-link-tool.ts`. Đọc xong muốn «xuất file» → `create_summary_pdf` (PDF «Tóm tắt tài liệu», cùng khung mẫu recap họp, biến
 thể `document` trong `meeting-recap-input.ts`) hoặc `export_report` (Excel / Sheets — mở cho cả hỏi trong nhóm).
 
+**Quy trình báo cáo** (07/10/2026): câu hỏi có «báo cáo / tổng hợp / thống kê / xuất file / Excel / PDF / recap»
+(`isReportRequest`) → chạy mô hình VIỆC NẶNG ngay từ đầu, tối đa 10 vòng gọi công cụ, prompt gắn thêm quy trình 4 bước (chốt phạm
+vi → lấy đủ dữ liệu → tự kiểm số → khung chuẩn: tóm tắt có số / chi tiết có cột Nguồn / bất thường / việc cần làm) kèm 1 ví dụ
+mẫu. `export_report` có `period` + `extra_sheets` (tab phụ), tên tệp theo quy ước IDA «Tên công việc - Thời gian - Tên nhân
+viên». Mã: `src/assistant/report-playbook.ts`, `src/reports/report-table.ts`.
+
 **Gemini hoặc OpenAI** (07/10/2026): Cài đặt → «Nhà cung cấp AI»: `gemini` · `openai` (tắt Gemini) · `openai_then_gemini`
 (trả lời bằng GPT, OpenAI lỗi bất kỳ — khóa sai, hết tiền, quá tải — thì làm lại lượt đó bằng Gemini và nghỉ OpenAI 10 phút).
 Mỗi bên một bộ mô hình (chính / việc nặng / dự phòng): OpenAI mặc định `gpt-6-luna` / `gpt-6.1-sol`. «Địa chỉ API OpenAI» cho

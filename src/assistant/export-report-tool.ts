@@ -11,20 +11,34 @@ export type ExportReport = (table: ReportTable, format: ReportFormat) => Promise
 export const EXPORT_REPORT_DECLARATION: FunctionDeclaration = {
   name: "export_report",
   description:
-    "Xuất báo cáo ra FILE khi người hỏi muốn báo cáo dạng Excel / Google Sheets / bảng / file. Lấy dữ liệu bằng các công cụ khác " +
-    "TRƯỚC, soạn thành MỘT bảng (mỗi dòng một mục: một nhóm, một việc, một khoản…), rồi gọi công cụ này MỘT lần. " +
-    "Kết quả: Google Sheets trả link (đưa link cho người hỏi); Excel thì tệp tự gửi cho người hỏi sau câu trả lời. " +
+    "Xuất báo cáo ra FILE khi người hỏi muốn báo cáo dạng Excel / Google Sheets / bảng / file. Lấy ĐỦ dữ liệu bằng các công cụ khác " +
+    "TRƯỚC (theo quy trình báo cáo), rồi gọi công cụ này MỘT lần: notes = tóm tắt đầu trang (3–5 ý CÓ SỐ); bảng chính = chi tiết, mỗi " +
+    "dòng một mục, CỘT CUỐI «Nguồn» (nhóm · người gửi · dd/mm hh:mm); có số cộng được thì thêm dòng «Tổng» cuối bảng; extra_sheets cho " +
+    "phần tách riêng (vd «Bất thường», «Theo nhân viên»). Kết quả: Google Sheets trả link; Excel thì tệp tự gửi sau câu trả lời. " +
     "Sau khi xuất, câu trả lời chỉ tóm 2–4 ý chính, không chép lại cả bảng.",
   parameters: {
     type: "object",
     properties: {
-      title: { type: "string", description: "Tiêu đề báo cáo, vd 'Báo cáo tình hình các nhóm 02/10–05/10'" },
-      notes: { type: "array", items: { type: "string" }, description: "Vài dòng tóm tắt / kết luận đặt trên bảng (tùy chọn)" },
+      title: { type: "string", description: "Tên công việc / báo cáo, vd 'Báo cáo tình hình các nhóm'" },
+      period: { type: "string", description: "Kỳ báo cáo, vd 'Tuần 41/2026', '01/10–07/10/2026' (ghi đầu trang + vào tên tệp)" },
+      notes: { type: "array", items: { type: "string" }, description: "Tóm tắt đầu trang: 3–5 ý quan trọng nhất, mỗi ý có số / tên cụ thể" },
       columns: { type: "array", items: { type: "string" }, description: "Tên các cột, vd ['Nhóm','Tiến độ','Vấn đề','Việc còn treo','Phụ trách']" },
       rows: {
         type: "array",
         items: { type: "array", items: { type: "string" } },
         description: "Các dòng; mỗi dòng là mảng ô theo ĐÚNG thứ tự columns",
+      },
+      extra_sheets: {
+        type: "array",
+        description: "Sheet phụ (tùy chọn, tối đa 4) — mỗi cái một tab: vd 'Bất thường', 'Theo nhân viên', 'Việc còn treo'",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            columns: { type: "array", items: { type: "string" } },
+            rows: { type: "array", items: { type: "array", items: { type: "string" } } },
+          },
+        },
       },
       format: {
         type: "string",

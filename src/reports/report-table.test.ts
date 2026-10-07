@@ -63,9 +63,25 @@ test("Excel sheet names drop forbidden characters and stay within 31 chars", () 
   assert.equal(excelSheetName("::"), "Báo cáo");
 });
 
-test("file names are ASCII-safe and carry the timestamp", () => {
-  assert.equal(reportFileName("Báo cáo công nợ Đà Nẵng", "20261005-172045"), "Bao-cao-cong-no-Da-Nang-20261005-172045.xlsx");
-  assert.equal(reportFileName("!!!", "20261005-172045"), "Bao-cao-20261005-172045.xlsx");
+test("file names follow the IDA convention «Tên công việc - Thời gian - Tên nhân viên», ASCII-safe", () => {
+  assert.equal(reportFileName("Báo cáo công nợ Đà Nẵng", "Tuần 41/2026", "Trần Được", "07/10/2026"), "Bao-cao-cong-no-Da-Nang - Tuan-41-2026 - Tran-Duoc.xlsx");
+  // Không có kỳ → ngày lập; không rõ người hỏi → Bot-tro-ly; tiêu đề toàn ký tự lạ → Bao-cao
+  assert.equal(reportFileName("!!!", "", "", "07/10/2026"), "Bao-cao - 07-10-2026 - Bot-tro-ly.xlsx");
+  assert.equal(reportFileName("Doanh số", "01.10–07.10.2026", "An", "07/10/2026"), "Doanh-so - 01.10-07.10.2026 - An.xlsx");
+});
+
+test("extra sheets become their own tabs with unique names; a broken extra sheet is reported to the model", () => {
+  const table = normalizeReportTable({ ...VALID, period: "Tuần 41/2026", extra_sheets: [
+    { title: "Bất thường", columns: ["Việc", "Nguồn"], rows: [["Trễ hạn hợp đồng", "K52 · Mai · 03/10 09:00"]] },
+    { title: "Báo cáo tình hình các nhóm", columns: ["A"], rows: [["x"]] },
+  ] });
+  const workbook = XLSX.read(buildReportWorkbook(table, "07/10/2026 14:00"), { type: "buffer" });
+  assert.deepEqual(workbook.SheetNames, ["Báo cáo tình hình các nhóm", "Bất thường", "Báo cáo tình hình các nhóm (2)"]);
+  const extra = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["Bất thường"], { header: 1, defval: "" });
+  assert.deepEqual(extra[2], ["Việc", "Nguồn"]);
+  assert.match(String(buildReportMatrix(table, "07/10/2026 14:00")[1][0]), /^Kỳ: Tuần 41\/2026 · Lập lúc/);
+  assert.throws(() => normalizeReportTable({ ...VALID, extra_sheets: [{ title: "Rỗng", columns: ["A"], rows: [] }] }),
+    (error) => error instanceof ReportInputError && /sheet phụ thứ 1/.test(error.message));
 });
 
 test("the workbook opens back with the same cells and a filter on the header row", () => {

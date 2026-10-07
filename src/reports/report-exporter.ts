@@ -5,7 +5,7 @@ import { GoogleSheetsError } from "../google/sheets-error-messages.js";
 import type { FileStorage } from "../storage/file-storage.js";
 import { compactDate, type MeetingRecap } from "./meeting-recap-input.js";
 import { renderRecapPdf } from "./meeting-recap-pdf.js";
-import { buildReportMatrix, buildReportWorkbook, excelSheetName, reportFileName, type ReportTable } from "./report-table.js";
+import { buildReportMatrix, buildReportWorkbook, buildSheetMatrix, excelSheetName, reportFileName, type ReportTable } from "./report-table.js";
 
 // Xuất báo cáo của trợ lý ra Google Sheets (tab mới trên trang tính đã kết nối ở màn Cài đặt) hoặc tệp Excel
 // cất vào kho — nơi gọi gửi tệp cho người hỏi. «auto» = Sheets nếu đã kết nối, không thì Excel; Sheets lỗi
@@ -68,9 +68,10 @@ export class ReportExporter {
     return Boolean(google.serviceAccount && google.spreadsheetUrl);
   }
 
-  async export(table: ReportTable, format: ReportFormat, now: Date): Promise<ReportExportOutcome> {
+  /** `requester`: tên người hỏi — vào tên tệp theo quy ước «Tên công việc - Thời gian - Tên nhân viên». */
+  async export(table: ReportTable, format: ReportFormat, now: Date, requester = ""): Promise<ReportExportOutcome> {
     const useSheets = format === "sheets" || (format === "auto" && this.sheetsConnected);
-    if (!useSheets) return this.exportExcel(table, now);
+    if (!useSheets) return this.exportExcel(table, now, requester);
     if (!this.sheetsConnected) {
       return { response: { error: "Google Sheets chưa kết nối (quản trị dán khóa service account + link trang tính ở màn Cài đặt). Có thể xuất Excel thay." }, file: null };
     }
@@ -80,7 +81,7 @@ export class ReportExporter {
       if (!(error instanceof GoogleSheetsError)) throw error;
       // Sheets hỏng (chưa chia sẻ, hết hạn mức…) mà người hỏi không đòi riêng Sheets: vẫn đưa Excel
       if (format === "sheets") return { response: { error: `Ghi Google Sheets lỗi: ${error.message}` }, file: null };
-      const fallback = await this.exportExcel(table, now);
+      const fallback = await this.exportExcel(table, now, requester);
       return { ...fallback, response: { ...fallback.response, note: `Ghi Google Sheets lỗi (${error.message}) nên đã xuất Excel thay.` } };
     }
   }
@@ -98,13 +99,14 @@ export class ReportExporter {
     };
   }
 
-  private async exportExcel(table: ReportTable, now: Date): Promise<ReportExportOutcome> {
+  private async exportExcel(table: ReportTable, now: Date, requester: string): Promise<ReportExportOutcome> {
     const { text, stamp } = vnTimestamp(now);
     const data = buildReportWorkbook(table, text);
-    const fileName = reportFileName(table.title, stamp);
-    const storageKey = await this.storage.put(`reports/${stamp.slice(0, 6)}/${fileName}`, data, EXCEL_CONTENT_TYPE);
+    const fileName = reportFileName(table.title, table.period, requester, text.slice(0, 10));
+    // Dấu giờ trong khóa kho: hai báo cáo cùng tên trong ngày không đè nhau
+    const storageKey = await this.storage.put(`reports/${stamp.slice(0, 6)}/${stamp}-${fileName}`, data, EXCEL_CONTENT_TYPE);
     return {
-      response: { format: "excel", file_name: fileName, rows: table.rows.length, will_send_file: true },
+      response: { format: "excel", file_name: fileName, rows: table.rows.length, sheets: 1 + table.extraSheets.length, will_send_file: true },
       file: { fileName, storageKey, bytes: data.length },
     };
   }
@@ -118,8 +120,14 @@ export class ReportExporter {
     const sheetTitle = `${excelSheetName(table.title).slice(0, 80)} ${stamp}`;
     const sheetId = await client.addSheet(spreadsheetId, sheetTitle);
     await client.appendRows(spreadsheetId, sheetTitle, buildReportMatrix(table, text));
+    // Sheet phụ: mỗi cái một tab nữa, cùng dấu giờ để biết đi chung báo cáo nào
+    for (const extra of table.extraSheets) {
+      const extraTitle = `${excelSheetName(extra.title).slice(0, 80)} ${stamp}`;
+      await client.addSheet(spreadsheetId, extraTitle);
+      await client.appendRows(spreadsheetId, extraTitle, buildSheetMatrix(extra));
+    }
     return {
-      response: { format: "sheets", link: sheetUrl(spreadsheetId, sheetId), sheet_title: sheetTitle, rows: table.rows.length },
+      response: { format: "sheets", link: sheetUrl(spreadsheetId, sheetId), sheet_title: sheetTitle, rows: table.rows.length, extra_tabs: table.extraSheets.length },
       file: null,
     };
   }

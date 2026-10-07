@@ -50,10 +50,11 @@ test("formats Vietnam time for display and for file names", () => {
 
 test("auto without Google Sheets builds an Excel file in storage for the bot to send", async () => {
   const storage = memoryStorage();
-  const outcome = await new ReportExporter(storage, () => google(false)).export(TABLE, "auto", NOW);
+  const outcome = await new ReportExporter(storage, () => google(false)).export(TABLE, "auto", NOW, "Trần Được");
   assert.equal(outcome.response.format, "excel");
-  assert.equal(outcome.file?.fileName, "Bao-cao-tuan-20261005-172045.xlsx");
-  assert.equal(outcome.file?.storageKey, "reports/202610/Bao-cao-tuan-20261005-172045.xlsx");
+  assert.equal(outcome.file?.fileName, "Bao-cao-tuan - 05-10-2026 - Tran-Duoc.xlsx");
+  // Dấu giờ trong khóa kho: hai báo cáo cùng tên trong ngày không đè nhau
+  assert.equal(outcome.file?.storageKey, "reports/202610/20261005-172045-Bao-cao-tuan - 05-10-2026 - Tran-Duoc.xlsx");
   assert.ok(storage.saved.get(outcome.file!.storageKey)!.length > 1000);
 });
 
