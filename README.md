@@ -201,6 +201,10 @@ Mã ở `src/alerts/`. Mỗi tin mới trong nhóm (đang đọc) được phân
 - **Qua chat riêng với bot** (`src/assistant/alert-tools.ts`): «có gì cần xử lý», «xong tin …»; Quản lý / Trưởng
   phòng đổi từ khóa và số phút chờ, người nhận đổi VIP / giờ bản tin của mình. Mọi thay đổi: bot đưa bản xem trước,
   phải xác nhận ở **tin sau** mới lưu; ghi «Lịch sử thao tác» với tên người đổi «(qua Zalo)».
+- **Lệnh gõ sẵn** (`src/assistant/chat-commands.ts`, chạy TRƯỚC mô hình — trả lời ngay, không tốn token, chạy cả khi chạm
+  trần ngày): «hướng dẫn» (nội dung theo vai trò; trong nhóm ra bản ngắn), «cấu hình», «cần xử lý», «xong <số>»,
+  «thêm / bỏ từ khẩn <từ>», «thêm / bỏ từ quan trọng <từ>», «phút chờ <n>», «phút chờ vip <n>», «thêm / bỏ vip <tên>»,
+  rồi «đồng ý» / «hủy». Gõ có dấu hay không dấu đều nhận; «ok» / «không» chỉ là lệnh khi đang có đề xuất chờ.
 
 ## Xem cơ sở dữ liệu bằng Adminer của ERP (máy dev)
 

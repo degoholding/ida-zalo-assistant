@@ -279,6 +279,21 @@ export async function runAlertTool(
   }
 }
 
+/** Đề xuất mới nhất còn hạn của một người (lệnh gõ «đồng ý» xác nhận đúng đề xuất này). */
+export function latestPendingChange(askerUid: string): { id: string; preview: string } | null {
+  cleanupPending(Date.now());
+  let latest: PendingChange | null = null;
+  for (const change of pending.values()) if (change.askerUid === askerUid && (!latest || change.createdAt >= latest.createdAt)) latest = change;
+  return latest ? { id: latest.id, preview: latest.preview } : null;
+}
+
+/** «Hủy»: bỏ mọi đề xuất đang chờ của một người. Trả số đề xuất đã bỏ. */
+export function dropPendingChanges(askerUid: string): number {
+  let dropped = 0;
+  for (const [id, change] of pending) if (change.askerUid === askerUid) { pending.delete(id); dropped += 1; }
+  return dropped;
+}
+
 /** Cho bài kiểm: xóa các đề xuất đang chờ. */
 export function clearPendingAlertChanges(): void {
   pending.clear();

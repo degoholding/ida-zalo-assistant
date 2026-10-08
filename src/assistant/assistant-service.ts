@@ -20,6 +20,7 @@ import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_S
 import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
 import { maskPersonalDataDeep } from "../privacy/personal-data.js";
 import { ALERT_TOOL_DECLARATIONS, ALERT_TOOLS_PROMPT, resolveAlertAsker, type AlertToolsDeps } from "./alert-tools.js";
+import { parseChatCommand, runChatCommand } from "./chat-commands.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
 // (tối đa MAX_TOOL_ROUNDS vòng) → ghi nhật ký assistant_turn. Không tự gửi Zalo — trả về câu trả
@@ -130,7 +131,7 @@ Việc bạn làm được:
 10. XUẤT FILE từ tài liệu / link đã đọc: người hỏi muốn «xuất file / PDF / gửi file» → create_summary_pdf (mặc định); muốn «Excel / Sheets / bảng»
    → export_report (một bảng các số chính). Gọi NGAY lượt này; tài liệu đọc ở lượt trước thì read_file / read_link LẠI để lấy đúng số (đừng chép từ
    câu trả lời cũ — đã bị cắt bớt). Xuất xong câu trả lời chỉ 2–3 ý chính + báo tệp đang được gửi, không chép lại cả bản tóm tắt.
-Câu hỏi ngoài các việc này: nói ngắn gọn bạn làm được gì.
+Câu hỏi ngoài các việc này: nói ngắn gọn bạn làm được gì, và nhắc người hỏi gõ «hướng dẫn» để xem danh sách lệnh.
 
 Quy tắc:
 - Chỉ dùng dữ liệu từ công cụ. Không bịa tên, số liệu, ngày giờ. Không có dữ liệu thì nói không có.
@@ -200,6 +201,19 @@ export class AssistantService {
   async answer(request: AssistantRequest, hooks: { onAccepted?: () => void } = {}): Promise<AssistantReply> {
     const started = Date.now();
     const now = this.clock();
+
+    // Lệnh gõ sẵn («hướng dẫn», «cấu hình», «cần xử lý», «thêm từ khẩn …», «đồng ý»…): trả lời ngay, không qua mô hình,
+    // không tính token — chạy cả khi đã chạm trần token ngày
+    const command = parseChatCommand(request.question);
+    if (command) {
+      const alertTools = this.options.alertTools;
+      const asker = !request.groupScope && alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
+      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now }, command);
+      if (text !== null) {
+        await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: command }], model: "lệnh" });
+        return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };
+      }
+    }
 
     const [hourRows] = await this.db.query<RowDataPacket[]>(
       `SELECT COUNT(*) AS n, SUM(status = ?) AS limited FROM assistant_turn
@@ -374,7 +388,7 @@ export class AssistantService {
   private async logTurn(
     request: AssistantRequest,
     status: AssistantTurnStatus,
-    detail: { started: number; answer?: string; toolCalls?: unknown[]; inputTokens?: number; outputTokens?: number; error?: string },
+    detail: { started: number; answer?: string; toolCalls?: unknown[]; inputTokens?: number; outputTokens?: number; error?: string; model?: string },
   ): Promise<void> {
     await this.db.query<ResultSetHeader>(
       `INSERT INTO assistant_turn (bot_account_id, contact_id, thread_id, question_msg_id, status, model, tool_calls,
@@ -382,7 +396,7 @@ export class AssistantService {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       // Ghi đúng mô hình đã trả lời — có thể là mô hình dự phòng khi mô hình chính quá tải
       [request.botAccountId, request.contact.id, request.threadId, request.questionMessageId, status,
-       (this.client as { lastModel?: string }).lastModel ?? this.model,
+       detail.model ?? (this.client as { lastModel?: string }).lastModel ?? this.model,
        detail.toolCalls?.length ? JSON.stringify(detail.toolCalls) : null, detail.answer ?? null,
        detail.inputTokens ?? 0, detail.outputTokens ?? 0, (detail.error ?? "").slice(0, 500),
        Date.now() - detail.started, this.clock()],

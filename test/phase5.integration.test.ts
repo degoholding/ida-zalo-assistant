@@ -12,6 +12,9 @@ import { AlertService } from "../src/alerts/alert-service.js";
 import { runReminders } from "../src/alerts/reminders.js";
 import { watchSessions } from "../src/alerts/session-watch.js";
 import { clearPendingAlertChanges, runAlertTool, type AlertAsker } from "../src/assistant/alert-tools.js";
+import { AssistantService } from "../src/assistant/assistant-service.js";
+import { parseChatCommand, runChatCommand, type ChatCommandContext } from "../src/assistant/chat-commands.js";
+import { findContactByUid } from "../src/sync/contact-repository.js";
 import type { ModelClient } from "../src/assistant/gemini-client.js";
 import type { AppConfig } from "../src/config.js";
 import { AlertKind, BotAccountStatus, ContactRole, GroupKind, JobKind, JobStatus, MessagePriority, ReplyState } from "../src/constants.js";
@@ -34,6 +37,7 @@ function makeConfig(): AppConfig {
     sessionEncryptionKey: "0".repeat(64),
     assistant: { dailyTokenCap: 1_000_000 },
     privacy: { allowedAiProviders: ["1", "2", "3", "4", "5", "6"] },
+    calendar: { workHours: "08:30-12:00, 13:30-17:30", workDays: ["1", "2", "3", "4", "5", "6"], quietHours: "21:00-06:30", holidays: "" },
     alerts: {
       enabled: true, urgentKeywords: DEFAULT_URGENT_KEYWORDS, importantKeywords: DEFAULT_IMPORTANT_KEYWORDS, strictKeywords: DEFAULT_STRICT_KEYWORDS,
       replyWaitMinutes: 120, vipWaitMinutes: 30, dailyReminderCap: 3, urgentMergeSeconds: 120, aiEnabled: true, telegramBotToken: "", telegramChatId: "",
@@ -243,5 +247,74 @@ describe("phase 5 — cảnh báo tin nhắn", { skip: !databaseUrl && "chưa đ
     assert.equal((await runAlertTool(deps, staff, "confirm_alert_change", { change_id: vipProposal.change_id }, NOW, Date.now()) as any).ok, true);
     const [vips] = await db.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM recipient_vip WHERE recipient_id = ?", [tp]);
     assert.equal(Number(vips[0].n), 2);
+  });
+  test("typed commands: help, config, pending list, keyword change confirmed by «đồng ý», cancel, VIP by name", async () => {
+    await receive("g-a", { content: "khiếu nại gấp về lô hàng" });
+    const saved: Record<string, unknown>[] = [];
+    const deps = { db, config, saveSettings: async (patch: Record<string, unknown>) => { saved.push(patch); return Object.keys(patch); }, invalidate: () => undefined };
+    const ceoAsker: AlertAsker = { uid: "u-ceo", name: "CEO", role: ContactRole.Manager, recipientId: ceo };
+    const tpAsker: AlertAsker = { uid: "u-tp", name: "Trưởng phòng", role: ContactRole.DepartmentHead, recipientId: tp };
+    const ctx = (asker: AlertAsker | null): ChatCommandContext => ({ db, alertTools: deps, asker, inGroup: false, now: NOW });
+    const say = async (asker: AlertAsker | null, text: string) => {
+      const command = parseChatCommand(text);
+      return command ? runChatCommand(ctx(asker), command) : null;
+    };
+
+    assert.match(String(await say(ceoAsker, "hướng dẫn tôi")), /thêm từ khẩn/);
+    const configText = String(await say(tpAsker, "cấu hình"));
+    assert.match(configText, /Từ KHẨN: .*khiếu nại/);
+    assert.match(configText, /Nhóm theo dõi: tất cả các nhóm/);
+    assert.match(configText, /VIP: Đại lý VIP/);
+
+    const pendingText = String(await say(ceoAsker, "cần xử lý"));
+    const id = Number(pendingText.match(/#(\d+) \[KHẨN\]/)?.[1]);
+    assert.ok(id > 0, pendingText);
+    assert.match(String(await say(ceoAsker, `xong ${id}`)), /Đã đánh dấu xong/);
+    assert.match(String(await say(ceoAsker, "can xu ly")), /không có tin nào/);
+
+    // «ok» khi KHÔNG có đề xuất chờ = câu nói thường, để AI trả lời
+    assert.equal(await say(ceoAsker, "ok"), null);
+    assert.match(String(await say(ceoAsker, "thêm từ khẩn Bể Bao")), /Thêm từ khóa KHẨN «bể bao»[\s\S]*đồng ý/);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.match(String(await say(ceoAsker, "đồng ý")), /Đã đổi/);
+    assert.match(String(saved[0].alert_urgent_keywords), /bể bao/);
+    // Không còn đề xuất chờ: «đồng ý» lần nữa không đổi gì
+    assert.equal(await say(ceoAsker, "đồng ý"), null);
+
+    assert.match(String(await say(ceoAsker, "phút chờ 90")), /90 phút/);
+    assert.match(String(await say(ceoAsker, "hủy")), /đã bỏ/);
+    assert.equal(saved.length, 1);
+    assert.match(String(await say(ceoAsker, "bỏ từ khẩn không có từ này")), /không có/);
+    assert.match(String(await say(ceoAsker, "phút chờ 3")), /từ 10 đến 2880/);
+
+    // Trưởng phòng không là quản lý chung? — có (DepartmentHead đổi được); người không vai trò thì không
+    const staff: AlertAsker = { uid: "u-nv", name: "NV", role: ContactRole.None, recipientId: tp };
+    assert.match(String(await say(staff, "thêm từ khẩn abc")), /Quản lý \/ Trưởng phòng/);
+    assert.match(String(await say(null, "cấu hình") ?? "AI"), /AI/);
+    assert.match(String(await say(null, "thêm từ khẩn abc")), /dành cho quản lý/);
+
+    // VIP theo tên: khớp không dấu, một người thì đề xuất luôn
+    await db.query("INSERT INTO contact (zalo_uid, display_name, kind, role) VALUES ('u-np1', 'Nguyễn Phát', 1, 0), ('u-np2', 'Trần Phát', 1, 0)");
+    assert.match(String(await say(tpAsker, "them vip phat")), /Có 2 người khớp/);
+    assert.match(String(await say(tpAsker, "thêm vip nguyen phat")), /Thêm «Nguyễn Phát» vào danh sách VIP/);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.match(String(await say(tpAsker, "ok")), /Đã đổi/);
+    assert.match(String(await say(tpAsker, "bỏ vip trần phát")), /không có ai/);
+    assert.match(String(await say(ceoAsker, "thêm vip nguyen phat")), /Thêm «Nguyễn Phát»/);
+  });
+
+  test("the assistant answers typed commands without calling the model, even past the daily token cap", async () => {
+    const model: ModelClient = { generate: async () => { throw new Error("không được gọi mô hình cho lệnh"); } };
+    const deps = { db, config, saveSettings: async () => [], invalidate: () => undefined };
+    const assistant = new AssistantService(db, model, "m", { maxPerHour: 30, dailyTokenCap: 0 }, () => NOW, { alertTools: deps });
+    const contact = (await findContactByUid(db, "u-ceo"))!;
+    const reply = await assistant.answer({ botAccountId: 1, contact, threadId: groupA, questionMessageId: null, question: "Hướng dẫn" });
+    assert.match(String(reply.text), /HƯỚNG DẪN/);
+    assert.match(String(reply.text), /thêm từ khẩn/);
+    const inGroup = await assistant.answer({ botAccountId: 1, contact, threadId: groupA, questionMessageId: null, question: "huong dan",
+      groupScope: { groupId: groupA, groupName: "Bán hàng A" } });
+    assert.match(String(inGroup.text), /TRONG NHÓM/);
+    const [turns] = await db.query<RowDataPacket[]>("SELECT model, input_tokens FROM assistant_turn ORDER BY id");
+    assert.deepEqual(turns.map((row) => [row.model, Number(row.input_tokens)]), [["lệnh", 0], ["lệnh", 0]]);
   });
 });
