@@ -41,13 +41,16 @@ màn chi tiết có thẻ danh tính, biểu mẫu, các tab và «Lịch sử t
 | **Công ty** | Danh mục công ty; nhóm và người gắn công ty. |
 | **Hỏi trợ lý** | Quản trị hỏi trợ lý AI ngay trên web dưới tên một người có vai trò (không cần Zalo): cùng cài đặt, công cụ, giới hạn như tin Zalo thật; báo cáo Excel có nút tải. Mỗi người một cuộc «Hỏi trợ lý · <tên>», không gửi ra Zalo. |
 | **Tài khoản bot** | Thêm bot bằng QR, bật / tắt, trạng thái phiên, số nhóm / số cuộc riêng. |
+| **Đăng nhập** (08/10/2026) | Nút «Đăng nhập bằng Google» (Client ID ở Cài đặt → Google, dùng chung với ERP) — chỉ email có ở màn Người dùng; mật khẩu quản trị là đường dự phòng. Phiên lưu CSDL (`web_session`). |
+| **Người dùng** (08/10/2026, chỉ quản trị) | Email, vai trò Quản trị / Quản lý / Nhân viên, người trên Zalo, nhóm được xem (hoặc mọi nhóm). Không phải quản trị thì mọi màn chỉ hiện nhóm trong phạm vi; quyền theo đường API khai ở `src/web/api/route-permissions.ts` (quên khai = chỉ quản trị). |
+| **Người nhận** (08/10/2026, chỉ quản trị) | Người nhận cảnh báo / bản tin: người trên Zalo, chức danh, thứ tự ưu tiên, nhóm theo dõi, VIP, giờ bản tin, «Gửi thử» kênh nhắn riêng. Bot nhắn qua hàng đợi (`JobKind.RecipientMessage`, tiến trình app gửi). |
 | **Cài đặt** | Tab «Vận hành» (08/10/2026): lịch làm việc, giữ bản sao lưu, bảng «Việc chạy theo lịch». Tab Trợ lý AI có thẻ «An toàn dữ liệu» (che dữ liệu cá nhân, câu hỏi kỹ thuật BVTV, hãng AI được phép). Sửa trên web, **có hiệu lực ngay** (không khởi động lại): khóa Gemini, mô hình chính / nặng / dự phòng, các trần của trợ lý, giãn cách gửi, mặc định nhóm / cuộc riêng mới, cỡ tệp tối đa. Giá trị web phủ lên `.env`; mỗi ô ghi rõ đang lấy từ web / `.env` / mặc định, có nút «Khôi phục mặc định». Khóa bí mật lưu mã hóa, không bao giờ hiện lại nguyên văn. Thẻ **Google Sheets**: dán khóa service account + link trang tính, nút «Kiểm tra kết nối» ghi thử một dòng vào tab «Bot trợ lý». Tab «Lịch sử thay đổi». |
 
 Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lịch sử thao tác» của từng bản ghi.
 
 ## 3. Trợ lý AI (nhắn riêng cho bot)
 
-- **Ai hỏi được:** người được gán vai trò trong Danh bạ (quản lý, trưởng phòng). Người lạ nhắn vào: lưu
+- **Ai hỏi được:** người được gán vai trò trong Danh bạ (quản lý, trưởng phòng), và người nhận đang bật (phase 4). Người lạ nhắn vào: lưu
   tin, không trả lời. **Trong nhóm** bot chỉ trả lời khi được gọi (06/10/2026): @nhắc tên bot hoặc có từ khóa
   gọi bot (mặc định «bot», «bot ơi», «trợ lý ơi», «@bot» — sửa ở Cài đặt, không phân biệt dấu, nguyên chữ / nguyên cụm, ở
   bất kỳ chỗ nào trong tin — «robot», «chatbot» không tính; gọi ở đầu tin thì bỏ phần gọi khỏi câu hỏi), hoặc bấm «Trả lời» vào tin của bot; bot đọc kèm ~10 tin gần nhất

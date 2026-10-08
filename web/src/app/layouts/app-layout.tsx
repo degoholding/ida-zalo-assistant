@@ -3,8 +3,10 @@ import type { CSSProperties } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { useAuthStore } from '@/core/auth/auth-store'
+import { getUserRoleLabel } from '@/core/auth/user-role'
 import { NAV_ITEMS } from '@/app/router/nav-items'
 import { appRoutes } from '@/shared/constants/app-routes'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Separator } from '@/shared/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/shared/ui/sidebar'
@@ -25,6 +27,7 @@ export function AppLayout() {
   }
 
   const current = NAV_ITEMS.find((item) => location.pathname.startsWith(item.path))
+  const roleLabel = getUserRoleLabel(user?.role)
 
   return (
     <SidebarProvider
@@ -44,7 +47,10 @@ export function AppLayout() {
             </>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-sm text-muted-foreground max-sm:hidden">{user?.full_name}</span>
+            <span className="flex items-center gap-2 text-sm text-muted-foreground max-sm:hidden">
+              {user?.full_name}
+              {roleLabel && <Badge variant="secondary">{roleLabel}</Badge>}
+            </span>
             <Button variant="outline" size="sm" onClick={logout}>
               <LogOut className="size-4" /> Đăng xuất
             </Button>

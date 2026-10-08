@@ -98,6 +98,8 @@ export interface AppConfig {
     serviceAccount: unknown; spreadsheetUrl: string;
     /** OAuth client (Kết nối Google: chép Client ID + Client secret từ Google Cloud) + tài khoản đã kết nối — để tạo cuộc họp Meet. */
     oauthClientId: string;
+    /** Client ID của nút «Đăng nhập bằng Google» (Google Identity Services) — phase 4. */
+    loginClientId: string;
     oauthClientSecret: string;
     calendarAccount: { email: string; refresh_token: string } | null;
   };
@@ -184,6 +186,6 @@ export function loadConfig(): AppConfig {
     calendar: { workHours: DEFAULT_WORK_HOURS, workDays: DEFAULT_WORK_DAYS, quietHours: DEFAULT_QUIET_HOURS, holidays: DEFAULT_HOLIDAYS },
     privacy: { maskPersonalData: true, blockWebForAgroTechnical: true, allowedAiProviders: ALL_AI_PROVIDER_CODES },
     backup: { keepDays: readInt("BACKUP_KEEP_DAYS", 30) },
-    google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null },
+    google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null, loginClientId: "" },
   };
 }

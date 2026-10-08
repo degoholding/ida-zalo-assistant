@@ -86,8 +86,8 @@ interface GoogleSettingsTabProps {
 }
 
 /**
- * Tab Google: hai thẻ tách bạch — Google Sheets (service account, xuất báo cáo) và Google Calendar & Meet (OAuth, tạo
- * cuộc họp). Mỗi thẻ: ô cài đặt của mình + phần kiểm tra / kết nối ngay bên dưới; Lưu chung một thanh dính đáy.
+ * Tab Google: ba thẻ tách bạch — Đăng nhập Google (Client ID cho nút đăng nhập web), Google Sheets (service account,
+ * xuất báo cáo) và Google Calendar & Meet (OAuth, tạo cuộc họp). Mỗi thẻ: ô cài đặt của mình + phần kiểm tra / kết nối ngay bên dưới; Lưu chung một thanh dính đáy.
  */
 export function GoogleSettingsTab({ settings, disabled }: GoogleSettingsTabProps) {
   return (

@@ -3,7 +3,7 @@ import type { RowDataPacket } from "mysql2";
 import { createLogger, describeError } from "../logger.js";
 import type { SyncService } from "../sync-service.js";
 import { handleApiRequest } from "./api/api-router.js";
-import { AdminAuth, SESSION_COOKIE } from "./auth.js";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, SessionStore } from "../auth/session-store.js";
 import { QrLoginManager } from "./qr-login.js";
 import { serveSpa, SPA_BASE } from "./spa-static.js";
 
@@ -31,9 +31,12 @@ function setSecurityHeaders(response: http.ServerResponse): void {
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "same-origin");
-  // Ảnh QR là data: URL; style inline do Tailwind/Radix sinh lúc chạy
+  // Ảnh QR là data: URL; style inline do Tailwind/Radix sinh lúc chạy. accounts.google.com/gsi: nút «Đăng nhập bằng
+  // Google» (Google Identity Services — script, khung chọn tài khoản, kiểu chữ của nút), phase 4
   response.setHeader("Content-Security-Policy",
-    "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'");
+    "default-src 'self'; img-src 'self' data: blob: https://*.googleusercontent.com; " +
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; script-src 'self' https://accounts.google.com/gsi/client; " +
+    "frame-src https://accounts.google.com/gsi/; connect-src 'self' https://accounts.google.com/gsi/; frame-ancestors 'none'");
 }
 
 function redirect(response: http.ServerResponse, location: string): void {
@@ -53,7 +56,7 @@ function isSameOrigin(origin: string | undefined, host: string | undefined): boo
 
 export function startWebServer(service: SyncService): Promise<http.Server> {
   const { db, config, storage } = service;
-  const auth = new AdminAuth(config.web.adminPassword);
+  const sessions = new SessionStore(db, config.web.adminPassword);
   const qrLogins = new QrLoginManager(service);
   const cookieFlags = `HttpOnly; SameSite=Strict; Path=/${config.web.cookieSecure ? "; Secure" : ""}`;
 
@@ -71,11 +74,11 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
     if (path.startsWith("/api/")) {
       // Lệnh ghi phải cùng nguồn (lớp hai sau cookie SameSite=Strict)
       if (method !== "GET" && !isSameOrigin(request.headers.origin, request.headers.host)) throw new HttpError(403, "Sai nguồn gửi");
-      const handled = await handleApiRequest({ request, response, url }, { service, auth, qrLogins }, {
+      const handled = await handleApiRequest({ request, response, url }, { service, sessions, qrLogins }, {
         token,
         clientKey,
         setCookie: (value) => value
-          ? `${SESSION_COOKIE}=${value}; ${cookieFlags}; Max-Age=43200`
+          ? `${SESSION_COOKIE}=${value}; ${cookieFlags}; Max-Age=${SESSION_MAX_AGE_SECONDS}`
           : `${SESSION_COOKIE}=; ${cookieFlags}; Max-Age=0`,
       });
       if (handled) return;
@@ -85,7 +88,7 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
     // ---- Ảnh đại diện (đã tải về kho) — cần phiên đăng nhập như mọi dữ liệu khác ----
     const avatarMatch = /^\/avatars\/(c|g)\/([A-Za-z0-9_-]{1,40})$/.exec(path);
     if (avatarMatch && method === "GET") {
-      if (!auth.isValid(token)) throw new HttpError(401, "Phiên đăng nhập đã hết");
+      if (!(await sessions.resolve(token))) throw new HttpError(401, "Phiên đăng nhập đã hết");
       const [rows] = await db.query<RowDataPacket[]>(
         avatarMatch[1] === "c" ? "SELECT avatar_key FROM contact WHERE zalo_uid = ?" : "SELECT avatar_key FROM zalo_group WHERE id = ?",
         [avatarMatch[2]]);

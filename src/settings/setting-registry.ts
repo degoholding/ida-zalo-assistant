@@ -290,6 +290,13 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     applyTo: (config, value) => { config.google.serviceAccount = value; },
   },
   {
+    key: "google_login_client_id", group: "google", label: "Client ID đăng nhập Google", type: "string", secret: false,
+    help: "Client ID của nút «Đăng nhập bằng Google» ở màn đăng nhập (dùng chung với ERP được). Trong Google Cloud phải thêm địa chỉ trang quản trị (vd https://botida.degoholding.vn) vào «Authorized JavaScript origins». Để trống = tắt đăng nhập Google, chỉ còn mật khẩu quản trị.",
+    envName: "GOOGLE_LOGIN_CLIENT_ID", defaultValue: "", allowEmpty: true, maxLength: 200,
+    pattern: /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/, patternHint: "chỉ chép dòng Client ID, dạng …apps.googleusercontent.com",
+    applyTo: (config, value) => { config.google.loginClientId = asString(value).trim(); },
+  },
+  {
     key: "google_oauth_client_id", group: "google", label: "Client ID (Kết nối Google)", type: "string", secret: false,
     help: "Chép dòng «Client ID» (…apps.googleusercontent.com) ở hộp thoại OAuth client của Google Cloud — để bot tạo cuộc họp Google Meet.",
     envName: null, defaultValue: "", allowEmpty: true, maxLength: 200,

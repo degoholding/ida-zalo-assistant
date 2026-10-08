@@ -1,13 +1,14 @@
 import type { RowDataPacket } from "mysql2";
 import type { Db } from "../../db/pool.js";
 import { ApiError } from "./api-http.js";
-import { ADMIN_USER, type ApiRoute } from "./api-route.js";
+import { currentActorName } from "../../auth/principal.js";
+import type { ApiRoute } from "./api-route.js";
 import { sendOk } from "./api-http.js";
 
 // Nhật ký thay đổi — nguồn của mục «Lịch sử» (AuditTimeline) ở mọi trang chi tiết của `web/`.
 // Response giữ đúng hình `AuditLogEntry` của ERP v2 để khung giao diện chép sang chạy nguyên.
 
-export type AuditEntity = "contact" | "group" | "company" | "bot_account" | "file" | "setting";
+export type AuditEntity = "contact" | "group" | "company" | "bot_account" | "file" | "setting" | "user" | "recipient";
 
 const ACTION_LABEL: Record<string, string> = {
   create: "Tạo mới",
@@ -25,9 +26,11 @@ const ACTION_LABEL: Record<string, string> = {
   google_disconnect: "Ngắt kết nối Google",
   delete: "Gỡ",
   reorder: "Đổi thứ tự",
+  test_message: "Gửi thử kênh báo",
+  login: "Đăng nhập",
 };
 
-const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file", "setting"]);
+const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file", "setting", "user", "recipient"]);
 const MAX_LIMIT = 200;
 
 /**
@@ -47,7 +50,7 @@ export async function recordAudit(
   const fields = entry.changedFields ?? [];
   await db.query(
     "INSERT INTO audit_log (entity, entity_id, action, message, changed_fields, change_count, actor) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [entry.entity, entry.entityId, entry.action, (entry.message ?? "").slice(0, 500), fields.join(", ").slice(0, 500), fields.length, ADMIN_USER.full_name],
+    [entry.entity, entry.entityId, entry.action, (entry.message ?? "").slice(0, 500), fields.join(", ").slice(0, 500), fields.length, currentActorName().slice(0, 100)],
   );
 }
 

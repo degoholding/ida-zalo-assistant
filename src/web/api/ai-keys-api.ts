@@ -2,7 +2,8 @@ import { AiKeyCheckError } from "../../assistant/ai-key-providers.js";
 import { parseAiKeyInput, parseAiKeyPatch, type AiKeyStore, type AiKeyView } from "../../assistant/ai-key-store.js";
 import type { SyncService } from "../../sync-service.js";
 import { ApiError, readJson, sendOk } from "./api-http.js";
-import { ADMIN_USER, type ApiRoute } from "./api-route.js";
+import { currentActorName } from "../../auth/principal.js";
+import type { ApiRoute } from "./api-route.js";
 import { diffFields, recordAudit } from "./audit-log.js";
 
 // API màn «Khóa AI» (tab đầu của Cài đặt, 07/10/2026): danh sách khóa có thứ tự, thêm (gọi thử hãng rồi mới lưu), sửa mô
@@ -49,7 +50,7 @@ export const aiKeyRoutes: ApiRoute[] = [
     const input = parseAiKeyInput(await readJson(request));
     let added: Awaited<ReturnType<AiKeyStore["add"]>>;
     try {
-      added = await store.add(input, ADMIN_USER.full_name);
+      added = await store.add(input, currentActorName());
     } catch (error) {
       if (error instanceof AiKeyCheckError) throw new ApiError(422, "ai_key_check_failed", error.message);
       throw error;
@@ -62,7 +63,7 @@ export const aiKeyRoutes: ApiRoute[] = [
   ["PATCH", /^\/api\/ai-keys\/(\d+)$/, async ({ request, response, service, match }) => {
     const store = requireStore(service);
     const patch = parseAiKeyPatch(await readJson(request));
-    const result = await store.update(parseId(match[1]), patch, ADMIN_USER.full_name);
+    const result = await store.update(parseId(match[1]), patch, currentActorName());
     if (!result) throw new ApiError(404, "not_found", "Không có khóa này");
     const changed = diffFields(result.before as unknown as Record<string, unknown>, result.after as unknown as Record<string, unknown>, PATCH_LABELS);
     if (changed.length) {
@@ -77,7 +78,7 @@ export const aiKeyRoutes: ApiRoute[] = [
     const id = parseId(match[1]);
     const view = store.find(id);
     if (!view) throw new ApiError(404, "not_found", "Không có khóa này");
-    const position = await store.moveUp(id, ADMIN_USER.full_name);
+    const position = await store.moveUp(id, currentActorName());
     if (position) {
       service.applyAiKeys();
       await audit(service, "reorder", `Khóa AI: đưa ${describeKey(view)} từ số ${view.position} lên số ${position}`);
@@ -87,7 +88,7 @@ export const aiKeyRoutes: ApiRoute[] = [
 
   ["DELETE", /^\/api\/ai-keys\/(\d+)$/, async ({ response, service, match }) => {
     const store = requireStore(service);
-    const removed = await store.remove(parseId(match[1]), ADMIN_USER.full_name);
+    const removed = await store.remove(parseId(match[1]), currentActorName());
     if (!removed) throw new ApiError(404, "not_found", "Không có khóa này");
     service.applyAiKeys();
     await audit(service, "delete", `Khóa AI: gỡ số ${removed.position} — ${describeKey(removed)}`);

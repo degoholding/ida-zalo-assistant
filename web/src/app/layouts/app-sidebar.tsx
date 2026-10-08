@@ -16,7 +16,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/shared/ui/sidebar'
-import { NAV_ITEMS } from '@/app/router/nav-items'
+import { selectVisibleNavItems } from '@/app/router/nav-items'
 import { SidebarResizeHandle } from './sidebar-resize-handle'
 
 /**
@@ -45,7 +45,7 @@ interface AppSidebarProps {
 export function AppSidebar({ onResizeWidth }: AppSidebarProps) {
   const { can } = usePermission()
   const { isMobile, setOpenMobile } = useSidebar()
-  const items = NAV_ITEMS.filter((item) => can(item.entity, 'read'))
+  const items = selectVisibleNavItems(can)
   const closeOnMobile = () => {
     if (isMobile) setOpenMobile(false)
   }

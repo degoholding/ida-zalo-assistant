@@ -1,3 +1,5 @@
+import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { assertFileVisible, scopedWhere } from "./scope.js";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
@@ -62,8 +64,10 @@ export function decorateFile(row: RowDataPacket): Record<string, unknown> {
   };
 }
 
-export function listFiles(db: Db, params: URLSearchParams) {
-  return runList(db, params, FILE_LIST_SPEC, { select: FILE_COLUMNS, from: FILE_FROM, decorate: (rows) => rows.map(decorateFile) });
+export function listFiles(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
+  return runList(db, params, FILE_LIST_SPEC, {
+    select: FILE_COLUMNS, from: FILE_FROM, baseWhere: scopedWhere(principal, undefined, "a.group_id"), decorate: (rows) => rows.map(decorateFile),
+  });
 }
 
 export async function getFile(db: Db, id: number): Promise<Record<string, unknown>> {
@@ -74,14 +78,16 @@ export async function getFile(db: Db, id: number): Promise<Record<string, unknow
 
 export const fileRoutes: ApiRoute[] = [
   // Chữ đã bóc của tệp — màn Tệp xem; chưa có thì 404 để giao diện mời bấm «Đọc»
-  ["GET", /^\/api\/files\/(\d+)\/text$/, async ({ response, match, service }) => {
+  ["GET", /^\/api\/files\/(\d+)\/text$/, async ({ principal, response, match, service }) => {
+    await assertFileVisible(service.db, principal, parseId(match[1]));
     const [rows] = await service.db.query<RowDataPacket[]>(
       "SELECT method, char_count, summary, text, extracted_at FROM attachment_text WHERE attachment_id = ?", [parseId(match[1])]);
     if (!rows[0] || rows[0].text === null) throw new ApiError(404, "not_found", "Tệp này chưa được đọc");
     sendOk(response, rows[0]);
   }],
   // Bóc chữ ngay (quản trị bấm «Đọc» ở màn Tệp) — cùng bộ đọc với bot, kết quả cất chung
-  ["POST", /^\/api\/files\/(\d+)\/extract$/, async ({ response, match, service }) => {
+  ["POST", /^\/api\/files\/(\d+)\/extract$/, async ({ principal, response, match, service }) => {
+    await assertFileVisible(service.db, principal, parseId(match[1]));
     const id = parseId(match[1]);
     if (!service.assistant) throw new ApiError(409, "assistant_off", "Trợ lý AI đang tắt — chưa có GEMINI_API_KEY");
     const result = await service.assistant.readFile(id);
@@ -89,10 +95,14 @@ export const fileRoutes: ApiRoute[] = [
     await recordAudit(service.db, { entity: "file", entityId: id, action: "extract", message: `Đọc chữ (${result.summary}, ${result.charCount} ký tự)` });
     sendOk(response, await getFile(service.db, id), result.cached ? `Đã có chữ của tệp (${result.charCount} ký tự)` : `Đã đọc: ${result.summary}, ${result.charCount} ký tự`);
   }],
-  ["GET", /^\/api\/files$/, async ({ response, url, service }) => sendOk(response, await listFiles(service.db, url.searchParams))],
-  ["GET", /^\/api\/files\/(\d+)$/, async ({ response, match, service }) => sendOk(response, await getFile(service.db, parseId(match[1])))],
+  ["GET", /^\/api\/files$/, async ({ response, url, service, principal }) => sendOk(response, await listFiles(service.db, url.searchParams, principal))],
+  ["GET", /^\/api\/files\/(\d+)$/, async ({ principal, response, match, service }) => {
+    await assertFileVisible(service.db, principal, parseId(match[1]));
+    sendOk(response, await getFile(service.db, parseId(match[1])));
+  }],
   // ?inline=1 → ảnh hiện thẳng trong khung chat (đúng Content-Type ảnh; máy chủ bật nosniff nên octet-stream sẽ không vẽ được)
-  ["GET", /^\/api\/files\/(\d+)\/download$/, async ({ response, match, url, service }) => {
+  ["GET", /^\/api\/files\/(\d+)\/download$/, async ({ principal, response, match, url, service }) => {
+    await assertFileVisible(service.db, principal, parseId(match[1]));
     const [rows] = await service.db.query<RowDataPacket[]>(
       "SELECT storage_key FROM attachment WHERE id = ? AND status = ?", [parseId(match[1]), AttachmentStatus.Stored]);
     const key = rows[0]?.storage_key as string | undefined;
@@ -110,7 +120,8 @@ export const fileRoutes: ApiRoute[] = [
     stream.pipe(response);
   }],
   // Đánh dấu «giữ tệp gốc»: không xóa khi hết hạn giữ tệp của nhóm (IDA câu 20) — vẫn theo hạn của tin
-  ["PATCH", /^\/api\/files\/(\d+)$/, async ({ request, response, match, service }) => {
+  ["PATCH", /^\/api\/files\/(\d+)$/, async ({ principal, request, response, match, service }) => {
+    await assertFileVisible(service.db, principal, parseId(match[1]));
     const id = parseId(match[1]);
     const body = await readJson(request);
     if (typeof body.keep_file !== "boolean") throw new ApiError(422, "validation_error", "keep_file chỉ nhận bật / tắt");
@@ -121,7 +132,8 @@ export const fileRoutes: ApiRoute[] = [
     }
     sendOk(response, await getFile(service.db, id), body.keep_file ? "Tệp gốc sẽ được giữ, không xóa khi hết hạn" : "Đã bỏ giữ — tệp gốc xóa theo hạn của nhóm");
   }],
-  ["POST", /^\/api\/files\/(\d+)\/retry$/, async ({ response, match, service }) => {
+  ["POST", /^\/api\/files\/(\d+)\/retry$/, async ({ principal, response, match, service }) => {
+    await assertFileVisible(service.db, principal, parseId(match[1]));
     const id = parseId(match[1]);
     const [result] = await service.db.query<ResultSetHeader>(
       "UPDATE attachment SET status = ?, attempts = 0, last_error = '' WHERE id = ? AND status IN (?, ?)",

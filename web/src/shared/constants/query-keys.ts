@@ -11,6 +11,13 @@ export const queryKeys = {
     me: () => ['auth', 'me'] as const,
     /** Tuỳ chọn hiển thị (bảng màu) — khung theme của ERP đọc khóa này. */
     preferences: () => ['auth', 'preferences'] as const,
+    /** Cấu hình màn đăng nhập (có nút Google không) — đọc được khi chưa đăng nhập. */
+    config: () => ['auth', 'config'] as const,
+  },
+  recipients: {
+    all: ['recipients'] as const,
+    /** Ô chọn «Tài khoản web» của người nhận — danh sách người dùng rút gọn. */
+    userOptions: () => ['recipients', 'user-options'] as const,
   },
   contacts: {
     all: ['contacts'] as const,
@@ -65,5 +72,9 @@ export const queryKeys = {
     groups: () => ['lookups', 'groups'] as const,
     threads: () => ['lookups', 'threads'] as const,
     contactTags: () => ['lookups', 'contact-tags'] as const,
+    /** Ô chọn người trong Danh bạ — tra phía máy chủ theo từ khóa. */
+    contactSearch: (keyword: string) => ['lookups', 'contact-search', keyword] as const,
+    /** Một người theo id — để ô chọn hiện TÊN của người đang lưu dù không nằm trong kết quả tìm. */
+    contact: (id: number) => ['lookups', 'contact', id] as const,
   },
 }

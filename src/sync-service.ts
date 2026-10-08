@@ -15,6 +15,7 @@ import { ConversationType, JobKind } from "./constants.js";
 import { CpuPool } from "./cpu/cpu-pool.js";
 import type { JobRow } from "./jobs/job-queue.js";
 import { JobRunner } from "./jobs/job-runner.js";
+import { findRecipient, type RecipientMessagePayload } from "./recipients/recipient-repository.js";
 import { GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
@@ -65,6 +66,7 @@ export class SyncService {
       handlers: {
         [JobKind.AssistantDirectReply]: (job) => this.runnerForJob(job).runDirectReplyJob(job),
         [JobKind.AssistantGroupReply]: (job) => this.runnerForJob(job).runGroupReplyJob(job),
+        [JobKind.RecipientMessage]: (job) => this.sendRecipientMessage(job.payload as RecipientMessagePayload),
       },
     });
   }
@@ -75,6 +77,23 @@ export class SyncService {
     const runner = this.runners.get(accountId);
     if (!runner) throw new Error(`tài khoản bot #${accountId} đang tắt`);
     return runner;
+  }
+
+  /**
+   * Nhắn riêng cho một người nhận (kênh báo / lệnh, phase 4). Gửi bằng tài khoản bot đã có cuộc riêng với người đó
+   * (người nhận đã kết bạn / từng nhắn với bot đó); chưa có thì tài khoản bot đầu tiên đang chạy. Lỗi thì ném — hàng
+   * đợi thử lại.
+   */
+  private async sendRecipientMessage(payload: RecipientMessagePayload): Promise<void> {
+    const recipient = await findRecipient(this.db, payload.recipientId);
+    if (!recipient || !recipient.is_active) return;
+    const [threads] = await this.db.query<RowDataPacket[]>(
+      "SELECT owner_bot_id FROM zalo_group WHERE thread_type = ? AND zalo_group_id = ? ORDER BY last_message_at DESC",
+      [ConversationType.Direct, recipient.zalo_uid]);
+    const ownerIds = threads.map((row) => Number(row.owner_bot_id));
+    const runner = ownerIds.map((id) => this.runners.get(id)).find(Boolean) ?? [...this.runners.values()][0];
+    if (!runner) throw new Error("không có tài khoản bot nào đang chạy để nhắn người nhận");
+    await runner.sendDirectText(recipient.zalo_uid, recipient.name, payload.text);
   }
 
   /** Trợ lý AI đang dùng (null = tắt). Đổi khóa / mô hình trên màn Cài đặt thì dựng lại — xem applySettings. */

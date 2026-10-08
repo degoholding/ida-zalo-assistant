@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { queryClient } from '@/core/api'
 import { authEvents } from './auth-events'
 import { authService } from './auth-service'
-import type { AuthUser, LoginCredentials } from './auth-types'
+import type { AuthUser, LoginCredentials, LoginResponse } from './auth-types'
 
 /**
  * Trạng thái đăng nhập. Phiên thật là cookie `HttpOnly` ở máy chủ — store chỉ giữ HỒ SƠ để vẽ menu.
@@ -15,40 +15,49 @@ interface AuthState {
   isLoggingIn: boolean
   checkSession: () => Promise<void>
   login: (credentials: LoginCredentials) => Promise<void>
+  /** Đăng nhập bằng ID token của nút Google — xong thì y như đăng nhập mật khẩu. */
+  loginGoogle: (credential: string) => Promise<void>
   logout: () => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  status: 'checking',
-  isLoggingIn: false,
-
-  checkSession: async () => {
-    try {
-      const user = await authService.me()
-      set({ user, status: 'signed-in' })
-    } catch {
-      set({ user: null, status: 'signed-out' })
-    }
-  },
-
-  login: async (credentials) => {
+export const useAuthStore = create<AuthState>((set) => {
+  //  Hai đường đăng nhập chỉ khác lời gọi API; trạng thái chờ và hồ sơ nhận về đi chung một khuôn.
+  const signIn = async (request: () => Promise<LoginResponse>) => {
     set({ isLoggingIn: true })
     try {
-      const { user } = await authService.login(credentials)
+      const { user } = await request()
       set({ user, status: 'signed-in' })
     } finally {
       set({ isLoggingIn: false })
     }
-  },
+  }
 
-  logout: () => {
-    void authService.logout().catch(() => {})
-    // Xóa cache React Query: người kế tiếp trên cùng máy không thấy dữ liệu của phiên trước
-    queryClient.clear()
-    set({ user: null, status: 'signed-out' })
-  },
-}))
+  return {
+    user: null,
+    status: 'checking',
+    isLoggingIn: false,
+
+    checkSession: async () => {
+      try {
+        const user = await authService.me()
+        set({ user, status: 'signed-in' })
+      } catch {
+        set({ user: null, status: 'signed-out' })
+      }
+    },
+
+    login: (credentials) => signIn(() => authService.login(credentials)),
+
+    loginGoogle: (credential) => signIn(() => authService.loginGoogle(credential)),
+
+    logout: () => {
+      void authService.logout().catch(() => {})
+      // Xóa cache React Query: người kế tiếp trên cùng máy không thấy dữ liệu của phiên trước
+      queryClient.clear()
+      set({ user: null, status: 'signed-out' })
+    },
+  }
+})
 
 // Máy chủ báo hết phiên ở bất kỳ lời gọi nào → về trạng thái chưa đăng nhập
 authEvents.onSessionExpired(() => {

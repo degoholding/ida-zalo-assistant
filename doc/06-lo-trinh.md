@@ -19,7 +19,7 @@
 | **2** | Màn Cài đặt + Google Sheets | **Xong** 03/10 | 4 / 4 |
 | **+** | Làm thêm ngoài kế hoạch (trợ lý trong nhóm, Google Meet, đọc link, Khóa AI…) | **Xong** 07/10 | 11 / 11 |
 | **3** | Hạ tầng xử lý nền (mở rộng cho ~100 nhóm / bot) | **Xong** 08/10 | 12 / 12 |
-| **4** | Nhiều tài khoản web, người nhận, tách theo công ty | **Chưa** | 0 / 5 |
+| **4** | Nhiều tài khoản web, người nhận, tách theo công ty | **Xong** 08/10 | 5 / 5 |
 | **5** | N1 — Check tin nhắn và cảnh báo | **Chưa** | 0 / 9 |
 | **6** | N4 — Tìm kiếm tin nhắn | Một phần | 1 / 5 |
 | **7** | N5 — Checklist công việc | **Chưa** | 0 / 5 |
@@ -28,9 +28,9 @@
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 1 / 9 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
-phần «bot tự theo dõi, tự báo» (phase 3) đã xong 08/10 — tiếp theo là phase 4 (tài khoản, 3 người nhận) rồi phase 5.
+phần «bot tự theo dõi, tự báo» (phase 3) và tài khoản + 3 người nhận (phase 4) đã xong 08/10 — tiếp theo là phase 5.
 
-Đối chiếu 27 câu của IDA (mục 9): **3 Đạt · 13 Một phần · 11 Chưa** sau phase 3 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
+Đối chiếu 27 câu của IDA (mục 9): **4 Đạt · 12 Một phần · 11 Chưa** sau phase 4 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
 
 ## 1. Đã chốt
@@ -134,15 +134,30 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | Trần token AI theo ngày cho từng bot | 2 | Xong 08/10 |
 | Phân loại tin bằng từ khóa trước, AI gom lô sau | 2, 6 | Chuyển sang phase 5 (là phần của bộ phân loại) |
 
-## 6. Phase 4 — Tài khoản, người nhận, tách theo công ty (Chưa)
+## 6. Phase 4 — Tài khoản, người nhận, tách theo công ty (Xong 08/10)
+
+**Đã làm (08/10):**
+- **Đăng nhập bằng Google** ở màn đăng nhập — dùng chung Client ID đăng nhập Google của ERP (Cài đặt → Google →
+  «Client ID đăng nhập Google»). Chỉ email có ở màn **Người dùng** và đang bật mới vào được. Mật khẩu quản trị
+  (ADMIN_PASSWORD) giữ làm đường dự phòng. Phiên đăng nhập lưu CSDL — deploy không văng mọi người.
+- **Người dùng theo vai trò** (màn Người dùng, chỉ quản trị): Quản trị (toàn quyền) · Quản lý (xem + sửa nhóm, Danh bạ,
+  tệp trong phạm vi, gửi tin dưới tên bot) · Nhân viên (chỉ xem trong phạm vi). Đổi vai trò / tắt / đổi phạm vi thì
+  phiên đang mở của người đó văng ngay. Nhật ký thao tác ghi đúng tên người làm.
+- **Phạm vi nhóm**: người không phải quản trị chỉ thấy nhóm được gán — danh sách nhóm, hội thoại, tệp, Danh bạ, ô chọn,
+  tin đẩy tức thời; mở thẳng đường dẫn nhóm khác thì như không có (404). Cài đặt, Khóa AI, tài khoản bot, người dùng,
+  người nhận, nhật ký: chỉ quản trị. Đường API mới mà quên khai quyền thì mặc định chỉ quản trị.
+- **Người nhận** (màn Người nhận, chỉ quản trị): người trên Zalo (kênh nhắn riêng của bot), chức danh, thứ tự ưu tiên,
+  nhóm theo dõi (hoặc mọi nhóm), danh sách VIP (tối đa 50), giờ bản tin sáng / cuối ngày, có báo ngay tin khẩn không.
+  Nút «Gửi thử» nhắn một tin vào chat riêng của người đó để kiểm kênh. Người nhận luôn được bot trả lời tin riêng.
+- **Khung tách theo công ty**: bảng `tenant` (dòng IDA), người dùng và người nhận mang `tenant_id`.
 
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
-| Web nhiều tài khoản, mỗi người một vai trò (hiện chỉ có **một mật khẩu quản trị**) | 1, 10 | Chưa |
-| Hồ sơ **người nhận**: 3 người (Trưởng phòng, CEO, trưởng nhóm), mỗi người một bộ nhóm theo dõi, danh sách VIP, giờ nhận bản tin | 1, 5, 24 | Chưa |
-| Kênh lệnh riêng: chat riêng giữa người nhận và bot là nơi nhận báo và ra lệnh | 9 | Chưa |
-| Phạm vi xem trên web theo người (mỗi người chỉ thấy nhóm của mình) | 1, 4 | Chưa |
-| **Khung tách theo công ty**: bảng mới mang mã công ty ngay từ đầu, để sau gom vào nền tảng nhiều bên mà không phải làm lại | — | Chưa |
+| Web nhiều tài khoản, mỗi người một vai trò, đăng nhập Google | 1, 10 | Xong 08/10 |
+| Hồ sơ **người nhận**: 3 người (Trưởng phòng, CEO, trưởng nhóm), mỗi người một bộ nhóm theo dõi, danh sách VIP, giờ nhận bản tin | 1, 5, 24 | Xong 08/10 |
+| Kênh lệnh riêng: chat riêng giữa người nhận và bot là nơi nhận báo và ra lệnh | 9 | Xong 08/10 (gửi báo + người nhận luôn hỏi được bot; lệnh cụ thể ở phase 5–9) |
+| Phạm vi xem trên web theo người (mỗi người chỉ thấy nhóm của mình) | 1, 4 | Xong 08/10 |
+| **Khung tách theo công ty**: bảng mới mang mã công ty ngay từ đầu | — | Xong 08/10 |
 
 ## 7. Phase 5 — N1 Check tin nhắn và cảnh báo (Chưa)
 
@@ -221,7 +236,7 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 
 | Câu | Nội dung | Phase | Trạng thái |
 |---|---|---|---|
-| 1 | 3 người nhận | 4 | Một phần |
+| 1 | 3 người nhận | 4 | Đạt (08/10) |
 | 2 | ~100 nhóm / bot | 3 | Một phần |
 | 3 | Nhóm có / không có quyền trưởng nhóm | 1 | Đạt |
 | 4 | Không đọc / Mật / tiếng nước ngoài | 1, 3 | Một phần (nhãn Mật xong 08/10; còn loại khỏi báo cáo ở phase 8) |

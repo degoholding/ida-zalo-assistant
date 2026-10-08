@@ -11,6 +11,7 @@ import {
   HardDriveDownload,
   History,
   KeyRound,
+  LogIn,
   MessageCircle,
   RefreshCw,
   ShieldCheck,
@@ -114,6 +115,13 @@ export const SYNC_SECTIONS: SettingsSection[] = [
 ]
 
 export const GOOGLE_SECTIONS: SettingsSection[] = [
+  {
+    id: 'login',
+    title: 'Đăng nhập Google',
+    description: 'Client ID của OAuth client (loại Web) để hiện nút «Đăng nhập bằng Google» ở màn đăng nhập. Để trống = chỉ đăng nhập bằng mật khẩu quản trị.',
+    icon: LogIn,
+    keys: ['google_login_client_id'],
+  },
   {
     id: 'sheets',
     title: 'Google Sheets — xuất báo cáo',

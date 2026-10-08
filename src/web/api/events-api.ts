@@ -7,7 +7,7 @@ import type { ApiRoute } from "./api-route.js";
 const HEARTBEAT_MS = 25_000;
 
 export const eventRoutes: ApiRoute[] = [
-  ["GET", /^\/api\/events$/, async ({ request, response }) => {
+  ["GET", /^\/api\/events$/, async ({ request, response, principal }) => {
     response.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-store",
@@ -17,6 +17,8 @@ export const eventRoutes: ApiRoute[] = [
     });
     response.write("retry: 3000\n\n");
     const unsubscribe = liveEvents.onMessage((event) => {
+      // Người bị khoanh phạm vi chỉ nhận sự kiện của nhóm mình (phase 4)
+      if (principal.groupIds !== null && !principal.groupIds.includes(event.threadId)) return;
       response.write(`event: message\ndata: ${JSON.stringify(event)}\n\n`);
     });
     const heartbeat = setInterval(() => response.write(": ping\n\n"), HEARTBEAT_MS);

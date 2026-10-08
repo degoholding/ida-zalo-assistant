@@ -83,12 +83,24 @@ export enum ContactKindSource {
   Manual = 1, // quản trị chỉnh tay — tự động không ghi đè
 }
 
+/** Vai trò người dùng giao diện quản trị (bảng app_user, phase 4). Giao diện chép sang web/src/core/auth. */
+export enum UserRole {
+  // Toàn quyền: cài đặt, tài khoản bot, người dùng, người nhận, mọi nhóm
+  Admin = 1,
+  // Xem nhóm trong phạm vi, sửa Danh bạ / nhóm trong phạm vi, gửi tin dưới tên bot
+  Manager = 2,
+  // Chỉ xem nhóm / tệp trong phạm vi
+  Staff = 3,
+}
+
 /** Loại việc trong hàng đợi (bảng job, 08/10/2026). */
 export enum JobKind {
   // Trả lời một câu hỏi nhắn riêng cho bot
   AssistantDirectReply = 1,
   // Trả lời khi bot được gọi trong nhóm
   AssistantGroupReply = 2,
+  // Bot nhắn riêng cho một người nhận (kênh báo / lệnh, phase 4) — tiến trình app gửi vì giữ phiên Zalo
+  RecipientMessage = 3,
 }
 
 /** Mức ưu tiên của một tin (bảng message_flag). */

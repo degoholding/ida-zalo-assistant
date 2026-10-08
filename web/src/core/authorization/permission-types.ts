@@ -24,7 +24,7 @@ export const ACTIONS = [
 export type PermissionAction = (typeof ACTIONS)[number]
 
 /**
- * Thực thể của Bot trợ lý — phải khớp `ENTITIES` ở máy chủ (`src/web/api/permissions.ts`).
+ * Thực thể của Bot trợ lý — phải khớp `ENTITIES` ở máy chủ (`src/auth/principal.ts`), CÙNG THỨ TỰ.
  * Mỗi màn quản trị một thực thể; nút / menu ẩn hiện theo ma trận này, chốt thật ở máy chủ.
  */
 export const ENTITIES = [
@@ -35,9 +35,13 @@ export const ENTITIES = [
   'file',
   'company',
   // Hai khóa dùng chung của khung ERP (dòng thời gian lịch sử thay đổi + cấu hình hệ thống).
-  // Máy chủ bot chưa có hai màn đó nên không cấp — linh kiện đọc quyền này sẽ tự ẩn.
+  // Chỉ quản trị có; `setting.write` còn là quyền mặc định của mọi đường API máy chủ không khai riêng
+  // (`src/web/api/route-permissions.ts`) — Hỏi trợ lý, Nhập lịch sử, Cài đặt đều gác bằng nó.
   'audit',
   'setting',
+  // Phase 4 — màn Người dùng và Người nhận, chỉ quản trị.
+  'user',
+  'recipient',
 ] as const
 
 export type PermissionEntity = (typeof ENTITIES)[number]

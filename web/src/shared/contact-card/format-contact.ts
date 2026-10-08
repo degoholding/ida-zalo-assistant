@@ -6,6 +6,12 @@ export function getContactName(contact: { display_name: string; zalo_name: strin
   return contact.display_name || contact.zalo_name || contact.zalo_uid
 }
 
+/** Nhãn trong ô chọn người: tên đang dùng, kèm tên Zalo khi khác — hai người trùng tên vẫn phân biệt được. */
+export function getContactOptionLabel(contact: { display_name: string; zalo_name: string; zalo_uid: string }): string {
+  const name = getContactName(contact)
+  return contact.zalo_name && contact.zalo_name !== name ? `${name} (${contact.zalo_name})` : name
+}
+
 export function getKindLabel(kind: number): string {
   return CONTACT_KIND_OPTIONS.find((option) => option.value === kind)?.label ?? 'Chưa phân loại'
 }

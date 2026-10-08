@@ -1,3 +1,5 @@
+import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { assertThreadVisible, scopedWhere } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
 import { ConversationType, GroupKind } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
@@ -83,9 +85,9 @@ function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
   }));
 }
 
-export function listGroups(db: Db, params: URLSearchParams) {
+export function listGroups(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
   return runList(db, params, GROUP_LIST_SPEC, {
-    select: GROUP_COLUMNS, from: GROUP_FROM, baseWhere: { sql: "g.thread_type = ?", params: [GROUP] }, decorate,
+    select: GROUP_COLUMNS, from: GROUP_FROM, baseWhere: scopedWhere(principal, { sql: "g.thread_type = ?", params: [GROUP] }, "g.id"), decorate,
   });
 }
 
@@ -200,16 +202,22 @@ function describeBackfill(job: BackfillJob): Record<string, unknown> {
 }
 
 export const groupRoutes: ApiRoute[] = [
-  ["GET", /^\/api\/groups$/, async ({ response, url, service }) => sendOk(response, await listGroups(service.db, url.searchParams))],
-  ["GET", /^\/api\/groups\/(\d+)$/, async ({ response, match, service }) => sendOk(response, await getGroupDetail(service.db, parseId(match[1])))],
-  ["PATCH", /^\/api\/groups\/(\d+)$/, async ({ request, response, match, service }) => {
+  ["GET", /^\/api\/groups$/, async ({ response, url, service, principal }) => sendOk(response, await listGroups(service.db, url.searchParams, principal))],
+  ["GET", /^\/api\/groups\/(\d+)$/, async ({ response, match, service, principal }) => {
     const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
+    sendOk(response, await getGroupDetail(service.db, id));
+  }],
+  ["PATCH", /^\/api\/groups\/(\d+)$/, async ({ request, response, match, service, principal }) => {
+    const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
     const message = await patchGroup(service, id, await readJson(request));
     sendOk(response, await getGroupDetail(service.db, id), message);
   }],
   // Lấy tin cũ: chạy nền, trả ngay trạng thái; giao diện hỏi GET tới khi `running` = false
-  ["POST", /^\/api\/groups\/(\d+)\/backfill$/, async ({ request, response, match, service }) => {
+  ["POST", /^\/api\/groups\/(\d+)\/backfill$/, async ({ request, response, match, service, principal }) => {
     const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
     await loadGroup(service.db, id);
     const body = await readJson(request);
     const running = service.getBackfillJob(id);
@@ -223,8 +231,10 @@ export const groupRoutes: ApiRoute[] = [
     await recordAudit(service.db, { entity: "group", entityId: id, action: "backfill", message: job.full ? "Bắt đầu lấy toàn bộ tin cũ" : "Bắt đầu lấy tin gần nhất" });
     sendOk(response, describeBackfill(job), "Đang lấy tin cũ ở nền");
   }],
-  ["GET", /^\/api\/groups\/(\d+)\/backfill$/, async ({ response, match, service }) => {
-    const job = service.getBackfillJob(parseId(match[1]));
+  ["GET", /^\/api\/groups\/(\d+)\/backfill$/, async ({ response, match, service, principal }) => {
+    const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
+    const job = service.getBackfillJob(id);
     if (!job) throw new ApiError(404, "not_found", "Chưa lấy tin cũ lần nào từ lúc máy chủ khởi động");
     sendOk(response, describeBackfill(job));
   }],

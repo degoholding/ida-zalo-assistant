@@ -10,7 +10,8 @@ import { GoogleSheetsError } from "../../google/sheets-error-messages.js";
 import { createLogger, describeError } from "../../logger.js";
 import type { SyncService } from "../../sync-service.js";
 import { ApiError, sendOk } from "./api-http.js";
-import { ADMIN_USER, type ApiRoute } from "./api-route.js";
+import { currentActorName } from "../../auth/principal.js";
+import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
 
 // «Kết nối Google» trên màn Cài đặt (06/10/2026): trạng thái, bắt đầu, ngắt, và callback Google gọi về sau khi quản
@@ -77,7 +78,7 @@ export async function handleOAuthCallback(url: URL, response: http.ServerRespons
   if (!client || !code) return redirectToSettings(response, "error", "Thiếu OAuth client hoặc mã đăng nhập — thử lại.");
   try {
     const account = await exchangeAuthCode(client, code, state.redirectUri);
-    await service.settings.saveInternal(ACCOUNT_KEY, account as unknown as Record<string, unknown>, ADMIN_USER.full_name);
+    await service.settings.saveInternal(ACCOUNT_KEY, account as unknown as Record<string, unknown>, currentActorName());
     await recordAudit(service.db, { entity: "setting", entityId: SETTINGS_ENTITY_ID, action: "google_connect", message: `Kết nối Google: ${account.email || "(không rõ email)"}` });
     log.info(`đã kết nối Google ${account.email}`);
     redirectToSettings(response, "connected");

@@ -1,3 +1,4 @@
+import { groupScopeSql } from "../../auth/principal.js";
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../../constants.js";
 import { listCompanies } from "../../sync/company-repository.js";
@@ -20,16 +21,19 @@ export const lookupRoutes: ApiRoute[] = [
       .map((company) => ({ id: company.id, code: company.code, name: company.name, is_active: Boolean(company.is_active) }));
     sendOk(response, url.searchParams.get("with_none") === "1" ? [NO_COMPANY_OPTION, ...companies] : companies);
   }],
-  ["GET", /^\/api\/lookups\/groups$/, async ({ response, service }) => {
+  ["GET", /^\/api\/lookups\/groups$/, async ({ response, service, principal }) => {
+    const scope = groupScopeSql(principal, "id");
     const [rows] = await service.db.query<RowDataPacket[]>(
-      `SELECT id, COALESCE(NULLIF(label, ''), name) AS name FROM zalo_group WHERE thread_type = ${ConversationType.Group} ORDER BY name`);
+      `SELECT id, COALESCE(NULLIF(label, ''), name) AS name FROM zalo_group WHERE thread_type = ${ConversationType.Group}
+       ${scope ? `AND ${scope.sql}` : ""} ORDER BY name`, scope?.params ?? []);
     sendOk(response, rows);
   }],
   // Mọi cuộc (nhóm + riêng) — bộ lọc màn Tệp
-  ["GET", /^\/api\/lookups\/threads$/, async ({ response, service }) => {
+  ["GET", /^\/api\/lookups\/threads$/, async ({ response, service, principal }) => {
+    const scope = groupScopeSql(principal, "id");
     const [rows] = await service.db.query<RowDataPacket[]>(
       `SELECT id, thread_type, IF(thread_type = ${ConversationType.Direct}, CONCAT('Nhắn riêng · ', name), COALESCE(NULLIF(label, ''), name)) AS name
-       FROM zalo_group ORDER BY thread_type DESC, name`);
+       FROM zalo_group ${scope ? `WHERE ${scope.sql}` : ""} ORDER BY thread_type DESC, name`, scope?.params ?? []);
     sendOk(response, rows);
   }],
 ];

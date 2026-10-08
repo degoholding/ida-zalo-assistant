@@ -25,6 +25,7 @@ import { findContactByUid, setContactZaloProfile, upsertMemberContact, type Cont
 import {
   directKey,
   ensureGroup,
+  ensureThread,
   findThread,
   findThreadById,
   groupKey,
@@ -51,6 +52,7 @@ import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { AckTracker, enqueueDirectReply, type AckState, type DirectReplyPayload, type GroupReplyPayload } from "./reply-jobs.js";
 import type { JobRow } from "../jobs/job-queue.js";
 import { recordReaction } from "../flags/message-flags.js";
+import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
 import {
   recordSessionEvent,
@@ -474,8 +476,10 @@ export class AccountRunner {
     );
     const who = `«${result.contact.display_name || incoming.senderUid}»`;
     void this.ensureContactAvatar(incoming.senderUid);
-    // Người lạ (chưa có vai trò): chỉ lưu, không trả lời — đại ca chốt 01/10/2026
-    if (!this.assistant || result.contact.role === ContactRole.None) {
+    // Người lạ (chưa có vai trò): chỉ lưu, không trả lời — đại ca chốt 01/10/2026. Người nhận (phase 4) luôn được trả
+    // lời: chat riêng với bot là kênh báo + ra lệnh của họ.
+    const canAsk = result.contact.role !== ContactRole.None || await isActiveRecipientUid(this.db, incoming.senderUid);
+    if (!this.assistant || !canAsk) {
       this.log.info(`tin riêng từ ${who}: đã lưu, không trả lời (${this.assistant ? "chưa có vai trò" : "trợ lý tắt"})`);
       return;
     }
@@ -635,6 +639,23 @@ export class AccountRunner {
   /** Thread Zalo (riêng / nhóm) của một cuộc trong kho. */
   private threadTarget(thread: GroupRow): { peer: string; type: ThreadType } {
     return { peer: thread.zalo_group_id, type: thread.thread_type === ConversationType.Group ? ThreadType.Group : ThreadType.User };
+  }
+
+  /**
+   * Bot tự nhắn riêng cho một người (kênh báo của người nhận, phase 4): gửi rồi lưu vào cuộc riêng giữa bot này và người
+   * đó (tạo cuộc nếu chưa có) — màn Hội thoại thấy bot đã báo gì, lúc nào.
+   */
+  async sendDirectText(peerUid: string, peerName: string, text: string): Promise<void> {
+    const api = this.api;
+    if (!api) throw new Error("bot chưa kết nối");
+    const { group: thread } = await ensureThread(this.db, directKey(this.account.id, peerUid),
+      { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles }, peerName);
+    const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
+    for (const chunk of splitForZalo(text)) {
+      const response = await this.sender.send(() => api.sendMessage(chunk, peerUid, ThreadType.User));
+      const msgId = response.message?.msgId;
+      if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), chunk);
+    }
   }
 
   /** Quản trị gõ chữ từ màn Hội thoại: gửi dưới tên tài khoản bot này, lưu lại ngay (nguồn «admin»). */

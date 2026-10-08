@@ -1,3 +1,4 @@
+import { canSeeGroup, PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
@@ -45,12 +46,13 @@ async function loadCompany(db: Db, id: number): Promise<Record<string, unknown>>
   return decorate(rows)[0];
 }
 
-export async function getCompanyDetail(db: Db, id: number): Promise<Record<string, unknown>> {
+export async function getCompanyDetail(db: Db, id: number, principal: Principal = PASSWORD_ADMIN): Promise<Record<string, unknown>> {
   const company = await loadCompany(db, id);
-  const [groups] = await db.query<RowDataPacket[]>(
+  const [allGroups] = await db.query<RowDataPacket[]>(
     `SELECT g.id, COALESCE(NULLIF(g.label, ''), g.name) AS name, g.group_kind, g.member_count, g.read_messages,
             IF(g.avatar_key IS NULL, NULL, CONCAT('/avatars/g/', g.id)) AS avatar_url
      FROM zalo_group g WHERE g.company_id = ? AND g.thread_type = ${ConversationType.Group} ORDER BY name`, [id]);
+  const groups = allGroups.filter((group) => canSeeGroup(principal, Number(group.id)));
   return { ...company, groups };
 }
 
@@ -74,8 +76,8 @@ async function translateInputError<T>(work: () => Promise<T>): Promise<T> {
 
 export const companyRoutes: ApiRoute[] = [
   ["GET", /^\/api\/companies$/, async ({ response, url, service }) => sendOk(response, await listCompanyRows(service.db, url.searchParams))],
-  ["GET", /^\/api\/companies\/(\d+)$/, async ({ response, match, service }) =>
-    sendOk(response, await getCompanyDetail(service.db, parseId(match[1])))],
+  ["GET", /^\/api\/companies\/(\d+)$/, async ({ response, match, service, principal }) =>
+    sendOk(response, await getCompanyDetail(service.db, parseId(match[1]), principal))],
   ["POST", /^\/api\/companies$/, async ({ request, response, service }) => {
     const body = await readJson(request);
     const id = await translateInputError(() => createCompany(service.db, String(body.code ?? ""), String(body.name ?? "")));

@@ -6,7 +6,8 @@ import { GoogleSheetsError } from "../../google/sheets-error-messages.js";
 import { findSetting } from "../../settings/setting-registry.js";
 import type { SyncService } from "../../sync-service.js";
 import { ApiError, readJson, sendOk } from "./api-http.js";
-import { ADMIN_USER, type ApiRoute } from "./api-route.js";
+import { currentActorName } from "../../auth/principal.js";
+import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
 
 // API màn Cài đặt: xem / lưu / khôi phục cài đặt (phủ lên .env, có hiệu lực ngay) + kiểm tra kết nối
@@ -40,7 +41,7 @@ export const settingRoutes: ApiRoute[] = [
 
   ["PATCH", /^\/api\/settings$/, async ({ request, response, service }) => {
     const body = await readJson(request);
-    const changed = await service.settings.save(body, ADMIN_USER.full_name);
+    const changed = await service.settings.save(body, currentActorName());
     if (changed.length) {
       service.applySettings(changed);
       // Chỉ ghi nhãn ô đã đổi — khóa bí mật không bao giờ có giá trị cũ / mới trong nhật ký

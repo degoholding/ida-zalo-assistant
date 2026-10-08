@@ -1,3 +1,5 @@
+import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { assertThreadVisible, scopedWhere } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
@@ -53,10 +55,10 @@ function decorateThread(bots: Set<string>) {
   });
 }
 
-export async function listConversations(db: Db, params: URLSearchParams) {
+export async function listConversations(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
   const bots = await loadBotUids(db);
   return runList(db, params, CONVERSATION_LIST_SPEC, {
-    select: CONVERSATION_COLUMNS, from: CONVERSATION_FROM, baseWhere: BASE_WHERE, decorate: (rows) => rows.map(decorateThread(bots)),
+    select: CONVERSATION_COLUMNS, from: CONVERSATION_FROM, baseWhere: scopedWhere(principal, BASE_WHERE, "g.id"), decorate: (rows) => rows.map(decorateThread(bots)),
   });
 }
 
@@ -138,8 +140,9 @@ async function translateSendError<T>(work: () => Promise<T>): Promise<T> {
 
 export const conversationRoutes: ApiRoute[] = [
   // Quản trị gõ chữ từ màn Hội thoại — đi ra Zalo dưới tên tài khoản bot
-  ["POST", /^\/api\/conversations\/(\d+)\/messages$/, async ({ request, response, match, service }) => {
+  ["POST", /^\/api\/conversations\/(\d+)\/messages$/, async ({ request, response, match, service, principal }) => {
     const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
     const body = await readJson(request);
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) throw new ApiError(422, "validation_error", "Chưa có nội dung tin");
@@ -148,8 +151,9 @@ export const conversationRoutes: ApiRoute[] = [
     sendOk(response, { message_id: messageId }, "Đã gửi");
   }],
   // Tải tệp / ảnh lên rồi bot gửi đi: thân là nhị phân thuần, tên tệp ở header x-file-name (đã encodeURIComponent)
-  ["POST", /^\/api\/conversations\/(\d+)\/attachments$/, async ({ request, response, match, service }) => {
+  ["POST", /^\/api\/conversations\/(\d+)\/attachments$/, async ({ request, response, match, service, principal }) => {
     const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
     const rawName = request.headers["x-file-name"];
     const fileName = decodeURIComponent(String(Array.isArray(rawName) ? rawName[0] : rawName ?? "")).trim();
     if (!fileName) throw new ApiError(422, "validation_error", "Thiếu tên tệp");
@@ -159,8 +163,15 @@ export const conversationRoutes: ApiRoute[] = [
     const messageId = await translateSendError(() => service.sendAdminFile(id, data, fileName, contentType));
     sendOk(response, { message_id: messageId }, `Đã gửi tệp ${fileName}`);
   }],
-  ["GET", /^\/api\/conversations$/, async ({ response, url, service }) => sendOk(response, await listConversations(service.db, url.searchParams))],
-  ["GET", /^\/api\/conversations\/(\d+)$/, async ({ response, match, service }) => sendOk(response, await getConversation(service.db, parseId(match[1])))],
-  ["GET", /^\/api\/conversations\/(\d+)\/messages$/, async ({ response, match, url, service }) =>
-    sendOk(response, await listMessages(service.db, parseId(match[1]), url.searchParams))],
+  ["GET", /^\/api\/conversations$/, async ({ response, url, service, principal }) => sendOk(response, await listConversations(service.db, url.searchParams, principal))],
+  ["GET", /^\/api\/conversations\/(\d+)$/, async ({ response, match, service, principal }) => {
+    const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
+    sendOk(response, await getConversation(service.db, id));
+  }],
+  ["GET", /^\/api\/conversations\/(\d+)\/messages$/, async ({ response, match, url, service, principal }) => {
+    const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
+    sendOk(response, await listMessages(service.db, id, url.searchParams));
+  }],
 ];

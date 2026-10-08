@@ -29,6 +29,16 @@ export const appRoutes = {
     list: '/accounts',
     detail: (id: number | string) => `/accounts/${id}`,
   },
+  users: {
+    list: '/users',
+    create: '/users/new',
+    detail: (id: number | string) => `/users/${id}`,
+  },
+  recipients: {
+    list: '/recipients',
+    create: '/recipients/new',
+    detail: (id: number | string) => `/recipients/${id}`,
+  },
   settings: '/settings',
   assistantChat: '/assistant-chat',
 

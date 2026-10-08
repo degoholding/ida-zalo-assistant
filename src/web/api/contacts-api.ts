@@ -1,3 +1,5 @@
+import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { assertContactVisible, contactScopeSql } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
 import { ContactKind, ContactKindSource, ContactRole, ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
@@ -104,8 +106,10 @@ async function decorate(db: Db, rows: RowDataPacket[]): Promise<Record<string, u
   });
 }
 
-export function listContacts(db: Db, params: URLSearchParams) {
-  return runList(db, params, CONTACT_LIST_SPEC, { select: CONTACT_COLUMNS, from: CONTACT_FROM, decorate: (rows) => decorate(db, rows) });
+export function listContacts(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
+  return runList(db, params, CONTACT_LIST_SPEC, {
+    select: CONTACT_COLUMNS, from: CONTACT_FROM, baseWhere: contactScopeSql(principal) ?? undefined, decorate: (rows) => decorate(db, rows),
+  });
 }
 
 async function loadContact(db: Db, whereSql: string, value: unknown): Promise<Record<string, unknown>> {
@@ -192,14 +196,20 @@ export async function patchContact(db: Db, id: number, body: Record<string, unkn
 }
 
 export const contactRoutes: ApiRoute[] = [
-  ["GET", /^\/api\/contacts$/, async ({ response, url, service }) => sendOk(response, await listContacts(service.db, url.searchParams))],
-  ["GET", /^\/api\/contacts\/(\d+)$/, async ({ response, match, service }) =>
-    sendOk(response, await getContactDetail(service.db, parseId(match[1])))],
-  ["PATCH", /^\/api\/contacts\/(\d+)$/, async ({ request, response, match, service }) => {
+  ["GET", /^\/api\/contacts$/, async ({ response, url, service, principal }) => sendOk(response, await listContacts(service.db, url.searchParams, principal))],
+  ["GET", /^\/api\/contacts\/(\d+)$/, async ({ response, match, service, principal }) => {
     const id = parseId(match[1]);
+    await assertContactVisible(service.db, principal, { id });
+    sendOk(response, await getContactDetail(service.db, id));
+  }],
+  ["PATCH", /^\/api\/contacts\/(\d+)$/, async ({ request, response, match, service, principal }) => {
+    const id = parseId(match[1]);
+    await assertContactVisible(service.db, principal, { id });
     await patchContact(service.db, id, await readJson(request));
     sendOk(response, await getContactDetail(service.db, id), "Đã lưu hồ sơ");
   }],
-  ["GET", /^\/api\/contact-cards\/([A-Za-z0-9_-]{1,40})$/, async ({ response, match, service }) =>
-    sendOk(response, await getContactCardByUid(service.db, match[1]))],
+  ["GET", /^\/api\/contact-cards\/([A-Za-z0-9_-]{1,40})$/, async ({ response, match, service, principal }) => {
+    await assertContactVisible(service.db, principal, { uid: match[1] });
+    sendOk(response, await getContactCardByUid(service.db, match[1]));
+  }],
 ];
