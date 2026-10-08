@@ -1,6 +1,6 @@
 # Bot trợ lý — mô tả chức năng và lộ trình
 
-> Bản 1.1 · 03/10/2026 · mô tả đúng mã trên nhánh `phase-b-cai-dat` (= `dev1` + phase B: màn Cài đặt, Google Sheets). Thiết kế gốc:
+> Bản 1.1 · 03/10/2026 · mô tả đúng mã trên nhánh `phase-b-cai-dat` (= `dev1` + phase 2: màn Cài đặt, Google Sheets). Thiết kế gốc:
 > [`01-thiet-ke-ban-dau.md`](01-thiet-ke-ban-dau.md) · đối chiếu đặc tả IDA (180 tính năng):
 > [`02-doi-chieu-nhu-cau.md`](02-doi-chieu-nhu-cau.md). Tài liệu này trả lời hai câu: **bây giờ hệ thống
 > làm được gì** (mục 1–6) và **làm gì tiếp theo, theo thứ tự nào** (mục 7).
@@ -136,25 +136,16 @@ trùng; giờ gửi lấy từ kho Zalo Web, không có thì suy từ `cliMsgId`
 
 ## 7. Lộ trình
 
-| Phase | Nội dung | Trạng thái |
-|---|---|---|
-| **A — Nền** | Đồng bộ Zalo đa tài khoản, lưu tin / tệp / thành viên, Danh bạ, trợ lý Gemini qua tin riêng, giao diện web khung ERP v2, gửi tin từ web, SSE, đọc tệp + cất chữ, nhật ký thao tác, bộ đếm, nhập lịch sử Zalo Web, tin hệ thống | **Xong** (dev1, 02/10/2026) |
-| **B — Cài đặt + Google Sheets** ([plan thi công](04-plan-phase-b-cai-dat-google-sheets.md)) | Bảng `app_setting` + màn **Cài đặt**: khóa Gemini, mô hình nhẹ / nặng / dự phòng, các trần, giá trị mặc định nhóm — sửa trên web, không build lại; khóa bí mật mã hóa, không hiện lại nguyên văn. **Google Sheets** bằng service account (dán JSON vào Cài đặt, nút «Kiểm tra kết nối» ghi thử một dòng). Giờ gửi bản tin, ngưỡng X giờ «chưa trả lời» thêm vào registry khi phase D / G cần | **Xong** (nhánh `phase-b-cai-dat`, 03/10/2026) |
-| **C — Hạ tầng GĐ1** | Bộ lập lịch trong tiến trình; bảng cờ trên tin (`message_flag`: loại, ưu tiên, đã xử lý, ai xử lý); chủ sở hữu của mỗi bot; che SĐT / STK / CCCD trước khi gửi AI | chờ B |
-| **D — Check tin nhắn (N1)** | @mention / hỏi thẳng chủ, VIP từ Danh bạ, phân loại Khẩn / Quan trọng / Thường, câu hỏi chưa trả lời quá X giờ, «có gì cần xử lý», đẩy tin khẩn | chờ C |
-| **E — Tìm kiếm (N4)** | `search_messages` (từ khóa + người + nhóm + ngày + loại), màn tìm tin trên web, link về tin gốc | chờ C |
-| **F — Checklist (N5)** | Bảng việc, bot đề xuất việc từ tin → chủ xác nhận, nhắc 3 mốc hạn | chờ C |
-| **G — Bản tin & báo cáo (N6)** | Morning / End-of-day Brief đúng giờ, mẫu Executive Summary, mẫu tóm tắt tệp đủ mọi sheet, báo cáo theo mẫu, **xuất Excel / Google Sheets** | Xuất Excel / Sheets **làm trước, xong 05/10** (`export_report`, theo yêu cầu khi hỏi); phần còn lại chờ C |
-| **H — Gửi theo lệnh (N7)** | Câu lệnh tự nhiên → xem trước → xác nhận → gửi → báo kết quả; hẹn giờ; tắt bot khẩn | chờ C |
-| **I — Thống kê (N3), Gợi ý trả lời (N2), nền tảng còn lại** | Trích số từ tin báo cáo, 2–3 bản nháp trả lời, khoanh quyền trưởng phòng theo nhóm, nhãn Mật, cảnh báo phiên văng, tài liệu PDPL | chờ D–H |
-
-Ghi nhận để làm sau: Claude làm mô hình nặng (cần khóa API console, gói Max không dùng được); cache ngữ
-cảnh Gemini cho tệp hỏi nhiều lần; bookmarklet tự quét theo lịch.
+Đã chuyển sang [`06-lo-trinh.md`](06-lo-trinh.md) (08/10/2026): lộ trình sửa theo 27 câu trả lời của IDA, có
+trạng thái Xong / Chưa của từng việc và bảng đối chiếu 27 câu. Phase đổi sang đánh số 1–10 (A=1, B=2, C=3, …, I=10;
+phase mới «C2» = 4). Thay đổi chính so với bản cũ ở đây: phase 3 mở rộng cho ~100 nhóm / bot (tách tiến trình
+nhận tin và xử lý, hàng đợi, R2, sao lưu, nhãn Mật, che dữ liệu cá nhân), thêm phase 4 (nhiều tài khoản web,
+3 người nhận, khung tách theo công ty), N3 đọc bảng Google Drive thay vì trích số từ tin chat.
 
 ## 8. Còn chờ quyết
 
 1. **Nhập chat riêng** của tài khoản người xuất (hộp thư cá nhân, tách khỏi tin của bot) — có cần không?
 2. **Nhập nhóm bot không ở** (chỉ làm kho lưu, bot không đọc tiếp) — có cần không?
 3. **Bật thanh toán cho khóa Gemini** trước khi chạy thật (mục 6 — dữ liệu gói miễn phí bị Google dùng lại).
-4. Các câu ở mục 4 của doc 02 còn mở: chủ sở hữu của bot, giờ làm việc + ngưỡng X giờ, giờ gửi bản tin, thời
-   hạn lưu cho tài liệu PDPL, kênh dự phòng Telegram.
+4. ~~Các câu ở mục 4 của doc 02~~ — IDA đã trả lời 07/10, đại ca chốt thêm 08/10; xem mục 1 và mục 11 của
+   [`06-lo-trinh.md`](06-lo-trinh.md).

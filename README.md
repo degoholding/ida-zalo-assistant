@@ -6,8 +6,9 @@ kèm giao diện web quản trị (`web/`, khung ERP v2) dưới `/app`: Hội t
 Công ty, Tài khoản bot (đăng nhập QR), Cài đặt (sửa cấu hình trên web + Google Sheets). Sự kiện nhóm (vào / rời / thêm người / đổi tên) lưu thành tin hệ thống. Màn Hội thoại nhận tin mới tức thời (kênh đẩy SSE `/api/events`) và có ô
 soạn tin: quản trị gõ chữ / gửi tệp từ web, đi ra Zalo **dưới tên tài khoản bot**, lưu lại với nhãn «quản trị».
 
-Tài liệu: **mô tả chức năng + lộ trình** [`doc/03-mo-ta-chuc-nang.md`](doc/03-mo-ta-chuc-nang.md) ·
-đối chiếu đặc tả IDA [`doc/02-doi-chieu-nhu-cau.md`](doc/02-doi-chieu-nhu-cau.md) · plan phase B (Cài đặt +
+Tài liệu: **lộ trình + trạng thái từng việc** [`doc/06-lo-trinh.md`](doc/06-lo-trinh.md) · mô tả chức năng
+[`doc/03-mo-ta-chuc-nang.md`](doc/03-mo-ta-chuc-nang.md) ·
+đối chiếu đặc tả IDA [`doc/02-doi-chieu-nhu-cau.md`](doc/02-doi-chieu-nhu-cau.md) · plan phase 2 (Cài đặt +
 Google Sheets) [`doc/04-plan-phase-b-cai-dat-google-sheets.md`](doc/04-plan-phase-b-cai-dat-google-sheets.md) · thiết kế gốc
 [`doc/01-thiet-ke-ban-dau.md`](doc/01-thiet-ke-ban-dau.md) · đối chiếu yêu cầu IDA Global v0.2 với bot hiện tại (07/10/2026)
 [`doc/05-doi-chieu-yeu-cau-ida-global.md`](doc/05-doi-chieu-yeu-cau-ida-global.md).

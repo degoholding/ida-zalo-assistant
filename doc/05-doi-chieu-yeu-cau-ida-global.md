@@ -47,6 +47,10 @@ chọn Gemini / OpenAI.
 
 ## Điểm cần chốt với chủ sở hữu
 
+> **08/10/2026 — đã chốt:** câu 1 làm cho **3 người nhận cùng lúc** (không phải 1 chủ sở hữu); bot được trả lời
+> trong nhóm khi có người gọi; bot chạy VPS riêng; phục vụ IDA trước, sau tách theo công ty. Phase đổi sang đánh số 1–10. Lộ trình và trạng
+> thái từng việc chuyển sang [`06-lo-trinh.md`](06-lo-trinh.md) — thứ tự ở mục «Đề xuất thứ tự» trên đây hết hiệu lực.
+
 - Câu 1 trả lời «Trưởng phòng, CEO, trưởng nhóm — theo thứ tự ưu tiên»: GĐ1 làm cho 1 người (đề xuất của file) hay
   nhiều người ngay? Ảnh hưởng thiết kế kênh lệnh, VIP list, brief.
 - Câu 2: mở rộng ~100 nhóm — ảnh hưởng chi phí AI (phân loại AI mọi tin) và cấu hình máy chủ.
