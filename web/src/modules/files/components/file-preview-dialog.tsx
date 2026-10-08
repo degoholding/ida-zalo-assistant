@@ -21,9 +21,11 @@ interface FilePreviewDialogProps {
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[120px_1fr] gap-3 py-1.5 text-sm">
+    //  minmax(0,1fr): cột giá trị được co hẹp hơn chữ dài nhất — không thì tên tệp liền một mạch (không dấu cách) đẩy
+    //  cả hộp thoại giãn ra ngoài khung (gặp thật 08/10/2026 với tên «Bao-cao-…-Pltgiang.xlsx»)
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 py-1.5 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
+      <dd className="min-w-0 [overflow-wrap:anywhere]">{children}</dd>
     </div>
   )
 }
@@ -42,9 +44,10 @@ export function FilePreviewDialog({ file, open, onOpenChange }: FilePreviewDialo
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className={cn('sm:max-w-xl', showImage && 'flex max-h-[92vh] flex-col sm:max-w-4xl')}>
-          <DialogHeader>
-            <DialogTitle className="truncate pr-6">{name}</DialogTitle>
+        {/* grid-cols-[minmax(0,1fr)]: khung lưới của DialogContent mặc định giãn theo nội dung dài nhất — khóa bề ngang */}
+        <DialogContent className={cn('grid-cols-[minmax(0,1fr)] sm:max-w-xl', showImage && 'flex max-h-[92vh] flex-col sm:max-w-4xl')}>
+          <DialogHeader className="min-w-0">
+            <DialogTitle className="pr-6 leading-snug [overflow-wrap:anywhere]">{name}</DialogTitle>
             <DialogDescription className="truncate">{where}</DialogDescription>
           </DialogHeader>
 
@@ -53,7 +56,7 @@ export function FilePreviewDialog({ file, open, onOpenChange }: FilePreviewDialo
               <img src={`${file.download_url}?inline=1`} alt={name} className="max-h-[70vh] max-w-full object-contain" />
             </div>
           ) : (
-            <dl className="divide-y rounded-md border px-3">
+            <dl className="min-w-0 divide-y rounded-md border px-3">
               <InfoRow label="Tên tệp">{name}</InfoRow>
               <InfoRow label="Cỡ">{file.size ? formatFileSize(file.size) : '—'}</InfoRow>
               <InfoRow label="Người gửi">{sender}</InfoRow>
@@ -70,7 +73,7 @@ export function FilePreviewDialog({ file, open, onOpenChange }: FilePreviewDialo
             </dl>
           )}
 
-          <DialogFooter className="gap-2 sm:justify-between">
+          <DialogFooter className="min-w-0 flex-wrap gap-2 sm:justify-between">
             <Button variant="outline" asChild>
               <Link to={appRoutes.conversations.message(file.thread_id, file.message_id)}>
                 <MessageSquareText />
