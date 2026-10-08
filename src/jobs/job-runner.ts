@@ -2,7 +2,7 @@ import os from "node:os";
 import type { JobKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
-import { claimJobs, completeJob, failJob, recoverStaleJobs, type JobRow } from "./job-queue.js";
+import { claimJobs, completeJob, failJob, recoverOrphanedJobs, recoverStaleJobs, type JobRow } from "./job-queue.js";
 
 // Bộ chạy việc: lấy việc từ bảng `job` theo loại mình xử lý, chạy song song tối đa `concurrency` việc. Có việc mới ghi
 // từ chính tiến trình này thì gọi wake() để lấy ngay; việc ghi từ tiến trình khác thì lượt quét định kỳ (pollMs) nhặt.
@@ -48,6 +48,8 @@ export class JobRunner {
 
   async start(): Promise<void> {
     this.stopped = false;
+    const orphaned = await recoverOrphanedJobs(this.options.db, this.options.role, this.kinds);
+    if (orphaned) this.log.warn(`trả ${orphaned} việc dở của lần chạy trước về hàng`);
     const recovered = await recoverStaleJobs(this.options.db, this.options.staleMs ?? DEFAULT_STALE_MS);
     if (recovered) this.log.warn(`trả ${recovered} việc bị bỏ dở về hàng`);
     this.schedule(0);

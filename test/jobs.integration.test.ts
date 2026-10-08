@@ -10,7 +10,7 @@ import type { RowDataPacket } from "mysql2";
 import { JobKind, JobStatus } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { createPool, type Db } from "../src/db/pool.js";
-import { claimJobs, completeJob, enqueueJob, failJob, purgeFinishedJobs, recoverStaleJobs, summarizeQueue } from "../src/jobs/job-queue.js";
+import { claimJobs, completeJob, enqueueJob, failJob, purgeFinishedJobs, recoverOrphanedJobs, recoverStaleJobs, summarizeQueue } from "../src/jobs/job-queue.js";
 import { JobRunner } from "../src/jobs/job-runner.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -54,6 +54,28 @@ describe("hàng đợi việc", { skip: !databaseUrl && "chưa đặt TEST_DATAB
     assert.deepEqual(await claimJobs(db, "t", [DIRECT], 10), []);
     await completeJob(db, a1!);
     assert.deepEqual((await claimJobs(db, "t", [DIRECT], 10)).map((job) => job.id), [a2]);
+  });
+
+  test("on start-up a role takes back its own half-done jobs at once, so later questions in that chat are not blocked", async () => {
+    // Lỗi 08/10/2026: khởi động lại lúc deploy giữa một câu trả lời nhóm → việc kẹt «đang chạy», cả nhóm đứng tới 30 phút
+    await enqueueJob(db, { kind: JobKind.AssistantGroupReply, payload: { n: 1 }, serialKey: "group:9", maxAttempts: 2 });
+    await enqueueJob(db, { kind: JobKind.AssistantGroupReply, payload: { n: 2 }, serialKey: "group:9" });
+    await enqueueJob(db, { kind: JobKind.RecipientMessage, payload: { n: 3 } });
+    const [first] = await claimJobs(db, "app:old-host:1", [JobKind.AssistantGroupReply], 5);
+    await claimJobs(db, "worker:x:1", [JobKind.RecipientMessage], 5);
+    // Câu sau cùng nhóm bị chặn khi câu trước còn «đang chạy»
+    assert.equal((await claimJobs(db, "app:new:1", [JobKind.AssistantGroupReply], 5)).length, 0);
+    assert.equal(await recoverOrphanedJobs(db, "app", [JobKind.AssistantGroupReply]), 1);
+    // Việc của vai trò khác (worker) không đụng
+    const [rows] = await db.query<RowDataPacket[]>("SELECT id, status, attempts FROM job ORDER BY id");
+    assert.deepEqual(rows.map((row) => Number(row.status)), [JobStatus.Pending, JobStatus.Pending, JobStatus.Running]);
+    const again = await claimJobs(db, "app:new:1", [JobKind.AssistantGroupReply], 5);
+    assert.deepEqual(again.map((job) => job.id), [first.id]);
+    // Hết lượt thử (2/2) mà lại bỏ dở → Failed, câu sau được chạy
+    assert.equal(await recoverOrphanedJobs(db, "app", [JobKind.AssistantGroupReply]), 1);
+    const [after2] = await db.query<RowDataPacket[]>("SELECT status FROM job WHERE id = ?", [first.id]);
+    assert.equal(Number(after2[0].status), JobStatus.Failed);
+    assert.equal((await claimJobs(db, "app:new:1", [JobKind.AssistantGroupReply], 5)).length, 1);
   });
 
   test("a claim only takes the kinds asked for and only jobs that are due", async () => {

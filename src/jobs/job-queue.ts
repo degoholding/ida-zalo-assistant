@@ -167,6 +167,22 @@ export async function recoverStaleJobs(db: Db, staleMs: number): Promise<number>
   return failed.affectedRows + requeued.affectedRows;
 }
 
+/**
+ * Lúc một tiến trình KHỞI ĐỘNG: việc «đang chạy» do chính vai trò này giữ (mỗi vai trò — app / worker — chỉ một tiến
+ * trình) là việc dở của lần chạy trước, không ai làm tiếp. Trả về hàng ngay, không đợi `staleMs`: việc dở giữ khóa nối
+ * tiếp của cuộc nên mọi câu sau trong cùng nhóm đứng chờ theo (gặp 08/10/2026: khởi động lại lúc deploy, nhóm «zalo bot»
+ * đứng gần 10 phút). Hết lượt thử thì Failed.
+ */
+export async function recoverOrphanedJobs(db: Db, role: string, kinds: JobKind[]): Promise<number> {
+  if (!kinds.length) return 0;
+  const [result] = await db.query<ResultSetHeader>(
+    `UPDATE job SET status = IF(attempts >= max_attempts, ?, ?), finished_at = IF(attempts >= max_attempts, NOW(3), NULL),
+       run_after = NOW(3), locked_by = NULL, locked_at = NULL, last_error = 'tiến trình khởi động lại giữa chừng'
+     WHERE status = ? AND locked_by LIKE ? AND kind IN (?)`,
+    [JobStatus.Failed, JobStatus.Pending, JobStatus.Running, `${role.replace(/[%_\\]/g, (char) => `\\${char}`)}:%`, kinds]);
+  return result.affectedRows;
+}
+
 /** Xóa việc đã xong / bỏ cũ hơn `olderThanDays` ngày — giữ bảng gọn. */
 export async function purgeFinishedJobs(db: Db, olderThanDays: number): Promise<number> {
   const [result] = await db.query<ResultSetHeader>(

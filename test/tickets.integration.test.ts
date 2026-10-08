@@ -9,7 +9,10 @@ import type http from "node:http";
 import { PassThrough } from "node:stream";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type { RowDataPacket } from "mysql2";
+import { AssistantService } from "../src/assistant/assistant-service.js";
 import { parseChatCommand, runChatCommand } from "../src/assistant/chat-commands.js";
+import type { ModelClient } from "../src/assistant/gemini-client.js";
+import { findContactByUid } from "../src/sync/contact-repository.js";
 import { SessionStore } from "../src/auth/session-store.js";
 import { ensureAdminUser, setUserPassword } from "../src/auth/user-admin.js";
 import { AttachmentStatus, JobKind, TicketStatus } from "../src/constants.js";
@@ -200,6 +203,36 @@ describe("ticket qua bot", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
     // T-2 là của chính u-binh nên đóng được; thử đóng ticket người khác đang mở
     await say("u-lan", dmThread, "báo lỗi: thứ ba");
     assert.match(await sayAs("u-binh", 2, "xong T-3"), /Chỉ người xử lý ticket \(hoặc chính người báo\)/);
+  });
+
+  test("a natural sentence («đánh dấu nó là đã xong») reaches the ticket through the AI tool, with the same permission rules", async () => {
+    await say("u-lan", dmThread, "báo lỗi: máy chiếu phòng họp mờ");
+    const calls: string[] = [];
+    const model = (ticketId: number): ModelClient => ({
+      generate: async (request) => {
+        const last = request.contents[request.contents.length - 1];
+        if (last.parts.some((part) => part.functionResponse)) {
+          const response = last.parts[0].functionResponse!.response as { result?: string; error?: string };
+          calls.push(String(response.result ?? response.error));
+          return { content: { role: "model", parts: [{ text: String(response.result ?? response.error) }] }, inputTokens: 10, outputTokens: 5 };
+        }
+        assert.ok(request.tools?.some((tool) => tool.name === "ticket_action"), "thiếu công cụ ticket_action");
+        return { content: { role: "model", parts: [{ functionCall: { name: "ticket_action", args: { ticket_id: ticketId, action: "done" } } }] }, inputTokens: 10, outputTokens: 5 };
+      },
+    });
+    const assistant = (id: number) => new AssistantService(db, model(id), "m", { maxPerHour: 30, dailyTokenCap: 1_000_000 }, () => NOW, { tickets: deps });
+    await db.query("UPDATE contact SET role = 2 WHERE zalo_uid IN ('u-it1', 'u-binh')");
+    // Người xử lý nói câu thường → đóng thật, người gửi được báo
+    const handler = (await findContactByUid(db, "u-it1"))!;
+    const reply = await assistant(1).answer({ botAccountId: 1, contact: handler, threadId: dmThread, questionMessageId: null, question: "đánh dấu nó là đã xong" });
+    assert.match(String(reply.text), /đã đóng T-0001/);
+    assert.equal((await findTicket(db, 1))!.status, TicketStatus.Done);
+    // Quản lý không phải người xử lý, không phải người báo → công cụ từ chối như lệnh gõ
+    await say("u-lan", dmThread, "báo lỗi: điều hòa kêu to");
+    const manager = (await findContactByUid(db, "u-binh"))!;
+    await assistant(2).answer({ botAccountId: 1, contact: manager, threadId: dmThread, questionMessageId: null, question: "đóng ticket 2 giúp anh" });
+    assert.match(calls[calls.length - 1], /Chỉ người xử lý ticket/);
+    assert.equal((await findTicket(db, 2))!.status, TicketStatus.New);
   });
 
   test("with no handler configured the ticket is still saved and the requester is told", async () => {

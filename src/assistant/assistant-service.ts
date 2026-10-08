@@ -22,6 +22,7 @@ import { maskPersonalDataDeep } from "../privacy/personal-data.js";
 import { ALERT_TOOL_DECLARATIONS, ALERT_TOOLS_PROMPT, resolveAlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { parseChatCommand, runChatCommand } from "./chat-commands.js";
 import { buildTicketContext } from "../tickets/ticket-commands.js";
+import { TICKET_TOOL_DECLARATIONS, TICKET_TOOLS_PROMPT } from "../tickets/ticket-tools.js";
 import type { TicketDeps } from "../tickets/ticket-service.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
@@ -84,6 +85,7 @@ function groupScopePrompt(groupName: string, memberNames: string[]): string {
 
 ĐANG TRẢ LỜI TRONG NHÓM «${groupName}» — mọi thành viên (có thể có khách hàng) đều đọc câu trả lời.
 - Chỉ dùng dữ liệu của chính nhóm này (công cụ đã bị khóa vào nhóm). Không nhắc tới nhóm khác, tin riêng, Danh bạ hay số liệu nội bộ ngoài nhóm.
+  Riêng thông tin CÔNG KHAI trên Internet (giá vàng, tỷ giá, tin tức, báo cáo tài chính công ty niêm yết…) thì tra bằng web_search, ghi nguồn + thời điểm.
 - Trả lời ngắn gọn, đi thẳng vào việc (riêng tóm tắt tài liệu / tệp / link thì đầy đủ theo từng phần như quy tắc chung); gọi người hỏi bằng tên.
 - Làm được trong nhóm này: tạo nhắc hẹn Zalo (create_reminder — tới giờ Zalo tự báo cả nhóm), ghim nội dung lên nhóm
   (create_pinned_note — Zalo không ghim được tin có sẵn, nên chép nội dung vào ghi chú rồi ghim), tạo bình chọn (create_poll).
@@ -136,9 +138,7 @@ Việc bạn làm được:
    → export_report (một bảng các số chính). Gọi NGAY lượt này; tài liệu đọc ở lượt trước thì read_file / read_link LẠI để lấy đúng số (đừng chép từ
    câu trả lời cũ — đã bị cắt bớt). Xuất xong câu trả lời chỉ 2–3 ý chính + báo tệp đang được gửi, không chép lại cả bản tóm tắt.
 Câu hỏi ngoài các việc này: nói ngắn gọn bạn làm được gì, và nhắc người hỏi gõ «hướng dẫn» để xem danh sách lệnh.
-Người hỏi muốn báo lỗi / sự cố / cần hỗ trợ: chỉ họ nhắn «báo lỗi: <nội dung>» (có ảnh thì gửi ảnh trước) — bot tạo ticket và báo người xử lý.
-Hỏi về ticket đã có: trả lời NGẮN 1–2 câu, chỉ đúng các lệnh sau (không bịa cú pháp khác): «ticket» (danh sách), «T-12» (tình hình),
-«T-12: <bổ sung>», «xong T-12» (đã ổn, đóng), «hủy T-12»; người xử lý: «nhận T-12», «xong T-12 <ghi chú>».
+Người hỏi muốn báo lỗi / sự cố / cần hỗ trợ: tạo ticket bằng create_ticket (có ảnh thì nhắc họ gửi ảnh trước) — bot báo người xử lý.
 
 Quy tắc:
 - Chỉ dùng dữ liệu từ công cụ. Không bịa tên, số liệu, ngày giờ. Không có dữ liệu thì nói không có.
@@ -211,16 +211,16 @@ export class AssistantService {
 
     // Lệnh gõ sẵn («hướng dẫn», «cấu hình», «cần xử lý», «thêm từ khẩn …», «đồng ý»…): trả lời ngay, không qua mô hình,
     // không tính token — chạy cả khi đã chạm trần token ngày
+    const tickets = this.options.tickets;
+    const ticket = tickets ? buildTicketContext(tickets, {
+      contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role },
+      threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
+    }) : undefined;
     const command = parseChatCommand(request.question);
     if (command) {
       const alertTools = this.options.alertTools;
       const asker = !request.groupScope && alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
-      const tickets = this.options.tickets;
       const contact = request.contact;
-      const ticket = tickets ? buildTicketContext(tickets, {
-        contact: { id: contact.id, uid: contact.zalo_uid, name: contact.display_name || contact.zalo_name || contact.zalo_uid, role: contact.role },
-        threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
-      }) : undefined;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
       const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, ticketOnly }, command);
@@ -307,6 +307,7 @@ export class AssistantService {
       question: request.question,
     };
     context.meetings = this.options.meetingScheduler;
+    context.ticket = ticket;
     const scope = request.groupScope;
     // Công cụ cảnh báo: chỉ tin riêng, người hỏi có vai trò hoặc là người nhận
     const alertAsker = !scope && this.options.alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
@@ -329,11 +330,12 @@ export class AssistantService {
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
       ...(alertAsker ? ALERT_TOOL_DECLARATIONS : []),
+      ...(ticket ? TICKET_TOOL_DECLARATIONS : []),
     ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
     const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
-      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "");
+      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "");
     const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
     const contents = scope ? [] : mask(await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid));
     // Câu hỏi của chính người hỏi giữ nguyên (họ có thể đang hỏi đúng một số điện thoại); ngữ cảnh nhóm kèm theo thì che
