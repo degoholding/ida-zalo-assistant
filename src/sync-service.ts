@@ -10,6 +10,26 @@ import type { SettingsStore } from "./settings/settings-store.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { ReportExporter } from "./reports/report-exporter.js";
 import { createTavilySearch } from "./assistant/tavily-search.js";
+import { createFreeWebSearch } from "./assistant/free-web-search.js";
+import type { WebSearchResult } from "./assistant/gemini-client.js";
+
+/**
+ * Tìm web của trợ lý: Tavily (nếu có khóa) → DuckDuckGo / Bing không cần khóa (cách của bot ERP) — rồi AssistantService
+ * lùi tiếp về tìm Google của Gemini nếu cả hai hỏng.
+ */
+function buildWebSearchChain(tavilyApiKey: string): (query: string) => Promise<WebSearchResult> {
+  const free = createFreeWebSearch();
+  if (!tavilyApiKey) return free;
+  const tavily = createTavilySearch(tavilyApiKey);
+  return async (query) => {
+    try {
+      return await tavily(query);
+    } catch (error) {
+      log.warn(`tìm web Tavily lỗi, dùng DuckDuckGo / Bing: ${describeError(error)}`);
+      return free(query);
+    }
+  };
+}
 import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
 import { ConversationType, JobKind } from "./constants.js";
@@ -190,7 +210,7 @@ export class SyncService {
         invalidate: () => this.alerts.invalidate(),
       },
       tickets: this.tickets,
-      webSearch: this.config.assistant.tavilyApiKey ? createTavilySearch(this.config.assistant.tavilyApiKey) : undefined,
+      webSearch: buildWebSearchChain(this.config.assistant.tavilyApiKey),
       reportExporter: new ReportExporter(this.storage, () => this.config.google),
       meetingScheduler: new MeetingScheduler(() => this.config.google),
     };
