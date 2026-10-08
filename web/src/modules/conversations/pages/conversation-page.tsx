@@ -6,12 +6,13 @@ import { CONVERSATION_TYPE } from '@/shared/contact-card/contact-constants'
 import { EntityAvatar } from '@/shared/contact-card/entity-avatar'
 import { getKindLabel } from '@/shared/contact-card/format-contact'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { Button } from '@/shared/ui/button'
 import { ErrorState } from '@/shared/ui/error-state'
 import { ChatTimeline } from '../components/chat-timeline'
 import { ConversationProfilePanel } from '../components/conversation-profile-panel'
 import { MessageComposer } from '../components/message-composer'
 import { ThreadList, THREAD_TYPE_ALL } from '../components/thread-list'
-import { useMessages, useThread, useThreads } from '../hooks/use-conversations'
+import { flattenMessagePages, useMessages, useThread, useThreads } from '../hooks/use-conversations'
 import { useLiveEvents } from '../hooks/use-live-events'
 
 /**
@@ -33,8 +34,16 @@ export function ConversationPage() {
   useLiveEvents()
   const threads = useThreads(listParams)
   const thread = useThread(selectedId)
-  const messages = useMessages(selectedId)
-  const items = useMemo(() => messages.data?.pages.flatMap((page) => page.items) ?? [], [messages.data])
+  // `?msg=<id tin>` (màn Tệp «Xem trong hội thoại»): mở cuộc quanh đúng tin đó, cuộn tới và làm sáng
+  const focusMessageId = Number(searchParams.get('msg')) > 0 ? Number(searchParams.get('msg')) : null
+  const messages = useMessages(selectedId, focusMessageId)
+  const items = useMemo(() => flattenMessagePages(messages.data?.pages), [messages.data])
+
+  const handleJumpToLatest = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('msg')
+    setSearchParams(next, { replace: true })
+  }
 
   const handleTypeFilterChange = (value: number) => {
     const next = new URLSearchParams(searchParams)
@@ -82,14 +91,28 @@ export function ConversationPage() {
                 <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
               </div>
             </header>
-            <ChatTimeline
-              threadId={detail.id}
-              messages={items}
-              isGroup={isGroup}
-              hasOlder={Boolean(messages.hasPreviousPage)}
-              isLoadingOlder={messages.isFetchingPreviousPage}
-              onLoadOlder={() => void messages.fetchPreviousPage()}
-            />
+            {focusMessageId && messages.isError ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-canvas p-6 text-center">
+                <p className="text-sm text-muted-foreground">Không tìm thấy tin này trong cuộc — có thể tin đã bị dọn theo hạn giữ.</p>
+                <Button variant="outline" size="sm" onClick={handleJumpToLatest}>
+                  Về tin mới nhất
+                </Button>
+              </div>
+            ) : (
+              <ChatTimeline
+                threadId={detail.id}
+                messages={items}
+                isGroup={isGroup}
+                hasOlder={Boolean(messages.hasNextPage)}
+                isLoadingOlder={messages.isFetchingNextPage}
+                onLoadOlder={() => void messages.fetchNextPage()}
+                hasNewer={Boolean(messages.hasPreviousPage)}
+                isLoadingNewer={messages.isFetchingPreviousPage}
+                onLoadNewer={() => void messages.fetchPreviousPage()}
+                focusMessageId={focusMessageId}
+                onJumpToLatest={focusMessageId ? handleJumpToLatest : undefined}
+              />
+            )}
             <MessageComposer threadId={detail.id} botName={botName} />
           </>
         )}

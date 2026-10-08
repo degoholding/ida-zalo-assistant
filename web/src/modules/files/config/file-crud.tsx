@@ -11,13 +11,11 @@ import { Pill } from '@/shared/ui/pill'
 import { formatDateTime } from '@/shared/utils/format-date'
 import { formatFileSize } from '@/shared/utils/format-file-size'
 import { FILES_API_PATH } from '../api/file-api'
+import { FileNameCell } from '../components/file-name-cell'
 import { FileRowActions } from '../components/file-row-actions'
 import { FileStatusBadge } from '../components/file-status-badge'
 import { FILE_STATUS_OPTIONS, type FileRecord } from '../types/file'
-
-export function getFileName(file: FileRecord): string {
-  return file.file_name || `(${file.zalo_msg_type})${file.file_ext ? `.${file.file_ext}` : ''}`
-}
+import { getFileName } from '../utils/get-file-name'
 
 /** Cột Tệp — `key` cột sắp xếp PHẢI trùng `sorts` của `FILE_LIST_SPEC` (`src/web/api/files-api.ts`). */
 export const FILE_COLUMNS: DataTableColumn<FileRecord>[] = [
@@ -28,16 +26,8 @@ export const FILE_COLUMNS: DataTableColumn<FileRecord>[] = [
     hideable: false,
     defaultPinned: true,
     sortable: true,
-    cell: (file) => {
-      const name = getFileName(file)
-      return file.download_url ? (
-        <a href={file.download_url} download className="block truncate font-medium text-primary hover:underline" title={name} onClick={(event) => event.stopPropagation()}>
-          {name}
-        </a>
-      ) : (
-        <span className="block truncate" title={name}>{name}</span>
-      )
-    },
+    // Bấm tên: ảnh hiện ngay trong hộp thoại, tệp khác hiện thông tin — kèm «Tải về» và «Xem trong hội thoại»
+    cell: (file) => <FileNameCell file={file} />,
   },
   {
     key: 'sent_at',
@@ -97,7 +87,7 @@ const FILE_FILTER_FIELDS: FilterFieldDefinition[] = [
 export const fileCrudConfig: CrudConfig<FileRecord> = {
   entity: 'file',
   title: 'Tệp',
-  description: 'Tệp, ảnh, video gửi trong các nhóm đang đọc và tin riêng. «Đọc» bóc chữ trong tệp (bot cũng dùng chữ này để tóm tắt và tìm); «Tải vào kho» thử lấy lại tệp lỗi; nút ghim «Giữ tệp gốc» để tệp không bị xóa khi hết hạn giữ tệp của nhóm.',
+  description: 'Tệp, ảnh, video gửi trong các nhóm đang đọc và tin riêng. Bấm tên tệp để xem ảnh / thông tin tệp và mở đúng chỗ trong hội thoại. «Đọc» bóc chữ trong tệp (bot cũng dùng chữ này để tóm tắt và tìm); «Tải vào kho» thử lấy lại tệp lỗi; nút ghim «Giữ tệp gốc» để tệp không bị xóa khi hết hạn giữ tệp của nhóm.',
   unitLabel: 'tệp',
   apiPath: FILES_API_PATH,
   emptyMessage: 'Chưa có tệp nào — bật «Lấy file» cho nhóm, tệp gửi trong nhóm sẽ hiện ở đây.',

@@ -4,6 +4,7 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
+import { buildContentDisposition, describeFileDownload } from "./file-download.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
 import { contactAvatarUrl } from "./contacts-api.js";
@@ -11,8 +12,6 @@ import type { ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
 
 // API Tệp: danh sách tệp / ảnh / video đã thấy trong các cuộc trò chuyện, tải về, tải lại vào kho.
-
-const IMAGE_TYPES: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
 
 export const FILE_LIST_SPEC: ListSpec = {
   fields: {
@@ -103,19 +102,23 @@ export const fileRoutes: ApiRoute[] = [
   // ?inline=1 → ảnh hiện thẳng trong khung chat (đúng Content-Type ảnh; máy chủ bật nosniff nên octet-stream sẽ không vẽ được)
   ["GET", /^\/api\/files\/(\d+)\/download$/, async ({ principal, response, match, url, service }) => {
     await assertFileVisible(service.db, principal, parseId(match[1]));
+    const id = parseId(match[1]);
     const [rows] = await service.db.query<RowDataPacket[]>(
-      "SELECT storage_key FROM attachment WHERE id = ? AND status = ?", [parseId(match[1]), AttachmentStatus.Stored]);
-    const key = rows[0]?.storage_key as string | undefined;
-    if (!key) throw new ApiError(404, "not_found", "Tệp chưa có trong kho");
+      `SELECT a.storage_key, a.file_name, a.file_ext, m.kind AS message_kind
+       FROM attachment a LEFT JOIN message m ON m.id = a.message_id WHERE a.id = ? AND a.status = ?`, [id, AttachmentStatus.Stored]);
+    const row = rows[0];
+    const key = row?.storage_key as string | undefined;
+    if (!row || !key) throw new ApiError(404, "not_found", "Tệp chưa có trong kho");
     const stream = await service.storage.read(key);
-    const downloadName = key.split("/").pop() ?? "tep";
-    const imageType = IMAGE_TYPES[(/\.([a-z0-9]{1,10})$/i.exec(downloadName)?.[1] ?? "").toLowerCase()];
+    // Tên + kiểu suy từ tên gốc / đuôi / loại tin (ảnh chat.photo không có tên) — xem file-download.ts
+    const { fileName, imageType } = describeFileDownload({
+      id, fileName: row.file_name as string | null, fileExt: row.file_ext as string | null, messageKind: row.message_kind as number | null, storageKey: key,
+    });
     const inline = url.searchParams.get("inline") === "1" && Boolean(imageType);
     response.writeHead(200, {
-      "Content-Type": inline ? imageType : "application/octet-stream",
+      "Content-Type": imageType ?? "application/octet-stream",
       "Cache-Control": inline ? "private, max-age=3600" : "no-store",
-      // Tên tệp tiếng Việt: filename* theo RFC 5987, kèm bản ASCII cho trình duyệt cũ
-      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${downloadName.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+      "Content-Disposition": buildContentDisposition(fileName, inline),
     });
     stream.pipe(response);
   }],

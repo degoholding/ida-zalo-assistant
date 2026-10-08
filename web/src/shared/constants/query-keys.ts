@@ -28,6 +28,8 @@ export const queryKeys = {
     list: (params: Record<string, unknown>) => ['conversations', 'list', params] as const,
     thread: (id: number) => ['conversations', 'thread', id] as const,
     messages: (id: number) => ['conversations', 'messages', id] as const,
+    /** Dòng tin mở quanh một tin (`?msg=`) — nằm dưới khóa `messages(id)` để tin mới tới làm mới cả hai. */
+    messagesAround: (id: number, messageId: number) => ['conversations', 'messages', id, 'around', messageId] as const,
   },
   groups: {
     all: ['groups'] as const,
@@ -40,6 +42,14 @@ export const queryKeys = {
   accounts: {
     all: ['accounts'] as const,
     qrLogin: (attemptId: string) => ['accounts', 'qr-login', attemptId] as const,
+    /** Tab «Kết bạn» của một tài khoản bot: lời mời đến / đã gửi. */
+    friends: (id: number) => ['accounts', 'friends', id] as const,
+    /**
+     * Kết quả tra số điện thoại ở tab Kết bạn. CỐ Ý không nằm dưới `friends(id)`: làm mới danh sách không được tra lại
+     * số trên Zalo (tra dồn dập dễ bị khóa) — gửi lời mời xong thì sửa thẳng kết quả trong bộ nhớ đệm.
+     */
+    friendSearchAll: (id: number) => ['accounts', 'friend-search', id] as const,
+    friendSearch: (id: number, phone: string) => ['accounts', 'friend-search', id, phone] as const,
   },
   imports: {
     all: ['imports'] as const,

@@ -8,6 +8,7 @@ import { formatDateTime } from '@/shared/utils/format-date'
 import { ACCOUNTS_API_PATH } from '../api/account-api'
 import { AccountCreateDialog } from '../components/account-create-dialog'
 import { AccountEventsTab, AccountGroupsTab } from '../components/account-detail-tabs'
+import { AccountFriendsTab } from '../components/account-friends-tab'
 import { AccountRescanButton } from '../components/account-rescan-button'
 import { AccountStateBadge } from '../components/account-state-badge'
 import type { BotAccountDetail } from '../types/account'
@@ -76,5 +77,7 @@ export const accountCrudConfig: CrudConfig<BotAccountDetail> = {
   tabs: [
     { key: 'groups', label: 'Nhóm đang ở', render: (account) => <AccountGroupsTab account={account} /> },
     { key: 'events', label: 'Nhật ký kết nối', render: (account) => <AccountEventsTab account={account} /> },
+    // Nhân sự kết bạn với bot rồi kéo bot vào nhóm Zalo công việc
+    { key: 'friends', label: 'Kết bạn', render: (account) => <AccountFriendsTab account={account} /> },
   ],
 }

@@ -4,6 +4,7 @@ import {
   Zalo,
   type API,
   type Credentials,
+  type FriendEvent,
   type GroupEvent,
   type GroupMessage,
   type Reaction,
@@ -47,6 +48,7 @@ import { parseZaloContent } from "./content-parser.js";
 import { describeGroupEvent, namesToLookup } from "./group-event-text.js";
 import { registerGroupHistoryApi, type HistoryPage } from "./group-history.js";
 import { ZaloSender } from "./zalo-sender.js";
+import { FriendRequestManager } from "./friend-requests.js";
 import { GroupAssistantReplier } from "./group-assistant-replier.js";
 import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { AckTracker, enqueueDirectReply, type AckState, type DirectReplyPayload, type GroupReplyPayload } from "./reply-jobs.js";
@@ -141,6 +143,8 @@ export class AccountRunner {
   private readonly acks = new AckTracker();
   // Người nhắn riêng đã hỏi Zalo ảnh đại diện trong phiên này — mỗi người hỏi một lần
   private readonly avatarAsked = new Set<string>();
+  /** Tab «Kết bạn»: lời mời đến / đi của tài khoản này — lệnh gửi sang Zalo đi qua cùng hàng gửi tin. */
+  readonly friends: FriendRequestManager;
 
   constructor(
     private readonly account: BotAccountRow,
@@ -160,6 +164,13 @@ export class AccountRunner {
       jobs,
       getBot: () => ({ uid: this.ownUid, name: this.account.display_name || this.account.label }),
       sendReportFile: (thread, file) => this.sendReportFile(thread, file),
+    });
+    this.friends = new FriendRequestManager({
+      db, botAccountId: account.id,
+      ownUid: () => this.ownUid,
+      api: () => this.api,
+      send: (task) => this.sender.send(task),
+      warn: (message, error) => this.log.warn(message, error),
     });
   }
 
@@ -300,6 +311,11 @@ export class AccountRunner {
     // Thả / gỡ cảm xúc lên tin (IDA câu 8: thả cảm xúc = «đã xem») — ghi để phase 5 biết tin đã có người xem
     listener.on("reaction", (reaction: Reaction) => {
       this.handleReaction(reaction).catch((error) => this.log.warn("ghi cảm xúc lỗi", error));
+    });
+
+    // Kết bạn: người khác mời bot / đồng ý / từ chối / rút lời mời — ghi vào bảng friend_request (tab Kết bạn)
+    listener.on("friend_event", (event: FriendEvent) => {
+      this.friends.handleEvent(event).catch((error) => this.log.warn(`xử lý sự kiện kết bạn ${event.type} lỗi`, error));
     });
 
     listener.on("group_event", (event: GroupEvent) => {

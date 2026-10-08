@@ -4,6 +4,7 @@ import type { SessionStore } from "../../auth/session-store.js";
 import { createLogger, describeError } from "../../logger.js";
 import type { SyncService } from "../../sync-service.js";
 import type { QrLoginManager } from "../qr-login.js";
+import { accountFriendRoutes } from "./account-friends-api.js";
 import { accountRoutes } from "./accounts-api.js";
 import { aiKeyRoutes } from "./ai-keys-api.js";
 import { ApiError, readJson, sendFail, sendOk } from "./api-http.js";
@@ -30,7 +31,7 @@ import { userRoutes } from "./users-api.js";
 const log = createLogger("api");
 
 const routes: ApiRoute[] = [
-  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
+  ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...accountFriendRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
   ...userRoutes, ...recipientRoutes,
 ];
 

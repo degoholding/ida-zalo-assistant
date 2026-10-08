@@ -87,24 +87,97 @@ export async function getConversation(db: Db, id: number): Promise<Record<string
   return { ...thread, bot_name: botName, contact: null, group: { ...groups[0], members: await listGroupMembers(db, id) } };
 }
 
+const MESSAGE_SELECT = `SELECT m.id, m.sender_uid, m.sender_name, m.sent_at, m.text, m.kind, m.zalo_msg_type, m.quote_text, m.recalled_at,
+            a.id AS attachment_id, a.file_name, a.file_ext, a.status AS attachment_status, a.stored_bytes, a.declared_size,
+            sc.avatar_key AS sender_avatar_key, sc.id AS sender_contact_id
+     FROM message m LEFT JOIN attachment a ON a.message_id = m.id LEFT JOIN contact sc ON sc.zalo_uid = m.sender_uid`;
+
+/** Số nguyên dương từ tham số truy vấn; sai / thiếu = 0. */
+function positiveParam(params: URLSearchParams, name: string): number {
+  const value = Number(params.get(name));
+  return Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+/** Tin `messageId` của ĐÚNG cuộc này — không thì 404, khỏi lần ra tin của cuộc ngoài phạm vi qua id. */
+async function findAnchor(db: Db, threadId: number, messageId: number): Promise<RowDataPacket> {
+  const [rows] = await db.query<RowDataPacket[]>("SELECT id, sent_at FROM message WHERE id = ? AND group_id = ?", [messageId, threadId]);
+  if (!rows[0]) throw new ApiError(404, "not_found", "Không có tin này trong cuộc — có thể tin đã bị dọn theo hạn giữ");
+  return rows[0];
+}
+
 /**
- * Một trang tin của cuộc, xếp theo GIỜ GỬI tăng dần (tin bù về sau vẫn nằm đúng chỗ). `before` = mốc ms
- * để lấy trang cũ hơn; trả `older_cursor` khi còn tin cũ hơn nữa.
+ * Tối đa `limit` tin cũ hơn (hoặc mới hơn) tin mốc, cùng mili giây thì so id — hai tin trùng giờ không bị sót ở ranh
+ * trang. Lấy dư một dòng để biết CHẮC còn tin nữa không (không đoán theo «đủ trang»). Trả xếp tăng dần theo giờ gửi.
+ */
+async function loadBeside(db: Db, threadId: number, anchor: RowDataPacket | null, side: "older" | "newer", limit: number, inclusive = false) {
+  const older = side === "older";
+  const condition = !anchor ? "" : older
+    ? `AND (m.sent_at < ? OR (m.sent_at = ? AND m.id ${inclusive ? "<=" : "<"} ?))`
+    : "AND (m.sent_at > ? OR (m.sent_at = ? AND m.id > ?))";
+  const [rows] = await db.query<RowDataPacket[]>(
+    `${MESSAGE_SELECT} WHERE m.group_id = ? ${condition}
+     ORDER BY m.sent_at ${older ? "DESC" : "ASC"}, m.id ${older ? "DESC" : "ASC"} LIMIT ?`,
+    anchor ? [threadId, anchor.sent_at, anchor.sent_at, anchor.id, limit + 1] : [threadId, limit + 1]);
+  const more = rows.length > limit;
+  const page = rows.slice(0, limit);
+  if (older) page.reverse();
+  return { rows: page, more };
+}
+
+/**
+ * Lấy các dòng tin của một trang (chưa trang trí), xếp theo giờ gửi tăng dần, kèm hai mốc là ID TIN:
+ * `older_cursor` (còn tin cũ hơn → `before_id=`) và `newer_cursor` (còn tin mới hơn → `after_id=`). Null = hết phía đó.
+ *   - không gì: trang mới nhất (không có `newer_cursor`).
+ *   - `before_id=<id tin>`: trang cũ hơn tin đó (cuộn lên).
+ *   - `around=<id tin>`: nửa trang trước (kể cả tin đó) + nửa trang sau — mở cuộc đúng chỗ tin đó (màn Tệp «Xem trong hội thoại»).
+ *   - `after_id=<id tin>`: trang mới hơn tin đó (cuộn xuống khi đang xem quanh một tin cũ). Trang này LUÔN kèm
+ *     `older_cursor` (tin cũ nhất của trang): giao diện nạp lại chuỗi trang từ trang mới nhất rồi lần ngược về trước.
+ *   - `before=<ms>`: kiểu cũ theo mốc giờ, còn nhận cho tương thích.
+ */
+async function loadMessageRows(db: Db, threadId: number, params: URLSearchParams, limit: number) {
+  const idOf = (row: RowDataPacket | undefined): number | null => (row ? Number(row.id) : null);
+  const aroundId = positiveParam(params, "around");
+  if (aroundId) {
+    const anchor = await findAnchor(db, threadId, aroundId);
+    const olderPart = await loadBeside(db, threadId, anchor, "older", Math.ceil(limit / 2), true);
+    const newerPart = await loadBeside(db, threadId, anchor, "newer", Math.max(1, limit - Math.ceil(limit / 2)));
+    return {
+      rows: [...olderPart.rows, ...newerPart.rows],
+      older: olderPart.more ? idOf(olderPart.rows[0]) : null,
+      newer: newerPart.more ? idOf(newerPart.rows.at(-1)) : null,
+    };
+  }
+  const afterId = positiveParam(params, "after_id");
+  if (afterId) {
+    const part = await loadBeside(db, threadId, await findAnchor(db, threadId, afterId), "newer", limit);
+    // Trang rỗng chỉ xảy ra khi tin vừa bị dọn giữa hai lần hỏi — khi đó không còn gì để lần ngược
+    return { rows: part.rows, older: idOf(part.rows[0]), newer: part.more ? idOf(part.rows.at(-1)) : null };
+  }
+  const beforeId = positiveParam(params, "before_id");
+  if (beforeId) {
+    const part = await loadBeside(db, threadId, await findAnchor(db, threadId, beforeId), "older", limit);
+    return { rows: part.rows, older: part.more ? idOf(part.rows[0]) : null, newer: null };
+  }
+  const beforeMs = positiveParam(params, "before");
+  if (beforeMs) {
+    const [rows] = await db.query<RowDataPacket[]>(
+      `${MESSAGE_SELECT} WHERE m.group_id = ? AND m.sent_at < ? ORDER BY m.sent_at DESC, m.id DESC LIMIT ?`, [threadId, new Date(beforeMs), limit + 1]);
+    const page = rows.slice(0, limit).reverse();
+    return { rows: page, older: rows.length > limit ? idOf(page[0]) : null, newer: null };
+  }
+  const part = await loadBeside(db, threadId, null, "older", limit);
+  return { rows: part.rows, older: part.more ? idOf(part.rows[0]) : null, newer: null };
+}
+
+/**
+ * Một trang tin của cuộc, xếp theo GIỜ GỬI tăng dần (tin bù về sau vẫn nằm đúng chỗ). Cách chọn trang: xem
+ * loadMessageRows (`before_id` / `after_id` / `around`).
  */
 export async function listMessages(db: Db, threadId: number, params: URLSearchParams): Promise<Record<string, unknown>> {
   const [threads] = await db.query<RowDataPacket[]>("SELECT id FROM zalo_group WHERE id = ?", [threadId]);
   if (!threads[0]) throw new ApiError(404, "not_found", "Không có cuộc trò chuyện này");
-  const beforeMs = Number(params.get("before")) || 0;
-  const limit = Math.min(MAX_TIMELINE_PAGE_SIZE, Math.max(1, Number(params.get("limit")) || TIMELINE_PAGE_SIZE));
-  const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT m.id, m.sender_uid, m.sender_name, m.sent_at, m.text, m.kind, m.zalo_msg_type, m.quote_text, m.recalled_at,
-            a.id AS attachment_id, a.file_name, a.file_ext, a.status AS attachment_status, a.stored_bytes, a.declared_size,
-            sc.avatar_key AS sender_avatar_key, sc.id AS sender_contact_id
-     FROM message m LEFT JOIN attachment a ON a.message_id = m.id LEFT JOIN contact sc ON sc.zalo_uid = m.sender_uid
-     WHERE m.group_id = ? AND (? = 0 OR m.sent_at < ?)
-     ORDER BY m.sent_at DESC, m.id DESC LIMIT ?`,
-    [threadId, beforeMs, new Date(beforeMs), limit]);
-  rows.reverse();
+  const limit = Math.min(MAX_TIMELINE_PAGE_SIZE, Math.max(1, positiveParam(params, "limit") || TIMELINE_PAGE_SIZE));
+  const { rows, older, newer } = await loadMessageRows(db, threadId, params, limit);
   const bots = await loadBotUids(db);
   const items = rows.map((row) => {
     const { sender_avatar_key: avatarKey, ...rest } = row;
@@ -122,7 +195,7 @@ export async function listMessages(db: Db, threadId: number, params: URLSearchPa
         size: attachment.size, download_url: attachment.download_url },
     };
   });
-  return { items, older_cursor: rows.length === limit ? new Date(rows[0].sent_at).getTime() : null };
+  return { items, older_cursor: older, newer_cursor: newer };
 }
 
 const MAX_TEXT_LENGTH = 10_000;

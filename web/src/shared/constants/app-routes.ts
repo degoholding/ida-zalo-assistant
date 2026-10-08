@@ -10,6 +10,8 @@ export const appRoutes = {
   conversations: {
     list: '/conversations',
     detail: (id: number | string) => `/conversations/${id}`,
+    /** Mở cuộc và cuộn tới đúng một tin (kể cả tin cũ) — màn Hội thoại đọc `?msg=`. */
+    message: (threadId: number | string, messageId: number | string) => `/conversations/${threadId}?msg=${messageId}`,
   },
   contacts: {
     list: '/contacts',

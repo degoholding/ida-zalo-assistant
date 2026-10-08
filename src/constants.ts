@@ -162,3 +162,21 @@ export enum AiKeyProvider {
   Xai = 5,
   OpenRouter = 6,
 }
+
+/** Chiều của một lời mời kết bạn với tài khoản bot (bảng friend_request, 08/10/2026). Giao diện chép sang `web/src/modules/accounts/types/friend-request.ts`. */
+export enum FriendRequestDirection {
+  // Người khác mời bot kết bạn
+  Incoming = 1,
+  // Bot mời người khác (quản trị bấm «Gửi lời mời» ở tab Kết bạn)
+  Outgoing = 2,
+}
+
+/** Lời mời kết bạn tới đâu rồi (bảng friend_request). */
+export enum FriendRequestStatus {
+  Pending = 0,
+  Accepted = 1,
+  // Lời mời bị từ chối (hoặc Zalo không còn giữ lời mời mà hai bên chưa là bạn)
+  Rejected = 2,
+  // Bên gửi rút lại lời mời
+  Cancelled = 3,
+}

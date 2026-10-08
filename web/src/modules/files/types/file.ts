@@ -44,6 +44,20 @@ export interface FileRecord {
   can_retry: boolean
   /** Số ký tự đã bóc; null = chưa đọc. */
   text_chars: number | null
+  /** Tóm tắt ngắn của chữ đã bóc (vd «bảng 3 trang tính»); null = chưa đọc. */
+  text_summary?: string | null
+}
+
+/** Khớp `MessageKind.Image` ở `src/constants.ts` của máy chủ — ảnh `chat.photo` không có tên / đuôi tệp. */
+export const MESSAGE_KIND_IMAGE = 1
+
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp'])
+
+/** Tệp là ảnh (tin ảnh, hoặc đuôi ảnh) — bấm tên thì xem ảnh ngay trong hộp thoại. */
+export function isImageFile(file: Pick<FileRecord, 'message_kind' | 'file_ext' | 'file_name'>): boolean {
+  if (file.message_kind === MESSAGE_KIND_IMAGE) return true
+  const ext = (file.file_ext || (file.file_name ?? '').split('.').pop() || '').toLowerCase()
+  return IMAGE_EXTENSIONS.has(ext)
 }
 
 /** `GET /api/files/:id/text` — chữ đã bóc (bảng attachment_text). */

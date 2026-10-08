@@ -19,6 +19,7 @@ import { findRecipient, type RecipientMessagePayload } from "./recipients/recipi
 import { GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
+import type { FriendRequestManager } from "./zalo/friend-requests.js";
 import { WEB_CHAT_ID_PREFIX } from "./web/api/assistant-chat-api.js";
 
 const log = createLogger("service");
@@ -180,6 +181,11 @@ export class SyncService {
 
   isRunning(accountId: number): boolean {
     return this.runners.has(accountId);
+  }
+
+  /** Việc kết bạn của một tài khoản bot đang chạy (tab «Kết bạn»); null = tài khoản đang tắt / chưa kết nối. */
+  friendsFor(accountId: number): FriendRequestManager | null {
+    return this.runners.get(accountId)?.friends ?? null;
   }
 
   /** Chạy (hoặc chạy lại sau khi quét QR mới) một tài khoản theo id. */

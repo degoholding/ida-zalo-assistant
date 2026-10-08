@@ -87,6 +87,15 @@ export interface ChatMessage {
 /** `GET /api/conversations/:id/messages` — một trang, xếp theo giờ gửi tăng dần. */
 export interface MessagesPage {
   items: ChatMessage[]
-  /** Mốc ms để lấy trang cũ hơn; null = hết. */
+  /** Id tin cũ nhất trang khi còn tin cũ hơn (`before_id=`); null = hết. */
   older_cursor: number | null
+  /** Id tin mới nhất trang khi còn tin mới hơn (`after_id=`) — chỉ có khi đang xem quanh một tin cũ; null = tới tin mới nhất. */
+  newer_cursor: number | null
+}
+
+/** Trang cần lấy: mới nhất (rỗng), cũ hơn / mới hơn một tin, hoặc quanh một tin (`?msg=` trên URL). */
+export interface MessagesCursor {
+  beforeId?: number
+  afterId?: number
+  around?: number
 }

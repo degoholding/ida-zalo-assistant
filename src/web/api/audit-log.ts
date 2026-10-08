@@ -28,6 +28,10 @@ const ACTION_LABEL: Record<string, string> = {
   reorder: "Đổi thứ tự",
   test_message: "Gửi thử kênh báo",
   login: "Đăng nhập",
+  friend_request: "Gửi lời mời kết bạn",
+  friend_accept: "Đồng ý kết bạn",
+  friend_reject: "Từ chối kết bạn",
+  friend_cancel: "Rút lời mời kết bạn",
 };
 
 const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file", "setting", "user", "recipient"]);
