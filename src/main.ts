@@ -1,5 +1,6 @@
-// Dịch vụ đồng bộ: chạy mọi tài khoản bot đã đăng nhập, lưu tin nhóm + thành viên + file,
-// kèm giao diện web quản trị (đăng nhập QR, cấu hình nhóm, tải file).
+// Dịch vụ đồng bộ: chạy mọi tài khoản bot đã đăng nhập, lưu tin nhóm + thành viên + file, trả lời câu hỏi qua hàng
+// đợi việc, kèm giao diện web quản trị (đăng nhập QR, cấu hình nhóm, tải file). Việc nền (dọn quá hạn, ảnh đại diện…)
+// chạy ở tiến trình worker riêng (src/worker.ts), hoặc ngay đây khi WORKER_EMBEDDED=true.
 
 import { AiKeyStore } from "./assistant/ai-key-store.js";
 import { loadConfig } from "./config.js";
@@ -8,12 +9,11 @@ import { createPool } from "./db/pool.js";
 import { createLogger } from "./logger.js";
 import { SettingsStore } from "./settings/settings-store.js";
 import { createFileStorage } from "./storage/file-storage.js";
-import { purgeExpiredMessages } from "./sync/retention.js";
+import { startBackgroundTasks } from "./background.js";
 import { SyncService } from "./sync-service.js";
 import { recordAudit } from "./web/api/audit-log.js";
 import { startWebServer } from "./web/server.js";
 
-const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const log = createLogger("main");
 
 const config = loadConfig();
@@ -37,13 +37,12 @@ const service = new SyncService(db, config, storage, settings, aiKeys);
 await service.startAll();
 const web = await startWebServer(service);
 
-const retentionTimer = setInterval(() => {
-  purgeExpiredMessages(db, storage).catch((error) => log.error("dọn tin quá hạn lỗi", error));
-}, RETENTION_INTERVAL_MS);
+const background = config.workerEmbedded ? await startBackgroundTasks(db, storage, config) : null;
+log.info(config.workerEmbedded ? "việc nền chạy ngay trong tiến trình này (WORKER_EMBEDDED)" : "việc nền do tiến trình worker chạy");
 
 async function shutdown(signal: string): Promise<void> {
   log.info(`nhận ${signal}, đang tắt`);
-  clearInterval(retentionTimer);
+  background?.stop();
   web.close();
   await service.stopAll();
   await db.end();

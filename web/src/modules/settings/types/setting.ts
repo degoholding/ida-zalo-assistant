@@ -1,5 +1,5 @@
 /** Nhóm cài đặt — khớp mỗi tab trên màn Cài đặt (doc 04 mục 3). */
-export type SettingGroup = 'assistant' | 'sync' | 'google'
+export type SettingGroup = 'assistant' | 'sync' | 'google' | 'operations'
 
 /** Kiểu dữ liệu một khóa — quyết định ô nhập nào `SettingField` vẽ ra. */
 export type SettingType = 'string' | 'int' | 'bool' | 'list' | 'json'

@@ -32,9 +32,16 @@ async function audit(service: SyncService, action: string, message: string, chan
   await recordAudit(service.db, { entity: "setting", entityId: SETTINGS_ENTITY_ID, action, message, changedFields });
 }
 
+/** Gắn cờ «hãng được phép» (cài đặt «Hãng AI được phép dùng») — màn Khóa AI hiện khóa bị bỏ qua. */
+function withAllowed(service: SyncService, views: AiKeyView[]): (AiKeyView & { allowed: boolean })[] {
+  // Chưa có cấu hình (dịch vụ dựng tối giản, vd bài kiểm) = mọi hãng được phép, như mặc định của cài đặt
+  const allowed = service.config?.privacy?.allowedAiProviders;
+  return views.map((view) => ({ ...view, allowed: !allowed || allowed.includes(String(view.provider)) }));
+}
+
 export const aiKeyRoutes: ApiRoute[] = [
   ["GET", /^\/api\/ai-keys$/, async ({ response, service }) => {
-    sendOk(response, service.aiKeys?.list() ?? []);
+    sendOk(response, withAllowed(service, service.aiKeys?.list() ?? []));
   }],
 
   ["POST", /^\/api\/ai-keys$/, async ({ request, response, service }) => {
@@ -49,7 +56,7 @@ export const aiKeyRoutes: ApiRoute[] = [
     }
     service.applyAiKeys();
     await audit(service, "create", `Khóa AI: thêm số ${added.view.position} — ${describeKey(added.view)}`);
-    sendOk(response, store.list(), [`Đã kiểm và lưu khóa ${describeKey(added.view)} (số ${added.view.position})`, added.note].filter(Boolean).join(". "), 201);
+    sendOk(response, withAllowed(service, store.list()), [`Đã kiểm và lưu khóa ${describeKey(added.view)} (số ${added.view.position})`, added.note].filter(Boolean).join(". "), 201);
   }],
 
   ["PATCH", /^\/api\/ai-keys\/(\d+)$/, async ({ request, response, service, match }) => {
@@ -62,7 +69,7 @@ export const aiKeyRoutes: ApiRoute[] = [
       service.applyAiKeys();
       await audit(service, "update", `Khóa AI số ${result.after.position} — ${describeKey(result.after)}: đổi ${changed.join(", ")}`, changed);
     }
-    sendOk(response, store.list(), changed.length ? "Đã lưu khóa" : "Không có gì thay đổi");
+    sendOk(response, withAllowed(service, store.list()), changed.length ? "Đã lưu khóa" : "Không có gì thay đổi");
   }],
 
   ["POST", /^\/api\/ai-keys\/(\d+)\/move-up$/, async ({ response, service, match }) => {
@@ -75,7 +82,7 @@ export const aiKeyRoutes: ApiRoute[] = [
       service.applyAiKeys();
       await audit(service, "reorder", `Khóa AI: đưa ${describeKey(view)} từ số ${view.position} lên số ${position}`);
     }
-    sendOk(response, store.list(), position ? `Đã đưa khóa lên số ${position}` : "Khóa đã đứng đầu");
+    sendOk(response, withAllowed(service, store.list()), position ? `Đã đưa khóa lên số ${position}` : "Khóa đã đứng đầu");
   }],
 
   ["DELETE", /^\/api\/ai-keys\/(\d+)$/, async ({ response, service, match }) => {
@@ -84,6 +91,6 @@ export const aiKeyRoutes: ApiRoute[] = [
     if (!removed) throw new ApiError(404, "not_found", "Không có khóa này");
     service.applyAiKeys();
     await audit(service, "delete", `Khóa AI: gỡ số ${removed.position} — ${describeKey(removed)}`);
-    sendOk(response, store.list(), `Đã gỡ khóa ${describeKey(removed)}`);
+    sendOk(response, withAllowed(service, store.list()), `Đã gỡ khóa ${describeKey(removed)}`);
   }],
 ];

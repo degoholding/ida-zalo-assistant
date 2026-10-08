@@ -41,7 +41,9 @@ export function linkFingerprint(raw: string): string | null {
 async function linkWasShared(db: Db, fingerprint: string, scopeGroupId: number | undefined): Promise<boolean> {
   const escaped = fingerprint.replace(/[\\%_]/g, (char) => `\\${char}`);
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT 1 FROM message WHERE text LIKE ? AND sent_at > NOW() - INTERVAL ? DAY ${scopeGroupId ? "AND group_id = ?" : ""} LIMIT 1`,
+    // Link chỉ xuất hiện trong nhóm Mật thì không tính — nội dung nhóm Mật không đi sang AI
+    `SELECT 1 FROM message m JOIN zalo_group g ON g.id = m.group_id
+     WHERE m.text LIKE ? AND m.sent_at > NOW() - INTERVAL ? DAY AND g.is_confidential = 0 ${scopeGroupId ? "AND m.group_id = ?" : ""} LIMIT 1`,
     [`%${escaped}%`, LINK_LOOKBACK_DAYS, ...(scopeGroupId ? [scopeGroupId] : [])],
   );
   return rows.length > 0;

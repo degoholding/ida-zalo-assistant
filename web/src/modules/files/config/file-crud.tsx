@@ -69,7 +69,7 @@ export const FILE_COLUMNS: DataTableColumn<FileRecord>[] = [
     ),
   },
   { key: 'size', header: 'Cỡ', width: 100, align: 'right', sortable: true, sortDescFirst: true, cell: (file) => (file.size ? formatFileSize(file.size) : '—') },
-  { key: 'status', header: 'Trạng thái', width: 200, sortable: true, cell: (file) => <FileStatusBadge status={file.status} lastError={file.last_error} /> },
+  { key: 'status', header: 'Trạng thái', width: 200, sortable: true, cell: (file) => <FileStatusBadge status={file.status} lastError={file.last_error} keepFile={file.keep_file} /> },
   {
     key: 'text_chars',
     header: 'Nội dung',
@@ -77,7 +77,7 @@ export const FILE_COLUMNS: DataTableColumn<FileRecord>[] = [
     cell: (file) =>
       file.text_chars === null ? <span className="text-xs text-muted-foreground">Chưa đọc</span> : <Pill tone="done">{file.text_chars.toLocaleString('vi-VN')} ký tự</Pill>,
   },
-  { key: 'actions', header: '', width: 230, hideable: false, cell: (file) => <FileRowActions file={file} /> },
+  { key: 'actions', header: '', width: 270, hideable: false, cell: (file) => <FileRowActions file={file} /> },
 ]
 
 const toFilterOptions = (options: { value: number; label: string }[]) =>
@@ -97,7 +97,7 @@ const FILE_FILTER_FIELDS: FilterFieldDefinition[] = [
 export const fileCrudConfig: CrudConfig<FileRecord> = {
   entity: 'file',
   title: 'Tệp',
-  description: 'Tệp, ảnh, video gửi trong các nhóm đang đọc và tin riêng. «Đọc» bóc chữ trong tệp (bot cũng dùng chữ này để tóm tắt và tìm); «Tải vào kho» thử lấy lại tệp lỗi.',
+  description: 'Tệp, ảnh, video gửi trong các nhóm đang đọc và tin riêng. «Đọc» bóc chữ trong tệp (bot cũng dùng chữ này để tóm tắt và tìm); «Tải vào kho» thử lấy lại tệp lỗi; nút ghim «Giữ tệp gốc» để tệp không bị xóa khi hết hạn giữ tệp của nhóm.',
   unitLabel: 'tệp',
   apiPath: FILES_API_PATH,
   emptyMessage: 'Chưa có tệp nào — bật «Lấy file» cho nhóm, tệp gửi trong nhóm sẽ hiện ở đây.',

@@ -3,7 +3,7 @@ import { AssistantTurnStatus, ContactRole } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import type { ContactRow } from "../sync/contact-repository.js";
 import type { FileStorage } from "../storage/file-storage.js";
-import { readAttachmentText, type ReadFileResult } from "./file-reader.js";
+import { readAttachmentText, type HeavyExtractor, type ReadFileResult } from "./file-reader.js";
 import type { GeminiContent, ModelClient } from "./gemini-client.js";
 import type { GeneratedReportFile, ReportExporter } from "../reports/report-exporter.js";
 import { LIST_CONTACTS_DECLARATION } from "./contact-directory-tool.js";
@@ -17,6 +17,8 @@ import { GROUP_ACTION_DECLARATIONS, type GroupActions } from "./group-action-too
 import { CREATE_MEETING_DECLARATION, MEETING_MANAGE_DECLARATIONS, type MeetingCreator } from "./meeting-tool.js";
 import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
 import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, formatVnDay, runTool, type ToolContext } from "./tools.js";
+import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
+import { maskPersonalDataDeep } from "../privacy/personal-data.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
 // (tối đa MAX_TOOL_ROUNDS vòng) → ghi nhật ký assistant_turn. Không tự gửi Zalo — trả về câu trả
@@ -30,6 +32,8 @@ const HEAVY_THRESHOLD_CHARS = 24_000;
 export interface AssistantLimits {
   maxPerHour: number;
   dailyTokenCap: number;
+  /** Trần token mỗi ngày của MỘT tài khoản bot; 0 / bỏ trống = không giới hạn riêng. */
+  dailyTokenCapPerBot?: number;
 }
 
 /** Tùy chọn đọc tệp + định tuyến nặng / nhẹ. Bỏ trống = không đọc tệp, một mô hình cho mọi việc. */
@@ -47,6 +51,10 @@ export interface AssistantOptions {
   heavyModel?: string;
   /** Xuất báo cáo ra Google Sheets / Excel; bỏ trống = không có công cụ export_report. */
   reportExporter?: ReportExporter;
+  /** Bóc xlsx / docx ở luồng phụ; bỏ trống = bóc ngay trên luồng chính. */
+  heavyExtract?: HeavyExtractor;
+  /** Bảo vệ dữ liệu (phase 3, bước 3.3); bỏ trống = không che, không chặn. */
+  privacy?: { maskPersonalData: boolean; blockWebForAgroTechnical: boolean };
 }
 
 export interface AssistantRequest {
@@ -179,7 +187,7 @@ export class AssistantService {
       ? (mime: string, data: Buffer, instruction: string) => this.client.readDocument!(mime, data, instruction, this.options.heavyModel)
       : undefined;
     return readAttachmentText({ db: this.db, storage, readDocument, maxFileBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024,
-      allowedExtensions: this.options.readableFileTypes }, attachmentId);
+      allowedExtensions: this.options.readableFileTypes, heavyExtract: this.options.heavyExtract }, attachmentId);
   }
 
   /**
@@ -207,11 +215,13 @@ export class AssistantService {
     const dayStart = new Date(Math.floor((now.getTime() + 7 * 3_600_000) / 86_400_000) * 86_400_000 - 7 * 3_600_000);
     const [dayRows] = await this.db.query<RowDataPacket[]>(
       `SELECT COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens,
+              COALESCE(SUM(CASE WHEN bot_account_id = ? THEN input_tokens + output_tokens END), 0) AS bot_tokens,
               SUM(status = ? AND contact_id = ?) AS told
        FROM assistant_turn WHERE created_at >= ?`,
-      [AssistantTurnStatus.DailyCapReached, request.contact.id, dayStart],
+      [request.botAccountId, AssistantTurnStatus.DailyCapReached, request.contact.id, dayStart],
     );
-    if (Number(dayRows[0].tokens) >= this.limits.dailyTokenCap) {
+    const perBotCap = this.limits.dailyTokenCapPerBot ?? 0;
+    if (Number(dayRows[0].tokens) >= this.limits.dailyTokenCap || (perBotCap > 0 && Number(dayRows[0].bot_tokens) >= perBotCap)) {
       const alreadyTold = Number(dayRows[0].told ?? 0) > 0;
       await this.logTurn(request, AssistantTurnStatus.DailyCapReached, { started });
       return { text: alreadyTold ? null : DAILY_CAP_TEXT, attachmentIds: [], status: AssistantTurnStatus.DailyCapReached };
@@ -223,6 +233,11 @@ export class AssistantService {
     // Yêu cầu báo cáo / xuất file: đi bản NẶNG ngay từ đầu — lượt quyết định nội dung báo cáo (soạn bảng, gọi công cụ xuất)
     // là lượt quan trọng nhất, không để bản lite làm rồi mới đổi
     const reportTurn = isReportRequest(request.question);
+    const privacy = this.options.privacy;
+    // Câu hỏi kỹ thuật thuốc BVTV (IDA câu 13): tắt tìm web, thêm luật chỉ trích tài liệu + «cần kỹ thuật xác nhận»
+    const agroTechnical = Boolean(privacy?.blockWebForAgroTechnical) && isAgroTechnicalQuestion(request.question);
+    // Che SĐT / STK / CCCD trong mọi dữ liệu kho đưa cho mô hình (kết quả công cụ, lịch sử, ngữ cảnh nhóm)
+    const mask = privacy?.maskPersonalData ? maskPersonalDataDeep : <T>(value: T) => value;
     let heavy = reportTurn;
     let toolChars = 0;
     const storage = this.options.storage;
@@ -253,7 +268,7 @@ export class AssistantService {
       searchWeb: this.client.searchWeb ? (query) => this.client.searchWeb!(query) : undefined,
       readFile: storage
         ? (attachmentId) => readAttachmentText({ db: this.db, storage, readDocument, maxFileBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024,
-          allowedExtensions: this.options.readableFileTypes }, attachmentId)
+          allowedExtensions: this.options.readableFileTypes, heavyExtract: this.options.heavyExtract }, attachmentId)
         : undefined,
       markHeavy: () => { heavy = true; },
       readLink: (url) => readLinkContent(url, readDocument),
@@ -270,7 +285,7 @@ export class AssistantService {
       LIST_CONTACTS_DECLARATION,
       ...(storage ? [READ_FILE_DECLARATION] : []),
       READ_LINK_DECLARATION,
-      ...(this.client.searchWeb ? [WEB_SEARCH_DECLARATION] : []),
+      ...(this.client.searchWeb && !agroTechnical ? [WEB_SEARCH_DECLARATION] : []),
       ...(exporter ? [EXPORT_REPORT_DECLARATION, MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION] : []),
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
@@ -278,11 +293,12 @@ export class AssistantService {
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
     const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
-      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "");
+      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "");
     const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
-    const contents = scope ? [] : await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid);
+    const contents = scope ? [] : mask(await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid));
+    // Câu hỏi của chính người hỏi giữ nguyên (họ có thể đang hỏi đúng một số điện thoại); ngữ cảnh nhóm kèm theo thì che
     const question = scope
-      ? buildGroupQuestion(await loadGroupContext(this.db, scope.groupId, request.questionMessageId), request.question)
+      ? buildGroupQuestion(mask(await loadGroupContext(this.db, scope.groupId, request.questionMessageId)), request.question)
       : request.question;
     const lastTurn = contents[contents.length - 1];
     if (lastTurn?.role === "user") lastTurn.parts.push({ text: question });
@@ -327,7 +343,7 @@ export class AssistantService {
         for (const part of calls) {
           const { name, args } = part.functionCall!;
           toolCalls.push({ name, args });
-          const response = await runTool(context, name, args ?? {});
+          const response = mask(await runTool(context, name, args ?? {}));
           toolChars += JSON.stringify(response).length;
           if (toolChars > HEAVY_THRESHOLD_CHARS) heavy = true;
           responses.push({ functionResponse: { name, response } });

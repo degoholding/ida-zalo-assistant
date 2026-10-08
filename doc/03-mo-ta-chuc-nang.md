@@ -41,7 +41,7 @@ màn chi tiết có thẻ danh tính, biểu mẫu, các tab và «Lịch sử t
 | **Công ty** | Danh mục công ty; nhóm và người gắn công ty. |
 | **Hỏi trợ lý** | Quản trị hỏi trợ lý AI ngay trên web dưới tên một người có vai trò (không cần Zalo): cùng cài đặt, công cụ, giới hạn như tin Zalo thật; báo cáo Excel có nút tải. Mỗi người một cuộc «Hỏi trợ lý · <tên>», không gửi ra Zalo. |
 | **Tài khoản bot** | Thêm bot bằng QR, bật / tắt, trạng thái phiên, số nhóm / số cuộc riêng. |
-| **Cài đặt** | Sửa trên web, **có hiệu lực ngay** (không khởi động lại): khóa Gemini, mô hình chính / nặng / dự phòng, các trần của trợ lý, giãn cách gửi, mặc định nhóm / cuộc riêng mới, cỡ tệp tối đa. Giá trị web phủ lên `.env`; mỗi ô ghi rõ đang lấy từ web / `.env` / mặc định, có nút «Khôi phục mặc định». Khóa bí mật lưu mã hóa, không bao giờ hiện lại nguyên văn. Thẻ **Google Sheets**: dán khóa service account + link trang tính, nút «Kiểm tra kết nối» ghi thử một dòng vào tab «Bot trợ lý». Tab «Lịch sử thay đổi». |
+| **Cài đặt** | Tab «Vận hành» (08/10/2026): lịch làm việc, giữ bản sao lưu, bảng «Việc chạy theo lịch». Tab Trợ lý AI có thẻ «An toàn dữ liệu» (che dữ liệu cá nhân, câu hỏi kỹ thuật BVTV, hãng AI được phép). Sửa trên web, **có hiệu lực ngay** (không khởi động lại): khóa Gemini, mô hình chính / nặng / dự phòng, các trần của trợ lý, giãn cách gửi, mặc định nhóm / cuộc riêng mới, cỡ tệp tối đa. Giá trị web phủ lên `.env`; mỗi ô ghi rõ đang lấy từ web / `.env` / mặc định, có nút «Khôi phục mặc định». Khóa bí mật lưu mã hóa, không bao giờ hiện lại nguyên văn. Thẻ **Google Sheets**: dán khóa service account + link trang tính, nút «Kiểm tra kết nối» ghi thử một dòng vào tab «Bot trợ lý». Tab «Lịch sử thay đổi». |
 
 Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lịch sử thao tác» của từng bản ghi.
 
@@ -96,6 +96,26 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
 - Cài đặt sửa trên web nằm ở `app_setting` (migration 014): không có dòng = dùng `.env` / mặc định; khóa
   bí mật (khóa Gemini, khóa service account Google) lưu mã hóa bằng `SESSION_ENCRYPTION_KEY`.
 - Loại tin lưu SMALLINT (`MessageKind` ở `src/constants.ts`, có `System = 9` cho tin hệ thống).
+- **Ba service** (08/10/2026): `app` (`src/main.ts`) giữ phiên Zalo, lưu tin, chạy web và trả lời câu hỏi;
+  `worker` (`src/worker.ts`) chạy việc nền theo lịch, không cần Zalo (`src/background.ts`: ảnh đại diện, dọn tin + tệp
+  gốc quá hạn, dọn hàng đợi, đưa bản sao lưu lên R2); `backup` (image mysql:8.4, `scripts/backup-loop.sh`) sao lưu CSDL
+  hằng ngày từ 02:00 vào `./backups`. Máy dev chạy một tiến trình (`WORKER_EMBEDDED=true`, mặc định).
+- **Bộ lập lịch** (`src/schedule/`, bảng `schedule_run`): việc mỗi N phút / hằng ngày / tuần / tháng, tùy chọn chỉ
+  ngày làm việc; nhận lượt bằng UPDATE có điều kiện nên không chạy trùng, tắt máy qua giờ thì chạy bù. Lịch làm việc
+  (giờ làm, ngày làm, giờ yên lặng, ngày lễ) ở Cài đặt → «Vận hành»; `WorkCalendar.addWorkingMinutes` tính hạn theo giờ làm.
+- **Cờ trên tin** `message_flag` (ưu tiên, chờ / đã xem / đã xử lý, hạn nhắc) + **cảm xúc** `message_reaction`
+  (migration 017, `src/flags/message-flags.ts`) — nền cho phase 5.
+- **Nhóm Mật** (`zalo_group.is_confidential`): công cụ AI bỏ qua nhóm Mật; gọi bot trong nhóm Mật thì bot trả câu cố
+  định. **Che dữ liệu cá nhân** (`src/privacy/personal-data.ts`) trên kết quả công cụ / lịch sử / ngữ cảnh nhóm trước
+  khi đưa cho mô hình. **Câu hỏi kỹ thuật BVTV** (`src/privacy/agro-technical.ts`) tắt tìm web + thêm luật trích tài liệu.
+  **Hãng AI được phép**: khóa của hãng ngoài danh sách bị bỏ khỏi chuỗi khóa.
+- **Kho tệp R2** có lớp dự phòng đĩa (`R2WithLocalFallback`): khóa chưa mang tiền tố R2 vẫn đọc ở đĩa; lệnh
+  `npm run cli -- storage-to-r2` chép hết lên R2. **Hạn giữ tệp gốc** `zalo_group.file_retention_days` (mặc định 180):
+  quá hạn thì xóa tệp, trạng thái `Expired`, chữ đã bóc giữ lại; `attachment.keep_file` = không xóa.
+- **Hàng đợi việc** bảng `job` (migration 016, `src/jobs/`): câu hỏi gửi bot ghi thành việc rồi mới trả lời — chống
+  trùng (`dedupe_key`), mỗi cuộc lần lượt (`serial_key`), hết hạn sau 15 phút, thử lại có giãn cách, việc bỏ dở khi
+  tiến trình chết được trả về hàng. Trần song song: cài đặt `assistant_concurrency` (mặc định 6).
+- Bóc chữ xlsx / docx chạy ở luồng phụ (`src/cpu/`), quá 60 giây thì dừng.
 
 ## 5. Nhập lịch sử từ Zalo Web
 

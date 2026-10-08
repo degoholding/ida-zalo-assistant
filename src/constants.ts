@@ -28,6 +28,8 @@ export enum AttachmentStatus {
   Failed = 2,
   // Nhóm không bật lấy file — chỉ ghi tên file + thời điểm
   Skipped = 3,
+  // Quá hạn giữ tệp gốc của nhóm (file_retention_days): tệp đã xóa, chữ đã bóc vẫn còn (08/10/2026)
+  Expired = 4,
 }
 
 export enum SessionEvent {
@@ -79,6 +81,60 @@ export enum GroupKind {
 export enum ContactKindSource {
   Auto = 0, // suy theo nhóm
   Manual = 1, // quản trị chỉnh tay — tự động không ghi đè
+}
+
+/** Loại việc trong hàng đợi (bảng job, 08/10/2026). */
+export enum JobKind {
+  // Trả lời một câu hỏi nhắn riêng cho bot
+  AssistantDirectReply = 1,
+  // Trả lời khi bot được gọi trong nhóm
+  AssistantGroupReply = 2,
+}
+
+/** Mức ưu tiên của một tin (bảng message_flag). */
+export enum MessagePriority {
+  Normal = 0,
+  Important = 1,
+  Urgent = 2,
+}
+
+/** Tin này có cần ai trả lời không, và tới đâu rồi (bảng message_flag). */
+export enum ReplyState {
+  NotNeeded = 0,
+  Waiting = 1,
+  // Có người thả cảm xúc — đã xem nhưng chưa trả lời, vẫn nhắc (IDA câu 8)
+  Seen = 2,
+  Handled = 3,
+}
+
+/** Cái gì gắn cờ cho tin. */
+export enum FlagSource {
+  Keyword = 1,
+  Vip = 2,
+  Ai = 3,
+  // Người nhận đánh dấu tay (vd «xong rồi»)
+  Manual = 4,
+  // Tin nhắc tên / hỏi thẳng người nhận
+  Mention = 5,
+}
+
+/** Kết quả lượt chạy gần nhất của một việc theo lịch (bảng schedule_run). */
+export enum ScheduleRunStatus {
+  NeverRun = 0,
+  Running = 1,
+  Done = 2,
+  Failed = 3,
+}
+
+/** Trạng thái một việc trong hàng đợi. */
+export enum JobStatus {
+  Pending = 0,
+  Running = 1,
+  Done = 2,
+  // Hết số lần thử mà vẫn lỗi
+  Failed = 3,
+  // Chờ quá `expires_at` mà chưa chạy — bỏ, không làm nữa
+  Expired = 4,
 }
 
 /**

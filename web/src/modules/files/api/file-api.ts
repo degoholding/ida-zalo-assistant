@@ -14,5 +14,10 @@ export const fileApi = {
     const res = await httpClient.post<SuccessEnvelope<FileRecord>>(`${FILES_API_PATH}/${id}/extract`)
     return { data: res.data.data, message: res.data.message ?? 'Đã đọc' }
   },
+  /** Bật / tắt «giữ tệp gốc» — tệp giữ thì không bị xóa khi hết hạn giữ tệp của nhóm. */
+  setKeepFile: async (id: number, keepFile: boolean) => {
+    const res = await httpClient.patch<SuccessEnvelope<FileRecord>>(`${FILES_API_PATH}/${id}`, { keep_file: keepFile })
+    return { data: res.data.data, message: res.data.message ?? (keepFile ? 'Đã đánh dấu giữ tệp gốc' : 'Đã bỏ giữ tệp gốc') }
+  },
   text: (id: number) => apiGet<FileText>(`${FILES_API_PATH}/${id}/text`),
 }

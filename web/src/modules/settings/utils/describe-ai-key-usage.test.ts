@@ -7,7 +7,7 @@ function makeItem(overrides: Partial<AiKeyItem> = {}): AiKeyItem {
   return {
     id: 1, position: 1, provider: AiKeyProvider.Gemini, provider_label: 'Gemini', base_url: '', model: '', model_heavy: '',
     default_model: 'gemini-3.5-flash-lite', key_tail: '…ab12', daily_cap: 0, used_today: 0, last_error: '', last_error_at: null,
-    broken: false, verified_at: null, ...overrides,
+    broken: false, allowed: true, verified_at: null, ...overrides,
   }
 }
 

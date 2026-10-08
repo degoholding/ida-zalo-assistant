@@ -1,11 +1,13 @@
 /** Khớp `AttachmentStatus` ở `src/constants.ts` của máy chủ. */
-export const FILE_STATUS = { pending: 0, stored: 1, failed: 2, skipped: 3 } as const
+export const FILE_STATUS = { pending: 0, stored: 1, failed: 2, skipped: 3, expired: 4 } as const
 
 export const FILE_STATUS_OPTIONS = [
   { value: FILE_STATUS.pending, label: 'Đang tải' },
   { value: FILE_STATUS.stored, label: 'Đã lưu' },
   { value: FILE_STATUS.failed, label: 'Lỗi' },
   { value: FILE_STATUS.skipped, label: 'Không lấy' },
+  // Quá hạn giữ tệp gốc của nhóm: tệp đã xóa khỏi kho, chữ đã bóc vẫn còn để tìm / tóm tắt
+  { value: FILE_STATUS.expired, label: 'Đã xóa tệp gốc (còn chữ)' },
 ]
 
 export function getFileStatusLabel(status: number): string {
@@ -19,6 +21,8 @@ export interface FileRecord {
   file_name: string
   file_ext: string
   status: number
+  /** Đánh dấu «giữ tệp gốc»: không xóa khi hết hạn giữ tệp của nhóm. */
+  keep_file: boolean
   stored_bytes: number | null
   declared_size: number | null
   size: number

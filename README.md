@@ -28,9 +28,13 @@ Chiều gộp một chiều: `dev1` → `dev` → `main`. Vá gấp trên prod t
 
 ## Chạy bằng Docker (cách chạy chính)
 
-Máy chỉ cần Docker, không cần cài Node. Hai container: `app` (đồng bộ + giao diện, ~35 MB RAM) và
-`mysql` (~210 MB). Đã chạy thử đủ vòng 01/10/2026: build, migration tự chạy, giao diện, lấy QR Zalo
-từ trong container, dòng lệnh.
+Máy chỉ cần Docker, không cần cài Node. Bốn container (08/10/2026): `app` (giữ phiên Zalo, nhận tin, trả lời,
+giao diện), `worker` (việc nền theo lịch: dọn quá hạn, ảnh đại diện, hàng đợi, đưa sao lưu lên R2), `backup`
+(mysqldump hằng ngày từ 02:00 vào `./backups`) và `mysql`. Migration tự chạy khi app / worker khởi động.
+
+Bật kho tệp R2: đặt `STORAGE_DRIVER=r2` + `R2_*` (bucket, khóa đọc + ghi, `R2_PREFIX=bot-tro-ly/`) trong `.env`,
+`docker compose up -d`, rồi chép tệp cũ đang nằm trên đĩa lên R2 (bot vẫn chạy trong lúc chép, tệp cũ vẫn đọc được):
+`docker compose exec app node dist/cli.js storage-to-r2`.
 
 ```
 cp .env.example .env

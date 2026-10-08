@@ -11,8 +11,10 @@ import type { FileStorage } from "./storage/file-storage.js";
 import { ReportExporter } from "./reports/report-exporter.js";
 import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
-import { cacheAvatars } from "./sync/avatar-cache.js";
-import { ConversationType } from "./constants.js";
+import { ConversationType, JobKind } from "./constants.js";
+import { CpuPool } from "./cpu/cpu-pool.js";
+import type { JobRow } from "./jobs/job-queue.js";
+import { JobRunner } from "./jobs/job-runner.js";
 import { GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
@@ -34,14 +36,16 @@ export interface BackfillJob extends BackfillProgress {
   method: string;
   error: string;
 }
-const AVATAR_INTERVAL_MS = 2 * 60 * 1000;
 
 /** Giữ các tài khoản bot đang chạy — cho phép bật thêm/tắt bớt lúc đang chạy (đăng nhập QR trên web). */
 export class SyncService {
   readonly downloader: AttachmentDownloader;
+  /** Luồng phụ bóc chữ xlsx / docx — tệp lớn không làm đứng việc nghe tin. */
+  readonly cpu = new CpuPool(1);
+  /** Hàng đợi trả lời: câu hỏi ghi vào bảng job, chạy song song tối đa `assistant.concurrency` câu (08/10/2026). */
+  readonly jobs: JobRunner;
   private currentAssistant: AssistantService | null;
   private readonly runners = new Map<number, AccountRunner>();
-  private avatarTimer: NodeJS.Timeout | null = null;
 
   constructor(
     readonly db: Db,
@@ -56,6 +60,21 @@ export class SyncService {
       maxFileBytes: config.maxFileBytes,
     });
     this.currentAssistant = this.buildAssistant();
+    this.jobs = new JobRunner({
+      db, role: "app", concurrency: config.assistant.concurrency,
+      handlers: {
+        [JobKind.AssistantDirectReply]: (job) => this.runnerForJob(job).runDirectReplyJob(job),
+        [JobKind.AssistantGroupReply]: (job) => this.runnerForJob(job).runGroupReplyJob(job),
+      },
+    });
+  }
+
+  /** Việc trả lời phải chạy đúng tài khoản bot đã nhận câu hỏi (phiên Zalo của tài khoản đó gửi câu trả lời). */
+  private runnerForJob(job: JobRow): AccountRunner {
+    const accountId = Number((job.payload as { accountId?: unknown }).accountId);
+    const runner = this.runners.get(accountId);
+    if (!runner) throw new Error(`tài khoản bot #${accountId} đang tắt`);
+    return runner;
   }
 
   /** Trợ lý AI đang dùng (null = tắt). Đổi khóa / mô hình trên màn Cài đặt thì dựng lại — xem applySettings. */
@@ -65,18 +84,21 @@ export class SyncService {
 
   private buildAssistant(): AssistantService | null {
     const settings = this.config.assistant;
-    const { apiKey, openaiApiKey, maxPerHour, dailyTokenCap, maxReadFileBytes, readableFileTypes, showTokenUsage } = settings;
+    const { apiKey, openaiApiKey, maxPerHour, dailyTokenCap, dailyTokenCapPerBot, maxReadFileBytes, readableFileTypes, showTokenUsage } = settings;
+    const limits = { maxPerHour, dailyTokenCap, dailyTokenCapPerBot };
     const options = {
       storage: this.storage, maxReadFileBytes, readableFileTypes, showTokenUsage,
+      heavyExtract: (task: "sheet" | "docx", data: Buffer) => this.cpu.run(task, data),
+      privacy: { maskPersonalData: this.config.privacy.maskPersonalData, blockWebForAgroTechnical: this.config.privacy.blockWebForAgroTechnical },
       reportExporter: new ReportExporter(this.storage, () => this.config.google),
       meetingScheduler: new MeetingScheduler(() => this.config.google),
     };
     // Bảng Khóa AI có khóa → chuỗi khóa (khóa số 1 trước, hỏng thì khóa kế); bảng rỗng → cài đặt cũ như trước 07/10/2026
-    const chainKeys = this.aiKeys?.buildChainKeys() ?? [];
+    const chainKeys = this.aiKeys?.buildChainKeys(this.config.privacy.allowedAiProviders) ?? [];
     if (this.aiKeys && chainKeys.length) {
       log.info(`trợ lý AI bật — bảng Khóa AI: ${chainKeys.map((key) => `${key.label} ${key.model}`).join(" → ")}`);
       // Việc nặng: mỗi khóa tự đổi HEAVY_MODEL_ALIAS thành mô hình việc nặng của nó (không khai thì chính mô hình chính)
-      return new AssistantService(this.db, new KeyChainClient(chainKeys, this.aiKeys.ledger), chainKeys[0].model, { maxPerHour, dailyTokenCap },
+      return new AssistantService(this.db, new KeyChainClient(chainKeys, this.aiKeys.ledger), chainKeys[0].model, limits,
         () => new Date(), { ...options, heavyModel: HEAVY_MODEL_ALIAS });
     }
     const keys = resolveModelKeys({ geminiKey: apiKey, openaiKey: openaiApiKey, openaiBaseUrl: settings.openaiBaseUrl });
@@ -89,7 +111,7 @@ export class SyncService {
     const { model, heavyModel } = primaryModels(plan, keys);
     const problem = missingKeyProblem(plan.provider, keys);
     const assistant = !problem
-      ? new AssistantService(this.db, new ModelRouterClient(keys, plan), model, { maxPerHour, dailyTokenCap }, () => new Date(),
+      ? new AssistantService(this.db, new ModelRouterClient(keys, plan), model, limits, () => new Date(),
           { ...options, heavyModel: heavyModel || undefined })
       : null;
     log.info(assistant
@@ -103,9 +125,12 @@ export class SyncService {
    * tạo. `default_*` không cần làm gì — runner đọc thẳng `config` mỗi lần dùng.
    */
   applySettings(changedKeys: string[]): void {
+    const notAssistantBuild = new Set(["assistant_send_interval_ms", "assistant_concurrency"]);
     const assistantChanged = changedKeys.some((key) =>
-      key.startsWith("gemini_") || key.startsWith("openai_") || key === "ai_provider" || (key.startsWith("assistant_") && key !== "assistant_send_interval_ms"));
+      key.startsWith("gemini_") || key.startsWith("openai_") || key.startsWith("privacy_") || key === "ai_provider"
+      || (key.startsWith("assistant_") && !notAssistantBuild.has(key)));
     if (assistantChanged) this.rebuildAssistant();
+    if (changedKeys.includes("assistant_concurrency")) this.jobs.setConcurrency(this.config.assistant.concurrency);
     if (changedKeys.includes("max_file_mb")) this.downloader.setMaxFileBytes(this.config.maxFileBytes);
     if (changedKeys.includes("assistant_send_interval_ms")) {
       for (const runner of this.runners.values()) runner.setSendInterval(this.config.assistant.sendIntervalMs);
@@ -130,10 +155,8 @@ export class SyncService {
     if (!accounts.length) log.warn("chưa có tài khoản bot nào — đăng nhập bằng QR trên giao diện web");
     for (const account of accounts) await this.startAccount(account);
     log.info(`đang chạy ${this.runners.size}/${accounts.length} tài khoản bot`);
-    // Ảnh đại diện: tải nền theo lô, lần đầu sau 30 giây (đợi quét nhóm + thành viên xong)
-    const runAvatars = () => cacheAvatars(this.db, this.storage).catch((error) => log.warn("tải ảnh đại diện lỗi", error));
-    setTimeout(runAvatars, 30_000).unref();
-    this.avatarTimer = setInterval(runAvatars, AVATAR_INTERVAL_MS);
+    // Bật bộ chạy việc SAU khi các tài khoản đã chạy — câu hỏi còn trong hàng từ lần trước có runner để trả lời
+    await this.jobs.start();
   }
 
   isRunning(accountId: number): boolean {
@@ -232,13 +255,15 @@ export class SyncService {
   }
 
   async stopAll(): Promise<void> {
-    if (this.avatarTimer) clearInterval(this.avatarTimer);
+    // Thôi nhận việc mới, chờ câu đang trả lời dở xong rồi mới tắt phiên Zalo
+    await this.jobs.stop();
     this.downloader.stop();
     await Promise.allSettled([...this.runners.keys()].map((id) => this.stopAccount(id)));
+    await this.cpu.close();
   }
 
   private async startAccount(account: BotAccountRow): Promise<boolean> {
-    const runner = new AccountRunner(account, this.db, this.config, this.downloader, this.storage, this.assistant);
+    const runner = new AccountRunner(account, this.db, this.config, this.downloader, this.storage, this.assistant, this.jobs);
     if (!(await runner.start())) return false;
     this.runners.set(account.id, runner);
     return true;

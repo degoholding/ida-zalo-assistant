@@ -46,6 +46,11 @@ export interface AppConfig {
   maxFileBytes: number;
   downloadConcurrency: number;
   heartbeatSeconds: number;
+  /**
+   * Việc nền (dọn tin quá hạn, tải ảnh đại diện, việc theo lịch) chạy NGAY trong tiến trình chính (true — máy dev, cài
+   * một khối) hay ở tiến trình `worker` riêng (false — docker compose bật service worker). 08/10/2026.
+   */
+  workerEmbedded: boolean;
   web: { host: string; port: number; adminPassword: string; cookieSecure: boolean; trustCloudflareIp: boolean; spaDistDir: string };
   defaultDirectRead: boolean;
   /** Số tin gần nhất xin Zalo khi lấy tin cũ của một nhóm. */
@@ -62,6 +67,10 @@ export interface AppConfig {
     openaiModel: string; openaiHeavyModel: string; openaiFallbackModels: string[];
     model: string; heavyModel: string; fallbackModels: string[]; maxPerHour: number; dailyTokenCap: number;
     sendIntervalMs: number; maxReadFileBytes: number;
+    /** Số câu hỏi trả lời song song tối đa (cả mọi tài khoản bot); câu dư xếp hàng. */
+    concurrency: number;
+    /** Trần token mỗi ngày của MỘT tài khoản bot (giờ VN); 0 = không giới hạn riêng, chỉ theo trần cả hệ thống. */
+    dailyTokenCapPerBot: number;
     /** Trả lời trong nhóm khi được gọi (@nhắc bot hoặc từ khóa). Chỉ đặt trên màn Cài đặt. */
     groupReplyEnabled: boolean; groupTriggerKeywords: string[];
     /** Trong nhóm: mọi thành viên gọi được bot (true) hay chỉ người có vai trò (false). Tin riêng luôn cần vai trò. */
@@ -71,6 +80,19 @@ export interface AppConfig {
     /** Gắn dòng đo token dưới mỗi câu trả lời (thử mô hình / ước chi phí). */
     showTokenUsage: boolean;
   };
+  /** Lịch làm việc (giờ VN) — chuỗi như nhập trên màn Cài đặt; dựng lịch bằng buildWorkCalendar. */
+  calendar: { workHours: string; workDays: string[]; quietHours: string; holidays: string };
+  /** Bảo vệ dữ liệu trước khi gửi sang AI (phase 3, bước 3.3). */
+  privacy: {
+    /** Che SĐT / số tài khoản / CCCD trong dữ liệu đưa cho mô hình. */
+    maskPersonalData: boolean;
+    /** Câu hỏi kỹ thuật thuốc BVTV: tắt tìm web, chỉ trích tài liệu đã duyệt (IDA câu 13). */
+    blockWebForAgroTechnical: boolean;
+    /** Hãng AI được phép (mã AiKeyProvider dạng chuỗi). Khóa hãng ngoài danh sách bị bỏ qua. */
+    allowedAiProviders: string[];
+  };
+  /** Sao lưu CSDL: số ngày giữ bản sao lưu trên kho tệp. */
+  backup: { keepDays: number };
   /** Chỉ đặt được trên màn Cài đặt (bảng app_setting) — không có biến .env. */
   google: {
     serviceAccount: unknown; spreadsheetUrl: string;
@@ -80,6 +102,15 @@ export interface AppConfig {
     calendarAccount: { email: string; refresh_token: string } | null;
   };
 }
+
+// Lịch IDA chốt 07/10/2026 (Q&A câu 7): giờ làm 08:30–12:00, 13:30–17:30, thứ 2 – thứ 7; yên lặng 21:00–06:30
+export const DEFAULT_WORK_HOURS = "08:30-12:00, 13:30-17:30";
+export const DEFAULT_WORK_DAYS = ["1", "2", "3", "4", "5", "6"];
+export const DEFAULT_QUIET_HOURS = "21:00-06:30";
+// Lễ dương lịch cố định; Tết âm lịch mỗi năm một khác — quản trị thêm khoảng ngày (vd 05/02/2027-11/02/2027)
+export const DEFAULT_HOLIDAYS = "01/01, 30/04, 01/05, 02/09";
+/** Mã mọi hãng AI (AiKeyProvider) — mặc định cho phép hết, quản trị bỏ bớt ở màn Cài đặt. */
+export const ALL_AI_PROVIDER_CODES = ["1", "2", "3", "4", "5", "6"];
 
 export function loadConfig(): AppConfig {
   const storageDriver = readString("STORAGE_DRIVER", "local");
@@ -106,6 +137,7 @@ export function loadConfig(): AppConfig {
     maxFileBytes: readInt("MAX_FILE_MB", 100) * 1024 * 1024,
     downloadConcurrency: readInt("DOWNLOAD_CONCURRENCY", 3),
     heartbeatSeconds: readInt("HEARTBEAT_SECONDS", 60),
+    workerEmbedded: readBool("WORKER_EMBEDDED", true),
     web: {
       // Mặc định chỉ nghe trong máy — vào từ xa thì qua đường hầm (SSH / Cloudflare Access)
       host: readString("WEB_HOST", "127.0.0.1"),
@@ -141,12 +173,17 @@ export function loadConfig(): AppConfig {
       sendIntervalMs: readInt("ASSISTANT_SEND_INTERVAL_MS", 1500),
       // Tệp lớn hơn thì bot từ chối đọc (chốt 01/10/2026: 5 MB; ảnh cũng đọc)
       maxReadFileBytes: readInt("ASSISTANT_MAX_READ_FILE_MB", 5) * 1024 * 1024,
+      concurrency: readInt("ASSISTANT_CONCURRENCY", 6),
+      dailyTokenCapPerBot: readInt("ASSISTANT_DAILY_TOKEN_CAP_PER_BOT", 0),
       groupReplyEnabled: true,
       groupTriggerKeywords: ["bot", "bot ơi", "trợ lý ơi", "@bot"],
       groupReplyAnyone: true,
       showTokenUsage: false,
       readableFileTypes: ["pdf", "docx", "xlsx", "xls", "csv", "txt", "md", "jpg", "jpeg", "png", "webp", "mp3", "m4a", "wav", "aac"],
     },
+    calendar: { workHours: DEFAULT_WORK_HOURS, workDays: DEFAULT_WORK_DAYS, quietHours: DEFAULT_QUIET_HOURS, holidays: DEFAULT_HOLIDAYS },
+    privacy: { maskPersonalData: true, blockWebForAgroTechnical: true, allowedAiProviders: ALL_AI_PROVIDER_CODES },
+    backup: { keepDays: readInt("BACKUP_KEEP_DAYS", 30) },
     google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null },
   };
 }

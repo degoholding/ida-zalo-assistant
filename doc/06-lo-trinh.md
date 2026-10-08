@@ -18,7 +18,7 @@
 | **1** | Nền: đồng bộ Zalo, lưu tin / tệp, Danh bạ, trợ lý AI, giao diện web | **Xong** 02/10 | 12 / 12 |
 | **2** | Màn Cài đặt + Google Sheets | **Xong** 03/10 | 4 / 4 |
 | **+** | Làm thêm ngoài kế hoạch (trợ lý trong nhóm, Google Meet, đọc link, Khóa AI…) | **Xong** 07/10 | 11 / 11 |
-| **3** | Hạ tầng xử lý nền (mở rộng cho ~100 nhóm / bot) | **Chưa** — làm tiếp theo | 0 / 12 |
+| **3** | Hạ tầng xử lý nền (mở rộng cho ~100 nhóm / bot) | **Xong** 08/10 | 12 / 12 |
 | **4** | Nhiều tài khoản web, người nhận, tách theo công ty | **Chưa** | 0 / 5 |
 | **5** | N1 — Check tin nhắn và cảnh báo | **Chưa** | 0 / 9 |
 | **6** | N4 — Tìm kiếm tin nhắn | Một phần | 1 / 5 |
@@ -27,10 +27,10 @@
 | **9** | N7 — Gửi tin theo lệnh | Một phần | 1 / 6 |
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 1 / 9 |
 
-**Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; phần
-«bot tự theo dõi, tự báo» mà IDA cần nhất ở giai đoạn 1 chưa có — nó đứng trên phase 3 và phase 4.
+**Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
+phần «bot tự theo dõi, tự báo» (phase 3) đã xong 08/10 — tiếp theo là phase 4 (tài khoản, 3 người nhận) rồi phase 5.
 
-Đối chiếu 27 câu của IDA (mục 9): **2 Đạt · 13 Một phần · 12 Chưa** (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
+Đối chiếu 27 câu của IDA (mục 9): **3 Đạt · 13 Một phần · 11 Chưa** sau phase 3 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
 
 ## 1. Đã chốt
@@ -86,25 +86,53 @@ câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải 
 | Màn **Khóa AI**: nhiều khóa có thứ tự, tự nhảy khóa khi hết tiền / lỗi | Xong 07/10 |
 | Kết nối Google bằng tài khoản OAuth để tạo cuộc họp | Xong 07/10 |
 
-## 5. Phase 3 — Hạ tầng xử lý nền (Chưa · làm tiếp theo)
+## 5. Phase 3 — Hạ tầng xử lý nền (Xong 08/10)
 
-Lý do làm trước: 8 trên 13 câu «Chưa» cần chung bộ lập lịch và cờ trên tin; và với ~100 nhóm / bot thì một
+Lý do làm trước: 8 trên 12 câu «Chưa» cần chung bộ lập lịch và cờ trên tin; và với ~100 nhóm / bot thì một
 tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ được yêu cầu «báo khẩn trong 1 phút».
+
+**Đã làm (08/10):**
+- **Hàng đợi câu hỏi** (bảng `job`, migration 016): câu hỏi gửi bot ghi vào hàng đợi rồi mới trả lời. Bot khởi động
+  lại thì câu hỏi còn nguyên; chờ quá 15 phút thì bỏ. Trả lời song song tối đa 6 câu (Cài đặt → «Số câu trả lời chạy
+  cùng lúc»); mỗi cuộc trò chuyện trả lời lần lượt; mỗi tin trong nhóm chỉ một bot trả lời. Nằm chờ quá 1 giây thì bot
+  nhắn «em nhận được rồi» ngay.
+- **Ba tiến trình** trong docker compose: `app` (giữ phiên Zalo, nhận tin, trả lời, web), `worker` (việc nền theo
+  lịch), `backup` (sao lưu CSDL). Bóc chữ Excel / Word chạy ở luồng phụ, quá 60 giây thì dừng tệp đó.
+- **Bộ lập lịch** + **lịch làm việc** (Cài đặt → tab «Vận hành»): giờ làm 08:30–12:00, 13:30–17:30, thứ 2 – thứ 7;
+  giờ yên lặng 21:00–06:30; ngày lễ cố định + kỳ Tết nhập tay. Có hàm đếm «2 giờ LÀM VIỆC» cho đồng hồ chờ của phase 5.
+  Việc theo lịch không chạy trùng, tắt máy qua giờ thì bật lên chạy bù; tab «Vận hành» hiện lần chạy gần nhất.
+- **Cờ trên từng tin** (bảng `message_flag`: mức ưu tiên, chờ trả lời / đã xem / đã xử lý, ai xử lý, hạn nhắc) và
+  **cảm xúc thả lên tin** (bảng `message_reaction`; thả cảm xúc = «đã xem», IDA câu 8). Phase 5 dùng để phân loại và nhắc.
+- **Nhóm Mật** (màn Nhóm): công cụ AI không thấy nhóm Mật (danh sách nhóm, tin, tệp, trao đổi với một người, đọc /
+  gửi tệp, link); gọi bot trong nhóm Mật thì bot trả một câu cố định, không qua AI.
+- **Che dữ liệu cá nhân** trước khi đưa cho AI: số điện thoại, CCCD, số tài khoản (giữ 3 số cuối). Tiền, mã đơn không
+  bị che nhầm. Tệp PDF / ảnh / ghi âm gửi nguyên cho mô hình đọc nên không che được.
+- **Câu hỏi kỹ thuật thuốc BVTV** (liều lượng, pha trộn, sâu bệnh…): tắt tìm web, chỉ trích tài liệu, luôn kèm
+  «cần phòng kỹ thuật xác nhận» (IDA câu 13).
+- **Hãng AI được phép** (Cài đặt → Trợ lý AI → «An toàn dữ liệu»): khóa của hãng không được tick thì bot bỏ qua.
+- **Kho tệp R2** (bucket `bot-tro-ly-ida`): tệp mới lên R2, tệp cũ trên đĩa vẫn đọc được tới khi lệnh
+  `npm run cli -- storage-to-r2` chép hết lên.
+- **Hạn giữ tệp gốc** 180 ngày / nhóm (tin vẫn 730 ngày); quá hạn thì xóa tệp gốc, giữ chữ đã bóc; tệp đánh dấu
+  «Giữ tệp gốc» ở màn Tệp thì không xóa.
+- **Sao lưu CSDL hằng ngày** từ 02:00 (service `backup`, mysqldump), giữ 7 ngày trên đĩa; worker đưa lên R2 và xóa bản
+  cũ hơn 30 ngày (Cài đặt → «Giữ bản sao lưu»).
+- **Trần token mỗi ngày cho từng bot** (Cài đặt → «Trần token mỗi ngày cho một bot»), cạnh trần cả hệ thống đã có.
 
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
-| Tách hai tiến trình: **nhận tin** (nhẹ, chỉ nghe và lưu) và **xử lý** (AI, bóc tệp, bản tin) | 2, 9 | Chưa |
-| Hàng đợi việc giữa hai tiến trình, có thử lại | 2 | Chưa |
-| Bộ lập lịch: chạy việc theo giờ, tôn trọng giờ làm / giờ yên lặng / Chủ nhật / lễ Tết | 7, 24, 25 | Chưa |
-| Bảng cờ trên tin: mức ưu tiên, trạng thái (chưa trả lời / đã xem / đã xử lý), ai xử lý | 6, 8 | Chưa |
-| Lưu thả cảm xúc lên tin (tính «đã xem») | 8 | Chưa |
-| Nhãn **Mật** cho nhóm: không gửi AI, không vào báo cáo cho người khác | 4 | Chưa |
-| Che SĐT / STK / CCCD trước khi gửi AI; chỉ dùng hãng AI đã duyệt | 4, mục 4 BC | Chưa |
-| Chặn tìm web cho câu hỏi kỹ thuật BVTV | 13 | Chưa |
-| Tệp lưu lên Cloudflare R2 thay vì đĩa VPS | 2, 20 | Có mã, chưa bật |
-| Hạn tệp gốc 6 tháng tách khỏi hạn tin 24 tháng; cờ «giữ» trên tệp | 20 | Chưa |
-| Sao lưu database bot hằng ngày | 2 | Chưa |
-| Trần token AI theo ngày cho từng bot; phân loại bằng từ khóa trước, AI gom lô sau | 2, 6 | Chưa |
+| Tách tiến trình: **nhận tin** (app) và **việc nền** (worker), thêm **sao lưu** (backup) | 2, 9 | Xong 08/10 |
+| Hàng đợi việc bền, có thử lại, trần song song | 2 | Xong 08/10 |
+| Bộ lập lịch: chạy việc theo giờ, tôn trọng giờ làm / giờ yên lặng / Chủ nhật / lễ Tết | 7, 24, 25 | Xong 08/10 |
+| Bảng cờ trên tin: mức ưu tiên, trạng thái (chưa trả lời / đã xem / đã xử lý), ai xử lý | 6, 8 | Xong 08/10 (phase 5 bắt đầu ghi cờ) |
+| Lưu thả cảm xúc lên tin (tính «đã xem») | 8 | Xong 08/10 |
+| Nhãn **Mật** cho nhóm: không gửi AI | 4 | Xong 08/10 (phần «không vào báo cáo cho người khác» làm cùng phase 8) |
+| Che SĐT / STK / CCCD trước khi gửi AI; chỉ dùng hãng AI đã duyệt | 4, mục 4 BC | Xong 08/10 |
+| Chặn tìm web cho câu hỏi kỹ thuật BVTV | 13 | Xong 08/10 |
+| Tệp lưu lên Cloudflare R2 thay vì đĩa VPS | 2, 20 | Xong 08/10 |
+| Hạn tệp gốc 6 tháng tách khỏi hạn tin 24 tháng; cờ «giữ» trên tệp | 20 | Xong 08/10 |
+| Sao lưu database bot hằng ngày | 2 | Xong 08/10 |
+| Trần token AI theo ngày cho từng bot | 2 | Xong 08/10 |
+| Phân loại tin bằng từ khóa trước, AI gom lô sau | 2, 6 | Chuyển sang phase 5 (là phần của bộ phân loại) |
 
 ## 6. Phase 4 — Tài khoản, người nhận, tách theo công ty (Chưa)
 
@@ -196,7 +224,7 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | 1 | 3 người nhận | 4 | Một phần |
 | 2 | ~100 nhóm / bot | 3 | Một phần |
 | 3 | Nhóm có / không có quyền trưởng nhóm | 1 | Đạt |
-| 4 | Không đọc / Mật / tiếng nước ngoài | 1, 3 | Một phần |
+| 4 | Không đọc / Mật / tiếng nước ngoài | 1, 3 | Một phần (nhãn Mật xong 08/10; còn loại khỏi báo cáo ở phase 8) |
 | 5 | VIP | 5 | Chưa |
 | 6 | Từ khóa KHẨN / QUAN TRỌNG | 5 | Chưa |
 | 7 | Đồng hồ chờ, giờ làm, giờ yên lặng | 3, 5 | Chưa |
@@ -205,14 +233,14 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | 10 | Thư viện mẫu C10 có duyệt | 4, 10 | Chưa |
 | 11 | Văn phong | 10 | Một phần |
 | 12 | Không tự điền số | 10 | Một phần |
-| 13 | Kỹ thuật BVTV | 3, 10 | Chưa |
+| 13 | Kỹ thuật BVTV | 3, 10 | Một phần (chặn tìm web + luật trích tài liệu 08/10; còn kho tài liệu duyệt) |
 | 14 | Bảng Drive mỗi tuần | 10 | Một phần |
 | 15 | Chỉ tiêu bảng sales | 10 | Một phần |
 | 16 | Danh mục nhân viên / đại lý | 10 | Một phần |
 | 17 | File KPI | 10 | Chưa |
 | 18 | Số mơ hồ: gắn cờ, báo người nhận | 5, 10 | Một phần |
 | 19 | Excel qua Zalo + lưu web | 8 | Đạt |
-| 20 | Lưu 24 tháng / tệp 6 tháng | 1, 3 | Một phần |
+| 20 | Lưu 24 tháng / tệp 6 tháng | 1, 3 | Đạt (08/10) |
 | 21 | Tìm tin + xem trước / sau | 6 | Một phần |
 | 22 | Checklist | 7 | Chưa |
 | 23 | Nhắc hạn | 7 | Chưa |
@@ -226,7 +254,8 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | Việc | Trạng thái |
 |---|---|
 | Bot chạy trên VPS 1 (chung ERP), tên miền botida.degoholding.vn qua Cloudflare | Xong 07/10 (tạm) |
-| VPS riêng cho bot (đề xuất 4 lõi CPU, 8 GB RAM, 100 GB SSD) + R2 cho tệp | Đang làm — đại ca đang mua |
+| VPS riêng cho bot (đề xuất 4 lõi CPU, 8 GB RAM, 100 GB SSD) | Đang làm — đại ca đang mua |
+| Tệp lên R2 (bucket `bot-tro-ly-ida`, token «ERP-doc-file-app-cu» được cấp đọc + ghi 08/10) | Xong 08/10 |
 | Chuyển bot sang VPS riêng (database + tệp + phiên Zalo) | Chưa |
 | Mỗi bot thêm một tài khoản Zalo dự phòng trong cùng các nhóm | Chưa |
 | Bật Cloudflare Access chắn trang quản trị | Chưa |

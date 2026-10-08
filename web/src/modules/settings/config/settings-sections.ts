@@ -2,6 +2,8 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Bot,
   CalendarClock,
+  Clock,
+  DatabaseBackup,
   Gem,
   FileSpreadsheet,
   FileText,
@@ -11,9 +13,11 @@ import {
   KeyRound,
   MessageCircle,
   RefreshCw,
+  ShieldCheck,
   Sparkles,
   Users,
   UsersRound,
+  Wrench,
 } from 'lucide-react'
 
 /** Một thẻ trong tab Cài đặt: gom các khóa cùng chủ đề — không xếp phẳng 17 ô một mạch. */
@@ -65,9 +69,23 @@ export const ASSISTANT_SECTIONS: SettingsSection[] = [
   {
     id: 'limits',
     title: 'Giới hạn & hiển thị',
-    description: 'Chặn hỏi quá nhiều, trần chi phí mỗi ngày, tốc độ gửi tin chống khóa tài khoản.',
+    description: 'Chặn hỏi quá nhiều, trần chi phí mỗi ngày, số câu trả lời chạy cùng lúc, tốc độ gửi tin chống khóa tài khoản.',
     icon: Gauge,
-    keys: ['assistant_max_per_hour', 'assistant_daily_token_cap', 'assistant_send_interval_ms', 'assistant_show_token_usage'],
+    keys: [
+      'assistant_max_per_hour',
+      'assistant_daily_token_cap',
+      'assistant_daily_token_cap_per_bot',
+      'assistant_concurrency',
+      'assistant_send_interval_ms',
+      'assistant_show_token_usage',
+    ],
+  },
+  {
+    id: 'privacy',
+    title: 'An toàn dữ liệu',
+    description: 'Che số điện thoại / tài khoản / CCCD trước khi gửi AI, chặn tìm web với câu hỏi kỹ thuật thuốc BVTV, chọn hãng AI được nhận dữ liệu.',
+    icon: ShieldCheck,
+    keys: ['privacy_mask_personal_data', 'privacy_block_web_agro_technical', 'privacy_allowed_ai_providers'],
   },
 ]
 
@@ -112,11 +130,29 @@ export const GOOGLE_SECTIONS: SettingsSection[] = [
   },
 ]
 
+export const OPERATIONS_SECTIONS: SettingsSection[] = [
+  {
+    id: 'work-calendar',
+    title: 'Giờ làm việc',
+    description: 'Đồng hồ chờ trả lời chỉ chạy trong giờ làm; giờ yên lặng và ngày nghỉ chỉ báo tin KHẨN / VIP.',
+    icon: Clock,
+    keys: ['work_hours', 'work_days', 'quiet_hours', 'holidays'],
+  },
+  {
+    id: 'backup',
+    title: 'Sao lưu',
+    description: 'Bản sao lưu CSDL hằng ngày đẩy lên kho tệp.',
+    icon: DatabaseBackup,
+    keys: ['backup_keep_days'],
+  },
+]
+
 export const SETTINGS_TABS = [
   // Đứng đầu cho dễ thấy (đại ca 07/10/2026: ~19 ô AI rời khó dùng) — mở màn Cài đặt là vào thẳng tab này
   { id: 'ai-keys', label: 'Khóa AI', icon: KeyRound },
   { id: 'assistant', label: 'Trợ lý AI', icon: Bot },
   { id: 'sync', label: 'Đồng bộ Zalo', icon: RefreshCw },
+  { id: 'operations', label: 'Vận hành', icon: Wrench },
   { id: 'google', label: 'Google', icon: FileSpreadsheet },
   { id: 'history', label: 'Lịch sử thay đổi', icon: History },
 ] as const

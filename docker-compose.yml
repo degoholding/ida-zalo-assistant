@@ -1,6 +1,7 @@
 name: bot-tro-ly
 
-# Một máy chạy đủ: dịch vụ đồng bộ + MySQL. Chuyển sang VPS khác = chép thư mục này + .env + sao lưu DB.
+# Một máy chạy đủ: dịch vụ đồng bộ (app) + tiến trình nền (worker) + MySQL. Chuyển sang VPS khác = chép thư mục này
+# + .env + sao lưu DB.
 services:
   app:
     build: .
@@ -11,6 +12,8 @@ services:
       DATA_DIR: /data
       # Trong container nghe mọi giao diện; ra ngoài máy chỉ mở ở 127.0.0.1 (xem ports)
       WEB_HOST: 0.0.0.0
+      # Việc nền (dọn quá hạn, ảnh đại diện, hàng đợi) do service worker chạy
+      WORKER_EMBEDDED: "false"
     ports:
       - "127.0.0.1:8090:8090"
     volumes:
@@ -19,6 +22,42 @@ services:
       mysql:
         condition: service_healthy
     mem_limit: 512m
+
+  # Tiến trình nền (src/worker.ts): cùng image với app, không giữ phiên Zalo, không mở cổng
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://bot:${MYSQL_PASSWORD}@mysql:3306/bot_tro_ly
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+      # Bản sao lưu do service backup ghi — worker đưa lên R2
+      - ./backups:/backups:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    mem_limit: 256m
+
+  # Sao lưu CSDL hằng ngày từ 02:00 giờ VN vào ./backups (giữ 7 ngày trên đĩa) — scripts/backup-loop.sh. Dùng image
+  # mysql:8.4 để mysqldump đúng phiên bản máy chủ.
+  backup:
+    image: mysql:8.4
+    restart: unless-stopped
+    entrypoint: ["sh", "/backup-loop.sh"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: bot_tro_ly
+    volumes:
+      - ./scripts/backup-loop.sh:/backup-loop.sh:ro
+      - ./backups:/backups
+    depends_on:
+      mysql:
+        condition: service_healthy
+    mem_limit: 256m
 
   mysql:
     image: mysql:8.4

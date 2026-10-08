@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { BoardType, ThreadType, type API, type GroupMessage, type NoteDetail } from "zca-js";
+import { BoardType, ThreadType, type API, type GroupMessage, type NoteDetail, type TMessage } from "zca-js";
 import { splitForZalo, type AssistantService } from "../assistant/assistant-service.js";
 import type { GroupActions } from "../assistant/group-action-tools.js";
 import type { AppConfig } from "../config.js";
@@ -8,22 +8,23 @@ import type { Db } from "../db/pool.js";
 import type { Logger } from "../logger.js";
 import { findContactByUid } from "../sync/contact-repository.js";
 import type { GeneratedReportFile } from "../reports/report-exporter.js";
-import { findGroupByZaloId, type GroupRow } from "../sync/group-repository.js";
+import { findGroupByZaloId, findThreadById, type GroupRow } from "../sync/group-repository.js";
 import { recordOutgoingMessage, type IncomingGroupMessage } from "../sync/message-ingest.js";
 import { parseZaloContent } from "./content-parser.js";
 import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { buildMentions, type MentionableMember } from "./group-mentions.js";
 import { canCallBotInGroup, detectGroupTrigger } from "./group-trigger.js";
 import type { ZaloSender } from "./zalo-sender.js";
+import { AckTracker, enqueueGroupReply, type AckState, type GroupReplyPayload } from "./reply-jobs.js";
 
 // Trả lời TRONG NHÓM khi bot được gọi (@nhắc tên bot hoặc từ khóa ở màn Cài đặt). Luật an toàn:
 // - ai gọi được: người có vai trò + NHÂN SỰ (cài đặt «Trong nhóm: nhân sự gọi được bot», mặc định bật); khách hàng /
 //   người chưa phân loại thì bot im lặng (canCallBotInGroup);
 // - chỉ nhóm đang bật «Đọc tin»; trợ lý chỉ đọc dữ liệu CỦA NHÓM ĐÓ (groupScope — chặn ở tầng công cụ);
 // - câu trả lời trích dẫn tin được hỏi, gửi qua hàng gửi chung (giãn cách chống khóa tài khoản);
-// - mỗi nhóm trả lời lần lượt, không chạy song song;
+// - mỗi nhóm trả lời lần lượt, không chạy song song (serial_key của hàng đợi, 08/10/2026);
 // - nhiều tài khoản bot cùng ở một nhóm: chỉ bot ĐƯỢC GHI NHẬN ở nhóm (bot_group) mới trả lời, và mỗi tin chỉ MỘT bot
-//   trả lời (giữ chỗ trong tiến trình — mọi tài khoản chạy chung một tiến trình). Tài khoản cá nhân dùng tạm làm bot
+//   trả lời (dedupe_key của hàng đợi — đúng cả khi chạy nhiều tiến trình). Tài khoản cá nhân dùng tạm làm bot
 //   mà không được ghi nhận ở nhóm thì không bao giờ trả lời thay.
 
 /**
@@ -56,17 +57,8 @@ function ensureUnpinApi(api: API): UnpinNoteCall {
   return (api as unknown as Record<string, UnpinNoteCall>)[UNPIN_API_NAME];
 }
 
-/** Tin đã có bot nhận trả lời — chung cho mọi AccountRunner trong tiến trình. */
-const claimedMessages = new Set<string>();
-const MAX_CLAIMED = 2000;
-
-function claimMessage(key: string): boolean {
-  if (claimedMessages.has(key)) return false;
-  claimedMessages.add(key);
-  // Set giữ thứ tự chèn — bỏ bớt mục cũ nhất cho khỏi phình
-  if (claimedMessages.size > MAX_CLAIMED) claimedMessages.delete(claimedMessages.values().next().value as string);
-  return true;
-}
+/** Câu trả lời khi được gọi trong nhóm Mật. */
+export const CONFIDENTIAL_GROUP_TEXT = "Dạ nhóm này đang để chế độ Mật nên em không đưa nội dung nhóm cho AI xử lý được ạ. Anh/chị nhắn riêng cho em nếu cần việc khác nhé.";
 
 export interface GroupReplierDeps {
   db: Db;
@@ -76,13 +68,15 @@ export interface GroupReplierDeps {
   accountId: number;
   getApi: () => API | null;
   getAssistant: () => AssistantService | null;
+  /** Báo bộ chạy việc có việc mới. */
+  jobs: { wake(): void };
   getBot: () => { uid: string; name: string };
   /** Gửi tệp trợ lý vừa tạo (PDF recap, Excel) vào cuộc. */
   sendReportFile: (thread: GroupRow, file: GeneratedReportFile) => Promise<void>;
 }
 
 export class GroupAssistantReplier {
-  private readonly chains = new Map<string, Promise<void>>();
+  private readonly acks = new AckTracker();
 
   constructor(private readonly deps: GroupReplierDeps) {}
 
@@ -100,14 +94,59 @@ export class GroupAssistantReplier {
       quotedUid: incoming.quote?.ownerUid,
     });
     if (!trigger) return;
-    const groupKey = incoming.zaloGroupId;
-    const next = (this.chains.get(groupKey) ?? Promise.resolve())
-      .then(() => this.answer(message, incoming, trigger.question))
-      .catch((error) => log.error(`trả lời trong nhóm ${groupKey} lỗi`, error));
-    this.chains.set(groupKey, next);
-    void next.finally(() => {
-      if (this.chains.get(groupKey) === next) this.chains.delete(groupKey);
+    this.enqueue(message, incoming, trigger.question).catch((error) => log.error(`ghi việc trả lời nhóm ${incoming.zaloGroupId} lỗi`, error));
+  }
+
+  /**
+   * Kiểm nhanh (nhóm đang đọc, bot này được ghi nhận ở nhóm, người gọi được phép) rồi ghi việc vào hàng đợi.
+   * Trả lời thật do bộ chạy việc làm (runJob).
+   */
+  private async enqueue(message: GroupMessage, incoming: IncomingGroupMessage, question: string): Promise<void> {
+    const { db, log, sender } = this.deps;
+    const group = await findGroupByZaloId(db, incoming.zaloGroupId);
+    if (!group?.read_messages) return;
+    const [linked] = await db.query<RowDataPacket[]>(
+      "SELECT 1 FROM bot_group WHERE group_id = ? AND bot_account_id = ? AND left_at IS NULL", [group.id, this.deps.accountId]);
+    if (!linked.length) return;
+    const contact = await findContactByUid(db, incoming.senderUid);
+    if (!contact) return;
+    const groupName = group.label || group.name;
+    if (!canCallBotInGroup(contact, this.deps.config.assistant.groupReplyAnyone, group.group_kind)) {
+      log.info(`«${incoming.senderName}» gọi bot trong nhóm khách hàng «${groupName}» nhưng không phải nhân sự / chưa có vai trò — không trả lời`);
+      return;
+    }
+    // Nhóm Mật (IDA câu 4): không gửi nội dung nhóm sang AI — trả một câu cố định, không qua mô hình
+    if (group.is_confidential) {
+      const api = this.deps.getApi();
+      if (!api) return;
+      const response = await sender.send(() => api.sendMessage({ msg: CONFIDENTIAL_GROUP_TEXT, quote: message.data }, incoming.zaloGroupId, ThreadType.Group));
+      const sentId = response?.message?.msgId;
+      if (sentId) await recordOutgoingMessage(db, group, this.deps.getBot(), String(sentId), CONFIDENTIAL_GROUP_TEXT);
+      log.info(`được gọi trong nhóm Mật «${groupName}» — trả câu cố định, không gửi AI`);
+      return;
+    }
+    const jobId = await enqueueGroupReply(db, { accountId: this.deps.accountId, groupId: group.id, incoming, quote: message.data, question });
+    // null = bot khác cùng nhóm đã nhận tin này
+    if (!jobId) return;
+    this.acks.watchQueued(jobId, async () => {
+      const api = this.deps.getApi();
+      if (!api) return;
+      const ackText = pickAckText();
+      const response = await sender.send(() => api.sendMessage({ msg: ackText, quote: message.data }, incoming.zaloGroupId, ThreadType.Group));
+      const ackId = response?.message?.msgId;
+      if (ackId) await recordOutgoingMessage(db, group, this.deps.getBot(), String(ackId), ackText);
     });
+    this.deps.jobs.wake();
+  }
+
+  /** Bộ chạy việc gọi: trả lời một lần được gọi trong nhóm đã ghi trong hàng đợi. Ném lỗi = việc lỗi. */
+  async runJob(jobId: number, payload: GroupReplyPayload): Promise<void> {
+    const ack = this.acks.begin(jobId);
+    try {
+      await this.answer(payload, ack);
+    } finally {
+      this.acks.end(jobId);
+    }
   }
 
   /** Việc làm trên Zalo, gắn cứng vào nhóm đang hỏi — mô hình không chọn được nhóm khác. */
@@ -159,24 +198,20 @@ export class GroupAssistantReplier {
     };
   }
 
-  private async answer(message: GroupMessage, incoming: IncomingGroupMessage, question: string): Promise<void> {
+  private async answer(payload: GroupReplyPayload, ack: AckState): Promise<void> {
     const { db, log, sender } = this.deps;
+    const { incoming, question } = payload;
+    // Dữ liệu gốc của tin được hỏi (zca-js) — gửi kèm để Zalo vẽ khung trích dẫn
+    const quote = payload.quote as TMessage;
     const assistant = this.deps.getAssistant();
     const api = this.deps.getApi();
-    if (!assistant || !api) return;
-    const group = await findGroupByZaloId(db, incoming.zaloGroupId);
-    if (!group?.read_messages) return;
-    const [linked] = await db.query<RowDataPacket[]>(
-      "SELECT 1 FROM bot_group WHERE group_id = ? AND bot_account_id = ? AND left_at IS NULL", [group.id, this.deps.accountId]);
-    if (!linked.length) return;
-    if (!claimMessage(`${incoming.zaloGroupId}:${incoming.msgId}`)) return;
+    if (!assistant) return;
+    if (!api) throw new Error("bot chưa kết nối");
+    const group = await findThreadById(db, payload.groupId);
+    if (!group?.read_messages || group.is_confidential) return;
     const contact = await findContactByUid(db, incoming.senderUid);
-    const groupName = group.label || group.name;
     if (!contact) return;
-    if (!canCallBotInGroup(contact, this.deps.config.assistant.groupReplyAnyone, group.group_kind)) {
-      log.info(`«${incoming.senderName}» gọi bot trong nhóm khách hàng «${groupName}» nhưng không phải nhân sự / chưa có vai trò — không trả lời`);
-      return;
-    }
+    const groupName = group.label || group.name;
     const [rows] = await db.query<RowDataPacket[]>("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [group.id, incoming.msgId]);
     const bot = this.deps.getBot();
     // Chưa trả lời xong sau ACK_DELAY_MS thì nhắn «chờ em xíu» (trích dẫn câu hỏi) — người hỏi biết bot đã nhận việc
@@ -185,7 +220,7 @@ export class GroupAssistantReplier {
     const sendAck = async () => {
       const ackText = pickAckText();
       const response = await sender.send(() => (answered ? Promise.resolve(null)
-        : api.sendMessage({ msg: ackText, quote: message.data }, incoming.zaloGroupId, ThreadType.Group)));
+        : api.sendMessage({ msg: ackText, quote }, incoming.zaloGroupId, ThreadType.Group)));
       const ackId = response?.message?.msgId;
       if (ackId) await recordOutgoingMessage(db, group, bot, String(ackId), ackText);
     };
@@ -194,7 +229,12 @@ export class GroupAssistantReplier {
       groupScope: { groupId: group.id, groupName, actions: this.buildActions(api, incoming.zaloGroupId, groupName) },
     }, {
       onAccepted: () => {
-        ackTimer = setTimeout(() => { if (!answered) void sendAck().catch((error) => log.warn("nhắn «chờ em xíu» trong nhóm lỗi", error)); }, ACK_DELAY_MS);
+        if (ack.acked) return;
+        ackTimer = setTimeout(() => {
+          if (answered || ack.acked) return;
+          ack.acked = true;
+          void sendAck().catch((error) => log.warn("nhắn «chờ em xíu» trong nhóm lỗi", error));
+        }, ACK_DELAY_MS);
       },
     }).finally(() => {
       answered = true;
@@ -207,7 +247,7 @@ export class GroupAssistantReplier {
       for (const [index, chunk] of splitForZalo(reply.text).entries()) {
         // Tin đầu trích dẫn câu được hỏi để cả nhóm biết bot đang trả lời ai; «@Tên» thành viên → thẻ nhắc thật
         const mentions = buildMentions(chunk, members);
-        const content = { msg: chunk, ...(index === 0 ? { quote: message.data } : {}), ...(mentions.length ? { mentions } : {}) };
+        const content = { msg: chunk, ...(index === 0 ? { quote } : {}), ...(mentions.length ? { mentions } : {}) };
         const response = await sender.send(() => api.sendMessage(content, incoming.zaloGroupId, ThreadType.Group));
         const msgId = response.message?.msgId;
         if (msgId) await recordOutgoingMessage(db, group, bot, String(msgId), chunk);

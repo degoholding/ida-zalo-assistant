@@ -1,3 +1,5 @@
+import { BACKGROUND_TASKS } from "../../schedule/background-tasks.js";
+import { listScheduleStatus } from "../../schedule/scheduler.js";
 import { parseServiceAccount, parseSpreadsheetId } from "../../google/service-account.js";
 import { GoogleSheetsClient, testSheetsConnection } from "../../google/sheets-client.js";
 import { GoogleSheetsError } from "../../google/sheets-error-messages.js";
@@ -27,6 +29,11 @@ function buildSheetsTarget(service: SyncService): { client: GoogleSheetsClient; 
 }
 
 export const settingRoutes: ApiRoute[] = [
+  // Việc chạy theo lịch (tiến trình worker) — lần chạy gần nhất, kết quả; đọc bảng schedule_run
+  ["GET", /^\/api\/schedules$/, async ({ response, service }) => {
+    sendOk(response, await listScheduleStatus(service.db, [...BACKGROUND_TASKS]));
+  }],
+
   ["GET", /^\/api\/settings$/, async ({ response, service }) => {
     sendOk(response, service.settings.describe());
   }],

@@ -1,4 +1,4 @@
-import { Building2, Eye, EyeOff, FileText, Hash, MessageSquare, Users } from 'lucide-react'
+import { Building2, Eye, EyeOff, FileText, Hash, Lock, MessageSquare, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { FilterFieldDefinition } from '@/shared/conditional-filter'
@@ -36,7 +36,17 @@ export const GROUP_COLUMNS: DataTableColumn<GroupDetail>[] = [
       <div className="flex min-w-0 items-center gap-2.5">
         <EntityAvatar name={getGroupName(group)} avatarUrl={group.avatar_url} shape="rounded" />
         <div className="min-w-0">
-          <div className="truncate font-semibold text-navy">{group.name || '(chưa rõ tên)'}</div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-semibold text-navy">{group.name || '(chưa rõ tên)'}</span>
+            {group.is_confidential && (
+              <span className="shrink-0" title="Nhóm Mật: nội dung không đưa cho AI và không vào báo cáo">
+                <Pill tone="handoff" className="gap-1">
+                  <Lock className="size-3" />
+                  Mật
+                </Pill>
+              </span>
+            )}
+          </div>
           <div className="truncate text-xs text-muted-foreground">{group.label ? `Tên gọi: ${group.label}` : group.zalo_group_id}</div>
           {!group.bot_count && <Pill tone="danger">Không còn bot nào</Pill>}
         </div>
@@ -63,6 +73,7 @@ export const GROUP_COLUMNS: DataTableColumn<GroupDetail>[] = [
   { key: 'capture_files', header: 'Lấy file', width: 110, align: 'center', cell: (group) => <OnOffPill on={group.capture_files} onLabel="Có lấy" offLabel="Không" /> },
   { key: 'file_count', header: 'Tệp', width: 80, align: 'center', defaultHidden: true, cell: (group) => group.file_count },
   { key: 'retention_days', header: 'Ngày lưu', width: 100, align: 'center', cell: (group) => group.retention_days },
+  { key: 'file_retention_days', header: 'Ngày giữ tệp', width: 120, align: 'center', defaultHidden: true, cell: (group) => group.file_retention_days },
   {
     key: 'first_seen_at',
     header: 'Thấy lần đầu',
@@ -83,10 +94,12 @@ const GROUP_FILTER_FIELDS: FilterFieldDefinition[] = [
   { name: 'company_id', label: 'Công ty', type: 'combobox', fetchOptions: async (search) => filterLookupOptions(await lookupApi.companies(false), search) },
   { name: 'read_messages', label: 'Đọc tin', type: 'select', options: ON_OFF_OPTIONS },
   { name: 'capture_files', label: 'Lấy file', type: 'select', options: ON_OFF_OPTIONS },
+  { name: 'is_confidential', label: 'Nhóm Mật', type: 'select', options: [{ value: '1', label: 'Mật' }, { value: '0', label: 'Thường' }] },
   { name: 'has_bot', label: 'Còn bot trong nhóm', type: 'select', options: [{ value: '1', label: 'Còn' }, { value: '0', label: 'Không còn' }] },
   { name: 'label', label: 'Tên gọi', type: 'text' },
   { name: 'member_count', label: 'Số thành viên', type: 'number' },
   { name: 'retention_days', label: 'Số ngày lưu', type: 'number' },
+  { name: 'file_retention_days', label: 'Số ngày giữ tệp gốc', type: 'number' },
   { name: 'last_message_at', label: 'Tin gần nhất', type: 'date' },
 ]
 
@@ -134,12 +147,28 @@ export const groupCrudConfig: CrudConfig<GroupDetail> = {
       required: true,
       hint: `Tin cũ hơn số ngày này bị dọn (${RETENTION_MIN}–${RETENTION_MAX}).`,
     },
+    {
+      name: 'file_retention_days',
+      label: 'Số ngày giữ tệp gốc',
+      type: 'number',
+      section: 'Đọc và lưu',
+      required: true,
+      hint: 'Ảnh, PDF, Excel… giữ bấy nhiêu ngày rồi xóa tệp gốc, vẫn giữ chữ đã bóc để tìm và tóm tắt. Mặc định 180 (6 tháng). Tin nhắn vẫn theo Số ngày lưu.',
+    },
+    {
+      name: 'is_confidential',
+      label: 'Nhóm Mật',
+      type: 'switch',
+      section: 'Đọc và lưu',
+      hint: 'Bot vẫn đọc và lưu để nhắc việc, nhưng không đưa nội dung nhóm cho AI và không đưa vào báo cáo cho người khác. Gọi bot trong nhóm Mật thì bot trả một câu cố định.',
+    },
   ],
   detailMaxWidth: 'max-w-none',
   detailMedia: (group) => <EntityAvatar name={getGroupName(group)} avatarUrl={group.avatar_url} shape="rounded" className="size-14 text-base" />,
   chips: (group) => [
     { icon: Hash, text: group.zalo_group_id, tone: 'code' },
     { icon: Users, text: `${group.member_count} thành viên`, tone: 'muted' },
+    ...(group.is_confidential ? [{ icon: Lock, text: 'Nhóm Mật', tone: 'ok' as const }] : []),
     { icon: group.read_messages ? Eye : EyeOff, text: group.read_messages ? 'Đang đọc tin' : 'Không đọc tin', tone: group.read_messages ? 'ok' : 'muted' },
     { icon: MessageSquare, text: `${group.message_count.toLocaleString('vi-VN')} tin đã lưu`, tone: 'muted' },
     { icon: FileText, text: `${group.file_count} tệp`, tone: 'muted' },

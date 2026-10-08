@@ -1,4 +1,4 @@
-import { ArrowUp, CircleAlert, ExternalLink, KeyRound, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { ArrowUp, CircleAlert, ExternalLink, KeyRound, Loader2, Pencil, ShieldOff, Trash2 } from 'lucide-react'
 import { useId, useRef, useState } from 'react'
 
 import { Badge } from '@/shared/ui/badge'
@@ -9,6 +9,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Skeleton } from '@/shared/ui/skeleton'
+import { cn } from '@/shared/utils/cn'
 import { AI_KEY_INTRO, AI_KEY_PROVIDER_OPTIONS, findAiKeyProviderOption } from '../config/ai-key-providers'
 import { AiKeyProvider, type AiKeyInput, type AiKeyItem, type AiKeyPatch } from '../types/ai-key'
 import { describeAiKeyUsage } from '../utils/describe-ai-key-usage'
@@ -122,18 +123,29 @@ export function AiKeyListCard({ items, isLoading, canWrite, saving, onAdd, onUpd
             {items.map((item, index) => {
               const lastError = formatAiKeyLastError(item, today)
               return (
-                <li key={item.id} className="space-y-2 px-3 py-2.5">
+                <li key={item.id} className={cn('space-y-2 px-3 py-2.5', item.allowed === false && 'bg-muted/40')}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
                       {index + 1}
                     </span>
-                    <div className="min-w-0 flex-1">
+                    {/* Hãng chưa được phép thì làm mờ phần thông tin (nút vẫn rõ để gỡ / sắp xếp) — bot đang bỏ qua khóa này */}
+                    <div className={cn('min-w-0 flex-1', item.allowed === false && 'text-muted-foreground')}>
                       <p>
                         <span className="font-medium">{item.provider_label}</span>{' '}
                         <span className="font-mono text-xs text-muted-foreground">{item.key_tail}</span>
                         {item.broken && (
                           <Badge variant="destructive" className="ml-2">
                             Không đọc được — gỡ rồi thêm lại
+                          </Badge>
+                        )}
+                        {item.allowed === false && (
+                          <Badge
+                            variant="outline"
+                            className="ml-2 border-warning/40 bg-warning/10 text-warning"
+                            title="Tick hãng này ở tab «Trợ lý AI» › «An toàn dữ liệu» › «Hãng AI được phép dùng» để bot dùng lại khóa"
+                          >
+                            <ShieldOff />
+                            Hãng chưa được phép — bot bỏ qua
                           </Badge>
                         )}
                       </p>

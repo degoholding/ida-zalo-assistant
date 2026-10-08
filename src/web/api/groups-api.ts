@@ -16,6 +16,8 @@ import { runList } from "./list-runner.js";
 const GROUP = ConversationType.Group;
 const RETENTION_MIN = 1;
 const RETENTION_MAX = 3650;
+/** Tệp gốc giữ ít nhất 7 ngày — để không lỡ tay đặt 1 ngày là mất sạch ảnh / tệp vừa gửi. */
+const FILE_RETENTION_MIN = 7;
 const LABEL_MAX = 100;
 
 export const GROUP_LIST_SPEC: ListSpec = {
@@ -29,6 +31,8 @@ export const GROUP_LIST_SPEC: ListSpec = {
     zalo_group_id: { sql: "g.zalo_group_id", type: "text" },
     member_count: { sql: "g.member_count", type: "number" },
     retention_days: { sql: "g.retention_days", type: "number" },
+    is_confidential: { sql: "g.is_confidential", type: "boolean" },
+    file_retention_days: { sql: "g.file_retention_days", type: "number" },
     last_message_at: { sql: "g.last_message_at", type: "date" },
     message_count: { sql: "g.message_count", type: "number" },
     // Còn tài khoản bot nào đang ở trong nhóm không
@@ -54,7 +58,7 @@ export const GROUP_LIST_SPEC: ListSpec = {
 const GROUP_FROM = "FROM zalo_group g LEFT JOIN company co ON co.id = g.company_id";
 const GROUP_COLUMNS = `
   g.id, g.zalo_group_id, g.name, g.label, g.group_kind, g.company_id, co.name AS company_name, g.member_count,
-  g.read_messages, g.capture_files, g.retention_days, g.first_seen_at, g.members_synced_at,
+  g.read_messages, g.capture_files, g.retention_days, g.is_confidential, g.file_retention_days, g.first_seen_at, g.members_synced_at,
   IF(g.avatar_key IS NULL, NULL, CONCAT('/avatars/g/', g.id)) AS avatar_url,
   (SELECT COUNT(*) FROM bot_group bg WHERE bg.group_id = g.id AND bg.left_at IS NULL) AS bot_count,
   g.message_count, g.last_message_at,
@@ -62,7 +66,7 @@ const GROUP_COLUMNS = `
 
 const FIELD_LABELS = {
   label: "Tên gọi", group_kind: "Loại nhóm", company_id: "Công ty", read_messages: "Đọc tin",
-  capture_files: "Lấy file", retention_days: "Số ngày lưu",
+  capture_files: "Lấy file", retention_days: "Số ngày lưu", is_confidential: "Nhóm Mật", file_retention_days: "Số ngày giữ tệp gốc",
 };
 
 function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
@@ -74,6 +78,8 @@ function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
     file_count: Number(row.file_count),
     read_messages: Boolean(row.read_messages),
     capture_files: Boolean(row.capture_files),
+    is_confidential: Boolean(row.is_confidential),
+    file_retention_days: Number(row.file_retention_days),
   }));
 }
 
@@ -143,6 +149,14 @@ export async function patchGroup(service: SyncService, id: number, body: Record<
     }
     patch.retentionDays = days;
   }
+  if (body.is_confidential !== undefined) patch.isConfidential = parseFlag(body.is_confidential, "Nhóm Mật");
+  if (body.file_retention_days !== undefined) {
+    const days = Number(body.file_retention_days);
+    if (!Number.isInteger(days) || days < FILE_RETENTION_MIN || days > RETENTION_MAX) {
+      throw new ApiError(422, "validation_error", `Số ngày giữ tệp gốc phải từ ${FILE_RETENTION_MIN} đến ${RETENTION_MAX}`);
+    }
+    patch.fileRetentionDays = days;
+  }
   //  Chốt 07/10/2026: chuyển sang nhóm NỘI BỘ thì tự bật đọc (gán vào `patch` để nhật ký + lấy tin gần nhất chạy như bật tay)
   Object.assign(patch, applyInternalGroupDefaults(patch));
   await updateGroupSettings(db, id, patch);
@@ -151,6 +165,8 @@ export async function patchGroup(service: SyncService, id: number, body: Record<
     company_id: patch.companyId === undefined ? before.company_id : (patch.companyId ?? 0),
     read_messages: patch.readMessages ?? before.read_messages, capture_files: patch.captureFiles ?? before.capture_files,
     retention_days: patch.retentionDays ?? before.retention_days,
+    is_confidential: patch.isConfidential ?? before.is_confidential,
+    file_retention_days: patch.fileRetentionDays ?? before.file_retention_days,
   };
   await recordAudit(db, { entity: "group", entityId: id, action: "update", changedFields: diffFields(before, after, FIELD_LABELS) });
 

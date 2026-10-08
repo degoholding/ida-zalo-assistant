@@ -32,6 +32,19 @@ export function useExtractFile() {
   })
 }
 
+/** «Giữ tệp gốc» / «Bỏ giữ tệp gốc» trên một dòng. */
+export function useSetKeepFile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, keepFile }: { id: number; keepFile: boolean }) => fileApi.setKeepFile(id, keepFile),
+    onSuccess: ({ message }) => {
+      toast.success(message)
+      void queryClient.invalidateQueries({ queryKey: getCrudRootKey(FILES_API_PATH) })
+    },
+    onError: (error) => toast.error(extractErrorMessage(error)),
+  })
+}
+
 export function useFileText(id: number | null) {
   return useQuery({ queryKey: queryKeys.files.text(id ?? 0), queryFn: () => fileApi.text(id ?? 0), enabled: Boolean(id), retry: false })
 }

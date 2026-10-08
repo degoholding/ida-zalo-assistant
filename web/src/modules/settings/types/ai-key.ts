@@ -37,6 +37,11 @@ export interface AiKeyItem {
   last_error_at: string | null
   /** Không giải mã được (đổi khóa mã hóa máy chủ) — phải gỡ rồi thêm lại. */
   broken: boolean
+  /**
+   * Hãng của khóa nằm trong «Hãng AI được phép dùng» (tab Trợ lý AI › An toàn dữ liệu). `false` = bot bỏ qua khóa này,
+   * dữ liệu không đi tới hãng đó.
+   */
+  allowed: boolean
   verified_at: string | null
 }
 

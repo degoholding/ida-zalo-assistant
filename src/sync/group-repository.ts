@@ -16,6 +16,10 @@ export interface GroupRow {
   read_messages: number;
   capture_files: number;
   retention_days: number;
+  /** Nhóm Mật: không gửi nội dung sang AI (08/10/2026). */
+  is_confidential: number;
+  /** Số ngày giữ tệp gốc (08/10/2026). */
+  file_retention_days: number;
 }
 
 export interface GroupDefaults {
@@ -23,7 +27,7 @@ export interface GroupDefaults {
   captureFiles: boolean;
 }
 
-export const GROUP_COLUMNS = "id, thread_type, group_kind, zalo_group_id, owner_bot_id, company_id, name, label, read_messages, capture_files, retention_days";
+export const GROUP_COLUMNS = "id, thread_type, group_kind, zalo_group_id, owner_bot_id, company_id, name, label, read_messages, capture_files, retention_days, is_confidential, file_retention_days";
 
 /** Khóa xác định một cuộc trò chuyện: nhóm (owner_bot_id = 0) hoặc riêng (bot nhận tin). */
 export interface ThreadKey {
@@ -50,6 +54,11 @@ export async function findThread(db: Db, key: ThreadKey): Promise<GroupRow | nul
 
 export async function findGroupByZaloId(db: Db, zaloGroupId: string): Promise<GroupRow | null> {
   return findThread(db, groupKey(zaloGroupId));
+}
+
+export async function findThreadById(db: Db, threadId: number): Promise<GroupRow | null> {
+  const [rows] = await db.query<RowDataPacket[]>(`SELECT ${GROUP_COLUMNS} FROM zalo_group WHERE id = ?`, [threadId]);
+  return (rows[0] as GroupRow | undefined) ?? null;
 }
 
 /**
@@ -127,6 +136,8 @@ export interface GroupSettingsPatch {
   /** null = gỡ khỏi công ty */
   companyId?: number | null;
   groupKind?: number;
+  isConfidential?: boolean;
+  fileRetentionDays?: number;
 }
 
 /**
@@ -157,6 +168,14 @@ export async function updateGroupSettings(db: Db, groupId: number, input: GroupS
   if (patch.retentionDays !== undefined) {
     sets.push("retention_days = ?");
     values.push(patch.retentionDays);
+  }
+  if (patch.isConfidential !== undefined) {
+    sets.push("is_confidential = ?");
+    values.push(patch.isConfidential ? 1 : 0);
+  }
+  if (patch.fileRetentionDays !== undefined) {
+    sets.push("file_retention_days = ?");
+    values.push(patch.fileRetentionDays);
   }
   if (patch.companyId !== undefined) {
     sets.push("company_id = ?");

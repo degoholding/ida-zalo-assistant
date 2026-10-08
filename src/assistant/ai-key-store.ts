@@ -262,10 +262,15 @@ export class AiKeyStore {
   }
 
   /** Chuỗi khóa cho trợ lý — mỗi khóa một client gọi hãng. Khóa không giải mã được thì bỏ. */
-  buildChainKeys(): ChainKey[] {
+  /**
+   * Chuỗi khóa cho trợ lý theo thứ tự ưu tiên. `allowedProviders` (mã AiKeyProvider dạng chuỗi, cài đặt «Hãng AI được
+   * phép dùng») — khóa của hãng ngoài danh sách bị bỏ qua, dữ liệu không đi tới hãng đó. Bỏ trống = mọi hãng.
+   */
+  buildChainKeys(allowedProviders?: string[]): ChainKey[] {
     return this.list().flatMap((view) => {
       const record = this.records.find((item) => item.id === view.id);
       if (!record?.secret) return [];
+      if (allowedProviders && !allowedProviders.includes(String(record.provider))) return [];
       const info = AI_PROVIDERS[record.provider];
       if (!info) return [];
       const model = record.model || info.defaultModel;

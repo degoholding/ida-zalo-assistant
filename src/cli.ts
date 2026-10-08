@@ -8,6 +8,7 @@
 //   npm run cli -- company add <MÃ> "Tên"       thêm công ty
 //   npm run cli -- group <mã nhóm> read=on files=on label="Bán hàng A" retention=730 company=<MÃ>
 //   npm run cli -- stats                        số đo 24 giờ qua
+//   npm run cli -- storage-to-r2                chép tệp đang nằm ở đĩa lên R2 (sau khi bật STORAGE_DRIVER=r2)
 
 import fs from "node:fs";
 import path from "node:path";
@@ -18,6 +19,8 @@ import { AttachmentStatus, BotAccountStatus, SessionEvent } from "./constants.js
 import { encryptJson, generateKey } from "./crypto/session-cipher.js";
 import { runMigrations } from "./db/migrate.js";
 import { createPool, type Db } from "./db/pool.js";
+import { createFileStorage, R2WithLocalFallback } from "./storage/file-storage.js";
+import { moveLocalFilesToR2 } from "./storage/move-to-r2.js";
 import { createCompany, findCompanyByCode, listCompanies } from "./sync/company-repository.js";
 import { findGroupByZaloId, updateGroupSettings, type GroupSettingsPatch } from "./sync/group-repository.js";
 import { saveLoggedInAccount } from "./zalo/bot-account-repository.js";
@@ -168,8 +171,14 @@ async function main(): Promise<void> {
       if (!args[0] || args.length < 2) throw new Error('Cú pháp: npm run cli -- group <mã nhóm> read=on files=on');
       await configureGroup(db, args[0], args.slice(1));
     } else if (command === "stats") await showStats(db);
+    else if (command === "storage-to-r2") {
+      const storage = createFileStorage(config);
+      if (!(storage instanceof R2WithLocalFallback)) throw new Error("Chưa bật R2: đặt STORAGE_DRIVER=r2 + R2_* trong .env rồi chạy lại");
+      const result = await moveLocalFilesToR2(db, storage, (line) => console.log(line));
+      console.log(`Xong: chép ${result.moved} tệp lên R2, ${result.missing} tệp không còn trên đĩa, ${result.failed} lỗi.`);
+    }
     else {
-      console.log("Lệnh: gen-key | login <nhãn> | accounts | groups | company [add <MÃ> <tên>] | group <mã> read=on|off files=on|off label=.. retention=.. company=<MÃ>|none | stats");
+      console.log("Lệnh: gen-key | login <nhãn> | accounts | groups | company [add <MÃ> <tên>] | group <mã> read=on|off files=on|off label=.. retention=.. company=<MÃ>|none | stats | storage-to-r2");
       process.exitCode = 1;
     }
   } finally {

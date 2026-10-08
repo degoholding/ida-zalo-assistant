@@ -12,8 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { AiKeysTab } from '../components/ai-keys-tab'
 import { AssistantSettingsTab } from '../components/assistant-settings-tab'
 import { GoogleSettingsTab } from '../components/google-settings-tab'
+import { ScheduleStatusCard } from '../components/schedule-status-card'
 import { SettingsSectionsForm } from '../components/settings-sections-form'
-import { SETTINGS_TABS, SYNC_SECTIONS, type SettingsTabId } from '../config/settings-sections'
+import { OPERATIONS_SECTIONS, SETTINGS_TABS, SYNC_SECTIONS, type SettingsTabId } from '../config/settings-sections'
 import { useGoogleOauthRedirectToast } from '../hooks/use-google-oauth-redirect-toast'
 import { useSettings } from '../hooks/use-settings'
 
@@ -83,6 +84,15 @@ export function SettingsPage() {
               sections={SYNC_SECTIONS}
               disabled={!canWrite}
             />
+          </TabsContent>
+
+          <TabsContent value="operations" className="mt-0 space-y-4">
+            <SettingsSectionsForm
+              settings={data.filter((item) => item.group === 'operations')}
+              sections={OPERATIONS_SECTIONS}
+              disabled={!canWrite}
+            />
+            <ScheduleStatusCard />
           </TabsContent>
 
           <TabsContent value="google" className="mt-0">

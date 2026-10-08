@@ -6,6 +6,7 @@ import {
   type Credentials,
   type GroupEvent,
   type GroupMessage,
+  type Reaction,
   type Undo,
   type UserMessage,
 } from "zca-js";
@@ -20,10 +21,13 @@ import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
 import { sanitizeFileName, type AttachmentDownloader } from "../sync/attachment-downloader.js";
 import type { FileStorage } from "../storage/file-storage.js";
-import { setContactZaloProfile, upsertMemberContact, type ContactRow } from "../sync/contact-repository.js";
+import { findContactByUid, setContactZaloProfile, upsertMemberContact, type ContactRow } from "../sync/contact-repository.js";
 import {
   directKey,
   ensureGroup,
+  findThread,
+  findThreadById,
+  groupKey,
   markBotInGroup,
   markBotLeftGroup,
   markBotLeftMissingGroups,
@@ -44,6 +48,9 @@ import { registerGroupHistoryApi, type HistoryPage } from "./group-history.js";
 import { ZaloSender } from "./zalo-sender.js";
 import { GroupAssistantReplier } from "./group-assistant-replier.js";
 import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
+import { AckTracker, enqueueDirectReply, type AckState, type DirectReplyPayload, type GroupReplyPayload } from "./reply-jobs.js";
+import type { JobRow } from "../jobs/job-queue.js";
+import { recordReaction } from "../flags/message-flags.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
 import {
   recordSessionEvent,
@@ -113,6 +120,11 @@ export function toIncomingGroupMessage(message: GroupMessage | UserMessage): Inc
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Báo bộ chạy việc có việc mới (src/jobs/job-runner.ts → wake). */
+export interface JobWaker {
+  wake(): void;
+}
+
 export class AccountRunner {
   private api: API | null = null;
   private ownUid = "";
@@ -123,8 +135,8 @@ export class AccountRunner {
   private readonly groupReplier: GroupAssistantReplier;
   // Đang chờ một trang tin cũ của nhóm (lấy tin cũ kiểu từng trang qua kết nối trực tiếp)
   private oldGroupPageWaiter: ((messages: GroupMessage[]) => void) | null = null;
-  // Mỗi cuộc riêng trả lời lần lượt — hai câu hỏi liền tay không chạy song song, câu sau đọc được câu trước
-  private readonly replyChains = new Map<number, Promise<void>>();
+  // «Em nhận được rồi» cho câu hỏi riêng đang nằm trong hàng đợi
+  private readonly acks = new AckTracker();
   // Người nhắn riêng đã hỏi Zalo ảnh đại diện trong phiên này — mỗi người hỏi một lần
   private readonly avatarAsked = new Set<string>();
 
@@ -135,6 +147,7 @@ export class AccountRunner {
     private readonly downloader: AttachmentDownloader,
     private readonly storage: FileStorage,
     private assistant: AssistantService | null,
+    private readonly jobs: JobWaker,
   ) {
     this.log = createLogger(`zalo:${account.label}`);
     this.sender = new ZaloSender(config.assistant.sendIntervalMs);
@@ -142,6 +155,7 @@ export class AccountRunner {
       db, config, sender: this.sender, log: this.log, accountId: account.id,
       getApi: () => this.api,
       getAssistant: () => this.assistant,
+      jobs,
       getBot: () => ({ uid: this.ownUid, name: this.account.display_name || this.account.label }),
       sendReportFile: (thread, file) => this.sendReportFile(thread, file),
     });
@@ -281,11 +295,29 @@ export class AccountRunner {
       recall.catch((error) => this.log.warn("ghi thu hồi tin lỗi", error));
     });
 
+    // Thả / gỡ cảm xúc lên tin (IDA câu 8: thả cảm xúc = «đã xem») — ghi để phase 5 biết tin đã có người xem
+    listener.on("reaction", (reaction: Reaction) => {
+      this.handleReaction(reaction).catch((error) => this.log.warn("ghi cảm xúc lỗi", error));
+    });
+
     listener.on("group_event", (event: GroupEvent) => {
       this.handleGroupEvent(event).catch((error) => this.log.warn(`xử lý sự kiện nhóm ${event.type} lỗi`, error));
     });
 
     listener.start({ retryOnClose: true });
+  }
+
+  private async handleReaction(reaction: Reaction): Promise<void> {
+    if (reaction.isSelf) return;
+    const thread = await findThread(this.db, reaction.isGroup ? groupKey(reaction.threadId) : directKey(this.account.id, reaction.threadId));
+    if (!thread?.read_messages) return;
+    const { data } = reaction;
+    for (const target of data.content.rMsg ?? []) {
+      await recordReaction(this.db, {
+        groupId: thread.id, zaloMsgId: String(target.gMsgID), reactorUid: String(data.uidFrom), icon: String(data.content.rIcon ?? ""),
+        at: new Date(Number(data.ts) || Date.now()),
+      });
+    }
   }
 
   /**
@@ -451,15 +483,34 @@ export class AccountRunner {
     const parsed = parseZaloContent(incoming.msgType, incoming.content);
     if (parsed.kind !== MessageKind.Text || !parsed.text.trim()) return;
 
-    const threadId = result.thread.id;
-    const previous = this.replyChains.get(threadId) ?? Promise.resolve();
-    const next = previous
-      .then(() => this.answerQuestion(result.thread, result.contact, result.messageId, parsed.text))
-      .catch((error) => this.log.error(`trả lời ${incoming.senderUid} lỗi`, error));
-    this.replyChains.set(threadId, next);
-    void next.finally(() => {
-      if (this.replyChains.get(threadId) === next) this.replyChains.delete(threadId);
-    });
+    // Ghi việc vào hàng đợi rồi đi tiếp — trả lời do bộ chạy việc làm (runDirectReplyJob), mỗi cuộc lần lượt từng câu
+    const payload: DirectReplyPayload = {
+      accountId: this.account.id, threadId: result.thread.id, senderUid: incoming.senderUid, messageId: result.messageId, question: parsed.text,
+    };
+    const jobId = await enqueueDirectReply(this.db, payload, incoming.msgId);
+    if (!jobId) return;
+    this.acks.watchQueued(jobId, () => this.sendAck(result.thread, result.contact, () => false));
+    this.jobs.wake();
+  }
+
+  /** Bộ chạy việc gọi: trả lời một câu hỏi riêng đã ghi trong hàng đợi. Ném lỗi = việc lỗi (thử lại nếu còn lượt). */
+  async runDirectReplyJob(job: JobRow): Promise<void> {
+    const payload = job.payload as DirectReplyPayload;
+    const ack = this.acks.begin(job.id);
+    try {
+      if (!this.api) throw new Error("bot chưa kết nối");
+      const thread = await findThreadById(this.db, payload.threadId);
+      const contact = await findContactByUid(this.db, payload.senderUid);
+      if (!thread || !contact) return;
+      await this.answerQuestion(thread, contact, payload.messageId, payload.question, ack);
+    } finally {
+      this.acks.end(job.id);
+    }
+  }
+
+  /** Bộ chạy việc gọi: trả lời khi bot được gọi trong nhóm. */
+  runGroupReplyJob(job: JobRow): Promise<void> {
+    return this.groupReplier.runJob(job.id, job.payload as GroupReplyPayload);
   }
 
   /** Người nhắn riêng chưa có ảnh / globalId: hỏi Zalo một lần mỗi phiên. */
@@ -504,7 +555,7 @@ export class AccountRunner {
     if (uids.length) this.log.info(`hỏi bù hồ sơ ${uids.length} người`);
   }
 
-  private async answerQuestion(thread: GroupRow, contact: ContactRow, messageId: number | null, question: string): Promise<void> {
+  private async answerQuestion(thread: GroupRow, contact: ContactRow, messageId: number | null, question: string, ack: AckState): Promise<void> {
     // Giữ bản trợ lý lúc bắt đầu: khóa bị xóa trên màn Cài đặt giữa chừng thì lượt này vẫn chạy nốt
     const assistant = this.assistant;
     if (!assistant) return;
@@ -518,8 +569,11 @@ export class AccountRunner {
       question,
     }, {
       onAccepted: () => {
+        if (ack.acked) return;
         ackTimer = setTimeout(() => {
-          if (!answered) void this.sendAck(thread, contact, () => answered).catch((error) => this.log.warn("nhắn xác nhận lỗi", error));
+          if (answered || ack.acked) return;
+          ack.acked = true;
+          void this.sendAck(thread, contact, () => answered).catch((error) => this.log.warn("nhắn xác nhận lỗi", error));
         }, ACK_DELAY_MS);
       },
     }).finally(() => {

@@ -30,7 +30,12 @@ export interface FileReaderDeps {
   maxFileBytes: number;
   /** Đuôi tệp được phép đọc (chữ thường, không dấu chấm). Bỏ trống / undefined = mọi loại bot đọc được. */
   allowedExtensions?: string[];
+  /** Bóc xlsx / docx ở luồng phụ (src/cpu/cpu-pool.ts) để không đứng luồng chính; bỏ trống = bóc ngay tại chỗ. */
+  heavyExtract?: HeavyExtractor;
 }
+
+/** Bóc chữ tệp nặng CPU ở nơi khác (luồng phụ). */
+export type HeavyExtractor = (task: "sheet" | "docx", data: Buffer) => Promise<{ text: string; summary: string }>;
 
 /** Số dòng bảng tính tối đa đưa cho mô hình — quá là tốn token mà không đọc hết được. */
 export const MAX_SHEET_ROWS = 2000;
@@ -128,10 +133,13 @@ async function extract(deps: FileReaderDeps, file: { file_name: string; file_ext
     return { method: "text", text: text.trim(), summary: `${ext}, ${text.length} ký tự`, ...zero };
   }
   if (SHEET_EXTENSIONS.has(ext)) {
-    const { text, summary } = extractSheet(file.data);
+    const { text, summary } = deps.heavyExtract ? await deps.heavyExtract("sheet", file.data) : extractSheet(file.data);
     return { method: "xlsx", text, summary, ...zero };
   }
-  if (ext === "docx") return { method: "docx", text: extractDocx(file.data), summary: "docx", ...zero };
+  if (ext === "docx") {
+    const text = deps.heavyExtract ? (await deps.heavyExtract("docx", file.data)).text : extractDocx(file.data);
+    return { method: "docx", text, summary: "docx", ...zero };
+  }
   if (VIDEO_EXTENSIONS.has(ext)) return { method: "unsupported", text: "", summary: `không đọc video (.${ext})`, ...zero };
   const mime = ext === "pdf" ? "application/pdf" : IMAGE_MIME[ext] ?? AUDIO_MIME[ext];
   if (mime && deps.readDocument) {

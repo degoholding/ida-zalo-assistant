@@ -42,6 +42,10 @@ export const queryKeys = {
     all: ['settings'] as const,
     list: () => ['settings', 'list'] as const,
   },
+  schedules: {
+    all: ['schedules'] as const,
+    list: () => ['schedules', 'list'] as const,
+  },
   aiKeys: {
     all: ['ai-keys'] as const,
     list: () => ['ai-keys', 'list'] as const,

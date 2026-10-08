@@ -13,6 +13,10 @@ export interface Group {
   read_messages: boolean
   capture_files: boolean
   retention_days: number
+  /** Nhóm Mật: bot vẫn đọc + lưu để nhắc việc nhưng không đưa nội dung cho AI / báo cáo. */
+  is_confidential: boolean
+  /** Số ngày giữ TỆP GỐC (ảnh, PDF…); hết hạn thì xóa tệp, vẫn giữ chữ đã bóc. */
+  file_retention_days: number
   first_seen_at: string
   members_synced_at: string | null
   avatar_url: string | null

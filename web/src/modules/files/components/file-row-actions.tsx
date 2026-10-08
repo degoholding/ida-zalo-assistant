@@ -1,19 +1,32 @@
-import { BookOpenText, Download, Eye, Loader2, RefreshCw } from 'lucide-react'
+import { BookOpenText, Download, Eye, Loader2, Pin, PinOff, RefreshCw } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
 
 import { Button } from '@/shared/ui/button'
-import { useExtractFile, useRetryFile } from '../hooks/use-files'
-import type { FileRecord } from '../types/file'
+import { useExtractFile, useRetryFile, useSetKeepFile } from '../hooks/use-files'
+import { FILE_STATUS, type FileRecord } from '../types/file'
 import { FileTextDialog } from './file-text-dialog'
 
-/** Cột hành động của bảng Tệp: tải về / đọc chữ / xem chữ (đã có trong kho), hoặc tải vào kho (lỗi / chưa lấy). */
+/**
+ * Cột hành động của bảng Tệp: tải về / đọc chữ / xem chữ / giữ tệp gốc (đã có trong kho), xem chữ (tệp gốc đã xóa theo
+ * hạn, chữ còn), hoặc tải vào kho (lỗi / chưa lấy).
+ */
 export function FileRowActions({ file }: { file: FileRecord }) {
   const retry = useRetryFile()
   const extract = useExtractFile()
+  const keep = useSetKeepFile()
   const [showText, setShowText] = useState(false)
   const stop = (event: MouseEvent) => event.stopPropagation()
 
+  const viewTextButton = (
+    <Button variant="outline" size="sm" title="Xem chữ đã bóc" onClick={(event) => { stop(event); setShowText(true) }}>
+      <Eye />
+      Xem chữ
+    </Button>
+  )
+  const textDialog = showText && <FileTextDialog file={file} open={showText} onOpenChange={setShowText} />
+
   if (file.download_url) {
+    const keepLabel = file.keep_file ? 'Bỏ giữ tệp gốc' : 'Giữ tệp gốc'
     return (
       <div className="flex items-center gap-1">
         <Button variant="outline" size="sm" asChild onClick={stop} title="Tải về">
@@ -28,12 +41,29 @@ export function FileRowActions({ file }: { file: FileRecord }) {
             Đọc
           </Button>
         ) : (
-          <Button variant="outline" size="sm" title="Xem chữ đã bóc" onClick={(event) => { stop(event); setShowText(true) }}>
-            <Eye />
-            Xem chữ
-          </Button>
+          viewTextButton
         )}
-        {showText && <FileTextDialog file={file} open={showText} onOpenChange={setShowText} />}
+        <Button
+          variant={file.keep_file ? 'secondary' : 'outline'}
+          size="sm"
+          disabled={keep.isPending}
+          aria-label={keepLabel}
+          title={file.keep_file ? 'Bỏ giữ — tệp gốc xóa theo hạn giữ tệp của nhóm' : 'Giữ tệp gốc — không xóa khi hết hạn giữ tệp của nhóm'}
+          onClick={(event) => { stop(event); keep.mutate({ id: file.id, keepFile: !file.keep_file }) }}
+        >
+          {keep.isPending ? <Loader2 className="animate-spin" /> : file.keep_file ? <PinOff /> : <Pin />}
+        </Button>
+        {textDialog}
+      </div>
+    )
+  }
+  // Tệp gốc đã xóa theo hạn nhưng chữ đã bóc vẫn còn — vẫn xem được thứ bot «nhìn thấy»
+  if (file.status === FILE_STATUS.expired) {
+    if (file.text_chars === null) return null
+    return (
+      <div className="flex items-center gap-1">
+        {viewTextButton}
+        {textDialog}
       </div>
     )
   }

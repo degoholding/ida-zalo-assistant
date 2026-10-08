@@ -18,7 +18,7 @@ function makeItem(overrides: Partial<AiKeyItem> = {}): AiKeyItem {
   return {
     id: 1, position: 1, provider: AiKeyProvider.OpenAICompatible, provider_label: 'Tương thích OpenAI (tùy chỉnh)',
     base_url: 'https://modelapi.vn/v1', model: 'deepseek-v4.1-flash', model_heavy: '', default_model: '', key_tail: '…ab12',
-    daily_cap: 0, used_today: 3, last_error: '', last_error_at: null, broken: false, verified_at: null, ...overrides,
+    daily_cap: 0, used_today: 3, last_error: '', last_error_at: null, broken: false, allowed: true, verified_at: null, ...overrides,
   }
 }
 
@@ -159,5 +159,21 @@ describe('AiKeyListCard', () => {
   it('flags a key the server cannot decrypt', () => {
     renderCard({ items: [makeItem({ broken: true })] })
     expect(screen.getByText('Không đọc được — gỡ rồi thêm lại')).toBeInTheDocument()
+  })
+
+  it('warns on a key whose provider is not allowed, and only on that key', () => {
+    renderCard({ items: [makeItem(), makeItem({ id: 7, position: 2, allowed: false, key_tail: '…gm99' })] })
+    const rows = screen.getAllByRole('listitem')
+    expect(within(rows[0]).queryByText('Hãng chưa được phép — bot bỏ qua')).toBeNull()
+    expect(within(rows[1]).getByText('Hãng chưa được phép — bot bỏ qua')).toBeInTheDocument()
+    // Khóa bị bỏ qua vẫn phải gỡ / sửa được — không khóa nút theo cờ này
+    expect(within(rows[1]).getByRole('button', { name: /Gỡ khóa/ })).toBeEnabled()
+  })
+
+  it('does not warn when the server omits the allowed flag (older server) — only an explicit false counts', () => {
+    const legacy: Partial<AiKeyItem> = makeItem()
+    delete legacy.allowed
+    renderCard({ items: [legacy as AiKeyItem] })
+    expect(screen.queryByText('Hãng chưa được phép — bot bỏ qua')).toBeNull()
   })
 })

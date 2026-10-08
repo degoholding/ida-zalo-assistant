@@ -1,7 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
-import { ApiError, parseId, sendOk } from "./api-http.js";
+import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
 import { contactAvatarUrl } from "./contacts-api.js";
@@ -44,7 +44,7 @@ export const FILE_LIST_SPEC: ListSpec = {
 const FILE_FROM = `FROM attachment a JOIN message m ON m.id = a.message_id JOIN zalo_group g ON g.id = a.group_id
   LEFT JOIN contact sc ON sc.zalo_uid = m.sender_uid LEFT JOIN attachment_text t ON t.attachment_id = a.id`;
 const FILE_COLUMNS = `
-  a.id, a.file_name, a.file_ext, a.status, a.stored_bytes, a.declared_size, a.last_error, a.attempts, a.stored_at,
+  a.id, a.file_name, a.file_ext, a.status, a.keep_file, a.stored_bytes, a.declared_size, a.last_error, a.attempts, a.stored_at,
   m.id AS message_id, m.sent_at, m.sender_name, m.sender_uid, m.zalo_msg_type, m.kind AS message_kind, sc.avatar_key AS sender_avatar_key,
   sc.id AS sender_contact_id, g.id AS thread_id, g.thread_type, t.method AS text_method, t.char_count AS text_chars, t.summary AS text_summary, t.extracted_at AS text_extracted_at,
   IF(g.thread_type = ${ConversationType.Direct}, CONCAT('Nhắn riêng · ', g.name), COALESCE(NULLIF(g.label, ''), g.name)) AS thread_name`;
@@ -58,6 +58,7 @@ export function decorateFile(row: RowDataPacket): Record<string, unknown> {
     download_url: row.status === AttachmentStatus.Stored ? `/api/files/${row.id}/download` : null,
     can_retry: row.status === AttachmentStatus.Failed || row.status === AttachmentStatus.Skipped,
     text_chars: row.text_chars === null || row.text_chars === undefined ? null : Number(row.text_chars),
+    keep_file: Boolean(row.keep_file),
   };
 }
 
@@ -107,6 +108,18 @@ export const fileRoutes: ApiRoute[] = [
       "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${downloadName.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
     });
     stream.pipe(response);
+  }],
+  // Đánh dấu «giữ tệp gốc»: không xóa khi hết hạn giữ tệp của nhóm (IDA câu 20) — vẫn theo hạn của tin
+  ["PATCH", /^\/api\/files\/(\d+)$/, async ({ request, response, match, service }) => {
+    const id = parseId(match[1]);
+    const body = await readJson(request);
+    if (typeof body.keep_file !== "boolean") throw new ApiError(422, "validation_error", "keep_file chỉ nhận bật / tắt");
+    const before = await getFile(service.db, id);
+    await service.db.query("UPDATE attachment SET keep_file = ? WHERE id = ?", [body.keep_file ? 1 : 0, id]);
+    if (Boolean(before.keep_file) !== body.keep_file) {
+      await recordAudit(service.db, { entity: "file", entityId: id, action: "update", message: body.keep_file ? "Đánh dấu giữ tệp gốc" : "Bỏ đánh dấu giữ tệp gốc" });
+    }
+    sendOk(response, await getFile(service.db, id), body.keep_file ? "Tệp gốc sẽ được giữ, không xóa khi hết hạn" : "Đã bỏ giữ — tệp gốc xóa theo hạn của nhóm");
   }],
   ["POST", /^\/api\/files\/(\d+)\/retry$/, async ({ response, match, service }) => {
     const id = parseId(match[1]);

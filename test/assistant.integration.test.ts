@@ -220,7 +220,9 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
     assert.equal(files.files.length, 0);
     const read = await runTool(context, "read_file", { attachment_id: secretFile[0].id }) as any;
     assert.match(read.error, /không thuộc nhóm/);
-    for (const blocked of ["find_people", "get_conversation_with_person", "list_contacts", "send_file", "export_report"]) {
+    // export_report KHÔNG nằm trong danh sách chặn: mở cho hỏi trong nhóm từ 07/10/2026 (ae4f45a) — bảng do mô hình soạn
+    // từ dữ liệu đã lấy qua các công cụ bị khóa nhóm ở trên, nên không mở thêm đường sang nhóm khác
+    for (const blocked of ["find_people", "get_conversation_with_person", "list_contacts", "send_file"]) {
       const result = await runTool(context, blocked, { name: "Lan", person_uid: "u-lan", from: window.from, to: window.to }) as any;
       assert.match(result.error, /chỉ dùng được dữ liệu của nhóm/, blocked);
     }
@@ -234,7 +236,9 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
       groupScope: { groupId: group.id, groupName: "bán hàng" },
     });
     assert.equal(reply.status, AssistantTurnStatus.Answered);
-    assert.equal(model.requests[0].toolCount, 3);
+    // list_groups · get_group_messages · search_files · read_link (read_link mở cho nhóm từ 07/10/2026, 1abdf34);
+    // không có kho tệp / bộ xuất / lịch họp nên read_file, export_report, create_meeting… không được đưa
+    assert.equal(model.requests[0].toolCount, 4);
     assert.equal(model.requests[0].contents.length, 1);
   });
 

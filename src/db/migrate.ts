@@ -13,6 +13,9 @@ export async function runMigrations(databaseUrl: string): Promise<string[]> {
   // Kết nối riêng có multipleStatements — chỉ dùng cho migration, không dùng cho pool chính
   const connection = await mysql.createConnection({ uri: databaseUrl, multipleStatements: true });
   try {
+    // Từ 08/10/2026 có hai tiến trình (app + worker) cùng khởi động — khóa tên để không ai chạy trùng một tệp
+    const [locked] = await connection.query("SELECT GET_LOCK('bot_tro_ly_migrate', 120) AS ok");
+    if (Number((locked as { ok: number }[])[0]?.ok) !== 1) throw new Error("chờ khóa migration quá 120 giây");
     await connection.query(
       `CREATE TABLE IF NOT EXISTS schema_migration (
          name VARCHAR(200) NOT NULL PRIMARY KEY,

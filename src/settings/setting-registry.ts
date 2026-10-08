@@ -2,12 +2,14 @@ import type { AppConfig } from "../config.js";
 import type { GoogleAccountLink } from "../google/google-oauth.js";
 import { parseServiceAccount, parseSpreadsheetId } from "../google/service-account.js";
 import { ApiError } from "../web/api/api-http.js";
+import { ALL_AI_PROVIDER_CODES, DEFAULT_HOLIDAYS, DEFAULT_QUIET_HOURS, DEFAULT_WORK_DAYS, DEFAULT_WORK_HOURS } from "../config.js";
+import { CalendarInputError, parseHolidays, parseTimeRanges, parseWorkDays } from "../schedule/work-calendar.js";
 
 // Danh mục cài đặt sửa được trên màn Cài đặt — khai MỘT chỗ ở đây. Thêm khóa = thêm một dòng vào mảng;
 // API, kho lưu và giao diện tự có ô. Thứ tự ưu tiên: giá trị trên web (app_setting) > .env > mặc định.
 // Những thứ cần có trước khi vào được DB / web (DATABASE_URL, khóa mã hóa, mật khẩu, cổng…) KHÔNG đưa lên đây.
 
-export type SettingGroup = "assistant" | "sync" | "google";
+export type SettingGroup = "assistant" | "sync" | "google" | "operations";
 export type SettingType = "string" | "int" | "bool" | "list" | "json";
 export type SettingValue = string | number | boolean | string[] | Record<string, unknown> | null;
 
@@ -42,6 +44,32 @@ export interface SettingDefinition {
 }
 
 const MB = 1024 * 1024;
+
+/** Kiểm chuỗi lịch bằng hàm parse của lịch làm việc; sai thì báo 422 với câu của bộ parse. */
+function calendarCheck(check: (value: SettingValue) => unknown): (value: SettingValue) => SettingValue {
+  return (value) => {
+    try {
+      check(value);
+    } catch (error) {
+      if (error instanceof CalendarInputError) throw new ApiError(422, "validation_error", error.message);
+      throw error;
+    }
+    return value;
+  };
+}
+
+const WEEKDAY_CHOICES = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
+  .map((label, index) => ({ value: String(index + 1), label, group: "Ngày làm việc" }));
+
+/** Mã AiKeyProvider (src/constants.ts) — cùng thứ tự với ALL_AI_PROVIDER_CODES. */
+const ALLOWED_AI_PROVIDER_CHOICES = [
+  { value: "1", label: "Gemini (Google)", group: "Hãng chính thức" },
+  { value: "2", label: "OpenAI", group: "Hãng chính thức" },
+  { value: "4", label: "DeepSeek", group: "Hãng chính thức" },
+  { value: "5", label: "Grok (xAI)", group: "Hãng chính thức" },
+  { value: "6", label: "OpenRouter", group: "Trạm trung gian" },
+  { value: "3", label: "Tương thích OpenAI (trạm tự nhập, vd modelapi.vn)", group: "Trạm trung gian" },
+];
 const MODEL_PATTERN = /^[a-z0-9.-]{3,80}$/;
 const MODEL_HINT = "tên mô hình chỉ gồm chữ thường, số, dấu chấm, gạch ngang (3–80 ký tự)";
 
@@ -169,6 +197,37 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     applyTo: (config, value) => { config.assistant.showTokenUsage = value === true; },
   },
   {
+    key: "assistant_concurrency", group: "assistant", label: "Số câu trả lời chạy cùng lúc", type: "int", secret: false,
+    help: "Nhiều người cùng hỏi thì bot trả lời song song tối đa bấy nhiêu câu, câu dư xếp hàng (vẫn được trả lời, chỉ chờ lâu hơn). Cao quá dễ chạm giới hạn của hãng AI.",
+    envName: "ASSISTANT_CONCURRENCY", defaultValue: 6, min: 1, max: 30,
+    applyTo: (config, value) => { config.assistant.concurrency = asNumber(value); },
+  },
+  {
+    key: "assistant_daily_token_cap_per_bot", group: "assistant", label: "Trần token mỗi ngày cho một bot", type: "int", secret: false,
+    help: "Mỗi tài khoản bot dùng tối đa bấy nhiêu token mỗi ngày (giờ Việt Nam); chạm trần thì bot đó nghỉ tới hôm sau. 0 = không giới hạn riêng, chỉ theo trần cả hệ thống.",
+    envName: "ASSISTANT_DAILY_TOKEN_CAP_PER_BOT", defaultValue: 0, min: 0, max: 100_000_000,
+    applyTo: (config, value) => { config.assistant.dailyTokenCapPerBot = asNumber(value); },
+  },
+  {
+    key: "privacy_mask_personal_data", group: "assistant", label: "Che dữ liệu cá nhân trước khi gửi AI", type: "bool", secret: false,
+    help: "Bật thì số điện thoại, số tài khoản, số CCCD trong tin nhắn / tệp bị che (chỉ giữ 3 số cuối) trước khi đưa cho mô hình AI. Tệp PDF / ảnh / ghi âm gửi nguyên cho mô hình đọc nên KHÔNG che được.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.privacy.maskPersonalData = value === true; },
+  },
+  {
+    key: "privacy_block_web_agro_technical", group: "assistant", label: "Câu hỏi kỹ thuật thuốc BVTV: không tìm web", type: "bool", secret: false,
+    help: "Bật thì câu hỏi về liều lượng, pha trộn, phun thuốc, sâu bệnh… bot không tìm trên mạng — chỉ trích tài liệu đã duyệt, luôn kèm «cần kỹ thuật xác nhận» (IDA câu 13).",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.privacy.blockWebForAgroTechnical = value === true; },
+  },
+  {
+    key: "privacy_allowed_ai_providers", group: "assistant", label: "Hãng AI được phép dùng", type: "list", secret: false,
+    help: "Khóa AI của hãng không được tick thì bot bỏ qua (dữ liệu không đi tới hãng đó). Trạm trung gian là bên thứ ba chuyển tiếp yêu cầu — không rõ dữ liệu đi đâu tiếp.",
+    envName: null, defaultValue: ALL_AI_PROVIDER_CODES, choices: ALLOWED_AI_PROVIDER_CHOICES, maxItems: 10,
+    normalize: (value) => { if (!asList(value).length) throw new ApiError(422, "validation_error", "phải chọn ít nhất một hãng"); return value; },
+    applyTo: (config, value) => { config.privacy.allowedAiProviders = asList(value); },
+  },
+  {
     key: "assistant_send_interval_ms", group: "assistant", label: "Giãn cách gửi tin (mili giây)", type: "int", secret: false,
     help: "Khoảng nghỉ giữa hai tin bot gửi. Dưới 500 dễ bị Zalo khóa tài khoản.",
     envName: "ASSISTANT_SEND_INTERVAL_MS", defaultValue: 1500, min: 500, max: 10_000,
@@ -255,6 +314,40 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     envName: null, defaultValue: "", maxLength: 500, allowEmpty: true,
     normalize: (value) => { if (value) parseSpreadsheetId(String(value)); return value; },
     applyTo: (config, value) => { config.google.spreadsheetUrl = asString(value); },
+  },
+  {
+    key: "work_hours", group: "operations", label: "Giờ làm việc", type: "string", secret: false,
+    help: "Các khoảng giờ làm trong ngày, cách nhau dấu phẩy, vd «08:30-12:00, 13:30-17:30». Đồng hồ chờ trả lời chỉ chạy trong giờ này.",
+    envName: null, defaultValue: DEFAULT_WORK_HOURS, maxLength: 100,
+    normalize: calendarCheck((value) => parseTimeRanges(asString(value), false)),
+    applyTo: (config, value) => { config.calendar.workHours = asString(value); },
+  },
+  {
+    key: "work_days", group: "operations", label: "Ngày làm việc", type: "list", secret: false,
+    help: "Ngày nào trong tuần là ngày làm việc. Ngày không tick = cả ngày tính là giờ yên lặng.",
+    envName: null, defaultValue: DEFAULT_WORK_DAYS, choices: WEEKDAY_CHOICES, maxItems: 7,
+    normalize: calendarCheck((value) => parseWorkDays(asList(value))),
+    applyTo: (config, value) => { config.calendar.workDays = asList(value); },
+  },
+  {
+    key: "quiet_hours", group: "operations", label: "Giờ yên lặng", type: "string", secret: false, allowEmpty: true,
+    help: "Trong giờ này chỉ báo tin KHẨN / VIP, tin khác dồn vào bản tin sáng kế tiếp. Được vắt qua nửa đêm, vd «21:00-06:30».",
+    envName: null, defaultValue: DEFAULT_QUIET_HOURS, maxLength: 100,
+    normalize: calendarCheck((value) => parseTimeRanges(asString(value), true)),
+    applyTo: (config, value) => { config.calendar.quietHours = asString(value); },
+  },
+  {
+    key: "holidays", group: "operations", label: "Ngày nghỉ lễ / Tết", type: "string", secret: false, allowEmpty: true,
+    help: "Ngày lặp hằng năm ghi dd/mm (vd 30/04); kỳ nghỉ một lần ghi dd/mm/yyyy-dd/mm/yyyy (vd Tết 05/02/2027-11/02/2027). Cách nhau dấu phẩy.",
+    envName: null, defaultValue: DEFAULT_HOLIDAYS, maxLength: 1000,
+    normalize: calendarCheck((value) => parseHolidays(asString(value))),
+    applyTo: (config, value) => { config.calendar.holidays = asString(value); },
+  },
+  {
+    key: "backup_keep_days", group: "operations", label: "Giữ bản sao lưu (ngày)", type: "int", secret: false,
+    help: "Bản sao lưu CSDL hằng ngày giữ trên kho tệp bấy nhiêu ngày rồi xóa.",
+    envName: "BACKUP_KEEP_DAYS", defaultValue: 30, min: 3, max: 365,
+    applyTo: (config, value) => { config.backup.keepDays = asNumber(value); },
   },
 ];
 

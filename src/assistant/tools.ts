@@ -211,6 +211,9 @@ function formatLines(rows: MessageLineRow[], withGroup: boolean): { text: string
   return { text: lines.slice(start).join("\n"), truncated: start > 0 };
 }
 
+/** Câu báo khi mô hình chạm vào dữ liệu nhóm Mật (IDA câu 4: nhóm Mật không gửi sang AI). */
+const CONFIDENTIAL_ERROR = "Nhóm này để chế độ Mật — bot không đưa nội dung nhóm cho AI. Báo người hỏi xem trực tiếp trong nhóm.";
+
 const MESSAGE_SELECT = `
   SELECT m.sent_at, m.sender_name, m.sender_uid, m.text, m.quote_text, a.file_name, a.id AS attachment_id,
          COALESCE(NULLIF(g.label, ''), g.name) AS group_name, g.thread_type
@@ -225,7 +228,8 @@ async function listGroups(context: ToolContext, args: Record<string, unknown>) {
             (SELECT COUNT(*) FROM message m WHERE m.group_id = g.id) AS message_count,
             (SELECT MAX(m.sent_at) FROM message m WHERE m.group_id = g.id) AS last_message_at
      FROM zalo_group g LEFT JOIN company c ON c.id = g.company_id
-     WHERE g.thread_type = ? AND g.read_messages = 1 AND (? = '' OR g.name LIKE ? OR g.label LIKE ?) AND (? = 0 OR g.id = ?)
+     WHERE g.thread_type = ? AND g.read_messages = 1 AND g.is_confidential = 0
+       AND (? = '' OR g.name LIKE ? OR g.label LIKE ?) AND (? = 0 OR g.id = ?)
      ORDER BY last_message_at DESC LIMIT 50`,
     [ConversationType.Group, query, `%${query}%`, `%${query}%`, context.scopeGroupId ?? 0, context.scopeGroupId ?? 0],
   );
@@ -246,10 +250,11 @@ async function getGroupMessages(context: ToolContext, args: Record<string, unkno
   const to = parseTime(args.to, context.now);
   const from = parseTime(args.from, new Date(to.getTime() - 86_400_000));
   const [groups] = await context.db.query<RowDataPacket[]>(
-    "SELECT id, name FROM zalo_group WHERE id = ? AND thread_type = ? AND read_messages = 1",
+    "SELECT id, name, is_confidential FROM zalo_group WHERE id = ? AND thread_type = ? AND read_messages = 1",
     [groupId, ConversationType.Group],
   );
   if (!groups.length) return { error: "Không có nhóm này hoặc nhóm không được lưu tin — gọi list_groups để lấy id đúng." };
+  if (groups[0].is_confidential) return { error: CONFIDENTIAL_ERROR };
   const [rows] = await context.db.query<MessageLineRow[]>(
     `${MESSAGE_SELECT}
      WHERE m.group_id = ? AND m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL
@@ -277,7 +282,7 @@ async function findPeople(context: ToolContext, args: Record<string, unknown>) {
             GROUP_CONCAT(DISTINCT COALESCE(NULLIF(g.label, ''), g.name) SEPARATOR ', ') AS groups_in
      FROM contact c
      LEFT JOIN group_member gm ON gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL
-     LEFT JOIN zalo_group g ON g.id = gm.group_id AND g.read_messages = 1
+     LEFT JOIN zalo_group g ON g.id = gm.group_id AND g.read_messages = 1 AND g.is_confidential = 0
      WHERE c.display_name LIKE ? OR c.zalo_name LIKE ?
         OR c.zalo_uid IN (SELECT zalo_uid FROM group_member WHERE display_name LIKE ?)
      GROUP BY c.id
@@ -304,7 +309,7 @@ async function getConversationWithPerson(context: ToolContext, args: Record<stri
   // mà người đó cũng nhắn trong khoảng này. Riêng: cuộc riêng giữa bot và người đó.
   const [rows] = await context.db.query<MessageLineRow[]>(
     `${MESSAGE_SELECT}
-     WHERE m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL AND g.read_messages = 1
+     WHERE m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL AND g.read_messages = 1 AND g.is_confidential = 0
        AND (
          (g.thread_type = ? AND (
             m.sender_uid = ?
@@ -352,6 +357,7 @@ async function searchFiles(context: ToolContext, args: Record<string, unknown>) 
      FROM attachment a JOIN message m ON m.id = a.message_id JOIN zalo_group g ON g.id = a.group_id
      LEFT JOIN attachment_text t ON t.attachment_id = a.id
      WHERE ${conditions} AND (? = 0 OR a.group_id = ?) AND m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL
+       AND g.is_confidential = 0
      ORDER BY m.sent_at DESC LIMIT 20`,
     [...conditionParams, groupId, groupId, from, to],
   );
@@ -377,10 +383,10 @@ async function readFile(context: ToolContext, args: Record<string, unknown>) {
   if (!context.readFile) return { error: "Bot chưa bật đọc tệp" };
   const attachmentId = Number(args.attachment_id);
   if (!Number.isSafeInteger(attachmentId) || attachmentId <= 0) return { error: "Thiếu attachment_id" };
-  if (context.scopeGroupId) {
-    const [owner] = await context.db.query<RowDataPacket[]>("SELECT group_id FROM attachment WHERE id = ?", [attachmentId]);
-    if (Number(owner[0]?.group_id) !== context.scopeGroupId) return { error: "Tệp này không thuộc nhóm đang hỏi." };
-  }
+  const [owner] = await context.db.query<RowDataPacket[]>(
+    "SELECT a.group_id, g.is_confidential FROM attachment a JOIN zalo_group g ON g.id = a.group_id WHERE a.id = ?", [attachmentId]);
+  if (context.scopeGroupId && Number(owner[0]?.group_id) !== context.scopeGroupId) return { error: "Tệp này không thuộc nhóm đang hỏi." };
+  if (owner[0]?.is_confidential) return { error: CONFIDENTIAL_ERROR };
   const result = await context.readFile(attachmentId);
   if ("error" in result) return result;
   if (context.usage) {
@@ -421,9 +427,11 @@ async function webSearch(context: ToolContext, args: Record<string, unknown>) {
 async function sendFile(context: ToolContext, args: Record<string, unknown>) {
   const attachmentId = Number(args.attachment_id);
   if (context.filesToSend.length >= MAX_FILES_PER_TURN) return { error: `Mỗi lần chỉ gửi tối đa ${MAX_FILES_PER_TURN} tệp.` };
-  const [rows] = await context.db.query<RowDataPacket[]>("SELECT id, file_name, status FROM attachment WHERE id = ?", [attachmentId]);
+  const [rows] = await context.db.query<RowDataPacket[]>(
+    "SELECT a.id, a.file_name, a.status, g.is_confidential FROM attachment a JOIN zalo_group g ON g.id = a.group_id WHERE a.id = ?", [attachmentId]);
   const file = rows[0];
   if (!file) return { error: "Không có tệp này." };
+  if (file.is_confidential) return { error: CONFIDENTIAL_ERROR };
   if (file.status !== AttachmentStatus.Stored) return { error: "Tệp này chưa có trong kho (link Zalo hết hạn hoặc nhóm không bật lấy file)." };
   if (!context.filesToSend.includes(attachmentId)) context.filesToSend.push(attachmentId);
   return { queued: true, name: file.file_name };
