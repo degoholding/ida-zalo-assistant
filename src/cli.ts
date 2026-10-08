@@ -9,6 +9,9 @@
 //   npm run cli -- group <mã nhóm> read=on files=on label="Bán hàng A" retention=730 company=<MÃ>
 //   npm run cli -- stats                        số đo 24 giờ qua
 //   npm run cli -- storage-to-r2                chép tệp đang nằm ở đĩa lên R2 (sau khi bật STORAGE_DRIVER=r2)
+//   npm run cli -- user-admin <tên> <mật khẩu>   tạo / nâng tài khoản quản trị (đường cứu khi không ai vào được web)
+//   npm run cli -- user-password <tên|email> <mật khẩu>   đặt lại mật khẩu một tài khoản
+//   npm run cli -- user-import <tệp.tsv> [vai trò 1|2|3]   nạp «email<TAB>họ tên»: tên đăng nhập = mật khẩu = email
 
 import fs from "node:fs";
 import path from "node:path";
@@ -21,6 +24,8 @@ import { runMigrations } from "./db/migrate.js";
 import { createPool, type Db } from "./db/pool.js";
 import { createFileStorage, R2WithLocalFallback } from "./storage/file-storage.js";
 import { moveLocalFilesToR2 } from "./storage/move-to-r2.js";
+import { ensureAdminUser, importUsersFromTsv, setUserPassword } from "./auth/user-admin.js";
+import { UserRole } from "./constants.js";
 import { createCompany, findCompanyByCode, listCompanies } from "./sync/company-repository.js";
 import { findGroupByZaloId, updateGroupSettings, type GroupSettingsPatch } from "./sync/group-repository.js";
 import { saveLoggedInAccount } from "./zalo/bot-account-repository.js";
@@ -171,7 +176,20 @@ async function main(): Promise<void> {
       if (!args[0] || args.length < 2) throw new Error('Cú pháp: npm run cli -- group <mã nhóm> read=on files=on');
       await configureGroup(db, args[0], args.slice(1));
     } else if (command === "stats") await showStats(db);
-    else if (command === "storage-to-r2") {
+    else if (command === "user-admin") {
+      if (!args[0] || !args[1]) throw new Error("Cú pháp: npm run cli -- user-admin <tên đăng nhập> <mật khẩu>");
+      const { id, created } = await ensureAdminUser(db, args[0], args[1]);
+      console.log(`${created ? "Đã tạo" : "Đã nâng lên quản trị + đặt lại mật khẩu cho"} tài khoản #${id} «${args[0].toLowerCase()}»`);
+    } else if (command === "user-password") {
+      if (!args[0] || !args[1]) throw new Error("Cú pháp: npm run cli -- user-password <tên đăng nhập|email> <mật khẩu>");
+      console.log(`Đã đặt lại mật khẩu tài khoản #${await setUserPassword(db, args[0], args[1])}`);
+    } else if (command === "user-import") {
+      if (!args[0]) throw new Error("Cú pháp: npm run cli -- user-import <tệp.tsv> [vai trò 1|2|3]");
+      const role = Number(args[1] ?? UserRole.Staff);
+      if (!Object.values(UserRole).includes(role)) throw new Error("Vai trò là 1 (Quản trị), 2 (Quản lý) hoặc 3 (Nhân viên)");
+      const result = await importUsersFromTsv(db, args[0], role as UserRole);
+      console.log(`Đã tạo ${result.created} tài khoản, bỏ qua ${result.skipped} dòng (đã có / sai email).`);
+    } else if (command === "storage-to-r2") {
       const storage = createFileStorage(config);
       if (!(storage instanceof R2WithLocalFallback)) throw new Error("Chưa bật R2: đặt STORAGE_DRIVER=r2 + R2_* trong .env rồi chạy lại");
       const result = await moveLocalFilesToR2(db, storage, (line) => console.log(line));

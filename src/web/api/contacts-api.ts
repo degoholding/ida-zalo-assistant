@@ -1,4 +1,4 @@
-import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
 import { assertContactVisible, contactScopeSql } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
 import { ContactKind, ContactKindSource, ContactRole, ConversationType } from "../../constants.js";
@@ -106,7 +106,7 @@ async function decorate(db: Db, rows: RowDataPacket[]): Promise<Record<string, u
   });
 }
 
-export function listContacts(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
+export function listContacts(db: Db, params: URLSearchParams, principal: Principal = SYSTEM_PRINCIPAL) {
   return runList(db, params, CONTACT_LIST_SPEC, {
     select: CONTACT_COLUMNS, from: CONTACT_FROM, baseWhere: contactScopeSql(principal) ?? undefined, decorate: (rows) => decorate(db, rows),
   });

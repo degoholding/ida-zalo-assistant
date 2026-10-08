@@ -1,4 +1,4 @@
-import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
 import { assertThreadVisible, scopedWhere } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../../constants.js";
@@ -55,7 +55,7 @@ function decorateThread(bots: Set<string>) {
   });
 }
 
-export async function listConversations(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
+export async function listConversations(db: Db, params: URLSearchParams, principal: Principal = SYSTEM_PRINCIPAL) {
   const bots = await loadBotUids(db);
   return runList(db, params, CONVERSATION_LIST_SPEC, {
     select: CONVERSATION_COLUMNS, from: CONVERSATION_FROM, baseWhere: scopedWhere(principal, BASE_WHERE, "g.id"), decorate: (rows) => rows.map(decorateThread(bots)),

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -70,13 +70,28 @@ beforeEach(() => {
 })
 
 describe('LoginPage', () => {
+  it('sends the typed username (trimmed) together with the password', async () => {
+    mockAuthConfig({ google_client_id: '' })
+    apiPost.mockResolvedValueOnce({ user: { id: 1, full_name: 'Quản trị', email: '', role: 1, all_groups: true, permissions: {} } })
+    renderLogin()
+
+    const submit = screen.getByRole('button', { name: 'Đăng nhập' })
+    expect(submit).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Tên đăng nhập hoặc email'), { target: { value: '  admin ' } })
+    fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'admin' } })
+    fireEvent.click(submit)
+
+    await vi.waitFor(() => expect(apiPost).toHaveBeenCalledWith('/api/auth/login', { username: 'admin', password: 'admin' }, expect.anything()))
+  })
+
   it('shows the Google button only after the server returns a client id', async () => {
     mockAuthConfig({ google_client_id: 'abc.apps.googleusercontent.com' })
     renderLogin()
 
     expect(await screen.findByRole('button', { name: 'Đăng nhập bằng Google' })).toBeInTheDocument()
-    // Mật khẩu quản trị vẫn còn — đường dự phòng
-    expect(screen.getByLabelText('Mật khẩu quản trị')).toBeInTheDocument()
+    // Đăng nhập bằng tên + mật khẩu vẫn còn bên cạnh nút Google
+    expect(screen.getByLabelText('Tên đăng nhập hoặc email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Mật khẩu')).toBeInTheDocument()
   })
 
   it('hides the Google button when the client id is empty or only whitespace', async () => {
@@ -85,7 +100,7 @@ describe('LoginPage', () => {
 
     await vi.waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/auth/config'))
     expect(screen.queryByRole('button', { name: 'Đăng nhập bằng Google' })).toBeNull()
-    expect(screen.getByLabelText('Mật khẩu quản trị')).toBeInTheDocument()
+    expect(screen.getByLabelText('Mật khẩu')).toBeInTheDocument()
   })
 
   it('keeps password login usable when the config request fails', async () => {

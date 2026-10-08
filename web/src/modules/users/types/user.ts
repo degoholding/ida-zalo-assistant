@@ -2,7 +2,12 @@
 export interface AppUser {
   [key: string]: unknown
   id: number
+  /** Rỗng = không đăng nhập Google được */
   email: string
+  /** Rỗng = chỉ đăng nhập bằng email / nút Google */
+  username: string
+  /** Đã đặt mật khẩu chưa — máy chủ không bao giờ trả mật khẩu */
+  has_password: boolean
   full_name: string
   /** `USER_ROLE` ở `@/core/auth/user-role`. */
   role: number

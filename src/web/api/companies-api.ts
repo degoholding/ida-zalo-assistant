@@ -1,4 +1,4 @@
-import { canSeeGroup, PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { canSeeGroup, SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
@@ -46,7 +46,7 @@ async function loadCompany(db: Db, id: number): Promise<Record<string, unknown>>
   return decorate(rows)[0];
 }
 
-export async function getCompanyDetail(db: Db, id: number, principal: Principal = PASSWORD_ADMIN): Promise<Record<string, unknown>> {
+export async function getCompanyDetail(db: Db, id: number, principal: Principal = SYSTEM_PRINCIPAL): Promise<Record<string, unknown>> {
   const company = await loadCompany(db, id);
   const [allGroups] = await db.query<RowDataPacket[]>(
     `SELECT g.id, COALESCE(NULLIF(g.label, ''), g.name) AS name, g.group_kind, g.member_count, g.read_messages,

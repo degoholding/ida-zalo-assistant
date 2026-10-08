@@ -56,7 +56,7 @@ function isSameOrigin(origin: string | undefined, host: string | undefined): boo
 
 export function startWebServer(service: SyncService): Promise<http.Server> {
   const { db, config, storage } = service;
-  const sessions = new SessionStore(db, config.web.adminPassword);
+  const sessions = new SessionStore(db);
   const qrLogins = new QrLoginManager(service);
   const cookieFlags = `HttpOnly; SameSite=Strict; Path=/${config.web.cookieSecure ? "; Secure" : ""}`;
 

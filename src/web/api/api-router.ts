@@ -1,5 +1,5 @@
 import { GoogleTokenError, verifyGoogleIdToken } from "../../auth/google-id-token.js";
-import { can, currentPrincipal, loadUserPrincipal, PASSWORD_ADMIN, permissionsFor, type Principal } from "../../auth/principal.js";
+import { can, currentPrincipal, loadUserPrincipal, permissionsFor, type Principal } from "../../auth/principal.js";
 import type { SessionStore } from "../../auth/session-store.js";
 import { createLogger, describeError } from "../../logger.js";
 import type { SyncService } from "../../sync-service.js";
@@ -58,7 +58,6 @@ function describeUser(principal: Principal) {
 async function resolvePrincipal(deps: ApiDeps, token: string | undefined): Promise<Principal | null> {
   const session = await deps.sessions.resolve(token);
   if (!session) return null;
-  if (session.userId === null) return PASSWORD_ADMIN;
   return loadUserPrincipal(deps.service.db, session.userId);
 }
 
@@ -79,7 +78,7 @@ async function loginWithGoogle(deps: ApiDeps, credential: string): Promise<{ tok
   const principal = await loadUserPrincipal(db, Number(user.id));
   if (!principal) throw new ApiError(403, "user_disabled", "Tài khoản đã bị tắt — liên hệ quản trị.");
   await db.query("UPDATE app_user SET last_login_at = NOW(3) WHERE id = ?", [principal.userId]);
-  return { token: await deps.sessions.create(principal.userId), principal };
+  return { token: await deps.sessions.create(Number(principal.userId)), principal };
 }
 
 /** Xử lý mọi đường `/api/*`. Trả false nếu không có tuyến (server trả 404 chung). */
@@ -94,16 +93,21 @@ export async function handleApiRequest(ctx: Pick<ApiContext, "request" | "respon
       sendOk(response, { google_client_id: deps.service.config.google.loginClientId || "" });
       return true;
     }
+    // Tên đăng nhập (hoặc email) + mật khẩu của từng người — từ 08/10/2026 không còn mật khẩu quản trị chung
     if (path === "/api/auth/login" && method === "POST") {
-      if (sessions.isLocked(session.clientKey)) throw new ApiError(429, "locked", "Sai mật khẩu quá nhiều lần — thử lại sau 15 phút.");
       const body = await readJson(request);
-      const token = await sessions.loginWithPassword(session.clientKey, typeof body.password === "string" ? body.password : "");
-      if (!token) {
-        log.warn(`đăng nhập quản trị sai từ ${session.clientKey}`);
-        throw new ApiError(401, "invalid_credentials", "Sai mật khẩu.");
+      const login = typeof body.username === "string" ? body.username.trim().slice(0, 191) : "";
+      if (sessions.isLocked(session.clientKey, login)) throw new ApiError(429, "locked", "Sai mật khẩu quá nhiều lần — thử lại sau 15 phút.");
+      const userId = await sessions.verifyLogin(session.clientKey, login, typeof body.password === "string" ? body.password : "");
+      const principal = userId ? await loadUserPrincipal(deps.service.db, userId) : null;
+      if (!principal) {
+        log.warn(`đăng nhập sai từ ${session.clientKey}`);
+        throw new ApiError(401, "invalid_credentials", "Sai tên đăng nhập hoặc mật khẩu.");
       }
-      response.setHeader("Set-Cookie", session.setCookie(token));
-      sendOk(response, { user: describeUser(PASSWORD_ADMIN) }, "Đăng nhập thành công");
+      await deps.service.db.query("UPDATE app_user SET last_login_at = NOW(3) WHERE id = ?", [principal.userId]);
+      response.setHeader("Set-Cookie", session.setCookie(await sessions.create(userId!)));
+      await currentPrincipal.run(principal, () => recordAudit(deps.service.db, { entity: "user", entityId: userId!, action: "login", message: "Đăng nhập bằng mật khẩu" }));
+      sendOk(response, { user: describeUser(principal) }, "Đăng nhập thành công");
       return true;
     }
     if (path === "/api/auth/google" && method === "POST") {

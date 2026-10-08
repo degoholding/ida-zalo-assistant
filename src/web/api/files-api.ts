@@ -1,4 +1,4 @@
-import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
 import { assertFileVisible, scopedWhere } from "./scope.js";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../../constants.js";
@@ -64,7 +64,7 @@ export function decorateFile(row: RowDataPacket): Record<string, unknown> {
   };
 }
 
-export function listFiles(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
+export function listFiles(db: Db, params: URLSearchParams, principal: Principal = SYSTEM_PRINCIPAL) {
   return runList(db, params, FILE_LIST_SPEC, {
     select: FILE_COLUMNS, from: FILE_FROM, baseWhere: scopedWhere(principal, undefined, "a.group_id"), decorate: (rows) => rows.map(decorateFile),
   });

@@ -22,6 +22,8 @@ export interface LoginResponse {
 }
 
 export interface LoginCredentials {
+  /** Tên đăng nhập hoặc email */
+  username: string
   password: string
 }
 

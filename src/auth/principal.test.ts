@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { UserRole } from "../constants.js";
 import { requiredPermission } from "../web/api/route-permissions.js";
-import { can, groupScopeSql, PASSWORD_ADMIN, permissionsFor, type Principal } from "./principal.js";
+import { can, groupScopeSql, SYSTEM_PRINCIPAL, permissionsFor, type Principal } from "./principal.js";
 
 const user = (role: UserRole, groupIds: number[] | null = [3]): Principal => ({ userId: 9, tenantId: 1, fullName: "A", email: "a@x.vn", role, groupIds });
 
 test("an admin can do everything, including users, recipients and settings", () => {
   for (const entity of ["setting", "user", "recipient", "bot_account", "audit", "group"] as const) {
-    assert.equal(can(PASSWORD_ADMIN, entity, "write"), true, entity);
+    assert.equal(can(SYSTEM_PRINCIPAL, entity, "write"), true, entity);
   }
 });
 
@@ -45,7 +45,7 @@ test("every API path maps to a permission, and unknown or admin paths fall back 
 });
 
 test("scope SQL: everything for admins, nothing for an empty scope, an IN list otherwise", () => {
-  assert.equal(groupScopeSql(PASSWORD_ADMIN, "g.id"), null);
+  assert.equal(groupScopeSql(SYSTEM_PRINCIPAL, "g.id"), null);
   assert.deepEqual(groupScopeSql(user(UserRole.Staff, []), "g.id"), { sql: "1 = 0", params: [] });
   assert.deepEqual(groupScopeSql(user(UserRole.Staff, [3, 4]), "g.id"), { sql: "g.id IN (?)", params: [[3, 4]] });
 });

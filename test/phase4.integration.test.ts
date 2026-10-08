@@ -8,7 +8,11 @@ import { PassThrough } from "node:stream";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type http from "node:http";
 import type { RowDataPacket } from "mysql2";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { SessionStore } from "../src/auth/session-store.js";
+import { ensureAdminUser, importUsersFromTsv, setUserPassword } from "../src/auth/user-admin.js";
 import { AttachmentStatus, JobKind, UserRole } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { createPool, type Db } from "../src/db/pool.js";
@@ -20,7 +24,7 @@ import { handleApiRequest, type ApiDeps } from "../src/web/api/api-router.js";
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const TABLES = ["web_session", "user_group_scope", "recipient_vip", "recipient_group", "recipient", "app_user", "job", "audit_log",
   "attachment", "message", "group_member", "bot_group", "zalo_group", "contact", "bot_account"];
-const ADMIN_PASSWORD = "mat-khau-quan-tri-thu";
+const ADMIN = { username: "admin", password: "admin" };
 const GOOGLE_CLIENT = "123-abc.apps.googleusercontent.com";
 
 function message(overrides: Partial<IncomingGroupMessage>): IncomingGroupMessage {
@@ -45,7 +49,7 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
       db, config: { google: { loginClientId: GOOGLE_CLIENT }, privacy: { allowedAiProviders: ["1"] } },
       jobs: { wake: () => undefined },
     };
-    deps = { service: service as unknown as ApiDeps["service"], sessions: new SessionStore(db, ADMIN_PASSWORD), qrLogins: {} as ApiDeps["qrLogins"] };
+    deps = { service: service as unknown as ApiDeps["service"], sessions: new SessionStore(db), qrLogins: {} as ApiDeps["qrLogins"] };
     // Google tokeninfo giả: trả email đang đặt trong `googleEmail`
     globalThis.fetch = (async (input: unknown) => {
       if (String(input).startsWith("https://oauth2.googleapis.com/tokeninfo")) {
@@ -64,6 +68,9 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
     for (const table of TABLES) await db.query(`TRUNCATE TABLE ${table}`);
     await db.query("SET FOREIGN_KEY_CHECKS = 1");
     await db.query("INSERT INTO bot_account (label, zalo_uid, session_cipher) VALUES ('bot1', 'u-bot', 'x')");
+    await ensureAdminUser(db, ADMIN.username, ADMIN.password);
+    // Khóa sai mật khẩu nằm trong bộ nhớ của SessionStore — mỗi bài một bộ mới
+    deps = { ...deps, sessions: new SessionStore(db) };
   });
 
   /** Gọi API như trình duyệt: phương thức, đường, thân JSON, cookie phiên. */
@@ -97,13 +104,15 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
     return { a: a.id, b: b.id };
   }
 
-  test("password login works, a wrong password does not, and the session survives in the database", async () => {
-    assert.equal((await call("POST", "/api/auth/login", { password: "sai" })).status, 401);
-    const ok = await call("POST", "/api/auth/login", { password: ADMIN_PASSWORD });
+  test("username + password login works, a wrong password does not, and the session survives in the database", async () => {
+    assert.equal((await call("POST", "/api/auth/login", { username: "admin", password: "sai" })).status, 401);
+    assert.equal((await call("POST", "/api/auth/login", { password: "admin" })).status, 401);
+    const ok = await call("POST", "/api/auth/login", { username: " ADMIN ", password: ADMIN.password });
     assert.equal(ok.status, 200);
     assert.equal(ok.body.data.user.role, UserRole.Admin);
+    assert.equal(ok.body.data.user.all_groups, true);
     // Phiên mới (như sau khi khởi động lại) vẫn nhận mã cũ vì phiên nằm trong CSDL
-    deps = { ...deps, sessions: new SessionStore(db, ADMIN_PASSWORD) };
+    deps = { ...deps, sessions: new SessionStore(db) };
     const me = await call("GET", "/api/auth/me", undefined, ok.cookie);
     assert.equal(me.body.data.full_name, "Quản trị");
     await call("POST", "/api/auth/logout", undefined, ok.cookie);
@@ -119,7 +128,7 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
     const ok = await call("POST", "/api/auth/google", { credential: "a.b.c" });
     assert.equal(ok.status, 200);
     assert.equal(ok.body.data.user.email, "la@ida.vn");
-    const [rows] = await db.query<RowDataPacket[]>("SELECT last_login_at FROM app_user");
+    const [rows] = await db.query<RowDataPacket[]>("SELECT last_login_at FROM app_user WHERE email = 'la@ida.vn'");
     assert.ok(rows[0].last_login_at);
     assert.equal((await call("GET", "/api/auth/config")).body.data.google_client_id, GOOGLE_CLIENT);
   });
@@ -155,7 +164,7 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
 
   test("changing a user's role revokes their open sessions, and the admin can manage users", async () => {
     const { a } = await seedData();
-    const admin = (await call("POST", "/api/auth/login", { password: ADMIN_PASSWORD })).cookie;
+    const admin = (await call("POST", "/api/auth/login", ADMIN)).cookie;
     const created = await call("POST", "/api/users", { email: "QL@IDA.vn ", full_name: "Quản lý", role: UserRole.Manager, group_ids: [a] }, admin);
     assert.equal(created.status, 201);
     assert.equal(created.body.data.email, "ql@ida.vn");
@@ -177,7 +186,7 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
   test("recipients: one per Zalo person, they may always DM the bot, and the test message goes through the queue", async () => {
     await seedData();
     const [contacts] = await db.query<RowDataPacket[]>("SELECT id, zalo_uid FROM contact ORDER BY zalo_uid");
-    const admin = (await call("POST", "/api/auth/login", { password: ADMIN_PASSWORD })).cookie;
+    const admin = (await call("POST", "/api/auth/login", ADMIN)).cookie;
     const created = await call("POST", "/api/recipients", {
       name: "Trưởng phòng DVKH", title: "Trưởng phòng", rank_order: 1, contact_id: contacts[0].id, vip_contact_ids: [contacts[1].id],
       morning_brief_at: "07:30", evening_brief_at: "",
@@ -197,6 +206,46 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
 
     await call("PATCH", `/api/recipients/${created.body.data.id}`, { is_active: false }, admin);
     assert.equal(await isActiveRecipientUid(db, String(contacts[0].zalo_uid)), false);
+  });
+
+  test("imported IDA users log in with their email as both username and password, by Google too", async () => {
+    const file = path.join(os.tmpdir(), `ida-users-${Date.now()}.tsv`);
+    fs.writeFileSync(file, "# email\tho ten\npdghuy.idaglobal@gmail.com\tPhan Đỗ Gia Huy\nkhong-phai-email\tX\n\nPDGHUY.idaglobal@gmail.com\tTrùng\n");
+    assert.deepEqual(await importUsersFromTsv(db, file, UserRole.Staff), { created: 1, skipped: 2 });
+    fs.rmSync(file);
+    const byPassword = await call("POST", "/api/auth/login", { username: "pdghuy.idaglobal@gmail.com", password: "pdghuy.idaglobal@gmail.com" });
+    assert.equal(byPassword.status, 200);
+    assert.equal(byPassword.body.data.user.full_name, "Phan Đỗ Gia Huy");
+    assert.equal(byPassword.body.data.user.role, UserRole.Staff);
+    googleEmail = "pdghuy.idaglobal@gmail.com";
+    assert.equal((await call("POST", "/api/auth/google", { credential: "a.b.c" })).status, 200);
+    // Đặt lại mật khẩu từ dòng lệnh: mật khẩu cũ hết dùng, phiên cũ văng
+    await setUserPassword(db, "pdghuy.idaglobal@gmail.com", "moi-1234");
+    assert.equal((await call("GET", "/api/auth/me", undefined, byPassword.cookie)).status, 401);
+    assert.equal((await call("POST", "/api/auth/login", { username: "pdghuy.idaglobal@gmail.com", password: "pdghuy.idaglobal@gmail.com" })).status, 401);
+    assert.equal((await call("POST", "/api/auth/login", { username: "pdghuy.idaglobal@gmail.com", password: "moi-1234" })).status, 200);
+  });
+
+  test("five wrong passwords lock that username for 15 minutes even with the right password afterwards", async () => {
+    for (let n = 0; n < 5; n += 1) assert.equal((await call("POST", "/api/auth/login", { username: "admin", password: `sai${n}` })).status, 401);
+    assert.equal((await call("POST", "/api/auth/login", ADMIN)).status, 429);
+  });
+
+  test("the admin can set and reset a user's password from the web, and the hash never leaves the server", async () => {
+    const admin = (await call("POST", "/api/auth/login", ADMIN)).cookie;
+    const created = await call("POST", "/api/users", { username: "ketoan", password: "1234", role: UserRole.Manager, all_groups: true }, admin);
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.data.has_password, true);
+    assert.equal(JSON.stringify(created.body).includes("scrypt"), false);
+    assert.equal((await call("POST", "/api/users", { username: "Có Dấu", role: 3 }, admin)).status, 422);
+    assert.equal((await call("POST", "/api/users", { role: 3 }, admin)).status, 422);
+    assert.equal((await call("POST", "/api/users", { username: "ngan", password: "123", role: 3 }, admin)).status, 422);
+    const ketoan = (await call("POST", "/api/auth/login", { username: "ketoan", password: "1234" })).cookie;
+    await call("PATCH", `/api/users/${created.body.data.id}`, { password: "5678" }, admin);
+    assert.equal((await call("GET", "/api/auth/me", undefined, ketoan)).status, 401);
+    assert.equal((await call("POST", "/api/auth/login", { username: "ketoan", password: "5678" })).status, 200);
+    const list = await call("GET", "/api/users", undefined, admin);
+    assert.equal(JSON.stringify(list.body).includes("password_hash"), false);
   });
 
   test("a direct thread is created for a recipient the bot has never talked to", async () => {

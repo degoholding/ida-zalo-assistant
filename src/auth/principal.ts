@@ -7,7 +7,7 @@ import type { Db } from "../db/pool.js";
 // (1) được làm gì — ma trận quyền theo vai trò (permissionsFor); (2) thấy nhóm nào — groupIds (null = mọi nhóm).
 
 export interface Principal {
-  /** null = đăng nhập bằng mật khẩu quản trị (ADMIN_PASSWORD) */
+  /** null = chính hệ thống (gọi hàm nội bộ, không qua phiên đăng nhập) */
   userId: number | null;
   tenantId: number;
   fullName: string;
@@ -17,7 +17,8 @@ export interface Principal {
   groupIds: number[] | null;
 }
 
-export const PASSWORD_ADMIN: Principal = { userId: null, tenantId: 1, fullName: "Quản trị", email: "", role: UserRole.Admin, groupIds: null };
+/** Quyền đầy đủ cho lời gọi nội bộ (mặc định của các hàm danh sách khi không qua API). Không phiên nào mang danh này. */
+export const SYSTEM_PRINCIPAL: Principal = { userId: null, tenantId: 1, fullName: "Hệ thống", email: "", role: UserRole.Admin, groupIds: null };
 
 /** Thực thể của giao diện — phải khớp `ENTITIES` ở web/src/core/authorization/permission-types.ts. */
 export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient"] as const;
@@ -49,7 +50,7 @@ export function can(principal: Principal, entity: Entity, action: Action): boole
 /** Người dùng (đang bật) → danh tính thao tác. null = không có / đã tắt. */
 export async function loadUserPrincipal(db: Db, userId: number): Promise<Principal | null> {
   const [rows] = await db.query<RowDataPacket[]>(
-    "SELECT id, tenant_id, email, full_name, role, all_groups, is_active FROM app_user WHERE id = ?", [userId]);
+    "SELECT id, tenant_id, email, username, full_name, role, all_groups, is_active FROM app_user WHERE id = ?", [userId]);
   const user = rows[0];
   if (!user || !user.is_active) return null;
   const role = Number(user.role) as UserRole;
@@ -59,7 +60,8 @@ export async function loadUserPrincipal(db: Db, userId: number): Promise<Princip
     groupIds = scope.map((row) => Number(row.group_id));
   }
   return {
-    userId: Number(user.id), tenantId: Number(user.tenant_id), fullName: String(user.full_name || user.email), email: String(user.email),
+    userId: Number(user.id), tenantId: Number(user.tenant_id), fullName: String(user.full_name || user.username || user.email),
+    email: String(user.email ?? ""),
     role, groupIds,
   };
 }

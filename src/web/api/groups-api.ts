@@ -1,4 +1,4 @@
-import { PASSWORD_ADMIN, type Principal } from "../../auth/principal.js";
+import { SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
 import { assertThreadVisible, scopedWhere } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
 import { ConversationType, GroupKind } from "../../constants.js";
@@ -85,7 +85,7 @@ function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
   }));
 }
 
-export function listGroups(db: Db, params: URLSearchParams, principal: Principal = PASSWORD_ADMIN) {
+export function listGroups(db: Db, params: URLSearchParams, principal: Principal = SYSTEM_PRINCIPAL) {
   return runList(db, params, GROUP_LIST_SPEC, {
     select: GROUP_COLUMNS, from: GROUP_FROM, baseWhere: scopedWhere(principal, { sql: "g.thread_type = ?", params: [GROUP] }, "g.id"), decorate,
   });

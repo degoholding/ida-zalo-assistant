@@ -90,15 +90,16 @@ describe('user form', () => {
     expect(defaults).toMatchObject({ role: USER_ROLE.staff, is_active: true, all_groups: false, contact_id: 0, group_ids: [] })
   })
 
-  it('tells the admin the email is what Google login matches on', () => {
+  it('tells the admin the email is what Google login matches on, and that one of email / username is needed', () => {
     renderForm()
-    expect(screen.getByText('Người này đăng nhập bằng nút Google với đúng email này')).toBeInTheDocument()
+    expect(screen.getByText(/bấm được nút «Đăng nhập bằng Google» với đúng email đó/)).toBeInTheDocument()
+    expect(screen.getByText(/Cần ít nhất email hoặc tên đăng nhập/)).toBeInTheDocument()
   })
 
   it('uses the exact field names the users API accepts', () => {
     //  Tên ô sai là máy chủ bỏ qua im lặng — bấm Lưu báo thành công mà không đổi gì.
     expect(FIELDS.map((field) => field.name).sort()).toEqual(
-      ['all_groups', 'contact_id', 'email', 'full_name', 'group_ids', 'is_active', 'role'].sort(),
+      ['all_groups', 'contact_id', 'email', 'full_name', 'group_ids', 'is_active', 'password', 'role', 'username'].sort(),
     )
   })
 })

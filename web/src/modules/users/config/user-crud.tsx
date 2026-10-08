@@ -1,4 +1,4 @@
-import { CircleCheck, CircleX, LogIn, Mail, ShieldCheck, Users } from 'lucide-react'
+import { CircleCheck, CircleX, KeyRound, LogIn, Mail, ShieldCheck, UserRound, Users } from 'lucide-react'
 
 import { getUserRoleLabel, USER_ROLE, USER_ROLE_OPTIONS } from '@/core/auth/user-role'
 import type { FilterFieldDefinition } from '@/shared/conditional-filter'
@@ -12,6 +12,7 @@ import type { StatusTone } from '@/shared/ui/status-tone'
 import { formatDateTime } from '@/shared/utils/format-date'
 import { USERS_API_PATH } from '../api/user-api'
 import type { AppUserDetail } from '../types/user'
+import { PasswordSetField } from '../components/password-set-field'
 import { describeUserScope } from '../utils/describe-user-scope'
 
 const ACTIVE_OPTIONS = [{ value: '1', label: 'Đang dùng' }, { value: '0', label: 'Ngừng' }]
@@ -40,9 +41,10 @@ export const USER_COLUMNS: DataTableColumn<AppUserDetail>[] = [
     hideable: false,
     defaultPinned: true,
     sortable: true,
-    cell: (user) => <span className="truncate font-semibold text-navy">{user.full_name || user.email}</span>,
+    cell: (user) => <span className="truncate font-semibold text-navy">{user.full_name || user.username || user.email}</span>,
   },
-  { key: 'email', header: 'Email', width: 240, sortable: true, cell: (user) => <span className="truncate">{user.email}</span> },
+  { key: 'username', header: 'Tên đăng nhập', width: 220, sortable: true, cell: (user) => <span className="truncate">{user.username || '—'}</span> },
+  { key: 'email', header: 'Email (Google)', width: 240, sortable: true, cell: (user) => <span className="truncate">{user.email || '—'}</span> },
   {
     key: 'role',
     header: 'Vai trò',
@@ -82,6 +84,7 @@ export const USER_COLUMNS: DataTableColumn<AppUserDetail>[] = [
 
 /** Bộ lọc nâng cao — tên trường PHẢI nằm trong `fields` của `USER_LIST_SPEC` ở máy chủ. */
 const USER_FILTER_FIELDS: FilterFieldDefinition[] = [
+  { name: 'username', label: 'Tên đăng nhập', type: 'text' },
   { name: 'email', label: 'Email', type: 'text' },
   { name: 'full_name', label: 'Họ tên', type: 'text' },
   { name: 'role', label: 'Vai trò', type: 'select', options: ROLE_FILTER_OPTIONS },
@@ -93,13 +96,13 @@ export const userCrudConfig: CrudConfig<AppUserDetail> = {
   entity: 'user',
   title: 'Người dùng',
   description:
-    'Ai được vào khu quản trị này bằng nút «Đăng nhập bằng Google», với vai trò nào và thấy những nhóm nào. Đổi vai trò / phạm vi / tắt thì phiên đang mở của người đó phải đăng nhập lại.',
+    'Ai được vào khu quản trị này (tên đăng nhập + mật khẩu, hoặc nút Google theo email), với vai trò nào và thấy những nhóm nào. Đổi vai trò / phạm vi / mật khẩu / tắt thì phiên đang mở của người đó phải đăng nhập lại.',
   unitLabel: 'người dùng',
   apiPath: USERS_API_PATH,
-  emptyMessage: 'Chưa có người dùng nào — bấm «Thêm người dùng», nhập email Google của người đó.',
+  emptyMessage: 'Chưa có người dùng nào — bấm «Thêm người dùng».',
   storageKey: 'users.list',
   searchParam: 'q',
-  searchPlaceholder: 'Tìm email, họ tên',
+  searchPlaceholder: 'Tìm tên đăng nhập, email, họ tên',
   defaultSort: { by: 'full_name', dir: 'asc' },
   quickFilters: [
     { key: 'role', label: 'Vai trò', type: 'select', options: ROLE_FILTER_OPTIONS },
@@ -110,18 +113,31 @@ export const userCrudConfig: CrudConfig<AppUserDetail> = {
   listRoute: appRoutes.users.list,
   createRoute: appRoutes.users.create,
   detailRoute: (id) => appRoutes.users.detail(id),
-  getItemName: (user) => user.full_name || user.email,
+  getItemName: (user) => user.full_name || user.username || user.email,
   formSections: {
     [SCOPE_SECTION]: 'Người này thấy những nhóm nào trên web (Hội thoại, Nhóm, Tệp, Danh bạ). Quản trị luôn thấy mọi nhóm.',
   },
   formFields: [
     {
-      name: 'email',
-      label: 'Email',
+      name: 'username',
+      label: 'Tên đăng nhập',
       type: 'text',
-      required: true,
+      placeholder: 'vd admin, hoặc chính email',
+      hint: 'Chữ thường không dấu, số, . _ @ - (3–100 ký tự). Ô đăng nhập nhận cả tên đăng nhập lẫn email.',
+    },
+    {
+      name: 'password',
+      label: 'Mật khẩu',
+      type: 'custom',
+      defaultValue: '',
+      render: ({ control, name, disabled }) => <PasswordSetField control={control} name={name} disabled={disabled} />,
+    },
+    {
+      name: 'email',
+      label: 'Email (đăng nhập Google)',
+      type: 'text',
       placeholder: 'ten@congty.com',
-      hint: 'Người này đăng nhập bằng nút Google với đúng email này',
+      hint: 'Có email thì người này bấm được nút «Đăng nhập bằng Google» với đúng email đó. Cần ít nhất email hoặc tên đăng nhập.',
     },
     { name: 'full_name', label: 'Họ tên', type: 'text', placeholder: 'Tên hiện trên thanh trên và trong nhật ký' },
     { name: 'role', label: 'Vai trò', type: 'select', required: true, options: USER_ROLE_OPTIONS, defaultValue: USER_ROLE.staff, hint: ROLE_HINT },
@@ -168,7 +184,9 @@ export const userCrudConfig: CrudConfig<AppUserDetail> = {
     },
   ],
   chips: (user) => [
-    { icon: Mail, text: user.email, tone: 'code' },
+    ...(user.username ? [{ icon: UserRound, text: user.username, tone: 'code' as const }] : []),
+    ...(user.email ? [{ icon: Mail, text: user.email, tone: 'code' as const }] : []),
+    { icon: KeyRound, text: user.has_password ? 'Có mật khẩu' : 'Chỉ đăng nhập Google', tone: 'muted' },
     { icon: ShieldCheck, text: getUserRoleLabel(user.role) || `Vai trò ${user.role}`, tone: 'ok' },
     { icon: Users, text: describeUserScope(user), tone: 'muted' },
     { icon: user.is_active ? CircleCheck : CircleX, text: user.is_active ? 'Đang dùng' : 'Ngừng', tone: user.is_active ? 'ok' : 'muted' },

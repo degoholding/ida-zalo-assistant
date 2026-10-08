@@ -40,8 +40,9 @@ Bật kho tệp R2: đặt `STORAGE_DRIVER=r2` + `R2_*` (bucket, khóa đọc + 
 cp .env.example .env
 docker compose build
 docker compose run --rm --no-deps app node dist/cli.js gen-key   # dán vào SESSION_ENCRYPTION_KEY
-# điền tiếp MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD, ADMIN_PASSWORD (≥ 12 ký tự) trong .env
+# điền tiếp MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD trong .env
 docker compose up -d
+docker compose exec app node dist/cli.js user-admin admin <mật khẩu>   # tài khoản quản trị đầu tiên
 docker compose logs -f app
 ```
 
@@ -166,7 +167,7 @@ nhóm / cuộc riêng mới, cỡ tệp tối đa — lưu là **có hiệu lự
 giá trị trên web (bảng `app_setting`) > `.env` > mặc định trong mã; «Khôi phục mặc định» = xóa giá trị web,
 quay về `.env`. Danh mục khóa khai một chỗ ở `src/settings/setting-registry.ts`. Khóa bí mật (khóa Gemini,
 khóa service account) lưu mã hóa bằng `SESSION_ENCRYPTION_KEY`, API chỉ trả «đã đặt» + 4 ký tự cuối / email.
-Những thứ cần có trước khi vào được web (`DATABASE_URL`, khóa mã hóa, `ADMIN_PASSWORD`, cổng, nơi cất tệp…)
+Những thứ cần có trước khi vào được web (`DATABASE_URL`, khóa mã hóa, cổng, nơi cất tệp…)
 vẫn chỉ đặt ở `.env`.
 
 **Google Sheets** (service account, không cần đăng nhập Google):

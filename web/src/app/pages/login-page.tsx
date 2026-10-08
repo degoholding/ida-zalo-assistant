@@ -19,25 +19,25 @@ import { Label } from '@/shared/ui/label'
 /**
  * Đăng nhập khu quản trị.
  *
- * Đường chính: nút «Đăng nhập bằng Google» — người dùng có email trong màn Người dùng. Client ID đọc từ máy chủ lúc
- * chạy (`/api/auth/config`), không nướng vào bản build: quản trị đổi ô «Đăng nhập Google» ở Cài đặt là có hiệu lực,
- * không phải build lại giao diện. Rỗng = máy chủ chưa bật → ẩn hẳn nút (dựng nút với Client ID rỗng thì Google
- * Identity Services báo lỗi liên tục).
- *
- * Đường dự phòng: mật khẩu quản trị (ADMIN_PASSWORD của máy chủ) — giữ nguyên như trước.
+ * Hai cách (08/10/2026 bỏ mật khẩu quản trị chung):
+ * - Tên đăng nhập (hoặc email) + mật khẩu của từng người — quản trị đặt ở màn Người dùng.
+ * - Nút «Đăng nhập bằng Google» — người có email trong màn Người dùng. Client ID đọc từ máy chủ lúc chạy
+ *   (`/api/auth/config`), không nướng vào bản build. Rỗng = máy chủ chưa bật → ẩn hẳn nút (dựng nút với Client ID rỗng
+ *   thì Google Identity Services báo lỗi liên tục).
  */
 export function LoginPage() {
   const status = useAuthStore((s) => s.status)
   const login = useAuthStore((s) => s.login)
   const loginGoogle = useAuthStore((s) => s.loginGoogle)
   const isLoggingIn = useAuthStore((s) => s.isLoggingIn)
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? appRoutes.launcher
 
-  //  Lỗi khi hỏi cấu hình thì coi như chưa bật Google — mật khẩu quản trị vẫn dùng được.
+  //  Lỗi khi hỏi cấu hình thì coi như chưa bật Google — đăng nhập bằng mật khẩu vẫn dùng được.
   const { data: authConfig } = useQuery({
     queryKey: queryKeys.auth.config(),
     queryFn: authService.config,
@@ -61,7 +61,7 @@ export function LoginPage() {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
-    void runLogin(() => login({ password }))
+    void runLogin(() => login({ username: username.trim(), password }))
   }
 
   return (
@@ -96,7 +96,7 @@ export function LoginPage() {
             </div>
             <div className="flex items-center gap-3">
               <span className="h-px flex-1 bg-border" />
-              <span className="text-xs font-medium text-muted-foreground">hoặc mật khẩu quản trị</span>
+              <span className="text-xs font-medium text-muted-foreground">hoặc tên đăng nhập</span>
               <span className="h-px flex-1 bg-border" />
             </div>
           </GoogleOAuthProvider>
@@ -104,22 +104,31 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="password">Mật khẩu quản trị</Label>
+            <Label htmlFor="username">Tên đăng nhập hoặc email</Label>
+            <Input
+              id="username"
+              autoFocus={!googleClientId}
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="password">Mật khẩu</Label>
             <Input
               id="password"
               type="password"
-              autoFocus={!googleClientId}
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
             />
-            {googleClientId && (
-              <p className="text-xs text-muted-foreground">Đường dự phòng cho quản trị khi chưa đăng nhập Google được.</p>
-            )}
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" variant={googleClientId ? 'outline' : 'default'} disabled={isLoggingIn || !password}>
+          <Button type="submit" variant={googleClientId ? 'outline' : 'default'} disabled={isLoggingIn || !password || !username.trim()}>
             Đăng nhập
           </Button>
         </form>

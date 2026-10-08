@@ -21,18 +21,6 @@ function readBool(name: string, fallback: boolean): boolean {
   return ["1", "true", "yes", "on"].includes(raw.toLowerCase());
 }
 
-// Màu chủ đạo của giao diện — chèn thẳng vào CSS nên chỉ nhận mã màu #rrggbb
-// Giao diện web giữ phiên Zalo + tin nhắn riêng tư: mật khẩu ngắn là cửa mở toang
-const MIN_ADMIN_PASSWORD_LENGTH = 12;
-
-function readAdminPassword(): string {
-  const value = readString("ADMIN_PASSWORD");
-  if (value.length < MIN_ADMIN_PASSWORD_LENGTH) {
-    throw new Error(`ADMIN_PASSWORD phải dài ít nhất ${MIN_ADMIN_PASSWORD_LENGTH} ký tự`);
-  }
-  return value;
-}
-
 export type StorageDriver = "local" | "r2";
 
 export interface AppConfig {
@@ -51,7 +39,7 @@ export interface AppConfig {
    * một khối) hay ở tiến trình `worker` riêng (false — docker compose bật service worker). 08/10/2026.
    */
   workerEmbedded: boolean;
-  web: { host: string; port: number; adminPassword: string; cookieSecure: boolean; trustCloudflareIp: boolean; spaDistDir: string };
+  web: { host: string; port: number; cookieSecure: boolean; trustCloudflareIp: boolean; spaDistDir: string };
   defaultDirectRead: boolean;
   /** Số tin gần nhất xin Zalo khi lấy tin cũ của một nhóm. */
   defaultDirectCaptureFiles: boolean;
@@ -144,7 +132,6 @@ export function loadConfig(): AppConfig {
       // Mặc định chỉ nghe trong máy — vào từ xa thì qua đường hầm (SSH / Cloudflare Access)
       host: readString("WEB_HOST", "127.0.0.1"),
       port: readInt("WEB_PORT", 8090),
-      adminPassword: readAdminPassword(),
       // Bật khi chạy sau HTTPS để cookie phiên không bao giờ đi qua http thường
       cookieSecure: readBool("COOKIE_SECURE", false),
       // Chỉ bật khi CHẮC CHẮN đứng sau Cloudflare — không thì ai cũng tự gửi tiêu đề này để né khóa đăng nhập

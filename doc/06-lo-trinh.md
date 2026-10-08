@@ -138,8 +138,12 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 
 **Đã làm (08/10):**
 - **Đăng nhập bằng Google** ở màn đăng nhập — dùng chung Client ID đăng nhập Google của ERP (Cài đặt → Google →
-  «Client ID đăng nhập Google»). Chỉ email có ở màn **Người dùng** và đang bật mới vào được. Mật khẩu quản trị
-  (ADMIN_PASSWORD) giữ làm đường dự phòng. Phiên đăng nhập lưu CSDL — deploy không văng mọi người.
+  «Client ID đăng nhập Google»). Chỉ email có ở màn **Người dùng** và đang bật mới vào được. Phiên đăng nhập lưu
+  CSDL — deploy không văng mọi người.
+- **Tên đăng nhập + mật khẩu riêng từng người** (đại ca chốt 08/10, bỏ mật khẩu quản trị chung ADMIN_PASSWORD): quản
+  trị đặt / đặt lại ở màn Người dùng; sai 5 lần / 15 phút thì khóa theo máy và theo tên đăng nhập. Tài khoản `admin`
+  quyền cao nhất; 102 nhân sự IDA đang làm (email có «ida» trong ERP) được tạo sẵn: tên đăng nhập = mật khẩu = email,
+  vai trò Nhân viên, thấy mọi nhóm, đăng nhập Google được. Đường cứu: `node dist/cli.js user-admin` / `user-password`.
 - **Người dùng theo vai trò** (màn Người dùng, chỉ quản trị): Quản trị (toàn quyền) · Quản lý (xem + sửa nhóm, Danh bạ,
   tệp trong phạm vi, gửi tin dưới tên bot) · Nhân viên (chỉ xem trong phạm vi). Đổi vai trò / tắt / đổi phạm vi thì
   phiên đang mở của người đó văng ngay. Nhật ký thao tác ghi đúng tên người làm.
