@@ -4,7 +4,7 @@ import type { Db } from "../db/pool.js";
 import type { ContactRow } from "../sync/contact-repository.js";
 import type { FileStorage } from "../storage/file-storage.js";
 import { readAttachmentText, type HeavyExtractor, type ReadFileResult } from "./file-reader.js";
-import type { GeminiContent, ModelClient } from "./gemini-client.js";
+import type { GeminiContent, ModelClient, WebSearchResult } from "./gemini-client.js";
 import type { GeneratedReportFile, ReportExporter } from "../reports/report-exporter.js";
 import { LIST_CONTACTS_DECLARATION } from "./contact-directory-tool.js";
 import { buildGroupQuestion, loadGroupContext, loadGroupMemberNames } from "./group-context.js";
@@ -64,6 +64,8 @@ export interface AssistantOptions {
   alertTools?: AlertToolsDeps;
   /** Ticket qua bot (08/10/2026): «báo lỗi: …», «nhận / xong T-12». Bỏ trống = không có lệnh ticket. */
   tickets?: TicketDeps;
+  /** Tìm web riêng (Tavily). Có thì dùng trước; lỗi / hết hạn mức thì lùi về tìm web của mô hình (Gemini) nếu có. */
+  webSearch?: (query: string) => Promise<WebSearchResult>;
 }
 
 export interface AssistantRequest {
@@ -297,7 +299,7 @@ export class AssistantService {
           return outcome.response;
         }
         : undefined,
-      searchWeb: this.client.searchWeb ? (query) => this.client.searchWeb!(query) : undefined,
+      searchWeb: this.buildWebSearch(),
       readFile: storage
         ? (attachmentId) => readAttachmentText({ db: this.db, storage, readDocument, maxFileBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024,
           allowedExtensions: this.options.readableFileTypes, heavyExtract: this.options.heavyExtract }, attachmentId)
@@ -325,7 +327,7 @@ export class AssistantService {
       LIST_CONTACTS_DECLARATION,
       ...(storage ? [READ_FILE_DECLARATION] : []),
       READ_LINK_DECLARATION,
-      ...(this.client.searchWeb && !agroTechnical ? [WEB_SEARCH_DECLARATION] : []),
+      ...((this.options.webSearch || this.client.searchWeb) && !agroTechnical ? [WEB_SEARCH_DECLARATION] : []),
       ...(exporter ? [EXPORT_REPORT_DECLARATION, MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION] : []),
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
@@ -400,6 +402,21 @@ export class AssistantService {
       });
       return { text: FAILURE_TEXT, attachmentIds: [], status: AssistantTurnStatus.Failed };
     }
+  }
+
+  /** Tìm web: nguồn riêng (Tavily) trước, lỗi thì lùi về tìm web của mô hình (Gemini). Không có nguồn nào = không tìm web. */
+  private buildWebSearch(): ((query: string) => Promise<WebSearchResult>) | undefined {
+    const external = this.options.webSearch;
+    const modelSearch = this.client.searchWeb ? (query: string) => this.client.searchWeb!(query) : undefined;
+    if (!external) return modelSearch;
+    return async (query: string) => {
+      try {
+        return await external(query);
+      } catch (error) {
+        if (!modelSearch) throw error;
+        return modelSearch(query);
+      }
+    };
   }
 
   private async logTurn(

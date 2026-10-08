@@ -317,4 +317,31 @@ describe("phase 5 — cảnh báo tin nhắn", { skip: !databaseUrl && "chưa đ
     const [turns] = await db.query<RowDataPacket[]>("SELECT model, input_tokens FROM assistant_turn ORDER BY id");
     assert.deepEqual(turns.map((row) => [row.model, Number(row.input_tokens)]), [["lệnh", 0], ["lệnh", 0]]);
   });
+  test("web search: the separate search service is used first and falls back to the model's own search when it is out of quota", async () => {
+    const { WebSearchUnavailableError } = await import("../src/assistant/gemini-client.js");
+    const answers: string[] = [];
+    const model = (withOwnSearch: boolean): ModelClient => ({
+      generate: async (request) => {
+        const last = request.contents[request.contents.length - 1];
+        const response = last.parts.find((part) => part.functionResponse)?.functionResponse?.response as { answer?: string; error?: string } | undefined;
+        if (response) {
+          answers.push(String(response.answer ?? response.error));
+          return { content: { role: "model", parts: [{ text: "xong" }] }, inputTokens: 1, outputTokens: 1 };
+        }
+        assert.ok(request.tools.some((tool) => tool.name === "web_search"));
+        return { content: { role: "model", parts: [{ functionCall: { name: "web_search", args: { query: "giá vàng hôm nay" } } }] }, inputTokens: 1, outputTokens: 1 };
+      },
+      ...(withOwnSearch ? { searchWeb: async () => ({ text: "từ Gemini", sources: [], inputTokens: 0, outputTokens: 0 }) } : {}),
+    });
+    const contact = (await findContactByUid(db, "u-ceo"))!;
+    const ask = (client: ModelClient, webSearch: (q: string) => Promise<never | { text: string; sources: never[]; inputTokens: number; outputTokens: number }>) =>
+      new AssistantService(db, client, "m", { maxPerHour: 30, dailyTokenCap: 1_000_000 }, () => NOW, { webSearch })
+        .answer({ botAccountId: 1, contact, threadId: groupA, questionMessageId: null, question: "giá vàng hôm nay bao nhiêu" });
+    await ask(model(true), async () => ({ text: "từ Tavily", sources: [], inputTokens: 0, outputTokens: 0 }));
+    await ask(model(true), async () => { throw new WebSearchUnavailableError("Tavily 432"); });
+    await ask(model(false), async () => { throw new WebSearchUnavailableError("Tavily 432"); });
+    assert.equal(answers[0], "từ Tavily");
+    assert.equal(answers[1], "từ Gemini");
+    assert.match(answers[2], /tạm không dùng được/);
+  });
 });

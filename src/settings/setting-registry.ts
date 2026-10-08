@@ -121,6 +121,13 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     applyTo: (config, value) => { config.assistant.openaiApiKey = asString(value).trim(); },
   },
   {
+    key: "assistant_tavily_api_key", group: "assistant", label: "Khóa Tavily (tìm web)", type: "string", secret: true,
+    help: "Tìm web riêng cho trợ lý (giá vàng, tỷ giá, tin tức, báo cáo công ty…) — tạo khóa ở app.tavily.com (bắt đầu «tvly-»). " +
+      "Có khóa thì tìm bằng Tavily, mô hình đang dùng (DeepSeek…) đọc kết quả; lỗi / hết hạn mức thì lùi về tìm Google của Gemini nếu khóa Gemini còn tiền.",
+    envName: "TAVILY_API_KEY", defaultValue: "", maxLength: 200, pattern: /^\S+$/, patternHint: "khóa không được có khoảng trắng",
+    applyTo: (config, value) => { config.assistant.tavilyApiKey = asString(value).trim(); },
+  },
+  {
     key: "openai_model", group: "assistant", label: "OpenAI — mô hình chính", type: "string", secret: false,
     help: "Mô hình GPT trả lời câu hỏi thường ngày, vd gpt-6-luna (rẻ nhất).",
     envName: "OPENAI_MODEL", defaultValue: "gpt-6-luna", pattern: MODEL_PATTERN, patternHint: MODEL_HINT,

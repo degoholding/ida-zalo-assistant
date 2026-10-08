@@ -50,6 +50,8 @@ export interface AppConfig {
     openaiApiKey: string;
     /** Địa chỉ API kiểu OpenAI — khóa mua qua bên bán lại (proxy) thì dùng địa chỉ của họ. */
     openaiBaseUrl: string;
+    /** Khóa Tavily — tìm web riêng, không phụ thuộc tìm Google của Gemini (08/10/2026). Trống = chỉ tìm qua Gemini (nếu có). */
+    tavilyApiKey: string;
     /** Nhà cung cấp AI: gemini / openai / ưu tiên openai rồi lùi về gemini khi lỗi. */
     provider: "gemini" | "openai" | "openai_then_gemini";
     openaiModel: string; openaiHeavyModel: string; openaiFallbackModels: string[];
@@ -170,6 +172,7 @@ export function loadConfig(): AppConfig {
       apiKey: (process.env.GEMINI_API_KEY ?? "").trim(),
       openaiApiKey: (process.env.OPENAI_API_KEY ?? "").trim(),
       openaiBaseUrl: readString("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+      tavilyApiKey: (process.env.TAVILY_API_KEY ?? "").trim(),
       provider: (["gemini", "openai", "openai_then_gemini"].includes(readString("AI_PROVIDER", "gemini")) ? readString("AI_PROVIDER", "gemini") : "gemini") as "gemini",
       openaiModel: readString("OPENAI_MODEL", "gpt-6-luna"),
       openaiHeavyModel: readString("OPENAI_MODEL_HEAVY", "gpt-6.1-sol"),

@@ -323,7 +323,7 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
     ]) as ScriptedModel & { searchWeb: (query: string) => Promise<WebSearchResult> };
     blocked.searchWeb = async () => { throw new WebSearchUnavailableError("429"); };
     await new AssistantService(db, blocked, "gia-lap", { maxPerHour: 30, dailyTokenCap: 1_000_000 }, () => NOW).answer(request);
-    assert.match(JSON.stringify(blocked.requests[1].contents.at(-1)), /CHƯA BẬT.*bật thanh toán/);
+    assert.match(JSON.stringify(blocked.requests[1].contents.at(-1)), /tạm không dùng được.*Tavily.*Gemini/);
   });
 
   test("giới hạn: quá số câu/giờ thì báo MỘT lần rồi im; chạm trần token ngày thì nghỉ", async () => {

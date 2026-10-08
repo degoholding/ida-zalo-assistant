@@ -430,7 +430,7 @@ async function webSearch(context: ToolContext, args: Record<string, unknown>) {
     return { answer: result.text || "(không có kết quả)", sources: result.sources };
   } catch (error) {
     if (error instanceof WebSearchUnavailableError) {
-      return { error: "Tìm web CHƯA BẬT: khóa Gemini đang ở gói miễn phí, không có hạn mức tìm Google. Báo người hỏi là quản trị cần bật thanh toán cho khóa." };
+      return { error: "Tìm web tạm không dùng được (khóa tìm web sai / hết hạn mức). Báo người hỏi ngắn gọn là quản trị cần kiểm khóa Tavily hoặc nạp khóa Gemini — không đưa số liệu cũ." };
     }
     throw error;
   }

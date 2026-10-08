@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   FileText,
   Gauge,
+  Globe,
   HardDriveDownload,
   History,
   KeyRound,
@@ -55,6 +56,14 @@ export const ASSISTANT_SECTIONS: SettingsSection[] = [
     description: 'Dùng khi nhà cung cấp là Gemini, hoặc khi OpenAI lỗi ở chế độ ưu tiên OpenAI.',
     icon: Gem,
     keys: ['gemini_model', 'gemini_model_heavy', 'gemini_fallback_models'],
+  },
+  {
+    id: 'web-search',
+    title: 'Tìm web',
+    description:
+      'Khóa Tavily để trợ lý tìm thông tin công khai (giá vàng, tỷ giá, tin tức, báo cáo công ty) mà không phụ thuộc Gemini. Trống = chỉ tìm qua Gemini nếu khóa Gemini còn tiền.',
+    icon: Globe,
+    keys: ['assistant_tavily_api_key'],
   },
   {
     id: 'group',

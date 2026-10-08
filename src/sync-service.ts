@@ -9,6 +9,7 @@ import { createLogger, describeError } from "./logger.js";
 import type { SettingsStore } from "./settings/settings-store.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { ReportExporter } from "./reports/report-exporter.js";
+import { createTavilySearch } from "./assistant/tavily-search.js";
 import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
 import { ConversationType, JobKind } from "./constants.js";
@@ -189,6 +190,7 @@ export class SyncService {
         invalidate: () => this.alerts.invalidate(),
       },
       tickets: this.tickets,
+      webSearch: this.config.assistant.tavilyApiKey ? createTavilySearch(this.config.assistant.tavilyApiKey) : undefined,
       reportExporter: new ReportExporter(this.storage, () => this.config.google),
       meetingScheduler: new MeetingScheduler(() => this.config.google),
     };
