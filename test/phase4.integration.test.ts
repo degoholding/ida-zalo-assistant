@@ -48,6 +48,7 @@ describe("phase 4 — tài khoản, quyền, phạm vi, người nhận", { skip
     const service = {
       db, config: { google: { loginClientId: GOOGLE_CLIENT }, privacy: { allowedAiProviders: ["1"] } },
       jobs: { wake: () => undefined },
+      alerts: { invalidate: () => undefined },
     };
     deps = { service: service as unknown as ApiDeps["service"], sessions: new SessionStore(db), qrLogins: {} as ApiDeps["qrLogins"] };
     // Google tokeninfo giả: trả email đang đặt trong `googleEmail`

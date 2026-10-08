@@ -182,6 +182,26 @@ vẫn chỉ đặt ở `.env`.
    dán khóa) → quyền **Người chỉnh sửa** → bỏ tick «Thông báo» → Chia sẻ. Chép link trang tính dán vào ô
    «Link trang tính», lưu, bấm **Kiểm tra kết nối** → có dòng mới trong tab «Bot trợ lý».
 
+## Cảnh báo tin nhắn (phase 5)
+
+Mã ở `src/alerts/`. Mỗi tin mới trong nhóm (đang đọc) được phân loại ngay trong tiến trình `app`:
+
+- **Từ khóa** (`keyword-matcher.ts`): tin có dấu so ĐÚNG dấu, nguyên chữ («gặp» không khớp «gấp»); tin gõ không dấu
+  chỉ tin cụm nhiều chữ. Từ «nghiêm» (`alert_strict_keywords`, mặc định «la, liền, ngay») và từ khẩn một chữ trong
+  tin không dấu không báo ngay — chờ **AI xét theo lô** (`ai-review.ts`, 5 phút / lần ở `worker`, một lần gọi cho
+  cả lô, nhóm Mật không gửi, chữ đã che SĐT / STK / CCCD, token ghi bảng `system_ai_usage` và tính vào trần ngày).
+- **Người nhận** (màn Người nhận): chỉ nhận báo của nhóm mình theo dõi. Tin KHẨN hoặc tin của VIP riêng người đó →
+  việc `AlertDispatch` trên hàng đợi, gộp các tin trong `alert_urgent_merge_seconds` thành một tin Zalo.
+- **Đồng hồ chờ**: tin @nhắc / trả lời đúng người nhận, câu hỏi của khách trong nhóm khách hàng → hạn = N phút
+  LÀM VIỆC (lịch ở thẻ «Giờ làm việc»). Đóng khi có người trích dẫn trả lời, nhắc tên người hỏi, hoặc người nhận
+  nhắn bot «xong tin …». Quá hạn → `worker` nhắc (1 phút / lần), tối đa `alert_daily_reminder_cap` lần / ngày,
+  không nhắc trong giờ yên lặng. Bảng `alert_log` giữ «đã báo gì cho ai» để không báo trùng.
+- **Phiên Zalo văng** (`session-watch.ts`): quá 5 phút không có nhịp tim hoặc phải đăng nhập lại → báo qua
+  **Telegram** (`alert_telegram_bot_token` + `alert_telegram_chat_id`), một lần khi văng, một lần khi nối lại.
+- **Qua chat riêng với bot** (`src/assistant/alert-tools.ts`): «có gì cần xử lý», «xong tin …»; Quản lý / Trưởng
+  phòng đổi từ khóa và số phút chờ, người nhận đổi VIP / giờ bản tin của mình. Mọi thay đổi: bot đưa bản xem trước,
+  phải xác nhận ở **tin sau** mới lưu; ghi «Lịch sử thao tác» với tên người đổi «(qua Zalo)».
+
 ## Xem cơ sở dữ liệu bằng Adminer của ERP (máy dev)
 
 MySQL của bot không mở cổng ra ngoài. Nối Adminer (cổng 8081) vào mạng của bot:

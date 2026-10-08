@@ -16,6 +16,9 @@ import { CpuPool } from "./cpu/cpu-pool.js";
 import type { JobRow } from "./jobs/job-queue.js";
 import { JobRunner } from "./jobs/job-runner.js";
 import { findRecipient, type RecipientMessagePayload } from "./recipients/recipient-repository.js";
+import { AlertService } from "./alerts/alert-service.js";
+import { workCalendarFrom } from "./background.js";
+import { recordAudit } from "./web/api/audit-log.js";
 import { GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
@@ -46,6 +49,8 @@ export class SyncService {
   readonly cpu = new CpuPool(1);
   /** Hàng đợi trả lời: câu hỏi ghi vào bảng job, chạy song song tối đa `assistant.concurrency` câu (08/10/2026). */
   readonly jobs: JobRunner;
+  /** Cảnh báo tin nhắn (phase 5): phân loại tin mới, báo KHẨN / VIP cho người nhận. */
+  readonly alerts: AlertService;
   private currentAssistant: AssistantService | null;
   private readonly runners = new Map<number, AccountRunner>();
 
@@ -68,8 +73,12 @@ export class SyncService {
         [JobKind.AssistantDirectReply]: (job) => this.runnerForJob(job).runDirectReplyJob(job),
         [JobKind.AssistantGroupReply]: (job) => this.runnerForJob(job).runGroupReplyJob(job),
         [JobKind.RecipientMessage]: (job) => this.sendRecipientMessage(job.payload as RecipientMessagePayload),
+        [JobKind.AlertDispatch]: (job) => this.alerts.runDispatchJob(job),
       },
     });
+    const getCalendar = workCalendarFrom(config);
+    this.alerts = new AlertService(db, config, () => getCalendar(), () => this.jobs.wake(),
+      (recipientId, text) => this.sendRecipientMessage({ recipientId, text }));
   }
 
   /** Việc trả lời phải chạy đúng tài khoản bot đã nhận câu hỏi (phiên Zalo của tài khoản đó gửi câu trả lời). */
@@ -110,6 +119,18 @@ export class SyncService {
       storage: this.storage, maxReadFileBytes, readableFileTypes, showTokenUsage,
       heavyExtract: (task: "sheet" | "docx", data: Buffer) => this.cpu.run(task, data),
       privacy: { maskPersonalData: this.config.privacy.maskPersonalData, blockWebForAgroTechnical: this.config.privacy.blockWebForAgroTechnical },
+      alertTools: {
+        db: this.db, config: this.config,
+        saveSettings: async (patch: Record<string, unknown>, actor: string) => {
+          const changed = await this.settings.save(patch, actor);
+          if (changed.length) {
+            this.applySettings(changed);
+            await recordAudit(this.db, { entity: "setting", entityId: 1, action: "update", message: `Đổi qua Zalo bởi ${actor}`, changedFields: changed });
+          }
+          return changed;
+        },
+        invalidate: () => this.alerts.invalidate(),
+      },
       reportExporter: new ReportExporter(this.storage, () => this.config.google),
       meetingScheduler: new MeetingScheduler(() => this.config.google),
     };
@@ -151,6 +172,7 @@ export class SyncService {
       || (key.startsWith("assistant_") && !notAssistantBuild.has(key)));
     if (assistantChanged) this.rebuildAssistant();
     if (changedKeys.includes("assistant_concurrency")) this.jobs.setConcurrency(this.config.assistant.concurrency);
+    if (changedKeys.some((key) => key.startsWith("alert_"))) this.alerts.invalidate();
     if (changedKeys.includes("max_file_mb")) this.downloader.setMaxFileBytes(this.config.maxFileBytes);
     if (changedKeys.includes("assistant_send_interval_ms")) {
       for (const runner of this.runners.values()) runner.setSendInterval(this.config.assistant.sendIntervalMs);
@@ -177,6 +199,7 @@ export class SyncService {
     log.info(`đang chạy ${this.runners.size}/${accounts.length} tài khoản bot`);
     // Bật bộ chạy việc SAU khi các tài khoản đã chạy — câu hỏi còn trong hàng từ lần trước có runner để trả lời
     await this.jobs.start();
+    this.alerts.start();
   }
 
   isRunning(accountId: number): boolean {
@@ -281,6 +304,7 @@ export class SyncService {
 
   async stopAll(): Promise<void> {
     // Thôi nhận việc mới, chờ câu đang trả lời dở xong rồi mới tắt phiên Zalo
+    this.alerts.stop();
     await this.jobs.stop();
     this.downloader.stop();
     await Promise.allSettled([...this.runners.keys()].map((id) => this.stopAccount(id)));

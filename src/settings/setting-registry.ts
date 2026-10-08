@@ -2,7 +2,7 @@ import type { AppConfig } from "../config.js";
 import type { GoogleAccountLink } from "../google/google-oauth.js";
 import { parseServiceAccount, parseSpreadsheetId } from "../google/service-account.js";
 import { ApiError } from "../web/api/api-http.js";
-import { ALL_AI_PROVIDER_CODES, DEFAULT_HOLIDAYS, DEFAULT_QUIET_HOURS, DEFAULT_WORK_DAYS, DEFAULT_WORK_HOURS } from "../config.js";
+import { ALL_AI_PROVIDER_CODES, DEFAULT_HOLIDAYS, DEFAULT_IMPORTANT_KEYWORDS, DEFAULT_QUIET_HOURS, DEFAULT_STRICT_KEYWORDS, DEFAULT_URGENT_KEYWORDS, DEFAULT_WORK_DAYS, DEFAULT_WORK_HOURS } from "../config.js";
 import { CalendarInputError, parseHolidays, parseTimeRanges, parseWorkDays } from "../schedule/work-calendar.js";
 
 // Danh mục cài đặt sửa được trên màn Cài đặt — khai MỘT chỗ ở đây. Thêm khóa = thêm một dòng vào mảng;
@@ -349,6 +349,72 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     envName: null, defaultValue: DEFAULT_HOLIDAYS, maxLength: 1000,
     normalize: calendarCheck((value) => parseHolidays(asString(value))),
     applyTo: (config, value) => { config.calendar.holidays = asString(value); },
+  },
+  {
+    key: "alert_enabled", group: "operations", label: "Bật cảnh báo tin nhắn", type: "bool", secret: false,
+    help: "Bot tự phân loại tin trong các nhóm đang đọc, báo ngay tin KHẨN / VIP và nhắc tin chờ quá giờ vào chat riêng của người nhận (màn Người nhận).",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.alerts.enabled = value === true; },
+  },
+  {
+    key: "alert_urgent_keywords", group: "operations", label: "Từ khóa KHẨN", type: "string", secret: false, allowEmpty: true,
+    help: "Cách nhau dấu phẩy. Tin có dấu thì so đúng dấu, nguyên từ («gặp» không khớp «gấp»); tin không dấu thì cụm nhiều chữ khớp thẳng, từ một chữ phải để AI xác nhận.",
+    envName: null, defaultValue: DEFAULT_URGENT_KEYWORDS, maxLength: 2000,
+    applyTo: (config, value) => { config.alerts.urgentKeywords = asString(value); },
+  },
+  {
+    key: "alert_important_keywords", group: "operations", label: "Từ khóa QUAN TRỌNG", type: "string", secret: false, allowEmpty: true,
+    help: "Cách nhau dấu phẩy. Tin quan trọng không báo ngay — vào danh sách «cần xử lý» và bản tin.",
+    envName: null, defaultValue: DEFAULT_IMPORTANT_KEYWORDS, maxLength: 2000,
+    applyTo: (config, value) => { config.alerts.importantKeywords = asString(value); },
+  },
+  {
+    key: "alert_strict_keywords", group: "operations", label: "Từ khóa cần AI xác nhận", type: "string", secret: false, allowEmpty: true,
+    help: "Từ dễ báo nhầm vì hay gặp trong câu thường (vd «la», «liền», «ngay»): so đúng dấu, nguyên từ, rồi AI đọc lại tin mới quyết có khẩn không.",
+    envName: null, defaultValue: DEFAULT_STRICT_KEYWORDS, maxLength: 500,
+    applyTo: (config, value) => { config.alerts.strictKeywords = asString(value); },
+  },
+  {
+    key: "alert_reply_wait_minutes", group: "operations", label: "Nhắc tin chờ sau (phút làm việc)", type: "int", secret: false,
+    help: "Tin nhắc tên / hỏi thẳng người nhận, câu hỏi của khách chưa ai trả lời: quá bấy nhiêu phút GIỜ LÀM VIỆC thì nhắc (IDA: 120).",
+    envName: null, defaultValue: 120, min: 10, max: 2880,
+    applyTo: (config, value) => { config.alerts.replyWaitMinutes = asNumber(value); },
+  },
+  {
+    key: "alert_vip_wait_minutes", group: "operations", label: "Nhắc tin VIP chờ sau (phút làm việc)", type: "int", secret: false,
+    help: "Tin của người VIP chưa ai trả lời quá bấy nhiêu phút giờ làm việc thì nhắc (IDA: 30).",
+    envName: null, defaultValue: 30, min: 5, max: 1440,
+    applyTo: (config, value) => { config.alerts.vipWaitMinutes = asNumber(value); },
+  },
+  {
+    key: "alert_daily_reminder_cap", group: "operations", label: "Số lần nhắc tối đa mỗi ngày", type: "int", secret: false,
+    help: "Mỗi người nhận được nhắc tin chờ tối đa bấy nhiêu lần một ngày (IDA: 3). Tin KHẨN / VIP luôn báo, không tính vào đây.",
+    envName: null, defaultValue: 3, min: 0, max: 50,
+    applyTo: (config, value) => { config.alerts.dailyReminderCap = asNumber(value); },
+  },
+  {
+    key: "alert_urgent_merge_seconds", group: "operations", label: "Gộp tin khẩn dồn trong (giây)", type: "int", secret: false,
+    help: "Tin khẩn đầu tiên báo ngay; tin khẩn tới tiếp trong khoảng này được gộp thành một thông báo (IDA: 120).",
+    envName: null, defaultValue: 120, min: 0, max: 1800,
+    applyTo: (config, value) => { config.alerts.urgentMergeSeconds = asNumber(value); },
+  },
+  {
+    key: "alert_ai_enabled", group: "operations", label: "AI đọc lại để bắt tin khẩn không có từ khóa", type: "bool", secret: false,
+    help: "Mỗi 5 phút AI đọc gom các tin mới (đã che số điện thoại / tài khoản) để bắt tin khẩn không chứa từ khóa và xác nhận từ khóa «cần AI xác nhận». Nhóm Mật không đưa cho AI.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.alerts.aiEnabled = value === true; },
+  },
+  {
+    key: "alert_telegram_bot_token", group: "operations", label: "Bot Telegram báo khi Zalo văng", type: "string", secret: true, allowEmpty: true,
+    help: "Mã bot Telegram (từ BotFather). Phiên Zalo của bot văng thì báo vào chat Telegram bên dưới — để bot im lặng không bị hiểu nhầm là không có tin khẩn.",
+    envName: "ALERT_TELEGRAM_BOT_TOKEN", defaultValue: "", maxLength: 200,
+    applyTo: (config, value) => { config.alerts.telegramBotToken = asString(value).trim(); },
+  },
+  {
+    key: "alert_telegram_chat_id", group: "operations", label: "Chat Telegram nhận báo", type: "string", secret: false, allowEmpty: true,
+    help: "Mã chat (người hoặc nhóm) nhận báo khi phiên Zalo văng.",
+    envName: "ALERT_TELEGRAM_CHAT_ID", defaultValue: "", maxLength: 40, pattern: /^-?\d{1,20}$/, patternHint: "mã chat là số (nhóm thì bắt đầu bằng -)",
+    applyTo: (config, value) => { config.alerts.telegramChatId = asString(value).trim(); },
   },
   {
     key: "backup_keep_days", group: "operations", label: "Giữ bản sao lưu (ngày)", type: "int", secret: false,

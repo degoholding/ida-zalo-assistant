@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
+  BellRing,
   Bot,
   CalendarClock,
   Clock,
@@ -14,8 +15,10 @@ import {
   LogIn,
   MessageCircle,
   RefreshCw,
+  Send,
   ShieldCheck,
   Sparkles,
+  Timer,
   Users,
   UsersRound,
   Wrench,
@@ -118,7 +121,7 @@ export const GOOGLE_SECTIONS: SettingsSection[] = [
   {
     id: 'login',
     title: 'Đăng nhập Google',
-    description: 'Client ID của OAuth client (loại Web) để hiện nút «Đăng nhập bằng Google» ở màn đăng nhập. Để trống = chỉ đăng nhập bằng mật khẩu quản trị.',
+    description: 'Client ID của OAuth client (loại Web) để hiện nút «Đăng nhập bằng Google» ở màn đăng nhập. Để trống = chỉ đăng nhập bằng tài khoản + mật khẩu.',
     icon: LogIn,
     keys: ['google_login_client_id'],
   },
@@ -145,6 +148,29 @@ export const OPERATIONS_SECTIONS: SettingsSection[] = [
     description: 'Đồng hồ chờ trả lời chỉ chạy trong giờ làm; giờ yên lặng và ngày nghỉ chỉ báo tin KHẨN / VIP.',
     icon: Clock,
     keys: ['work_hours', 'work_days', 'quiet_hours', 'holidays'],
+  },
+  {
+    id: 'alerts',
+    title: 'Cảnh báo tin nhắn',
+    description:
+      'Bot tự đọc tin trong nhóm, báo KHẨN / VIP cho người nhận qua Zalo. Từ khóa có dấu khớp đúng dấu, đúng nguyên chữ; từ «nghiêm» (la, liền, ngay) chỉ tính khi AI xác nhận.',
+    icon: BellRing,
+    keys: ['alert_enabled', 'alert_urgent_keywords', 'alert_important_keywords', 'alert_strict_keywords', 'alert_ai_enabled'],
+  },
+  {
+    id: 'alert-timing',
+    title: 'Đồng hồ chờ & nhắc',
+    description:
+      'Tin hỏi người nhận / khách hỏi mà chưa ai trả lời quá số phút làm việc thì nhắc. Tin thường nhắc tối đa vài lần / ngày; tin KHẨN gộp lại trong vài phút rồi báo một lần.',
+    icon: Timer,
+    keys: ['alert_reply_wait_minutes', 'alert_vip_wait_minutes', 'alert_daily_reminder_cap', 'alert_urgent_merge_seconds'],
+  },
+  {
+    id: 'alert-telegram',
+    title: 'Kênh dự phòng Telegram',
+    description: 'Phiên Zalo của bot văng thì báo qua Telegram (Zalo không gửi được). Để trống = không báo.',
+    icon: Send,
+    keys: ['alert_telegram_bot_token', 'alert_telegram_chat_id'],
   },
   {
     id: 'backup',

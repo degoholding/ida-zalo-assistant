@@ -20,7 +20,7 @@
 | **+** | Làm thêm ngoài kế hoạch (trợ lý trong nhóm, Google Meet, đọc link, Khóa AI…) | **Xong** 07/10 | 11 / 11 |
 | **3** | Hạ tầng xử lý nền (mở rộng cho ~100 nhóm / bot) | **Xong** 08/10 | 12 / 12 |
 | **4** | Nhiều tài khoản web, người nhận, tách theo công ty | **Xong** 08/10 | 5 / 5 |
-| **5** | N1 — Check tin nhắn và cảnh báo | **Chưa** | 0 / 9 |
+| **5** | N1 — Check tin nhắn và cảnh báo | **Xong** 08/10 | 9 / 9 |
 | **6** | N4 — Tìm kiếm tin nhắn | Một phần | 1 / 5 |
 | **7** | N5 — Checklist công việc | **Chưa** | 0 / 5 |
 | **8** | N6 — Bản tin và báo cáo | Một phần | 3 / 7 |
@@ -28,9 +28,10 @@
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 1 / 9 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
-phần «bot tự theo dõi, tự báo» (phase 3) và tài khoản + 3 người nhận (phase 4) đã xong 08/10 — tiếp theo là phase 5.
+phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
+08/10 — tiếp theo là phase 6 (tìm tin).
 
-Đối chiếu 27 câu của IDA (mục 9): **4 Đạt · 12 Một phần · 11 Chưa** sau phase 4 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
+Đối chiếu 27 câu của IDA (mục 9): **8 Đạt · 13 Một phần · 6 Chưa** sau phase 5 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
 
 ## 1. Đã chốt
@@ -163,19 +164,20 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | Phạm vi xem trên web theo người (mỗi người chỉ thấy nhóm của mình) | 1, 4 | Xong 08/10 |
 | **Khung tách theo công ty**: bảng mới mang mã công ty ngay từ đầu | — | Xong 08/10 |
 
-## 7. Phase 5 — N1 Check tin nhắn và cảnh báo (Chưa)
+## 7. Phase 5 — N1 Check tin nhắn và cảnh báo (Xong 08/10)
 
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
-| Danh sách **VIP** (20–30 người) trên Danh bạ, có tác dụng thật | 5 | Chưa |
-| Từ khóa KHẨN / QUAN TRỌNG sửa trên Cài đặt; so đúng dấu, nguyên từ (tránh «la» khớp «là», «ngay», «liền» báo giả) | 6 | Chưa |
-| AI nhận tin khẩn không chứa từ khóa (báo trong 5–10 phút) | 6 | Chưa |
-| Nhận ra tin @nhắc tên hoặc hỏi thẳng người nhận | 7 | Chưa |
-| Đồng hồ chờ: 2 giờ làm việc; VIP 30 phút; câu hỏi của khách chưa ai trả lời | 7 | Chưa |
-| Xác định «đã xử lý»: trả lời trích dẫn / nhắc tên người hỏi / đánh dấu xong trên bot | 8 | Chưa |
-| Đẩy tin KHẨN / VIP ngay (gộp tin trong 2 phút); báo khác tối đa 3 lần/ngày | 9 | Chưa |
-| «Có gì cần xử lý» — danh sách tin theo mức ưu tiên | N1 | Chưa |
-| Báo người nhận + IT khi phiên Zalo văng, qua kênh dự phòng | 9 | Chưa (hiện chỉ hiện trạng thái trên web) |
+| Danh sách **VIP** (20–30 người) có tác dụng thật | 5 | Xong 08/10 (VIP riêng từng người nhận, sửa ở màn Người nhận hoặc nhắn bot; chờ IDA gửi danh sách) |
+| Từ khóa KHẨN / QUAN TRỌNG sửa trên Cài đặt; so đúng dấu, nguyên từ (tránh «la» khớp «là», «ngay», «liền» báo giả) | 6 | Xong 08/10 (từ «nghiêm» la / liền / ngay chỉ tính khi AI xác nhận) |
+| AI nhận tin khẩn không chứa từ khóa (báo trong 5–10 phút) | 6 | Xong 08/10 (AI xét theo lô 5 phút / lần; không đưa nhóm Mật; che SĐT / STK) |
+| Nhận ra tin @nhắc tên hoặc hỏi thẳng người nhận | 7 | Xong 08/10 |
+| Đồng hồ chờ: 2 giờ làm việc; VIP 30 phút; câu hỏi của khách chưa ai trả lời | 7 | Xong 08/10 |
+| Xác định «đã xử lý»: trả lời trích dẫn / nhắc tên người hỏi / đánh dấu xong trên bot | 8 | Xong 08/10 |
+| Đẩy tin KHẨN / VIP ngay (gộp tin trong 2 phút); báo khác tối đa 3 lần/ngày | 9 | Xong 08/10 (giờ yên lặng chỉ báo KHẨN / VIP) |
+| «Có gì cần xử lý» — danh sách tin theo mức ưu tiên | N1 | Xong 08/10 (nhắn riêng bot; màn web để sau) |
+| Báo người nhận + IT khi phiên Zalo văng, qua kênh dự phòng | 9 | Xong 08/10 (Telegram; báo một lần khi văng, một lần khi nối lại) |
+| Quản lý / trưởng phòng / người nhận đổi cấu hình cảnh báo bằng cách nhắn riêng bot (xem trước → xác nhận ở tin sau) | N1 | Xong 08/10 (làm thêm) |
 
 ## 8. Phase 6–10
 
@@ -244,11 +246,11 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | 2 | ~100 nhóm / bot | 3 | Một phần |
 | 3 | Nhóm có / không có quyền trưởng nhóm | 1 | Đạt |
 | 4 | Không đọc / Mật / tiếng nước ngoài | 1, 3 | Một phần (nhãn Mật xong 08/10; còn loại khỏi báo cáo ở phase 8) |
-| 5 | VIP | 5 | Chưa |
-| 6 | Từ khóa KHẨN / QUAN TRỌNG | 5 | Chưa |
-| 7 | Đồng hồ chờ, giờ làm, giờ yên lặng | 3, 5 | Chưa |
-| 8 | Thế nào là «đã xử lý» | 3, 5 | Chưa |
-| 9 | Đẩy báo, trần 3 lần/ngày, báo phiên văng | 5 | Chưa |
+| 5 | VIP | 5 | Một phần (chạy thật 08/10; chờ IDA gửi danh sách VIP) |
+| 6 | Từ khóa KHẨN / QUAN TRỌNG | 5 | Đạt (08/10) |
+| 7 | Đồng hồ chờ, giờ làm, giờ yên lặng | 3, 5 | Đạt (08/10) |
+| 8 | Thế nào là «đã xử lý» | 3, 5 | Đạt (08/10) |
+| 9 | Đẩy báo, trần 3 lần/ngày, báo phiên văng | 5 | Đạt (08/10) |
 | 10 | Thư viện mẫu C10 có duyệt | 4, 10 | Chưa |
 | 11 | Văn phong | 10 | Một phần |
 | 12 | Không tự điền số | 10 | Một phần |

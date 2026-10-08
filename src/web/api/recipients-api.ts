@@ -167,6 +167,7 @@ export const recipientRoutes: ApiRoute[] = [
     const [result] = await db.query<any>(`INSERT INTO recipient (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`, Object.values(columns));
     const id = Number(result.insertId);
     await saveLinks(db, id, input);
+    service.alerts.invalidate();
     await recordAudit(db, { entity: "recipient", entityId: id, action: "create", message: `Thêm người nhận ${String(input.columns.name)}` });
     sendOk(response, await getRecipientDetail(db, id), "Đã thêm người nhận", 201);
   }],
@@ -179,6 +180,7 @@ export const recipientRoutes: ApiRoute[] = [
     const keys = Object.keys(input.columns);
     if (keys.length) await db.query(`UPDATE recipient SET ${keys.map((key) => `${key} = ?`).join(", ")} WHERE id = ?`, [...Object.values(input.columns), id]);
     await saveLinks(db, id, input);
+    service.alerts.invalidate();
     const after = await getRecipientDetail(db, id);
     const changed = diffFields(before, after, FIELD_LABELS);
     if (changed.length) await recordAudit(db, { entity: "recipient", entityId: id, action: "update", changedFields: changed });

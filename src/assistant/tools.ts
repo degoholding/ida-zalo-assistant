@@ -9,6 +9,7 @@ import { runReadLink, type ReadLink } from "./read-link-tool.js";
 import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings, type MeetingCreator } from "./meeting-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
+import { ALERT_TOOL_NAMES, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 
 // Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file và export_report — send_file chỉ gửi cho
 // chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
@@ -54,6 +55,11 @@ export interface ToolContext {
   actionCounter?: { done: number };
   /** Tạo cuộc họp Google Meet (tài khoản «Kết nối Google»). Không có / chưa kết nối = không có công cụ create_meeting. */
   meetings?: MeetingCreator;
+  /** Công cụ cảnh báo (phase 5) — chỉ tin riêng, người hỏi là quản lý / người nhận. */
+  alertTools?: AlertToolsDeps;
+  alertAsker?: AlertAsker;
+  /** Lúc lượt hỏi bắt đầu (đồng hồ thật) — xác nhận đổi cấu hình phải ở lượt SAU lượt đề xuất. */
+  turnStartedAt?: number;
 }
 
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
@@ -466,6 +472,9 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   list_meetings: (context) => runListMeetings(context.meetings, meetingScopeTag(context.scopeGroupId)),
   cancel_meeting: (context, args) =>
     runCancelMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, meetingScopeTag(context.scopeGroupId)),
+  ...Object.fromEntries([...ALERT_TOOL_NAMES].map((name) => [name,
+    (context: ToolContext, args: Record<string, unknown>) =>
+      runAlertTool(context.alertTools, context.alertAsker, name, args, context.now, context.turnStartedAt ?? Date.now())])),
   ...Object.fromEntries([...GROUP_ACTION_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) =>
       runGroupAction(context.groupActions, (context.actionCounter ??= { done: 0 }), name, args, context.now)])),

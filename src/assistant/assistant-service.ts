@@ -19,6 +19,7 @@ import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
 import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, formatVnDay, runTool, type ToolContext } from "./tools.js";
 import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
 import { maskPersonalDataDeep } from "../privacy/personal-data.js";
+import { ALERT_TOOL_DECLARATIONS, ALERT_TOOLS_PROMPT, resolveAlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
 // (tối đa MAX_TOOL_ROUNDS vòng) → ghi nhật ký assistant_turn. Không tự gửi Zalo — trả về câu trả
@@ -55,6 +56,8 @@ export interface AssistantOptions {
   heavyExtract?: HeavyExtractor;
   /** Bảo vệ dữ liệu (phase 3, bước 3.3); bỏ trống = không che, không chặn. */
   privacy?: { maskPersonalData: boolean; blockWebForAgroTechnical: boolean };
+  /** Công cụ cảnh báo (phase 5): «có gì cần xử lý», «xong tin…», đổi cấu hình qua chat. Bỏ trống = không có. */
+  alertTools?: AlertToolsDeps;
 }
 
 export interface AssistantRequest {
@@ -276,6 +279,13 @@ export class AssistantService {
     };
     context.meetings = this.options.meetingScheduler;
     const scope = request.groupScope;
+    // Công cụ cảnh báo: chỉ tin riêng, người hỏi có vai trò hoặc là người nhận
+    const alertAsker = !scope && this.options.alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
+    if (alertAsker) {
+      context.alertTools = this.options.alertTools;
+      context.alertAsker = alertAsker;
+      context.turnStartedAt = Date.now();
+    }
     if (scope) {
       context.scopeGroupId = scope.groupId;
       context.groupActions = scope.actions;
@@ -289,11 +299,12 @@ export class AssistantService {
       ...(exporter ? [EXPORT_REPORT_DECLARATION, MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION] : []),
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
+      ...(alertAsker ? ALERT_TOOL_DECLARATIONS : []),
     ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
     const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
-      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "");
+      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "");
     const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
     const contents = scope ? [] : mask(await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid));
     // Câu hỏi của chính người hỏi giữ nguyên (họ có thể đang hỏi đúng một số điện thoại); ngữ cảnh nhóm kèm theo thì che

@@ -79,6 +79,24 @@ export interface AppConfig {
     /** Hãng AI được phép (mã AiKeyProvider dạng chuỗi). Khóa hãng ngoài danh sách bị bỏ qua. */
     allowedAiProviders: string[];
   };
+  /** Cảnh báo tin nhắn (phase 5, N1) — chuỗi từ khóa như nhập trên màn Cài đặt. */
+  alerts: {
+    enabled: boolean;
+    urgentKeywords: string;
+    importantKeywords: string;
+    /** Từ chỉ là ứng viên khẩn, cần AI xác nhận («la, liền, ngay»). */
+    strictKeywords: string;
+    replyWaitMinutes: number;
+    vipWaitMinutes: number;
+    /** Số LẦN nhắc tin chờ tối đa mỗi ngày cho một người nhận (tin KHẨN / VIP không tính). */
+    dailyReminderCap: number;
+    /** Tin khẩn đến dồn trong ngần này giây thì gộp thành một thông báo. */
+    urgentMergeSeconds: number;
+    aiEnabled: boolean;
+    /** Kênh dự phòng khi phiên Zalo văng (bot Telegram). */
+    telegramBotToken: string;
+    telegramChatId: string;
+  };
   /** Sao lưu CSDL: số ngày giữ bản sao lưu trên kho tệp. */
   backup: { keepDays: number };
   /** Chỉ đặt được trên màn Cài đặt (bảng app_setting) — không có biến .env. */
@@ -99,6 +117,12 @@ export const DEFAULT_WORK_DAYS = ["1", "2", "3", "4", "5", "6"];
 export const DEFAULT_QUIET_HOURS = "21:00-06:30";
 // Lễ dương lịch cố định; Tết âm lịch mỗi năm một khác — quản trị thêm khoảng ngày (vd 05/02/2027-11/02/2027)
 export const DEFAULT_HOLIDAYS = "01/01, 30/04, 01/05, 02/09";
+// Từ khóa IDA chốt 07/10/2026 (Q&A câu 6). «la», «liền», «ngay» tách sang danh sách «nghiêm» — chỉ là ứng viên, AI xác nhận
+export const DEFAULT_URGENT_KEYWORDS = "gấp, khẩn, trả hàng, đổi hàng, khiếu nại, khởi kiện, hàng giả, hàng lỗi, vón cục, cháy lá, chết cây, ngộ độc, " +
+  "thanh tra, quản lý thị trường, ngừng lấy hàng, giận, chửi, mắng vốn, lập tức";
+export const DEFAULT_IMPORTANT_KEYWORDS = "công nợ, quá hạn, khất nợ, gia hạn nợ, chiết khấu, hóa đơn, giao trễ, thiếu hàng, hết hàng, đề nghị duyệt, cận date";
+export const DEFAULT_STRICT_KEYWORDS = "la, liền, ngay";
+
 /** Mã mọi hãng AI (AiKeyProvider) — mặc định cho phép hết, quản trị bỏ bớt ở màn Cài đặt. */
 export const ALL_AI_PROVIDER_CODES = ["1", "2", "3", "4", "5", "6"];
 
@@ -173,6 +197,11 @@ export function loadConfig(): AppConfig {
     calendar: { workHours: DEFAULT_WORK_HOURS, workDays: DEFAULT_WORK_DAYS, quietHours: DEFAULT_QUIET_HOURS, holidays: DEFAULT_HOLIDAYS },
     privacy: { maskPersonalData: true, blockWebForAgroTechnical: true, allowedAiProviders: ALL_AI_PROVIDER_CODES },
     backup: { keepDays: readInt("BACKUP_KEEP_DAYS", 30) },
+    alerts: {
+      enabled: true, urgentKeywords: DEFAULT_URGENT_KEYWORDS, importantKeywords: DEFAULT_IMPORTANT_KEYWORDS, strictKeywords: DEFAULT_STRICT_KEYWORDS,
+      replyWaitMinutes: 120, vipWaitMinutes: 30, dailyReminderCap: 3, urgentMergeSeconds: 120, aiEnabled: true,
+      telegramBotToken: (process.env.ALERT_TELEGRAM_BOT_TOKEN ?? "").trim(), telegramChatId: (process.env.ALERT_TELEGRAM_CHAT_ID ?? "").trim(),
+    },
     google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null, loginClientId: "" },
   };
 }

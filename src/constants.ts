@@ -101,6 +101,16 @@ export enum JobKind {
   AssistantGroupReply = 2,
   // Bot nhắn riêng cho một người nhận (kênh báo / lệnh, phase 4) — tiến trình app gửi vì giữ phiên Zalo
   RecipientMessage = 3,
+  // Gom tin KHẨN / VIP chưa báo của một người nhận thành một thông báo rồi gửi (phase 5)
+  AlertDispatch = 4,
+}
+
+/** Loại báo trong bảng alert_log (phase 5). */
+export enum AlertKind {
+  // Tin KHẨN / VIP — báo ngay, kể cả giờ yên lặng, không tính vào trần mỗi ngày
+  Urgent = 1,
+  // Nhắc tin chờ quá giờ chưa ai trả lời — tối đa N lần báo / ngày, không báo trong giờ yên lặng
+  Reminder = 2,
 }
 
 /** Mức ưu tiên của một tin (bảng message_flag). */

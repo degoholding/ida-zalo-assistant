@@ -5,6 +5,9 @@ import { createLogger } from "./logger.js";
 import { BACKGROUND_TASKS, type BackgroundTaskName } from "./schedule/background-tasks.js";
 import { Scheduler } from "./schedule/scheduler.js";
 import { buildWorkCalendar, type WorkCalendar } from "./schedule/work-calendar.js";
+import { runAiReview } from "./alerts/ai-review.js";
+import { runReminders } from "./alerts/reminders.js";
+import { telegramSenderFor, watchSessions } from "./alerts/session-watch.js";
 import { uploadBackups } from "./storage/backup-uploader.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
@@ -58,8 +61,20 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
       }
     },
     "backup-upload": () => uploadBackups(storage, BACKUP_DIR, config.backup.keepDays),
+    "alert-reminders": () => runReminders(db, config, safeCalendar()),
+    "alert-ai-review": () => runAiReview(db, config),
+    "session-watch": () => watchSessions(db, telegramSenderFor(config)),
   };
-  const scheduler = new Scheduler(db, BACKGROUND_TASKS.map((task) => ({ ...task, run: runners[task.name] })), workCalendarFrom(config));
+  const getCalendar = workCalendarFrom(config);
+  // Lịch cài sai thì nhắc theo giờ thường còn hơn tắt hẳn
+  const safeCalendar = () => {
+    try {
+      return getCalendar();
+    } catch {
+      return null;
+    }
+  };
+  const scheduler = new Scheduler(db, BACKGROUND_TASKS.map((task) => ({ ...task, run: runners[task.name] })), getCalendar);
   await scheduler.start();
   return { stop: () => scheduler.stop() };
 }
