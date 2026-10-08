@@ -209,3 +209,27 @@ describe('CrudDetailPage — id ngoài phạm vi (D5)', () => {
     expect(await screen.findByText('Không tìm thấy loại nghỉ')).toBeInTheDocument()
   })
 })
+
+/**
+ * Trang chi tiết CHỈ XEM (`readOnlyDetail`) — màn Ticket. Người có quyền `write` vẫn KHÔNG được thấy nút Lưu:
+ * máy chủ không có đường PATCH cho ticket, bấm vào là 404.
+ */
+describe('CrudDetailPage — read-only detail', () => {
+  const READ_ONLY: CrudConfig<LeaveType> = {
+    ...CONFIG,
+    readOnlyDetail: true,
+    renderExtra: (row) => <div>nội dung {row.name}</div>,
+  }
+
+  it('hides the form and the Save button even for a user who can write', async () => {
+    build('/hr/leave-types/5', READ_ONLY)
+    expect(await screen.findByText('nội dung Phép năm')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Lưu' })).toBeNull()
+    expect(screen.queryByLabelText(/Tên loại nghỉ/)).toBeNull()
+  })
+
+  it('still shows the Save button when the flag is absent', async () => {
+    build('/hr/leave-types/5')
+    expect(await screen.findByRole('button', { name: 'Lưu' })).toBeInTheDocument()
+  })
+})

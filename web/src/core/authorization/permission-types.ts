@@ -42,6 +42,8 @@ export const ENTITIES = [
   // Phase 4 — màn Người dùng và Người nhận, chỉ quản trị.
   'user',
   'recipient',
+  // Màn Ticket (08/10/2026): Quản trị mọi quyền; Quản lý xem + thao tác (nhận / xong / hủy / nhắn); Nhân viên chỉ xem.
+  'ticket',
 ] as const
 
 export type PermissionEntity = (typeof ENTITIES)[number]

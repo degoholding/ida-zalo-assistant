@@ -21,6 +21,7 @@
 | **3** | Hạ tầng xử lý nền (mở rộng cho ~100 nhóm / bot) | **Xong** 08/10 | 12 / 12 |
 | **4** | Nhiều tài khoản web, người nhận, tách theo công ty | **Xong** 08/10 | 5 / 5 |
 | **5** | N1 — Check tin nhắn và cảnh báo | **Xong** 08/10 | 9 / 9 |
+| **11** | Ticket qua bot (đại ca thêm 08/10, làm trước phase 6) | **Xong** 08/10 | 7 / 7 |
 | **6** | N4 — Tìm kiếm tin nhắn | Một phần | 1 / 5 |
 | **7** | N5 — Checklist công việc | **Chưa** | 0 / 5 |
 | **8** | N6 — Bản tin và báo cáo | Một phần | 3 / 7 |
@@ -44,6 +45,7 @@ câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải 
 | 08/10 | **Bot chạy trên VPS riêng** (đại ca đang mua); trong lúc chờ, tạm chạy trên VPS 1 chung với ERP | Mục 10 |
 | 08/10 | **Phục vụ IDA trước**; về sau có thể gom vào nền tảng của công ty cho nhiều bên dùng, **tách theo từng công ty** | Phase 4 dựng sẵn khung tách theo công ty |
 | 08/10 | Số liệu N3 đọc từ **bảng Google Drive nhân viên nhập mỗi tuần**, không trích từ tin chat | Phase 10 đổi hướng |
+| 08/10 | **Ticket qua bot**: việc chung của IDA, **chỉ trong bot, không nối ERP**; người xử lý do đại ca gửi tên; làm ngay | Thêm phase 11 (làm trước phase 6) |
 
 ## 2. Phase 1 — Nền (Xong)
 
@@ -178,6 +180,21 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | «Có gì cần xử lý» — danh sách tin theo mức ưu tiên | N1 | Xong 08/10 (nhắn riêng bot; màn web để sau) |
 | Báo người nhận + IT khi phiên Zalo văng, qua kênh dự phòng | 9 | Xong 08/10 (Telegram; báo một lần khi văng, một lần khi nối lại) |
 | Quản lý / trưởng phòng / người nhận đổi cấu hình cảnh báo bằng cách nhắn riêng bot (xem trước → xác nhận ở tin sau) | N1 | Xong 08/10 (làm thêm) |
+
+## 7b. Phase 11 — Ticket qua bot (Xong 08/10)
+
+Nhân viên báo việc cần hỗ trợ / lỗi / sự cố cho bot; bot ghi nhận, báo người xử lý, báo lại người gửi khi có tiến triển.
+Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/api/tickets-api.ts`, migration 022.
+
+| Việc | Trạng thái |
+|---|---|
+| Báo ticket: «báo lỗi: …» trong tin riêng hoặc gọi bot trong nhóm; ảnh gửi trước đó 15 phút tự gắn vào ticket; mã T-0001 | Xong 08/10 |
+| Nhân viên chưa có vai trò vẫn báo / theo dõi ticket được (chỉ lệnh ticket + «hướng dẫn»; khách hàng thì không) | Xong 08/10 |
+| Báo người xử lý qua Zalo (chữ + ảnh), nhiều người; danh sách người xử lý sửa trên màn Ticket | Xong 08/10 |
+| Người xử lý «nhận T-12», «xong T-12 <ghi chú>», «T-12: <nhắn người gửi>», «ticket» (đang mở) | Xong 08/10 |
+| Báo lại người gửi đúng chỗ đã báo (tin riêng / nhóm) khi nhận, xong, hủy, có lời nhắn | Xong 08/10 |
+| Người gửi «T-12» xem tình hình, «T-12: …» bổ sung (ticket đã xong thì mở lại), «hủy T-12» | Xong 08/10 |
+| Màn Ticket trên web: danh sách, chi tiết, ảnh, nhật ký, nhận / xong / hủy / mở lại / nhắn người gửi | Xong 08/10 |
 
 ## 8. Phase 6–10
 

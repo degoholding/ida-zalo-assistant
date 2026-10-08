@@ -39,6 +39,11 @@ export const queryKeys = {
     all: ['files'] as const,
     text: (id: number) => ['files', 'text', id] as const,
   },
+  tickets: {
+    all: ['tickets'] as const,
+    /** Người xử lý ticket (nhận tin báo ticket mới qua Zalo). Danh sách / chi tiết ticket đi qua khóa của khung CRUD. */
+    handlers: () => ['tickets', 'handlers'] as const,
+  },
   accounts: {
     all: ['accounts'] as const,
     qrLogin: (attemptId: string) => ['accounts', 'qr-login', attemptId] as const,

@@ -12,6 +12,7 @@ import { groupsModule } from '@/modules/groups/routes'
 import { importsModule } from '@/modules/imports/routes'
 import { recipientsModule } from '@/modules/recipients/routes'
 import { settingsModule } from '@/modules/settings/routes'
+import { ticketsModule } from '@/modules/tickets/routes'
 import { usersModule } from '@/modules/users/routes'
 import { appRoutes } from '@/shared/constants/app-routes'
 import { NotFoundPage } from '@/shared/ui/not-found-page'
@@ -27,6 +28,7 @@ const MODULE_ROUTES = [
   contactsModule,
   groupsModule,
   filesModule,
+  ticketsModule,
   importsModule,
   companiesModule,
   recipientsModule,

@@ -19,6 +19,7 @@ import { groupRoutes } from "./groups-api.js";
 import { importRoutes } from "./imports-api.js";
 import { lookupRoutes } from "./lookups-api.js";
 import { recipientRoutes } from "./recipients-api.js";
+import { ticketRoutes } from "./tickets-api.js";
 import { requiredPermission } from "./route-permissions.js";
 import { settingRoutes } from "./settings-api.js";
 import { assistantChatRoutes } from "./assistant-chat-api.js";
@@ -32,7 +33,7 @@ const log = createLogger("api");
 
 const routes: ApiRoute[] = [
   ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...accountFriendRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
-  ...userRoutes, ...recipientRoutes,
+  ...userRoutes, ...recipientRoutes, ...ticketRoutes,
 ];
 
 export interface ApiDeps {

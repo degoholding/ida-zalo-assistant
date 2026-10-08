@@ -21,6 +21,8 @@ import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-
 import { maskPersonalDataDeep } from "../privacy/personal-data.js";
 import { ALERT_TOOL_DECLARATIONS, ALERT_TOOLS_PROMPT, resolveAlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { parseChatCommand, runChatCommand } from "./chat-commands.js";
+import { buildTicketContext } from "../tickets/ticket-commands.js";
+import type { TicketDeps } from "../tickets/ticket-service.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
 // (tối đa MAX_TOOL_ROUNDS vòng) → ghi nhật ký assistant_turn. Không tự gửi Zalo — trả về câu trả
@@ -59,6 +61,8 @@ export interface AssistantOptions {
   privacy?: { maskPersonalData: boolean; blockWebForAgroTechnical: boolean };
   /** Công cụ cảnh báo (phase 5): «có gì cần xử lý», «xong tin…», đổi cấu hình qua chat. Bỏ trống = không có. */
   alertTools?: AlertToolsDeps;
+  /** Ticket qua bot (08/10/2026): «báo lỗi: …», «nhận / xong T-12». Bỏ trống = không có lệnh ticket. */
+  tickets?: TicketDeps;
 }
 
 export interface AssistantRequest {
@@ -132,6 +136,7 @@ Việc bạn làm được:
    → export_report (một bảng các số chính). Gọi NGAY lượt này; tài liệu đọc ở lượt trước thì read_file / read_link LẠI để lấy đúng số (đừng chép từ
    câu trả lời cũ — đã bị cắt bớt). Xuất xong câu trả lời chỉ 2–3 ý chính + báo tệp đang được gửi, không chép lại cả bản tóm tắt.
 Câu hỏi ngoài các việc này: nói ngắn gọn bạn làm được gì, và nhắc người hỏi gõ «hướng dẫn» để xem danh sách lệnh.
+Người hỏi muốn báo lỗi / sự cố / cần hỗ trợ: chỉ họ nhắn «báo lỗi: <nội dung>» (có ảnh thì gửi ảnh trước) — bot tạo ticket và báo người xử lý.
 
 Quy tắc:
 - Chỉ dùng dữ liệu từ công cụ. Không bịa tên, số liệu, ngày giờ. Không có dữ liệu thì nói không có.
@@ -208,7 +213,15 @@ export class AssistantService {
     if (command) {
       const alertTools = this.options.alertTools;
       const asker = !request.groupScope && alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
-      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now }, command);
+      const tickets = this.options.tickets;
+      const contact = request.contact;
+      const ticket = tickets ? buildTicketContext(tickets, {
+        contact: { id: contact.id, uid: contact.zalo_uid, name: contact.display_name || contact.zalo_name || contact.zalo_uid },
+        threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
+      }) : undefined;
+      // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
+      const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
+      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, ticketOnly }, command);
       if (text !== null) {
         await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: command }], model: "lệnh" });
         return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };

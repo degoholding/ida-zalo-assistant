@@ -22,6 +22,10 @@ export const appRoutes = {
     detail: (id: number | string) => `/groups/${id}`,
   },
   files: { list: '/files' },
+  tickets: {
+    list: '/tickets',
+    detail: (id: number | string) => `/tickets/${id}`,
+  },
   imports: { zaloWeb: '/imports/zalo-web' },
   companies: {
     list: '/companies',

@@ -19,7 +19,8 @@ import { findRecipient, type RecipientMessagePayload } from "./recipients/recipi
 import { AlertService } from "./alerts/alert-service.js";
 import { workCalendarFrom } from "./background.js";
 import { recordAudit } from "./web/api/audit-log.js";
-import { GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
+import { findThreadById, GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
+import type { ContactMessagePayload, TicketDeps } from "./tickets/ticket-service.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
 import type { FriendRequestManager } from "./zalo/friend-requests.js";
@@ -51,6 +52,8 @@ export class SyncService {
   readonly jobs: JobRunner;
   /** Cảnh báo tin nhắn (phase 5): phân loại tin mới, báo KHẨN / VIP cho người nhận. */
   readonly alerts: AlertService;
+  /** Ticket qua bot (08/10/2026): lệnh trên Zalo + màn Ticket trên web dùng chung. */
+  readonly tickets: TicketDeps;
   private currentAssistant: AssistantService | null;
   private readonly runners = new Map<number, AccountRunner>();
 
@@ -66,6 +69,11 @@ export class SyncService {
       concurrency: config.downloadConcurrency,
       maxFileBytes: config.maxFileBytes,
     });
+    this.tickets = {
+      db,
+      requestDownload: (ids) => { for (const id of ids) this.downloader.enqueue(id); },
+      wakeJobs: () => this.jobs?.wake(),
+    };
     this.currentAssistant = this.buildAssistant();
     this.jobs = new JobRunner({
       db, role: "app", concurrency: config.assistant.concurrency,
@@ -74,6 +82,7 @@ export class SyncService {
         [JobKind.AssistantGroupReply]: (job) => this.runnerForJob(job).runGroupReplyJob(job),
         [JobKind.RecipientMessage]: (job) => this.sendRecipientMessage(job.payload as RecipientMessagePayload),
         [JobKind.AlertDispatch]: (job) => this.alerts.runDispatchJob(job),
+        [JobKind.ContactMessage]: (job) => this.sendContactMessage(job),
       },
     });
     const getCalendar = workCalendarFrom(config);
@@ -106,6 +115,54 @@ export class SyncService {
     await runner.sendDirectText(recipient.zalo_uid, recipient.name, payload.text);
   }
 
+  /**
+   * Tin báo ticket: vào một cuộc có sẵn (`threadId` — tin riêng thì đúng tài khoản bot chủ cuộc, nhóm thì tài khoản bot
+   * đang ở nhóm) hoặc nhắn riêng một người (`zaloUid`). Tệp kèm: tệp chưa vào kho thì đợi lượt thử sau; lượt cuối gửi
+   * những tệp đã có. Lỗi thì ném — hàng đợi thử lại.
+   */
+  private async sendContactMessage(job: JobRow): Promise<void> {
+    const payload = job.payload as ContactMessagePayload;
+    const attachmentIds = payload.attachmentIds ?? [];
+    let ready = attachmentIds;
+    if (attachmentIds.length) {
+      const [rows] = await this.db.query<RowDataPacket[]>("SELECT id FROM attachment WHERE id IN (?) AND status = 1", [attachmentIds]);
+      ready = attachmentIds.filter((id) => rows.some((row) => Number(row.id) === id));
+      const lastAttempt = job.attempts >= job.maxAttempts;
+      if (ready.length < attachmentIds.length && !lastAttempt) throw new Error(`còn ${attachmentIds.length - ready.length} tệp chưa tải về kho`);
+    }
+    if (payload.threadId) {
+      const thread = await findThreadById(this.db, payload.threadId);
+      if (!thread) return;
+      const runner = await this.runnerForThread(thread);
+      if (payload.text) await runner.sendThreadText(thread, payload.text);
+      for (const id of ready) await runner.sendThreadStoredFile(thread, id);
+      return;
+    }
+    if (!payload.zaloUid) return;
+    const [threads] = await this.db.query<RowDataPacket[]>(
+      "SELECT owner_bot_id FROM zalo_group WHERE thread_type = ? AND zalo_group_id = ? ORDER BY last_message_at DESC",
+      [ConversationType.Direct, payload.zaloUid]);
+    const runner = threads.map((row) => this.runners.get(Number(row.owner_bot_id))).find(Boolean) ?? [...this.runners.values()][0];
+    if (!runner) throw new Error("không có tài khoản bot nào đang chạy");
+    if (payload.text) await runner.sendDirectText(payload.zaloUid, payload.name ?? "", payload.text);
+    for (const id of ready) await runner.sendDirectStoredFile(payload.zaloUid, id);
+  }
+
+  /** Tài khoản bot gửi được vào một cuộc: tin riêng → bot chủ cuộc; nhóm → bot đang ở nhóm. */
+  private async runnerForThread(thread: GroupRow): Promise<AccountRunner> {
+    if (thread.thread_type === ConversationType.Direct) {
+      const runner = this.runners.get(Number(thread.owner_bot_id));
+      if (runner) return runner;
+    } else {
+      const [rows] = await this.db.query<RowDataPacket[]>("SELECT bot_account_id FROM bot_group WHERE group_id = ?", [thread.id]);
+      const runner = rows.map((row) => this.runners.get(Number(row.bot_account_id))).find(Boolean);
+      if (runner) return runner;
+    }
+    const fallback = [...this.runners.values()][0];
+    if (!fallback) throw new Error("không có tài khoản bot nào đang chạy");
+    return fallback;
+  }
+
   /** Trợ lý AI đang dùng (null = tắt). Đổi khóa / mô hình trên màn Cài đặt thì dựng lại — xem applySettings. */
   get assistant(): AssistantService | null {
     return this.currentAssistant;
@@ -131,6 +188,7 @@ export class SyncService {
         },
         invalidate: () => this.alerts.invalidate(),
       },
+      tickets: this.tickets,
       reportExporter: new ReportExporter(this.storage, () => this.config.google),
       meetingScheduler: new MeetingScheduler(() => this.config.google),
     };

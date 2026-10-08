@@ -15,7 +15,7 @@ import type { AssistantService } from "../assistant/assistant-service.js";
 import { reportFileExtension, type GeneratedReportFile } from "../reports/report-exporter.js";
 import { splitForZalo } from "../assistant/assistant-service.js";
 import type { AppConfig } from "../config.js";
-import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
+import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactKind, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
 import { decryptJson } from "../crypto/session-cipher.js";
 import type { RowDataPacket } from "mysql2";
 import type { Db } from "../db/pool.js";
@@ -55,6 +55,7 @@ import { AckTracker, enqueueDirectReply, type AckState, type DirectReplyPayload,
 import type { JobRow } from "../jobs/job-queue.js";
 import { recordReaction } from "../flags/message-flags.js";
 import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
+import { isTicketCommand, parseChatCommand } from "../assistant/chat-commands.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
 import {
   recordSessionEvent,
@@ -494,13 +495,17 @@ export class AccountRunner {
     void this.ensureContactAvatar(incoming.senderUid);
     // Người lạ (chưa có vai trò): chỉ lưu, không trả lời — đại ca chốt 01/10/2026. Người nhận (phase 4) luôn được trả
     // lời: chat riêng với bot là kênh báo + ra lệnh của họ.
-    const canAsk = result.contact.role !== ContactRole.None || await isActiveRecipientUid(this.db, incoming.senderUid);
+    const parsed = parseZaloContent(incoming.msgType, incoming.content);
+    const command = parsed.kind === MessageKind.Text ? parseChatCommand(parsed.text) : null;
+    // Ticket (08/10/2026): nhân viên chưa có vai trò vẫn báo / theo dõi ticket được — chỉ lệnh ticket + «hướng dẫn»,
+    // câu hỏi khác vẫn không trả lời. Khách hàng thì không.
+    const ticketAllowed = (isTicketCommand(command) || command?.kind === "help") && result.contact.kind !== ContactKind.Customer;
+    const canAsk = result.contact.role !== ContactRole.None || await isActiveRecipientUid(this.db, incoming.senderUid) || ticketAllowed;
     if (!this.assistant || !canAsk) {
       this.log.info(`tin riêng từ ${who}: đã lưu, không trả lời (${this.assistant ? "chưa có vai trò" : "trợ lý tắt"})`);
       return;
     }
     this.log.info(`tin riêng từ ${who}: đang trả lời`);
-    const parsed = parseZaloContent(incoming.msgType, incoming.content);
     if (parsed.kind !== MessageKind.Text || !parsed.text.trim()) return;
 
     // Ghi việc vào hàng đợi rồi đi tiếp — trả lời do bộ chạy việc làm (runDirectReplyJob), mỗi cuộc lần lượt từng câu
@@ -723,7 +728,33 @@ export class AccountRunner {
     if (msgId) await recordOutgoingMessage(this.db, thread, { uid: this.ownUid, name: this.account.display_name || this.account.label }, String(msgId), text);
   }
 
-  private async sendStoredFile(peerUid: string, attachmentId: number): Promise<void> {
+  /** Bot tự nhắn vào một cuộc có sẵn (riêng / nhóm) — báo ticket (08/10/2026). Lưu như tin bot gửi. */
+  async sendThreadText(thread: GroupRow, text: string): Promise<void> {
+    const api = this.api;
+    if (!api) throw new Error("bot chưa kết nối");
+    const { peer, type } = this.threadTarget(thread);
+    const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
+    for (const chunk of splitForZalo(text)) {
+      const response = await this.sender.send(() => api.sendMessage(chunk, peer, type));
+      const msgId = response.message?.msgId;
+      if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), chunk);
+    }
+  }
+
+  /** Gửi một tệp đã cất trong kho vào một cuộc có sẵn (riêng / nhóm). */
+  async sendThreadStoredFile(thread: GroupRow, attachmentId: number): Promise<void> {
+    if (!this.api) throw new Error("bot chưa kết nối");
+    const { peer, type } = this.threadTarget(thread);
+    await this.sendStoredFile(peer, attachmentId, type);
+  }
+
+  /** Nhắn riêng một tệp đã cất cho một người (chưa cần có cuộc trong kho). */
+  async sendDirectStoredFile(peerUid: string, attachmentId: number): Promise<void> {
+    if (!this.api) throw new Error("bot chưa kết nối");
+    await this.sendStoredFile(peerUid, attachmentId);
+  }
+
+  private async sendStoredFile(peerUid: string, attachmentId: number, threadType: ThreadType = ThreadType.User): Promise<void> {
     const [rows] = await this.db.query<RowDataPacket[]>(
       "SELECT storage_key, file_name, file_ext FROM attachment WHERE id = ? AND status = ?",
       [attachmentId, AttachmentStatus.Stored],
@@ -740,7 +771,7 @@ export class AccountRunner {
     const filename = (hasExtension ? storedName : `${storedName}.${file.file_ext || "bin"}`) as `${string}.${string}`;
     await this.sender.send(() =>
       this.api!.sendMessage({ msg: "", attachments: [{ data, filename, metadata: { totalSize: data.length } }] },
-        peerUid, ThreadType.User));
+        peerUid, threadType));
   }
 
   private async handleGroupEvent(event: GroupEvent): Promise<void> {

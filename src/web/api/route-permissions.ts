@@ -23,6 +23,9 @@ const RULES: Rule[] = [
   ["GET", /^\/api\/recipients(\/|$)/, "recipient", "read"],
   ["WRITE", /^\/api\/recipients(\/\d+(\/test)?)?$/, "recipient", "write"],
   ["GET", /^\/api\/accounts(\/|$)/, "bot_account", "read"],
+  // Ticket (08/10/2026): xem + thao tác theo quyền «ticket»; sửa danh sách người xử lý KHÔNG khai → chỉ quản trị
+  ["GET", /^\/api\/(tickets|ticket-handlers)(\/|$)/, "ticket", "read"],
+  ["WRITE", /^\/api\/tickets\/\d+\/actions$/, "ticket", "write"],
   ["WRITE", /^\/api\/accounts(\/|$)/, "bot_account", "write"],
 ];
 

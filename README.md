@@ -206,6 +206,16 @@ Mã ở `src/alerts/`. Mỗi tin mới trong nhóm (đang đọc) được phân
   «thêm / bỏ từ khẩn <từ>», «thêm / bỏ từ quan trọng <từ>», «phút chờ <n>», «phút chờ vip <n>», «thêm / bỏ vip <tên>»,
   rồi «đồng ý» / «hủy». Gõ có dấu hay không dấu đều nhận; «ok» / «không» chỉ là lệnh khi đang có đề xuất chờ.
 
+## Ticket qua bot (phase 11)
+
+Mã ở `src/tickets/` (một chỗ cho mọi thao tác — lệnh Zalo và màn Ticket trên web cùng gọi). Nhân viên nhắn bot
+«báo lỗi: <nội dung>» (tin riêng hoặc gọi bot trong nhóm); ảnh / tệp người đó gửi trong 15 phút trước tự gắn vào ticket
+(nhóm chưa bật lấy tệp thì đưa lại hàng tải). Bot báo những người trong bảng `ticket_handler` (sửa ở màn Ticket, chỉ quản
+trị) qua việc `ContactMessage` trên hàng đợi — chữ ngay, ảnh sau 30 giây cho kịp tải về kho. Người xử lý gõ «nhận T-12»,
+«xong T-12 <ghi chú>», «T-12: <nhắn người gửi>», «ticket»; người gửi gõ «T-12», «T-12: <bổ sung>» (ticket đã xong thì mở
+lại), «hủy T-12», «ticket». Bot báo lại người gửi vào đúng cuộc họ đã báo. Nhân viên chưa có vai trò vẫn dùng được các
+lệnh ticket + «hướng dẫn» trong tin riêng (khách hàng thì không); câu hỏi khác của họ vẫn không được trả lời.
+
 ## Xem cơ sở dữ liệu bằng Adminer của ERP (máy dev)
 
 MySQL của bot không mở cổng ra ngoài. Nối Adminer (cổng 8081) vào mạng của bot:

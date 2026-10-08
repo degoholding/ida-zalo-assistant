@@ -253,6 +253,14 @@ export interface CrudConfig<T> {
    * bản ghi mà biểu mẫu không diễn đạt được (vd «Lấy tin cũ» của nhóm, «Quét QR lại» của tài khoản bot).
    */
   detailActions?: (row: T) => ReactNode
+  /**
+   * Trang chi tiết CHỈ XEM: không dựng biểu mẫu, không có nút «Lưu». Nội dung do `renderExtra` / `tabs` vẽ.
+   *
+   * Sinh ra cho màn Ticket (08/10/2026): ticket do bot lập từ tin Zalo, không có ô nào sửa tay — đổi trạng thái đi
+   * bằng nút riêng ở `detailActions`. Không có cờ này thì người có quyền `write` thấy nút Lưu, bấm vào là PATCH một
+   * đường máy chủ không có. Bỏ trống = giữ nguyên hành vi cũ (có biểu mẫu + nút Lưu).
+   */
+  readOnlyDetail?: boolean
   /** Cảnh báo khi xóa bản ghi (vd 'Dữ liệu tồn kho liên quan có thể bị ảnh hưởng'). */
   deleteWarning?: string
   /** Tab mở rộng ở trang chi tiết (vd Lịch sử mua hàng, Đơn hàng về kho). */

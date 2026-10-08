@@ -50,3 +50,38 @@ test("help lists only the commands the asker may use", () => {
   assert.doesNotMatch(manager, /thêm vip/);
   assert.match(buildHelpText(null, true), /TRONG NHÓM/);
 });
+
+test("ticket commands: report text keeps line breaks and punctuation, status / accept / done / cancel / note by number", () => {
+  assert.deepEqual(parseChatCommand("Báo lỗi: máy in phòng kế toán kẹt giấy.\nĐã thử tắt mở lại?"),
+    { kind: "ticket_create", text: "máy in phòng kế toán kẹt giấy.\nĐã thử tắt mở lại?" });
+  assert.deepEqual(parseChatCommand("bao loi wifi kho yeu"), { kind: "ticket_create", text: "wifi kho yeu" });
+  assert.deepEqual(parseChatCommand("ticket: xe giao hàng hỏng"), { kind: "ticket_create", text: "xe giao hàng hỏng" });
+  assert.deepEqual(parseChatCommand("ticket"), { kind: "ticket_list" });
+  assert.deepEqual(parseChatCommand("ticket của tôi"), { kind: "ticket_list" });
+  assert.deepEqual(parseChatCommand("T-12"), { kind: "ticket_status", ticketId: 12 });
+  assert.deepEqual(parseChatCommand("t12 sao rồi?"), { kind: "ticket_status", ticketId: 12 });
+  assert.deepEqual(parseChatCommand("T-0012"), { kind: "ticket_status", ticketId: 12 });
+  assert.deepEqual(parseChatCommand("nhận T-12"), { kind: "ticket_accept", ticketId: 12 });
+  assert.deepEqual(parseChatCommand("Xong T-12 đã thay hộp mực."), { kind: "ticket_done", ticketId: 12, note: "đã thay hộp mực." });
+  assert.deepEqual(parseChatCommand("xong t-12"), { kind: "ticket_done", ticketId: 12, note: "" });
+  assert.deepEqual(parseChatCommand("hủy T-12: báo nhầm"), { kind: "ticket_cancel", ticketId: 12, note: "báo nhầm" });
+  assert.deepEqual(parseChatCommand("T-12: vẫn còn lỗi anh ơi"), { kind: "ticket_note", ticketId: 12, note: "vẫn còn lỗi anh ơi" });
+  // «xong 1234» (không có T) vẫn là lệnh đánh dấu tin cảnh báo, không phải ticket
+  assert.deepEqual(parseChatCommand("xong 1234"), { kind: "mark_done", messageId: 1234 });
+  // Lời báo quá ngắn / trống không thành ticket
+  assert.equal(parseChatCommand("báo lỗi:"), null);
+  assert.equal(parseChatCommand("báo lỗi: a"), null);
+});
+
+test("long ticket descriptions are accepted (other commands stay short)", () => {
+  const long = "x".repeat(2500);
+  assert.deepEqual(parseChatCommand(`báo lỗi: ${long}`), { kind: "ticket_create", text: long });
+  assert.equal(parseChatCommand(`báo lỗi: ${"x".repeat(3100)}`), null);
+});
+
+test("help for a ticket-only user lists only ticket commands; handlers also see handler commands", () => {
+  const only = buildHelpText(null, false, { ticketOnly: true });
+  assert.match(only, /báo lỗi:/);
+  assert.doesNotMatch(only, /Tóm tắt nhóm|cần xử lý/);
+  assert.match(buildHelpText(null, false, { ticketOnly: true, ticketHandler: true }), /nhận T-12/);
+});

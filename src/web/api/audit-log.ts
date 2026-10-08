@@ -8,7 +8,7 @@ import { sendOk } from "./api-http.js";
 // Nhật ký thay đổi — nguồn của mục «Lịch sử» (AuditTimeline) ở mọi trang chi tiết của `web/`.
 // Response giữ đúng hình `AuditLogEntry` của ERP v2 để khung giao diện chép sang chạy nguyên.
 
-export type AuditEntity = "contact" | "group" | "company" | "bot_account" | "file" | "setting" | "user" | "recipient";
+export type AuditEntity = "contact" | "group" | "company" | "bot_account" | "file" | "setting" | "user" | "recipient" | "ticket";
 
 const ACTION_LABEL: Record<string, string> = {
   create: "Tạo mới",

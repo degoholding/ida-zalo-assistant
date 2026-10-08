@@ -4,6 +4,7 @@ import { ContactKind, ContactRole } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { parseKeywordList } from "../alerts/keyword-matcher.js";
 import { dropPendingChanges, latestPendingChange, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
+import { runTicketCommand, type TicketCommand, type TicketCommandContext } from "../tickets/ticket-commands.js";
 
 // Lệnh gõ sẵn trong chat với bot (đại ca 08/10/2026: gõ «hướng dẫn» ra hướng dẫn cơ bản, có lệnh cấu hình luôn). Chạy TRƯỚC mô
 // hình: trả lời ngay, không tốn token, không phụ thuộc AI hiểu đúng. Gõ có dấu hay không dấu đều nhận. Câu không khớp lệnh nào
@@ -19,7 +20,11 @@ export type ChatCommand =
   | { kind: "wait_minutes"; vip: boolean; minutes: number }
   | { kind: "vip"; add: boolean; name: string }
   | { kind: "confirm" }
-  | { kind: "cancel" };
+  | { kind: "cancel" }
+  | TicketCommand;
+
+/** Lệnh ticket (báo / xem / nhận / xong / hủy / bổ sung) — người chưa có vai trò cũng dùng được (src/tickets/). */
+export const isTicketCommand = (command: ChatCommand | null): command is TicketCommand => Boolean(command?.kind.startsWith("ticket_"));
 
 /** Bỏ dấu GIỮ NGUYÊN độ dài chuỗi (mỗi ký tự → một ký tự) — để cắt phần đối số từ câu gốc đúng vị trí. */
 function foldKeepLength(text: string): string {
@@ -29,8 +34,37 @@ function foldKeepLength(text: string): string {
   }).join("");
 }
 
+const TICKET_TEXT_MAX = 3000;
+
+/**
+ * Lệnh ticket có nội dung dài (lời báo, ghi chú): đọc trên câu GỐC (giữ xuống dòng, dấu câu), chỉ so tiền tố không dấu.
+ * «báo lỗi: …», «ticket: …», «T-12: …», «xong T-12 …», «hủy T-12 …».
+ */
+function parseTicketTextCommand(input: string): TicketCommand | null {
+  const raw = input.normalize("NFC").trim();
+  if (!raw || raw.length > TICKET_TEXT_MAX + 40) return null;
+  const folded = foldKeepLength(raw.toLowerCase());
+  const rest = (match: RegExpMatchArray) => raw.slice(match[0].length).trim();
+  let match = folded.match(/^(bao loi|bao su co|bao ticket|tao ticket|yeu cau ho tro|ticket)\s*[:\-–]\s*/)
+    ?? folded.match(/^(bao loi|bao su co|bao ticket|tao ticket)\s+/);
+  if (match) {
+    const text = rest(match);
+    return text.length >= 3 ? { kind: "ticket_create", text } : null;
+  }
+  match = folded.match(/^(xong|huy)\s+(ticket\s+)?#?t\s?-?(\d{1,6})(\s*[:\-–]\s*|\s+|$)/);
+  if (match) return { kind: match[1] === "xong" ? "ticket_done" : "ticket_cancel", ticketId: Number(match[3]), note: rest(match) };
+  match = folded.match(/^#?t\s?-?(\d{1,6})\s*[:\-–]\s*/);
+  if (match) {
+    const note = rest(match);
+    return note ? { kind: "ticket_note", ticketId: Number(match[1]), note } : null;
+  }
+  return null;
+}
+
 /** Đọc một tin thành lệnh; không phải lệnh thì null. */
 export function parseChatCommand(input: string): ChatCommand | null {
+  const ticketText = parseTicketTextCommand(input);
+  if (ticketText) return ticketText;
   const original = input.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?…]+$/u, "").trim();
   if (!original || original.length > 120) return null;
   const folded = foldKeepLength(original);
@@ -47,6 +81,11 @@ export function parseChatCommand(input: string): ChatCommand | null {
   if (match) return { kind: "wait_minutes", vip: Boolean(match[2]), minutes: Number(match[3]) };
   match = folded.match(/^(them|bo|xoa) vip (.+)$/);
   if (match) return { kind: "vip", add: match[1] === "them", name: tail(match) };
+  if (/^(ticket|tickets|ds ticket|danh sach ticket|ticket cua (toi|em|anh|chi|minh|tui))$/.test(folded)) return { kind: "ticket_list" };
+  match = folded.match(/^nhan (ticket )?#?t ?-?(\d{1,6})$/);
+  if (match) return { kind: "ticket_accept", ticketId: Number(match[2]) };
+  match = folded.match(/^(xem )?(ticket )?#?t ?-?(\d{1,6})( (sao roi|the nao|xong chua|tinh hinh|den dau roi|sao))?$/);
+  if (match) return { kind: "ticket_status", ticketId: Number(match[3]) };
   if (/^(dong y|ok|oke|okay|xac nhan|luu|yes|co|uh|u|chot)$/.test(folded)) return { kind: "confirm" };
   if (/^(huy|thoi|khong|bo qua|cancel)$/.test(folded)) return { kind: "cancel" };
   return null;
@@ -58,15 +97,38 @@ export interface ChatCommandContext {
   alertTools?: AlertToolsDeps;
   /** null = người hỏi không có vai trò / không là người nhận */
   asker: AlertAsker | null;
-  /** Hỏi trong nhóm (bot được gọi tên): chỉ có «hướng dẫn», mọi lệnh khác để AI xử lý */
+  /** Hỏi trong nhóm (bot được gọi tên): chỉ có «hướng dẫn» và lệnh ticket, mọi lệnh khác để AI xử lý */
   inGroup: boolean;
   now: Date;
+  /** Ticket: người hỏi + cuộc đang hỏi. Không có = không có lệnh ticket. */
+  ticket?: TicketCommandContext;
+  /** Người chỉ được dùng lệnh ticket (chưa có vai trò, không là người nhận) — «hướng dẫn» chỉ nói phần ticket */
+  ticketOnly?: boolean;
 }
 
 const CONFIRM_HINT = "Anh/chị nhắn «đồng ý» để lưu (trong 15 phút), «hủy» để bỏ.";
 const canChangeGlobal = (asker: AlertAsker | null) => asker?.role === ContactRole.Manager || asker?.role === ContactRole.DepartmentHead;
 
-export function buildHelpText(asker: AlertAsker | null, inGroup: boolean): string {
+const TICKET_HELP = [
+  "BÁO TICKET (việc cần hỗ trợ, lỗi, sự cố):",
+  "- báo lỗi: <nội dung> — có ảnh thì gửi ảnh TRƯỚC rồi nhắn",
+  "- ticket — xem các ticket của anh/chị",
+  "- T-12 — xem tình hình ticket T-12",
+  "- T-12: <bổ sung> — thêm nội dung / ảnh cho ticket",
+  "- hủy T-12 — hủy ticket mình đã báo",
+];
+
+const TICKET_HANDLER_HELP = [
+  "XỬ LÝ TICKET (người xử lý):",
+  "- ticket — các ticket đang mở",
+  "- nhận T-12 — nhận xử lý (bot báo người gửi)",
+  "- xong T-12 <ghi chú> — báo đã xong",
+  "- T-12: <nội dung> — nhắn người gửi",
+];
+
+export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, options: { ticketOnly?: boolean; ticketHandler?: boolean } = {}): string {
+  const ticketLines = ["", ...TICKET_HELP, ...(options.ticketHandler ? ["", ...TICKET_HANDLER_HELP] : [])];
+  if (options.ticketOnly) return ["HƯỚNG DẪN DÙNG BOT TRỢ LÝ", ...ticketLines.slice(1)].join("\n");
   if (inGroup) {
     return [
       "HƯỚNG DẪN DÙNG BOT TRONG NHÓM",
@@ -78,6 +140,8 @@ export function buildHelpText(asker: AlertAsker | null, inGroup: boolean): strin
       "- Ghim nội dung … / tạo bình chọn …",
       "- Tạo cuộc họp Meet 9h sáng mai",
       "Muốn xem tin cần xử lý hay đổi cấu hình cảnh báo thì nhắn RIÊNG cho bot.",
+      "",
+      "BÁO TICKET: gọi tên bot rồi «báo lỗi: <nội dung>» (có ảnh thì gửi ảnh trước).",
     ].join("\n");
   }
   const lines = [
@@ -105,6 +169,7 @@ export function buildHelpText(asker: AlertAsker | null, inGroup: boolean): strin
     }
     lines.push("", "Lệnh đổi cấu hình: em đọc lại thay đổi, anh/chị nhắn «đồng ý» mới lưu, «hủy» để bỏ.");
   }
+  lines.push(...ticketLines);
   return lines.join("\n");
 }
 
@@ -184,8 +249,12 @@ async function propose(ctx: ChatCommandContext, deps: AlertToolsDeps, asker: Ale
 
 /** Chạy lệnh. null = không xử lý ở đây (để trợ lý AI trả lời). */
 export async function runChatCommand(ctx: ChatCommandContext, command: ChatCommand): Promise<string | null> {
-  if (command.kind === "help") return buildHelpText(ctx.inGroup ? null : ctx.asker, ctx.inGroup);
-  if (ctx.inGroup) return null;
+  if (command.kind === "help") {
+    const ticketHandler = ctx.ticket ? await ctx.ticket.isHandler() : false;
+    return buildHelpText(ctx.inGroup ? null : ctx.asker, ctx.inGroup, { ticketOnly: ctx.ticketOnly, ticketHandler });
+  }
+  if (isTicketCommand(command)) return ctx.ticket ? runTicketCommand(ctx.ticket, command, ctx.now) : null;
+  if (ctx.inGroup || ctx.ticketOnly) return null;
   const { asker, alertTools: deps } = ctx;
   if (command.kind === "confirm" || command.kind === "cancel") {
     // «ok», «không»… chỉ là lệnh khi người này ĐANG có đề xuất chờ; ngược lại là câu nói thường — để AI trả lời

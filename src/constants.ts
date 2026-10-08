@@ -103,6 +103,26 @@ export enum JobKind {
   RecipientMessage = 3,
   // Gom tin KHẨN / VIP chưa báo của một người nhận thành một thông báo rồi gửi (phase 5)
   AlertDispatch = 4,
+  // Bot nhắn một người (tin riêng) hoặc vào một cuộc có sẵn, kèm tệp đã cất — báo ticket (08/10/2026)
+  ContactMessage = 5,
+}
+
+/** Trạng thái ticket (bảng ticket). Giao diện chép sang web/src/modules/tickets/types. */
+export enum TicketStatus {
+  New = 1,
+  InProgress = 2,
+  Done = 3,
+  Cancelled = 4,
+}
+
+/** Loại dòng nhật ký ticket (bảng ticket_event). */
+export enum TicketEventKind {
+  Created = 1,
+  Accepted = 2,
+  Note = 3,
+  Done = 4,
+  Cancelled = 5,
+  Reopened = 6,
 }
 
 /** Loại báo trong bảng alert_log (phase 5). */

@@ -16,7 +16,7 @@ function buildPermissions(role: 'admin' | 'manager' | 'staff') {
     ENTITIES.map((entity) => {
       if (role === 'admin') return [entity, { read: true, write: true, export: true, create: true }]
       if (ADMIN_ONLY.includes(entity)) return [entity, { read: false, write: false, export: false, create: false }]
-      const canWrite = role === 'manager' && ['conversation', 'contact', 'group', 'file'].includes(entity)
+      const canWrite = role === 'manager' && ['conversation', 'contact', 'group', 'file', 'ticket'].includes(entity)
       return [entity, { read: true, write: canWrite, export: role === 'manager', create: false }]
     }),
   ) as Record<string, Record<string, boolean>>
@@ -35,7 +35,7 @@ describe('sidebar gating by role', () => {
   })
 
   it('hides every admin-only screen from a staff member', () => {
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Danh bạ', 'Nhóm', 'Tệp', 'Công ty'])
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Công ty'])
   })
 
   it('gives a manager the same menu as staff — write rights do not unlock admin screens', () => {
@@ -53,6 +53,11 @@ describe('menu items point at registered screens', () => {
     const paths = NAV_ITEMS.map((item) => item.path)
     expect(paths).toContain(appRoutes.users.list)
     expect(paths).toContain(appRoutes.recipients.list)
+  })
+
+  it('has a menu entry for the Ticket list that staff can see (read-only)', () => {
+    expect(NAV_ITEMS.find((item) => item.path === appRoutes.tickets.list)?.entity).toBe('ticket')
+    expect(visibleLabels('staff')).toContain('Ticket')
   })
 
   it('never repeats a path — the breadcrumb picks the first prefix match', () => {

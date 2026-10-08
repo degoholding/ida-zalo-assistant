@@ -204,6 +204,8 @@ export function CrudDetailPage<T extends CrudRecord>({
 
   const infoPanel = (
     <div className="space-y-6">
+      {/*  Màn CHỈ XEM (`readOnlyDetail`) không có biểu mẫu — xem `CrudConfig.readOnlyDetail`. */}
+      {!config.readOnlyDetail && (
       <form
         id="crud-detail-form"
         onSubmit={handleSubmit(onSubmit)}
@@ -229,6 +231,7 @@ export function CrudDetailPage<T extends CrudRecord>({
           />
         </Card>
       </form>
+      )}
 
       {item && config.renderExtra && <div>{config.renderExtra(item)}</div>}
 
@@ -276,16 +279,18 @@ export function CrudDetailPage<T extends CrudRecord>({
 
         <div className="flex shrink-0 items-center gap-2">
           {item && config.detailActions?.(item)}
-          <PermissionGate entity={config.entity} action={isCreate ? 'create' : 'write'}>
-            <Button
-              type="submit"
-              form="crud-detail-form"
-              disabled={saveMutation.isPending || !canSave}
-            >
-              {saveMutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-              {isCreate ? `Tạo ${config.unitLabel}` : 'Lưu'}
-            </Button>
-          </PermissionGate>
+          {!config.readOnlyDetail && (
+            <PermissionGate entity={config.entity} action={isCreate ? 'create' : 'write'}>
+              <Button
+                type="submit"
+                form="crud-detail-form"
+                disabled={saveMutation.isPending || !canSave}
+              >
+                {saveMutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+                {isCreate ? `Tạo ${config.unitLabel}` : 'Lưu'}
+              </Button>
+            </PermissionGate>
+          )}
 
           {item && (
             <PermissionGate entity={config.entity} action="delete">
