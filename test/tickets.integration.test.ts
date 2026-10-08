@@ -92,6 +92,13 @@ describe("ticket qua bot", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
     return String(await runChatCommand({ db, asker: null, inGroup, now: NOW, ticket, ticketOnly: !inGroup }, command));
   }
 
+  async function sayAs(uid: string, role: number, text: string) {
+    const command = parseChatCommand(text);
+    assert.ok(command, `không đọc được lệnh: ${text}`);
+    const ticket = buildTicketContext(deps, { contact: { id: contactIds[uid], uid, name: uid, role }, threadId: dmThread, messageId: null, botAccountId: 1 });
+    return String(await runChatCommand({ db, asker: null, inGroup: false, now: NOW, ticket }, command));
+  }
+
   async function messages(): Promise<(ContactMessagePayload & { runAfter: Date })[]> {
     const [rows] = await db.query<RowDataPacket[]>("SELECT payload, run_after FROM job WHERE kind = ? ORDER BY id", [JobKind.ContactMessage]);
     return rows.map((row) => ({ ...(typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload), runAfter: new Date(row.run_after) }));
@@ -175,6 +182,24 @@ describe("ticket qua bot", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
     // Chưa ai nhận: mọi người xử lý đã nhận tin «TICKET MỚI» nên đều được báo hủy
     assert.deepEqual((await messages()).map((item) => item.zaloUid).sort(), ["u-it1", "u-it2"]);
     assert.match(await say("u-lan", dmThread, "hủy T-2"), /không thấy ticket T-2/);
+  });
+
+  test("a requester may close their own ticket («báo xử lý xong T1»); a manager sees every open ticket but cannot close others'", async () => {
+    await say("u-lan", dmThread, "báo lỗi: một");
+    await say("u-binh", dmThread, "báo lỗi: hai");
+    await db.query("UPDATE contact SET role = 2 WHERE zalo_uid = 'u-binh'");
+    await db.query("DELETE FROM job");
+    assert.match(await say("u-lan", dmThread, "báo xử lý xong T1"), /đã đóng T-0001 theo báo/);
+    const closed = (await findTicket(db, 1))!;
+    assert.deepEqual([closed.status, closed.handler_name, closed.resolution], [TicketStatus.Done, "", "Người gửi báo đã xong"]);
+    // Chưa ai nhận → mọi người xử lý được báo; người gửi không bị báo lại
+    assert.deepEqual((await messages()).map((item) => item.zaloUid).sort(), ["u-it1", "u-it2"]);
+    assert.match(await sayAs("u-binh", 2, "hiện tại có bao nhiêu ticket"), /TICKET ĐANG MỞ \(1\)/);
+    assert.match(await sayAs("u-binh", 2, "T-1"), /T-0001/);
+    assert.match(await sayAs("u-binh", 2, "xong T-1"), /đã xong rồi|Chỉ người xử lý/);
+    // T-2 là của chính u-binh nên đóng được; thử đóng ticket người khác đang mở
+    await say("u-lan", dmThread, "báo lỗi: thứ ba");
+    assert.match(await sayAs("u-binh", 2, "xong T-3"), /Chỉ người xử lý ticket \(hoặc chính người báo\)/);
   });
 
   test("with no handler configured the ticket is still saved and the requester is told", async () => {

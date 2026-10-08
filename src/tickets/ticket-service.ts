@@ -239,14 +239,24 @@ export async function acceptTicket(deps: TicketDeps, ticket: TicketRow, actor: T
   return (await findTicket(deps.db, ticket.id))!;
 }
 
-export async function finishTicket(deps: TicketDeps, ticket: TicketRow, actor: TicketActor, note: string): Promise<TicketRow> {
+/**
+ * Đóng ticket (xong). Người xử lý / web đóng → báo người gửi. Người gửi tự báo xong (`byRequester`, vd lỗi tự hết) →
+ * báo người đang xử lý (chưa ai nhận thì mọi người xử lý), không báo lại chính người gửi.
+ */
+export async function finishTicket(deps: TicketDeps, ticket: TicketRow, actor: TicketActor, note: string, byRequester = false): Promise<TicketRow> {
   if (!isOpen(ticket.status)) throw new TicketActionError(`${ticket.code} ${TICKET_STATUS_LABELS[ticket.status]} rồi.`);
   await deps.db.query(
     `UPDATE ticket SET status = ?, resolution = ?, closed_at = NOW(3),
        handler_contact_id = COALESCE(handler_contact_id, ?), handler_name = IF(handler_name = '', ?, handler_name),
        accepted_at = COALESCE(accepted_at, NOW(3)) WHERE id = ?`,
-    [TicketStatus.Done, note || null, actor.contactId, actor.name.slice(0, 255), ticket.id]);
+    [TicketStatus.Done, note || (byRequester ? "Người gửi báo đã xong" : null), byRequester ? null : actor.contactId,
+      byRequester ? "" : actor.name.slice(0, 255), ticket.id]);
   await recordEvent(deps.db, ticket.id, TicketEventKind.Done, actor, note);
+  if (byRequester) {
+    await notifyHandlers(deps, ticket, `${ticket.code} «${ticket.title}» đã được người gửi (${actor.name}) báo xong${note ? `: ${note}` : "."}`,
+      `done:${Date.now()}`, { onlyContactId: ticket.handler_contact_id });
+    return (await findTicket(deps.db, ticket.id))!;
+  }
   await notifyRequester(deps, ticket, [
     `ticket ${ticket.code} «${ticket.title}» đã xử lý xong (${actor.name}).`,
     ...(note ? [`Ghi chú: ${note}`] : []),

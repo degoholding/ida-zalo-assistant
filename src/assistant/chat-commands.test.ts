@@ -85,3 +85,13 @@ test("help for a ticket-only user lists only ticket commands; handlers also see 
   assert.doesNotMatch(only, /Tóm tắt nhóm|cần xử lý/);
   assert.match(buildHelpText(null, false, { ticketOnly: true, ticketHandler: true }), /nhận T-12/);
 });
+
+test("natural ticket phrasings people actually typed (08/10/2026)", () => {
+  assert.deepEqual(parseChatCommand("báo xử lý xong T1"), { kind: "ticket_done", ticketId: 1, note: "" });
+  assert.deepEqual(parseChatCommand("đã xử lý xong T-12 thay dây mạng"), { kind: "ticket_done", ticketId: 12, note: "thay dây mạng" });
+  assert.deepEqual(parseChatCommand("T1 xong rồi"), { kind: "ticket_done", ticketId: 1, note: "" });
+  assert.deepEqual(parseChatCommand("đã nhận xử lý T3"), { kind: "ticket_accept", ticketId: 3 });
+  assert.deepEqual(parseChatCommand("hiện tại có bao nhiêu ticket"), { kind: "ticket_list" });
+  assert.deepEqual(parseChatCommand("có mấy ticket đang mở?"), { kind: "ticket_list" });
+  assert.deepEqual(parseChatCommand("báo ticket meo meo truy cập chậm"), { kind: "ticket_create", text: "meo meo truy cập chậm" });
+});

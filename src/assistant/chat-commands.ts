@@ -51,7 +51,8 @@ function parseTicketTextCommand(input: string): TicketCommand | null {
     const text = rest(match);
     return text.length >= 3 ? { kind: "ticket_create", text } : null;
   }
-  match = folded.match(/^(xong|huy)\s+(ticket\s+)?#?t\s?-?(\d{1,6})(\s*[:\-–]\s*|\s+|$)/);
+  // «xong T-12», «báo xử lý xong T1», «đã xử lý xong T-12 …», «báo hủy T12»
+  match = folded.match(/^(?:bao\s+)?(?:da\s+)?(?:xu\s+ly\s+)?(xong|huy)\s+(ticket\s+)?#?t\s?-?(\d{1,6})(\s*[:\-–]\s*|\s+|$)/);
   if (match) return { kind: match[1] === "xong" ? "ticket_done" : "ticket_cancel", ticketId: Number(match[3]), note: rest(match) };
   match = folded.match(/^#?t\s?-?(\d{1,6})\s*[:\-–]\s*/);
   if (match) {
@@ -82,8 +83,15 @@ export function parseChatCommand(input: string): ChatCommand | null {
   match = folded.match(/^(them|bo|xoa) vip (.+)$/);
   if (match) return { kind: "vip", add: match[1] === "them", name: tail(match) };
   if (/^(ticket|tickets|ds ticket|danh sach ticket|ticket cua (toi|em|anh|chi|minh|tui))$/.test(folded)) return { kind: "ticket_list" };
-  match = folded.match(/^nhan (ticket )?#?t ?-?(\d{1,6})$/);
-  if (match) return { kind: "ticket_accept", ticketId: Number(match[2]) };
+  // «hiện tại có bao nhiêu ticket», «có mấy ticket đang mở», «ticket nào chưa xử lý»
+  if (/^(hien tai |hien gio |bay gio )?(co )?(bao nhieu|may|nhung) ticket( (dang mo|chua xu ly|dang cho|roi))?$/.test(folded)
+    || /^(cac )?ticket (nao )?(dang mo|chua xu ly|dang cho)$/.test(folded)) return { kind: "ticket_list" };
+  // «nhận T-12», «đã nhận xử lý T12»
+  match = folded.match(/^(da )?nhan( xu ly)? (ticket )?#?t ?-?(\d{1,6})$/);
+  if (match) return { kind: "ticket_accept", ticketId: Number(match[4]) };
+  // «T1 xong rồi», «T-12 đã xử lý xong»
+  match = folded.match(/^#?t ?-?(\d{1,6}) (da )?(xu ly )?xong( roi)?$/);
+  if (match) return { kind: "ticket_done", ticketId: Number(match[1]), note: "" };
   match = folded.match(/^(xem )?(ticket )?#?t ?-?(\d{1,6})( (sao roi|the nao|xong chua|tinh hinh|den dau roi|sao))?$/);
   if (match) return { kind: "ticket_status", ticketId: Number(match[3]) };
   if (/^(dong y|ok|oke|okay|xac nhan|luu|yes|co|uh|u|chot)$/.test(folded)) return { kind: "confirm" };
@@ -115,7 +123,7 @@ const TICKET_HELP = [
   "- ticket — xem các ticket của anh/chị",
   "- T-12 — xem tình hình ticket T-12",
   "- T-12: <bổ sung> — thêm nội dung / ảnh cho ticket",
-  "- hủy T-12 — hủy ticket mình đã báo",
+  "- xong T-12 — tự báo đã ổn (đóng ticket); hủy T-12 — hủy ticket báo nhầm",
 ];
 
 const TICKET_HANDLER_HELP = [

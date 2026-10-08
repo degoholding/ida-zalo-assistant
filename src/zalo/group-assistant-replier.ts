@@ -13,6 +13,7 @@ import { recordOutgoingMessage, type IncomingGroupMessage } from "../sync/messag
 import { parseZaloContent } from "./content-parser.js";
 import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { buildMentions, type MentionableMember } from "./group-mentions.js";
+import { toStyledContent } from "./rich-text.js";
 import { canCallBotInGroup, detectGroupTrigger } from "./group-trigger.js";
 import type { ZaloSender } from "./zalo-sender.js";
 import { AckTracker, enqueueGroupReply, type AckState, type GroupReplyPayload } from "./reply-jobs.js";
@@ -245,12 +246,14 @@ export class GroupAssistantReplier {
     if (reply.text) {
       const members = reply.text.includes("@") ? await this.loadMembers(group.id, bot.uid) : [];
       for (const [index, chunk] of splitForZalo(reply.text).entries()) {
-        // Tin đầu trích dẫn câu được hỏi để cả nhóm biết bot đang trả lời ai; «@Tên» thành viên → thẻ nhắc thật
-        const mentions = buildMentions(chunk, members);
-        const content = { msg: chunk, ...(index === 0 ? { quote } : {}), ...(mentions.length ? { mentions } : {}) };
+        // Tin đầu trích dẫn câu được hỏi để cả nhóm biết bot đang trả lời ai; «@Tên» thành viên → thẻ nhắc thật.
+        // «…» → in đậm TRƯỚC khi tính vị trí thẻ nhắc (bỏ dấu ngoặc làm lệch vị trí)
+        const styled = toStyledContent(chunk);
+        const mentions = buildMentions(styled.msg, members);
+        const content = { ...styled, ...(index === 0 ? { quote } : {}), ...(mentions.length ? { mentions } : {}) };
         const response = await sender.send(() => api.sendMessage(content, incoming.zaloGroupId, ThreadType.Group));
         const msgId = response.message?.msgId;
-        if (msgId) await recordOutgoingMessage(db, group, bot, String(msgId), chunk);
+        if (msgId) await recordOutgoingMessage(db, group, bot, String(msgId), styled.msg);
       }
     }
     for (const file of reply.reportFiles ?? []) {

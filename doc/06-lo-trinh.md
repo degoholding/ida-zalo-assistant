@@ -189,7 +189,8 @@ Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/a
 | Việc | Trạng thái |
 |---|---|
 | Báo ticket: «báo lỗi: …» trong tin riêng hoặc gọi bot trong nhóm; ảnh gửi trước đó 15 phút tự gắn vào ticket; mã T-0001 | Xong 08/10 |
-| Nhân viên chưa có vai trò vẫn báo / theo dõi ticket được (chỉ lệnh ticket + «hướng dẫn»; khách hàng thì không) | Xong 08/10 |
+| Ai nhắn được cho bot (kể cả khách) hoặc gọi bot trong nhóm đều báo / theo dõi ticket được (chỉ lệnh ticket + «hướng dẫn») | Xong 08/10 |
+| Người gửi tự báo xong («báo xử lý xong T1»); Quản lý / Trưởng phòng xem mọi ticket; chữ «…» trên Zalo thành in đậm | Xong 08/10 |
 | Báo người xử lý qua Zalo (chữ + ảnh), nhiều người; danh sách người xử lý sửa trên màn Ticket | Xong 08/10 |
 | Người xử lý «nhận T-12», «xong T-12 <ghi chú>», «T-12: <nhắn người gửi>», «ticket» (đang mở) | Xong 08/10 |
 | Báo lại người gửi đúng chỗ đã báo (tin riêng / nhóm) khi nhận, xong, hủy, có lời nhắn | Xong 08/10 |

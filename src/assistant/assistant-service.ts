@@ -137,6 +137,8 @@ Việc bạn làm được:
    câu trả lời cũ — đã bị cắt bớt). Xuất xong câu trả lời chỉ 2–3 ý chính + báo tệp đang được gửi, không chép lại cả bản tóm tắt.
 Câu hỏi ngoài các việc này: nói ngắn gọn bạn làm được gì, và nhắc người hỏi gõ «hướng dẫn» để xem danh sách lệnh.
 Người hỏi muốn báo lỗi / sự cố / cần hỗ trợ: chỉ họ nhắn «báo lỗi: <nội dung>» (có ảnh thì gửi ảnh trước) — bot tạo ticket và báo người xử lý.
+Hỏi về ticket đã có: trả lời NGẮN 1–2 câu, chỉ đúng các lệnh sau (không bịa cú pháp khác): «ticket» (danh sách), «T-12» (tình hình),
+«T-12: <bổ sung>», «xong T-12» (đã ổn, đóng), «hủy T-12»; người xử lý: «nhận T-12», «xong T-12 <ghi chú>».
 
 Quy tắc:
 - Chỉ dùng dữ liệu từ công cụ. Không bịa tên, số liệu, ngày giờ. Không có dữ liệu thì nói không có.
@@ -216,7 +218,7 @@ export class AssistantService {
       const tickets = this.options.tickets;
       const contact = request.contact;
       const ticket = tickets ? buildTicketContext(tickets, {
-        contact: { id: contact.id, uid: contact.zalo_uid, name: contact.display_name || contact.zalo_name || contact.zalo_uid },
+        contact: { id: contact.id, uid: contact.zalo_uid, name: contact.display_name || contact.zalo_name || contact.zalo_uid, role: contact.role },
         threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
       }) : undefined;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»

@@ -5,7 +5,8 @@ import {
 } from "./ticket-service.js";
 
 // Lệnh ticket gõ trên Zalo (đọc ở src/assistant/chat-commands.ts). Ai làm được gì:
-// - Mọi người (trừ khách hàng — chặn ở cổng tin riêng): báo ticket, xem ticket của mình, bổ sung, hủy ticket mình báo.
+// - Mọi người nhắn được cho bot (kể cả khách) hoặc gọi bot trong nhóm: báo ticket, xem ticket của mình, bổ sung, hủy hoặc tự báo xong ticket
+//   mình báo.
 // - Người xử lý (bảng ticket_handler, sửa trên màn Ticket): xem ticket đang mở, nhận, xong, hủy, nhắn người gửi.
 
 export type TicketCommand =
@@ -19,7 +20,8 @@ export type TicketCommand =
 
 export interface TicketCommandContext {
   deps: TicketDeps;
-  contact: { id: number; uid: string; name: string };
+  /** role = ContactRole (Quản lý / Trưởng phòng xem được mọi ticket, như người xử lý) */
+  contact: { id: number; uid: string; name: string; role?: number };
   /** Cuộc đang nhắn (tin riêng / nhóm) và tin chứa lệnh — để gắn ảnh vừa gửi, báo lại đúng chỗ */
   threadId: number | null;
   messageId: number | null;
@@ -53,8 +55,10 @@ export async function runTicketCommand(ctx: TicketCommandContext, command: Ticke
   }
 
   const handler = await ctx.isHandler();
+  // Quản lý / Trưởng phòng: xem mọi ticket (danh sách đang mở, tình hình) — nhận / xong vẫn chỉ người xử lý
+  const overseer = handler || (contact.role ?? 0) > 0;
   if (command.kind === "ticket_list") {
-    if (handler) {
+    if (overseer) {
       const open = await listOpenTickets(deps.db);
       if (!open.length) return "Hiện không có ticket nào đang mở.";
       return [`TICKET ĐANG MỞ (${open.length})`, ...open.map(describeTicketLine), "", "Nhắn «nhận T-12» / «xong T-12 <ghi chú>»."].join("\n");
@@ -66,7 +70,7 @@ export async function runTicketCommand(ctx: TicketCommandContext, command: Ticke
 
   const ticket = await findTicket(deps.db, command.ticketId);
   const isRequester = Boolean(ticket && ticket.requester_uid === contact.uid);
-  if (!ticket || (!isRequester && !handler)) return NOT_FOUND(command.ticketId);
+  if (!ticket || (!isRequester && !overseer)) return NOT_FOUND(command.ticketId);
 
   try {
     switch (command.kind) {
@@ -77,7 +81,12 @@ export async function runTicketCommand(ctx: TicketCommandContext, command: Ticke
         await acceptTicket(deps, ticket, actor);
         return `Dạ anh/chị đã nhận ${ticket.code}; em đã báo ${ticket.requester_name}. Xong thì nhắn «xong T-${ticket.id} <ghi chú>».`;
       case "ticket_done":
-        if (!handler) return "Chỉ người xử lý ticket mới báo xong được. Anh/chị muốn đóng ticket mình báo thì nhắn «hủy T-" + ticket.id + "».";
+        // Người gửi tự báo xong (lỗi tự hết / tự xử lý được) → đóng, báo người xử lý
+        if (!handler && !isRequester) return "Chỉ người xử lý ticket (hoặc chính người báo) mới báo xong được.";
+        if (!handler) {
+          await finishTicket(deps, ticket, actor, command.note, true);
+          return `Dạ em đã đóng ${ticket.code} theo báo của anh/chị. Còn vấn đề thì nhắn «T-${ticket.id}: <nội dung>» để mở lại.`;
+        }
         await finishTicket(deps, ticket, actor, command.note);
         return `Dạ đã đóng ${ticket.code} và báo ${ticket.requester_name}.`;
       case "ticket_cancel":

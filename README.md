@@ -214,7 +214,9 @@ Mã ở `src/tickets/` (một chỗ cho mọi thao tác — lệnh Zalo và màn
 trị) qua việc `ContactMessage` trên hàng đợi — chữ ngay, ảnh sau 30 giây cho kịp tải về kho. Người xử lý gõ «nhận T-12»,
 «xong T-12 <ghi chú>», «T-12: <nhắn người gửi>», «ticket»; người gửi gõ «T-12», «T-12: <bổ sung>» (ticket đã xong thì mở
 lại), «hủy T-12», «ticket». Bot báo lại người gửi vào đúng cuộc họ đã báo. Nhân viên chưa có vai trò vẫn dùng được các
-lệnh ticket + «hướng dẫn» trong tin riêng (khách hàng thì không); câu hỏi khác của họ vẫn không được trả lời.
+lệnh ticket + «hướng dẫn» trong tin riêng (kể cả khách — đại ca chốt: ai nhắn được cho bot đều tạo được ticket); câu hỏi
+khác của họ vẫn không được trả lời. Người gửi tự báo xong được («xong T-12», «báo xử lý xong T1»); Quản lý / Trưởng phòng
+xem được mọi ticket. Chữ «…» trong tin bot gửi lên Zalo hiện thành in đậm (src/zalo/rich-text.ts).
 
 ## Xem cơ sở dữ liệu bằng Adminer của ERP (máy dev)
 

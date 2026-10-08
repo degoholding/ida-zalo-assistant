@@ -15,7 +15,7 @@ import type { AssistantService } from "../assistant/assistant-service.js";
 import { reportFileExtension, type GeneratedReportFile } from "../reports/report-exporter.js";
 import { splitForZalo } from "../assistant/assistant-service.js";
 import type { AppConfig } from "../config.js";
-import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactKind, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
+import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
 import { decryptJson } from "../crypto/session-cipher.js";
 import type { RowDataPacket } from "mysql2";
 import type { Db } from "../db/pool.js";
@@ -56,6 +56,7 @@ import type { JobRow } from "../jobs/job-queue.js";
 import { recordReaction } from "../flags/message-flags.js";
 import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
 import { isTicketCommand, parseChatCommand } from "../assistant/chat-commands.js";
+import { toStyledContent } from "./rich-text.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
 import {
   recordSessionEvent,
@@ -497,9 +498,9 @@ export class AccountRunner {
     // lời: chat riêng với bot là kênh báo + ra lệnh của họ.
     const parsed = parseZaloContent(incoming.msgType, incoming.content);
     const command = parsed.kind === MessageKind.Text ? parseChatCommand(parsed.text) : null;
-    // Ticket (08/10/2026): nhân viên chưa có vai trò vẫn báo / theo dõi ticket được — chỉ lệnh ticket + «hướng dẫn»,
-    // câu hỏi khác vẫn không trả lời. Khách hàng thì không.
-    const ticketAllowed = (isTicketCommand(command) || command?.kind === "help") && result.contact.kind !== ContactKind.Customer;
+    // Ticket (đại ca 08/10/2026): AI nhắn được cho bot đều báo / theo dõi ticket được, kể cả khách — chỉ lệnh ticket +
+    // «hướng dẫn»; câu hỏi khác của người chưa có vai trò vẫn không trả lời.
+    const ticketAllowed = isTicketCommand(command) || command?.kind === "help";
     const canAsk = result.contact.role !== ContactRole.None || await isActiveRecipientUid(this.db, incoming.senderUid) || ticketAllowed;
     if (!this.assistant || !canAsk) {
       this.log.info(`tin riêng từ ${who}: đã lưu, không trả lời (${this.assistant ? "chưa có vai trò" : "trợ lý tắt"})`);
@@ -613,9 +614,10 @@ export class AccountRunner {
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
     if (reply.text) {
       for (const chunk of splitForZalo(reply.text)) {
-        const response = await this.sender.send(() => api.sendMessage(chunk, contact.zalo_uid, ThreadType.User));
+        const styled = toStyledContent(chunk);
+        const response = await this.sender.send(() => api.sendMessage(styled, contact.zalo_uid, ThreadType.User));
         const msgId = response.message?.msgId;
-        if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), chunk);
+        if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), styled.msg);
       }
     }
     for (const attachmentId of reply.attachmentIds) {
@@ -673,9 +675,10 @@ export class AccountRunner {
       { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles }, peerName);
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
     for (const chunk of splitForZalo(text)) {
-      const response = await this.sender.send(() => api.sendMessage(chunk, peerUid, ThreadType.User));
+      const styled = toStyledContent(chunk);
+      const response = await this.sender.send(() => api.sendMessage(styled, peerUid, ThreadType.User));
       const msgId = response.message?.msgId;
-      if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), chunk);
+      if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), styled.msg);
     }
   }
 
@@ -735,9 +738,10 @@ export class AccountRunner {
     const { peer, type } = this.threadTarget(thread);
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
     for (const chunk of splitForZalo(text)) {
-      const response = await this.sender.send(() => api.sendMessage(chunk, peer, type));
+      const styled = toStyledContent(chunk);
+      const response = await this.sender.send(() => api.sendMessage(styled, peer, type));
       const msgId = response.message?.msgId;
-      if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), chunk);
+      if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), styled.msg);
     }
   }
 
