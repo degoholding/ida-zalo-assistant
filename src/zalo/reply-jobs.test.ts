@@ -16,6 +16,19 @@ test("a question still waiting in the queue after the ack delay gets exactly one
   tracker.end(1);
 });
 
+test("a queued ack can see that the job has since been answered, so it never lands after the answer", async () => {
+  const tracker = new AckTracker();
+  let isAnswered: (() => boolean) | null = null;
+  tracker.watchQueued(4, async (check) => { isAnswered = check; });
+  await wait(ACK_DELAY_MS + 100);
+  assert.ok(isAnswered);
+  assert.equal(isAnswered!(), false);
+  // Tin chờ còn xếp trong hàng gửi; việc chạy và trả lời xong — tới lượt tin chờ phải thấy «đã trả lời» để bỏ
+  tracker.begin(4).answered = true;
+  tracker.end(4);
+  assert.equal(isAnswered!(), true);
+});
+
 test("a question picked up before the ack delay is not acked from the queue side", async () => {
   const tracker = new AckTracker();
   let sent = 0;

@@ -25,6 +25,7 @@ import { QuickFilterSourceSelect } from './quick-filter-source-select'
 import { SearchField } from '@/shared/ui/search-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { CrudFormDialog } from './crud-form-dialog'
+import { describeListError } from './describe-list-error'
 import { resolveSort } from './resolve-sort'
 import type { CrudConfig, CrudRecord } from './types'
 import { useCrudList } from './use-crud'
@@ -144,7 +145,7 @@ function CrudListContent<T extends CrudRecord>({
     }
   }
 
-  const { data, isLoading, isError } = useCrudList<T>(config.apiPath, params)
+  const { data, isLoading, isError, error } = useCrudList<T>(config.apiPath, params)
 
   const handleRowClick = (row: T) => {
     // Mở popup Sửa tại chỗ, hoặc điều hướng sang trang chi tiết (mặc định).
@@ -278,6 +279,9 @@ function CrudListContent<T extends CrudRecord>({
       >
         {beforeContent}
 
+        {/*  Lỗi thì `data` còn là kết quả lần trước (keepPreviousData) — ghi chú của nó không còn đúng. */}
+        {!isError && config.listNotice?.(data)}
+
         <Card className="flex min-h-0 w-full min-w-0 flex-1 flex-col p-3 md:p-4">
         <DataTable
           fillHeight
@@ -286,6 +290,7 @@ function CrudListContent<T extends CrudRecord>({
           getRowId={(row: T) => String(row[idKey])}
           isLoading={isLoading}
           isError={isError}
+          errorMessage={describeListError(error)}
           //  ⚠️ Câu «bảng rỗng» phải PHÂN BIỆT *rỗng vì bộ lọc* với *rỗng vì
           //  chưa có gì*. Một câu chung cho cả hai thì người vừa gõ nhầm một
           //  chữ đọc ra "chưa có dữ liệu" rồi tin là vậy — và ở màn danh mục,

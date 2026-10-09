@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.0 · 08/10/2026 · đối chiếu mã `dev1` @ `2cb61ac` (đang chạy trên VPS, botida.degoholding.vn).
+> Bản 1.2 · 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1` @ `2cb61ac` (đang chạy trên VPS, botida.degoholding.vn).
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -22,7 +22,7 @@
 | **4** | Nhiều tài khoản web, người nhận, tách theo công ty | **Xong** 08/10 | 5 / 5 |
 | **5** | N1 — Check tin nhắn và cảnh báo | **Xong** 08/10 | 9 / 9 |
 | **11** | Ticket qua bot (đại ca thêm 08/10, làm trước phase 6) | **Xong** 08/10 | 7 / 7 |
-| **6** | N4 — Tìm kiếm tin nhắn | Một phần | 1 / 5 |
+| **6** | N4 — Tìm kiếm tin nhắn | **Xong** 09/10 (phần GĐ1) | 5 / 6 |
 | **7** | N5 — Checklist công việc | **Chưa** | 0 / 5 |
 | **8** | N6 — Bản tin và báo cáo | Một phần | 3 / 7 |
 | **9** | N7 — Gửi tin theo lệnh | Một phần | 1 / 6 |
@@ -30,9 +30,9 @@
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
-08/10 — tiếp theo là phase 6 (tìm tin).
+08/10; tìm tin (phase 6) xong 09/10 — tiếp theo là phase 7 (checklist).
 
-Đối chiếu 27 câu của IDA (mục 9): **8 Đạt · 13 Một phần · 6 Chưa** sau phase 5 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
+Đối chiếu 27 câu của IDA (mục 9): **9 Đạt · 12 Một phần · 6 Chưa** sau phase 6 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
 
 ## 1. Đã chốt
@@ -199,15 +199,71 @@ Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/a
 
 ## 8. Phase 6–10
 
-### Phase 6 — N4 Tìm kiếm (Một phần)
+### Phase 6 — N4 Tìm kiếm (Xong 09/10, phần GĐ1)
+
+**Đã làm (09/10):**
+- **Bảng tìm riêng `message_search`** (migration 023: chữ tin + nhóm + giờ gửi, chỉ mục toàn văn bộ tách theo khoảng trắng,
+  collation `utf8mb4_0900_ai_ci` để gõ không dấu khớp có dấu **kể cả «đ» = «d»**). KHÔNG thêm FULLTEXT thẳng vào `message`:
+  việc đó dựng lại cả bảng và chặn ghi suốt lúc dựng (bảng càng lớn bot càng đứng lâu). Migration chỉ tạo bảng rỗng — đo
+  trên bảng 300 nghìn tin: 57 ms. Tin mới ghi vào bảng tìm ngay lúc lưu (`indexMessage` trong `message-ingest.ts`, thu hồi thì
+  bỏ ra, xóa tin thì khóa ngoại tự xóa); tin cũ do việc nền «search-index» (mỗi phút, ≤ 40 giây / lượt) chép theo lô 5.000 id
+  từ mới về cũ — đo ~38.000 tin / giây (1 triệu tin ~26 giây), ghi tin mới trong lúc chép: trung vị 3 ms, chậm nhất 54 ms.
+  Chưa chép xong thì màn «Tìm tin» và trợ lý báo «mới tìm được từ khoảng ngày …». Không dùng trigger: binlog bật thì user
+  ứng dụng (không SUPER) không tạo được. Mã: `src/search/message-search-index.ts`.
+- Mỗi từ khóa bắt buộc, cụm trong ngoặc kép giữ thứ tự; từ toàn dấu câu / emoji bị bỏ. **MATCH chỉ nhận chữ đơn**
+  (`+công +nợ`), thứ tự cụm kiểm lại bằng LIKE: đo 09/10 trên 300 nghìn tin, MATCH cụm (`+"công nợ"`) dùng bộ nhớ vượt trần
+  và làm MySQL bị giết. Lõi chung: `src/search/message-search.ts`.
+- **Không dùng bộ tách ngram**: đo trên 1 triệu tin giả, ngram tách thành cặp 2 ký tự («ng», «nh» có trong gần như mọi tin)
+  → một câu tìm làm MySQL hết 768 MB và bị giết. Cấu hình MySQL đi kèm (docker-compose.yml): `innodb_ft_min_token_size=1`,
+  `innodb_ft_enable_stopword=OFF`, **trần bộ nhớ mỗi câu tìm 32 MB** (vượt thì câu tìm báo lỗi, bot lùi về LIKE; 64 MB × 2
+  câu cùng lúc trên 1 triệu tin đã làm MySQL bị giết, 32 MB thì 6 câu dồn cùng lúc vẫn ~600 MB).
+- **Tự lùi về quét LIKE trong 90 ngày gần nhất** (đi theo chỉ mục giờ gửi) khi từ khóa quá phổ biến (vượt trần), quá ngắn,
+  hoặc MySQL chưa đổi cấu hình (bot tự đọc `@@innodb_ft_*`); kết quả báo «chỉ tìm các tin từ ngày …». Chỉ chọn «đến ngày»
+  thì 90 ngày tính lùi từ ngày đó. Mỗi câu tìm có trần 5 giây (`MAX_EXECUTION_TIME`, quá thì báo «thu hẹp lại»); màn web
+  đếm tối đa 1.000 kết quả; lọc «Lúc gửi» theo ngày lấy trọn ngày giờ Việt Nam.
+- **Số đo chịu tải (đo lại 09/10 sau review, dữ liệu giả CỰC ĐOAN: 30 chữ, chữ nào cũng có trong gần như mọi tin)**:
+  300 nghìn tin — mọi câu 0,4–0,7 giây, 6 câu dồn cùng lúc 1,2 giây, MySQL ~660 MB; 1 triệu tin (trần 32 MB) — 6 câu
+  dồn cùng lúc 0,35 giây (chữ quá phổ biến tự lùi LIKE), câu đầu tiên lúc bộ đệm nguội ~1,5 giây, MySQL ~600 MB, không
+  sập. Lần đo 1.1 («1 triệu tin < 1 giây, không sập») chưa thử câu cụm + nhiều câu cùng lúc — đo lại đã làm MySQL bị giết
+  trước khi sửa (MATCH chữ đơn, trần 32 MB, tối đa 2 câu). Dữ liệu thật ít chữ phổ biến hơn nên ít phải lùi LIKE hơn.
+- `search_index_meta` ghi `innodb_ft_min_token_size` LÚC TẠO bảng tìm: đổi cấu hình MySQL về sau thì từ ngắn tự đi LIKE
+  (không ra rỗng). Muốn bảng tìm nhận từ ngắn theo cấu hình mới: `TRUNCATE message_search; UPDATE search_index_meta SET
+  min_token_size = @@innodb_ft_min_token_size, backfill_next_id = NULL, backfilled_at = NULL` — việc nền tự chép lại (bảng
+  `message` không bị khóa).
+- **Chịu tải 100 nhóm cùng gọi bot** (giả lập 09/10 bằng đúng `ZaloSender`, AI giả ~2,5 giây / lượt, tìm thật trên DB):
+  nút thắt là **hàng gửi Zalo** (1 tin / 1,5 giây / tài khoản để không bị khóa), không phải AI hay hàng đợi câu hỏi — tăng 6 → 30
+  câu song song không nhanh thêm giây nào. Đã sửa: (1) tin «chờ em xíu» gửi bằng `sendIfQuiet` — hàng gửi đông (> 2 tin) thì
+  bỏ; (2) câu trả lời đi TRƯỚC tin «chờ» trong hàng gửi; (3) lượt tự bỏ (trả null) không chiếm 1,5 giây giãn cách;
+  (4) tối đa 2 câu tìm chạy cùng lúc trong MySQL (`searchLimiter`; mỗi câu toàn văn được dùng tới 32 MB — 100 câu cùng lúc
+  không giới hạn sẽ vượt 768 MB). Kết quả: nhóm chờ lâu nhất 303 → 157 giây (1 tài khoản), 87 giây nếu 2 tài khoản chia
+  nhóm; ngày thường (5 nhóm) vẫn thấy «chờ em xíu» sau ~4 giây, có câu trả lời sau 9–12 giây. 100 câu tìm thật cùng lúc: xong
+  trong 0,23 giây (đo trước khi đổi sang bảng tìm riêng, lúc còn cho 3 câu cùng lúc). Muốn nhanh hơn nữa: thêm tài khoản Zalo
+  (mục 10); không hạ 1,5 giây vì Zalo không công bố ngưỡng chống spam.
+- Review code (agent, 09/10): không thấy lỗi tiêm SQL / lộ phạm vi; 10 điểm (cửa sổ ngày, đ/d, dấu câu, trần thời gian, cấu hình
+  lúc dựng chỉ mục…) đã sửa cùng ngày. Kèm theo: `npm test` trước đây bỏ sót các tệp test sâu 2 cấp (`src/web/api/*.test.ts`,
+  sh hiểu `**` như `*`) — đã sửa, bộ test từ 315 lên 343.
+- **Review lần 2 (09/10)**: (1) tin «chờ em xíu» gửi lúc câu hỏi còn nằm trong hàng đợi giờ cũng tự bỏ nếu tới lượt mà câu
+  trả lời đã có — hàng gửi ưu tiên làm câu trả lời chen trước, tin chờ từng tới SAU câu trả lời (`AckState.answered`);
+  (2) màn «Tìm tin» hiện ghi chú khi máy chủ tự giới hạn và câu lỗi 422 đúng nghĩa (khung CRUD thêm `listNotice`,
+  `describeListError`); (3) chỉ chọn «đến ngày» không còn ra rỗng; (4) đổi FULLTEXT trên `message` sang bảng tìm riêng (không
+  khóa bảng khi migrate); (5) chống sập MySQL khi tìm cụm / nhiều câu cùng lúc; (6) ẩn nhóm đã tắt «Đọc tin». Bộ test 354
+  (3 bài `src/cpu/cpu-pool.test.ts` trượt từ trước — luồng phụ không nạp được `.ts`, chưa sửa).
+- **Màn «Tìm tin»** (menu trái, quyền xem hội thoại, đúng phạm vi nhóm của từng người, nhóm đã tắt «Đọc tin» không hiện
+  như màn Hội thoại): từ khóa + lọc cuộc trò chuyện / người gửi / khoảng ngày; đoạn trích tô sáng từ khóa; «Xem trong hội
+  thoại» mở đúng tin cùng các tin trước và sau. Dòng ghi chú trên bảng khi máy chủ tự giới hạn (đang chép tin cũ, chỉ dò từ
+  ngày …, hơn 1.000 tin); lỗi «tìm lâu quá» hiện đúng câu hướng dẫn. Chỉ chọn «Lúc gửi ≤ ngày» thì cửa sổ 90 ngày tính lùi từ
+  ngày đó (trước đây tính từ hôm nay → ra rỗng).
+- **Công cụ trợ lý `search_messages`**: «ai nhắc tới hợp đồng thép», «tìm tin về công nợ Minh Phát»… — chỉ nhóm đang đọc, không
+  bao giờ nhóm Mật hay tin riêng; hỏi trong nhóm thì chỉ tìm trong nhóm đó.
 
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
 | Tìm tệp theo tên và nội dung đã bóc (`search_files`) | 21 | Xong |
-| Chỉ mục toàn văn cho tin nhắn, tìm ≤ 5 giây trên 6 tháng dữ liệu | 21 | Chưa |
-| Công cụ trợ lý tìm tin theo từ khóa + người + nhóm + ngày | 21 | Chưa |
-| Màn tìm tin trên web, nút «xem các tin trước và sau» | 21 | Chưa |
-| Tìm bằng câu tự nhiên (giai đoạn 2) | 21 | Chưa |
+| Chỉ mục toàn văn cho tin nhắn, tìm ≤ 5 giây trên 6 tháng dữ liệu | 21 | Xong 09/10 (đo 1 triệu tin giả cực đoan: ≤ 1,5 giây, không sập) |
+| Bảng tìm riêng, chép tin cũ trong nền (migrate không khóa bảng `message`) | 21 | Xong 09/10 |
+| Công cụ trợ lý tìm tin theo từ khóa + người + nhóm + ngày | 21 | Xong 09/10 |
+| Màn tìm tin trên web, nút «xem các tin trước và sau» | 21 | Xong 09/10 |
+| Tìm bằng câu tự nhiên (giai đoạn 2) | 21 | Một phần (trợ lý hiểu câu hỏi tự nhiên rồi tự chọn từ khóa; chưa tìm theo nghĩa) |
 
 ### Phase 7 — N5 Checklist (Chưa)
 
@@ -280,7 +336,7 @@ Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/a
 | 18 | Số mơ hồ: gắn cờ, báo người nhận | 5, 10 | Một phần |
 | 19 | Excel qua Zalo + lưu web | 8 | Đạt |
 | 20 | Lưu 24 tháng / tệp 6 tháng | 1, 3 | Đạt (08/10) |
-| 21 | Tìm tin + xem trước / sau | 6 | Một phần |
+| 21 | Tìm tin + xem trước / sau | 6 | Đạt (09/10) |
 | 22 | Checklist | 7 | Chưa |
 | 23 | Nhắc hạn | 7 | Chưa |
 | 24 | Bản tin sáng | 8 | Chưa |
@@ -298,6 +354,9 @@ Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/a
 | Chuyển bot sang VPS riêng (database + tệp + phiên Zalo) | Chưa |
 | Mỗi bot thêm một tài khoản Zalo dự phòng trong cùng các nhóm | Chưa |
 | Bật Cloudflare Access chắn trang quản trị | Chưa |
+| Khởi động lại MySQL trên VPS theo `command` mới trong docker-compose.yml (cấu hình tìm toàn văn, phase 6) — làm TRƯỚC khi deploy bản có migration 023 | Chưa — chưa làm thì tìm tin vẫn chạy nhưng chỉ quét LIKE 90 ngày; làm sau thì tin đã chép thiếu từ 1–2 chữ, phải chép lại (lệnh ở mục Phase 6, không khóa bảng) |
+| Sau deploy phase 6: xem log worker «đã chép xong tin cũ vào bảng tìm»; kiểm chỗ trống ổ đĩa (bảng tìm chép lại chữ của mọi tin — chữ tin chiếm thêm ~gấp đôi) | Chưa |
+| Lên VPS riêng 8 GB: nâng `mem_limit` + `innodb-buffer-pool-size` của MySQL (đang 768 MB / 256 MB, lúc nghỉ đã ~600–670 MB với 1 triệu tin); khi đó có thể nâng trần tìm toàn văn 32 MB → 64 MB và số câu tìm cùng lúc (`MAX_CONCURRENT_SEARCHES`) | Chưa |
 
 Ước lượng cho một bot 100 nhóm ở mức «vừa» (20–100 tin / nhóm / ngày): 2.000–10.000 tin / ngày; 24 tháng
 khoảng 1,5–7 triệu tin (2–7 GB database); ảnh / tệp giữ 6 tháng khoảng 10–55 GB — vì vậy tệp phải lên R2.

@@ -9,6 +9,7 @@ import {
   LifeBuoy,
   MessageCircle,
   MessageSquareText,
+  Search,
   Settings,
   UserCog,
   Users,
@@ -34,6 +35,8 @@ export interface NavItem {
 /** Menu trái — thêm màn mới thì thêm một dòng ở đây và một route ở `app-router.tsx`. */
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Hội thoại', path: appRoutes.conversations.list, icon: MessageCircle, entity: 'conversation' },
+  // `/api/messages/search` khai cùng quyền xem hội thoại ở bảng quyền máy chủ
+  { label: 'Tìm tin', path: appRoutes.search.messages, icon: Search, entity: 'conversation' },
   //  `/api/assistant-chat` không khai trong bảng quyền máy chủ → chỉ quản trị (setting.write).
   { label: 'Hỏi trợ lý', path: appRoutes.assistantChat, icon: MessageSquareText, entity: 'setting', action: 'write' },
   { label: 'Danh bạ', path: appRoutes.contacts.list, icon: Contact, entity: 'contact' },

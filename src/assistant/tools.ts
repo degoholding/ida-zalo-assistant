@@ -6,6 +6,7 @@ import { runExportReport, type ExportReport } from "./export-report-tool.js";
 import { GROUP_ACTION_TOOL_NAMES, runGroupAction, type GroupActions } from "./group-action-tools.js";
 import { runCreateRecapPdf, type CreateRecapPdf } from "./meeting-recap-tool.js";
 import { runReadLink, type ReadLink } from "./read-link-tool.js";
+import { runSearchMessages } from "./search-messages-tool.js";
 import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings, type MeetingCreator } from "./meeting-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
@@ -69,7 +70,7 @@ export interface ToolContext {
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
 // web_search: thông tin CÔNG KHAI (giá vàng, tỷ giá, báo cáo tài chính công ty niêm yết…) — mở cho nhóm 08/10/2026 (đại ca);
 // câu tìm vẫn không được chứa dữ liệu nội bộ (luật chung + mô tả công cụ)
-export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "web_search", ...TICKET_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
+export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "web_search", ...TICKET_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
   name: "web_search",
@@ -455,6 +456,7 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   find_people: findPeople,
   get_conversation_with_person: getConversationWithPerson,
   search_files: searchFiles,
+  search_messages: (context, args) => runSearchMessages(context, args),
   send_file: sendFile,
   read_file: readFile,
   web_search: webSearch,

@@ -3,6 +3,7 @@ import { AttachmentStatus, MessageKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { parseZaloContent } from "../zalo/content-parser.js";
 import { liveEvents } from "../live-events.js";
+import { indexMessage, unindexMessage } from "../search/message-search-index.js";
 import { countDirectMessage, ensureSenderContact, recordDirectMessageContact, type ContactRow } from "./contact-repository.js";
 import {
   directKey,
@@ -123,6 +124,7 @@ async function storeMessage(deps: IngestDeps, group: GroupRow, incoming: Incomin
   );
   // Hai tài khoản bot cùng ở một nhóm, hoặc Zalo gửi lại tin cũ khi nối lại: bỏ qua bản trùng
   if (result.affectedRows === 0) return null;
+  await indexMessage(deps.db, result.insertId);
   await bumpThreadCounters(deps.db, group.id, new Date(incoming.sentAtMs));
   liveEvents.emitMessage({ threadId: group.id, messageId: result.insertId, kind: "new" });
 
@@ -161,7 +163,10 @@ export async function recallMessage(db: Db, key: ThreadKey, zaloMsgId: string): 
     const [rows] = await db.query<RowDataPacket[]>(
       "SELECT m.id, m.group_id FROM message m JOIN zalo_group g ON g.id = m.group_id WHERE g.thread_type = ? AND g.zalo_group_id = ? AND g.owner_bot_id = ? AND m.zalo_msg_id = ?",
       [key.threadType, key.zaloThreadId, key.ownerBotId, zaloMsgId]);
-    if (rows[0]) liveEvents.emitMessage({ threadId: Number(rows[0].group_id), messageId: Number(rows[0].id), kind: "recalled" });
+    if (rows[0]) {
+      await unindexMessage(db, Number(rows[0].id));
+      liveEvents.emitMessage({ threadId: Number(rows[0].group_id), messageId: Number(rows[0].id), kind: "recalled" });
+    }
   }
   return result.affectedRows > 0;
 }
@@ -211,6 +216,7 @@ export async function recordOutgoingMessage(
     [thread.id, zaloMsgId, options.source ?? OUTGOING_SOURCE.assistant, options.kind ?? MessageKind.Text, bot.uid, bot.name.slice(0, 255), sentAt, text],
   );
   if (result.affectedRows === 0) return null;
+  await indexMessage(db, result.insertId);
   if (options.file) {
     await db.query(
       `INSERT INTO attachment (message_id, group_id, file_name, file_ext, declared_size, source_url, storage_key, stored_bytes, status, stored_at)

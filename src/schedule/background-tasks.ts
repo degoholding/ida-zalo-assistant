@@ -11,6 +11,8 @@ export const BACKGROUND_TASKS = [
   { name: "alert-reminders", label: "Nhắc tin chờ trả lời quá giờ", spec: { every: "minutes", minutes: 1 } },
   { name: "alert-ai-review", label: "AI đọc lại tin để bắt tin khẩn", spec: { every: "minutes", minutes: 5 } },
   { name: "session-watch", label: "Theo dõi phiên Zalo, báo khi văng", spec: { every: "minutes", minutes: 2 } },
+  // Chép xong thì mỗi lượt chỉ còn một câu đọc mốc — để chạy mãi không tốn gì
+  { name: "search-index", label: "Chép tin cũ vào bảng tìm tin", spec: { every: "minutes", minutes: 1 } },
 ] as const satisfies readonly { name: string; label: string; spec: ScheduleSpec }[];
 
 export type BackgroundTaskName = (typeof BACKGROUND_TASKS)[number]["name"];

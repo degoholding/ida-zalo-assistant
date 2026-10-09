@@ -4,6 +4,7 @@ import type { Control } from 'react-hook-form'
 import type { PermissionEntity } from '@/core/authorization/permission-types'
 import type { FilterFieldDefinition } from '@/shared/conditional-filter'
 import type { DataTableColumn } from '@/shared/data-table'
+import type { PaginatedResult } from '@/shared/types/api'
 import type { IdentityChip } from '@/shared/ui/record-identity-card'
 
 /**
@@ -301,6 +302,12 @@ export interface CrudConfig<T> {
   detailMaxWidth?: string
   /** Render thêm nội dung ở đầu thanh công cụ. */
   renderToolbarExtra?: () => ReactNode
+  /**
+   * Dòng ghi chú ngay trên bảng, dựng từ phản hồi danh sách (kể cả trường riêng ngoài `total` /
+   * `items`, vd màn Tìm tin báo «chỉ tìm từ ngày …», «hơn 1.000 tin»). `undefined` = chưa có dữ
+   * liệu. Trả `null` khi không có gì để báo.
+   */
+  listNotice?: (result: PaginatedResult<T> | undefined) => ReactNode
   /**
    * Câu khi danh sách RỖNG mà không lọc gì. Mặc định mời bấm «Thêm» — sai với danh mục do Zalo
    * sinh ra (Danh bạ, Nhóm, Tệp) vốn không có nút Thêm.

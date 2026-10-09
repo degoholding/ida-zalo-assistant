@@ -35,7 +35,8 @@ describe('sidebar gating by role', () => {
   })
 
   it('hides every admin-only screen from a staff member', () => {
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Công ty'])
+    // «Tìm tin» (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Công ty'])
   })
 
   it('gives a manager the same menu as staff — write rights do not unlock admin screens', () => {

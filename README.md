@@ -126,6 +126,15 @@ chuyển hướng. Tóm tắt tài liệu: đủ mọi phần, mỗi phần 2–
 `read-link-tool.ts`. Đọc xong muốn «xuất file» → `create_summary_pdf` (PDF «Tóm tắt tài liệu», cùng khung mẫu recap họp, biến
 thể `document` trong `meeting-recap-input.ts`) hoặc `export_report` (Excel / Sheets — mở cho cả hỏi trong nhóm).
 
+**Tìm tin nhắn** (phase 6, 09/10/2026): màn «Tìm tin» + công cụ trợ lý `search_messages` — từ khóa (gõ không dấu được, cụm
+trong ngoặc kép) + lọc nhóm / người / khoảng ngày, đoạn trích tô sáng, «Xem trong hội thoại» mở đúng tin. Tìm trên bảng
+riêng `message_search` (migration 023 — tạo tức thời, KHÔNG khóa bảng `message`; collation `utf8mb4_0900_ai_ci` để «đ» =
+«d»): tin mới ghi vào lúc lưu, tin cũ do việc nền «search-index» chép dần (màn / trợ lý báo «mới tìm được từ ngày …» tới khi
+xong). Ghi `message.text` ở chỗ mới thì gọi `indexMessage`. Cần cấu hình MySQL trong docker-compose.yml (`innodb_ft_*`) —
+khởi động lại MySQL TRƯỚC khi deploy; chưa có thì tự lùi về quét LIKE 90 ngày. Mã: `src/search/`,
+`src/web/api/message-search-api.ts`, `src/assistant/search-messages-tool.ts`, `web/src/modules/message-search/`. Chi tiết,
+số đo: doc 06 mục Phase 6.
+
 **Quy trình báo cáo** (07/10/2026): câu hỏi có «báo cáo / tổng hợp / thống kê / xuất file / Excel / PDF / recap»
 (`isReportRequest`) → chạy mô hình VIỆC NẶNG ngay từ đầu, tối đa 10 vòng gọi công cụ, prompt gắn thêm quy trình 4 bước (chốt phạm
 vi → lấy đủ dữ liệu → tự kiểm số → khung chuẩn: tóm tắt có số / chi tiết có cột Nguồn / bất thường / việc cần làm) kèm 1 ví dụ

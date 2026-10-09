@@ -515,7 +515,7 @@ export class AccountRunner {
     };
     const jobId = await enqueueDirectReply(this.db, payload, incoming.msgId);
     if (!jobId) return;
-    this.acks.watchQueued(jobId, () => this.sendAck(result.thread, result.contact, () => false));
+    this.acks.watchQueued(jobId, (isAnswered) => this.sendAck(result.thread, result.contact, isAnswered));
     this.jobs.wake();
   }
 
@@ -585,7 +585,6 @@ export class AccountRunner {
     // Giữ bản trợ lý lúc bắt đầu: khóa bị xóa trên màn Cài đặt giữa chừng thì lượt này vẫn chạy nốt
     const assistant = this.assistant;
     if (!assistant) return;
-    let answered = false;
     let ackTimer: NodeJS.Timeout | null = null;
     const reply = await assistant.answer({
       botAccountId: this.account.id,
@@ -597,13 +596,13 @@ export class AccountRunner {
       onAccepted: () => {
         if (ack.acked) return;
         ackTimer = setTimeout(() => {
-          if (answered || ack.acked) return;
+          if (ack.answered || ack.acked) return;
           ack.acked = true;
-          void this.sendAck(thread, contact, () => answered).catch((error) => this.log.warn("nhắn xác nhận lỗi", error));
+          void this.sendAck(thread, contact, () => ack.answered).catch((error) => this.log.warn("nhắn xác nhận lỗi", error));
         }, ACK_DELAY_MS);
       },
     }).finally(() => {
-      answered = true;
+      ack.answered = true;
       if (ackTimer) clearTimeout(ackTimer);
     });
     // Không ghi nội dung câu hỏi / câu trả lời vào log — chỉ ai, kết quả, bao lâu; nội dung xem ở màn Hội thoại
@@ -726,7 +725,8 @@ export class AccountRunner {
     const api = this.api;
     if (!api) return;
     const text = pickAckText();
-    const response = await this.sender.send(() => (isAnswered() ? Promise.resolve(null) : api.sendMessage(text, contact.zalo_uid, ThreadType.User)));
+    // Tin phụ: hàng gửi đang đông thì bỏ (null) — nhường chỗ cho câu trả lời thật (ZaloSender.sendIfQuiet)
+    const response = await this.sender.sendIfQuiet(() => (isAnswered() ? Promise.resolve(null) : api.sendMessage(text, contact.zalo_uid, ThreadType.User)));
     const msgId = response?.message?.msgId;
     if (msgId) await recordOutgoingMessage(this.db, thread, { uid: this.ownUid, name: this.account.display_name || this.account.label }, String(msgId), text);
   }

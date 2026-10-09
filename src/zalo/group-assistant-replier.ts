@@ -129,11 +129,13 @@ export class GroupAssistantReplier {
     const jobId = await enqueueGroupReply(db, { accountId: this.deps.accountId, groupId: group.id, incoming, quote: message.data, question });
     // null = bot khác cùng nhóm đã nhận tin này
     if (!jobId) return;
-    this.acks.watchQueued(jobId, async () => {
+    this.acks.watchQueued(jobId, async (isAnswered) => {
       const api = this.deps.getApi();
       if (!api) return;
       const ackText = pickAckText();
-      const response = await sender.send(() => api.sendMessage({ msg: ackText, quote: message.data }, incoming.zaloGroupId, ThreadType.Group));
+      // Tin phụ: hàng gửi đang đông thì bỏ (null) — nhường chỗ cho câu trả lời thật; tới lượt mà đã trả lời xong thì cũng bỏ
+      const response = await sender.sendIfQuiet(() => (isAnswered() ? Promise.resolve(null)
+        : api.sendMessage({ msg: ackText, quote: message.data }, incoming.zaloGroupId, ThreadType.Group)));
       const ackId = response?.message?.msgId;
       if (ackId) await recordOutgoingMessage(db, group, this.deps.getBot(), String(ackId), ackText);
     });
@@ -216,11 +218,10 @@ export class GroupAssistantReplier {
     const [rows] = await db.query<RowDataPacket[]>("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [group.id, incoming.msgId]);
     const bot = this.deps.getBot();
     // Chưa trả lời xong sau ACK_DELAY_MS thì nhắn «chờ em xíu» (trích dẫn câu hỏi) — người hỏi biết bot đã nhận việc
-    let answered = false;
     let ackTimer: NodeJS.Timeout | null = null;
     const sendAck = async () => {
       const ackText = pickAckText();
-      const response = await sender.send(() => (answered ? Promise.resolve(null)
+      const response = await sender.sendIfQuiet(() => (ack.answered ? Promise.resolve(null)
         : api.sendMessage({ msg: ackText, quote }, incoming.zaloGroupId, ThreadType.Group)));
       const ackId = response?.message?.msgId;
       if (ackId) await recordOutgoingMessage(db, group, bot, String(ackId), ackText);
@@ -232,13 +233,13 @@ export class GroupAssistantReplier {
       onAccepted: () => {
         if (ack.acked) return;
         ackTimer = setTimeout(() => {
-          if (answered || ack.acked) return;
+          if (ack.answered || ack.acked) return;
           ack.acked = true;
           void sendAck().catch((error) => log.warn("nhắn «chờ em xíu» trong nhóm lỗi", error));
         }, ACK_DELAY_MS);
       },
     }).finally(() => {
-      answered = true;
+      ack.answered = true;
       if (ackTimer) clearTimeout(ackTimer);
     });
     // Không ghi nội dung câu hỏi / trả lời vào log — xem ở màn Hội thoại

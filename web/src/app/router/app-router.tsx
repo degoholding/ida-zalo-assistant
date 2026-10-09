@@ -8,6 +8,7 @@ import { companiesModule } from '@/modules/companies/routes'
 import { contactsModule } from '@/modules/contacts/routes'
 import { conversationsModule } from '@/modules/conversations/routes'
 import { filesModule } from '@/modules/files/routes'
+import { messageSearchModule } from '@/modules/message-search/routes'
 import { groupsModule } from '@/modules/groups/routes'
 import { importsModule } from '@/modules/imports/routes'
 import { recipientsModule } from '@/modules/recipients/routes'
@@ -28,6 +29,7 @@ const MODULE_ROUTES = [
   contactsModule,
   groupsModule,
   filesModule,
+  messageSearchModule,
   ticketsModule,
   importsModule,
   companiesModule,

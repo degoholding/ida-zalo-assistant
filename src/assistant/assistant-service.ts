@@ -11,6 +11,7 @@ import { buildGroupQuestion, loadGroupContext, loadGroupMemberNames } from "./gr
 import { MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION } from "./meeting-recap-tool.js";
 import { readLinkContent } from "./link-reader.js";
 import { READ_LINK_DECLARATION } from "./read-link-tool.js";
+import { SEARCH_MESSAGES_DECLARATION } from "./search-messages-tool.js";
 import { REPORT_MAX_TOOL_ROUNDS, REPORT_PLAYBOOK_PROMPT, isReportRequest } from "./report-playbook.js";
 import { appendTokenFooter, stripTokenFooter } from "./token-usage-footer.js";
 import { GROUP_ACTION_DECLARATIONS, type GroupActions } from "./group-action-tools.js";
@@ -327,6 +328,7 @@ export class AssistantService {
       LIST_CONTACTS_DECLARATION,
       ...(storage ? [READ_FILE_DECLARATION] : []),
       READ_LINK_DECLARATION,
+      SEARCH_MESSAGES_DECLARATION,
       ...((this.options.webSearch || this.client.searchWeb) && !agroTechnical ? [WEB_SEARCH_DECLARATION] : []),
       ...(exporter ? [EXPORT_REPORT_DECLARATION, MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION] : []),
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),

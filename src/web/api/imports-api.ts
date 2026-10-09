@@ -4,6 +4,7 @@ import { parseZaloContent } from "../../zalo/content-parser.js";
 import type { Db } from "../../db/pool.js";
 import { findGroupByZaloId } from "../../sync/group-repository.js";
 import { ingestGroupMessage, type IncomingGroupMessage } from "../../sync/message-ingest.js";
+import { indexMessage } from "../../search/message-search-index.js";
 import { ApiError, readRawBody, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
@@ -120,6 +121,8 @@ async function enrichExistingMessage(db: Db, incoming: IncomingGroupMessage, onQ
   let changed = false;
   if (!existing.text && parsed.text) {
     await db.query("UPDATE message SET text = ? WHERE id = ?", [parsed.text, existing.id]);
+    // Tin trước đây không có chữ nên chưa nằm trong bảng tìm
+    await indexMessage(db, Number(existing.id));
     changed = true;
   }
   if (parsed.attachment) {

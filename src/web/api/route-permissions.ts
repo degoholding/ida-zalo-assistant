@@ -10,6 +10,8 @@ const RULES: Rule[] = [
   ["GET", /^\/api\/(groups|lookups\/groups)(\/|$)/, "group", "read"],
   ["WRITE", /^\/api\/groups\/\d+$/, "group", "write"],
   ["GET", /^\/api\/(conversations|lookups\/threads|events)(\/|$)/, "conversation", "read"],
+  // Tìm tin (phase 6): cùng quyền xem hội thoại; phạm vi nhóm áp trong API
+  ["GET", /^\/api\/messages\/search$/, "conversation", "read"],
   ["WRITE", /^\/api\/conversations\/\d+\/(messages|attachments)$/, "conversation", "write"],
   ["GET", /^\/api\/(contacts|contact-cards|lookups\/contact-tags)(\/|$)/, "contact", "read"],
   ["WRITE", /^\/api\/contacts\/\d+$/, "contact", "write"],

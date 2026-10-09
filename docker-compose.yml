@@ -67,7 +67,12 @@ services:
       MYSQL_USER: bot
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    command: ["--innodb-buffer-pool-size=256M", "--performance-schema=OFF"]
+    # Tìm tin (phase 6, migration 023): chỉ mục toàn văn tách theo khoảng trắng, nhận cả từ 1–2 chữ («nợ», «xe»), không bỏ
+    # stopword tiếng Anh («la», «a» là chữ tiếng Việt); trần bộ nhớ MỖI câu tìm 32 MB — vượt thì câu tìm báo lỗi (ứng dụng
+    # lùi về LIKE) thay vì làm sập MySQL. Đo 09/10/2026 trên 1 triệu tin: MySQL nghỉ ~670 MB, trần 64 MB × 2 câu chữ phổ biến
+    # cùng lúc → bị giết; 32 MB thì 6 câu cùng lúc vẫn ~600 MB.
+    command: ["--innodb-buffer-pool-size=256M", "--performance-schema=OFF",
+      "--innodb-ft-min-token-size=1", "--innodb-ft-enable-stopword=OFF", "--innodb-ft-result-cache-limit=33554432"]
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:

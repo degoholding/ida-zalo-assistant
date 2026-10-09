@@ -49,12 +49,19 @@ export function enqueueGroupReply(db: Db, payload: GroupReplyPayload): Promise<n
   });
 }
 
-/** Trạng thái «em nhận được rồi» của một việc trả lời: đã nhắn chưa, đã bắt đầu chưa. */
+/** Trạng thái «em nhận được rồi» của một việc trả lời: đã nhắn chưa, đã bắt đầu chưa, đã có câu trả lời chưa. */
 export interface AckState {
   acked: boolean;
   started: boolean;
+  /**
+   * Trợ lý đã trả lời xong (câu trả lời đang / đã vào hàng gửi). Tin «chờ em xíu» còn nằm trong hàng gửi kiểm cờ này lúc tới
+   * lượt: câu trả lời là tin thường nên chen trước tin phụ (ZaloSender) — không kiểm thì tin chờ tới SAU câu trả lời.
+   */
+  answered: boolean;
   timer: NodeJS.Timeout | null;
 }
+
+const newAckState = (): AckState => ({ acked: false, started: false, answered: false, timer: null });
 
 /**
  * Giữ trạng thái nhắn xác nhận theo id việc. Hai đường nhắn: (1) việc nằm chờ trong hàng quá ACK_DELAY_MS — nhắn từ
@@ -63,14 +70,17 @@ export interface AckState {
 export class AckTracker {
   private readonly states = new Map<number, AckState>();
 
-  /** Gọi ngay sau khi ghi việc: quá ACK_DELAY_MS mà việc chưa chạy thì `send()`. */
-  watchQueued(jobId: number, send: () => Promise<void>): void {
-    const state: AckState = { acked: false, started: false, timer: null };
+  /**
+   * Gọi ngay sau khi ghi việc: quá ACK_DELAY_MS mà việc chưa chạy thì `send()`. `isAnswered` — kiểm lại lúc tin chờ tới lượt
+   * trong hàng gửi: việc đã chạy và trả lời xong trong lúc tin chờ còn xếp hàng thì bỏ tin chờ.
+   */
+  watchQueued(jobId: number, send: (isAnswered: () => boolean) => Promise<void>): void {
+    const state = newAckState();
     state.timer = setTimeout(() => {
       state.timer = null;
       if (state.started || state.acked) return;
       state.acked = true;
-      void send().catch(() => undefined);
+      void send(() => state.answered).catch(() => undefined);
     }, ACK_DELAY_MS);
     state.timer.unref?.();
     this.states.set(jobId, state);
@@ -78,7 +88,7 @@ export class AckTracker {
 
   /** Việc bắt đầu chạy — hủy hẹn nhắn lúc chờ; trả trạng thái để đường (2) biết đã nhắn chưa. */
   begin(jobId: number): AckState {
-    const state = this.states.get(jobId) ?? { acked: false, started: false, timer: null };
+    const state = this.states.get(jobId) ?? newAckState();
     state.started = true;
     if (state.timer) clearTimeout(state.timer);
     state.timer = null;

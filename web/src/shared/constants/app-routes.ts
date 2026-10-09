@@ -22,6 +22,7 @@ export const appRoutes = {
     detail: (id: number | string) => `/groups/${id}`,
   },
   files: { list: '/files' },
+  search: { messages: '/search' },
   tickets: {
     list: '/tickets',
     detail: (id: number | string) => `/tickets/${id}`,
