@@ -267,7 +267,7 @@ Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/a
 
 ### Phase 7 — N5 Checklist (Xong 09/10)
 
-Plan: `plans/261009-1416-phase-07-checklist/`. **Đã chốt (đại ca, 09/10):** nhắc 3 mốc gửi NGƯỜI PHỤ TRÁCH (tag trong nhóm
+Plan: `plans/261009-1416-phase-07-checklist/` · kịch bản test khi deploy (phase 6 + 7): [`07-kich-ban-test-phase-6-7.md`](07-kich-ban-test-phase-6-7.md). **Đã chốt (đại ca, 09/10):** nhắc 3 mốc gửi NGƯỜI PHỤ TRÁCH (tag trong nhóm
 nguồn, không ở nhóm thì nhắn riêng), quá hạn báo thêm người giao + sếp (chung trần 3 báo / ngày); việc vào từ lệnh / câu tự
 nhiên + recap họp + AI tự bắt; việc AI bắt phải được NGƯỜI GIAO (hoặc sếp) xác nhận mới vào checklist.
 
