@@ -110,11 +110,11 @@ describe('B2 — hình dạng hằng số', () => {
     expect(ACTIONS.filter((a) => a === 'process')).toHaveLength(1)
   })
 
-  it('ENTITIES matches the server list in `src/auth/principal.ts`, including the phase 4 user and recipient keys and ticket', () => {
+  it('ENTITIES matches the server list in `src/auth/principal.ts`, including the phase 4 user and recipient keys, ticket and task', () => {
     //  Chép tay từ máy chủ — thiếu một khóa thì `can()` trả false im lặng và cả màn (Người dùng, Người nhận) biến
     //  khỏi menu của chính quản trị.
     expect([...ENTITIES]).toEqual([
-      'bot_account', 'conversation', 'contact', 'group', 'file', 'company', 'audit', 'setting', 'user', 'recipient', 'ticket',
+      'bot_account', 'conversation', 'contact', 'group', 'file', 'company', 'audit', 'setting', 'user', 'recipient', 'ticket', 'task',
     ])
   })
 

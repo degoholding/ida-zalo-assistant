@@ -13,6 +13,8 @@ import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResu
 import { ALERT_TOOL_NAMES, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { runTicketTool, TICKET_TOOL_NAMES } from "../tickets/ticket-tools.js";
 import type { TicketCommandContext } from "../tickets/ticket-commands.js";
+import type { TaskCommandContext } from "../tasks/task-commands.js";
+import { runTaskTool, TASK_TOOL_NAMES } from "../tasks/task-tools.js";
 
 // Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file và export_report — send_file chỉ gửi cho
 // chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
@@ -65,12 +67,14 @@ export interface ToolContext {
   turnStartedAt?: number;
   /** Ticket: người hỏi + cuộc đang hỏi (công cụ list_tickets / ticket_action / create_ticket) */
   ticket?: TicketCommandContext;
+  /** Việc (checklist): người hỏi + cuộc đang hỏi (list_tasks / create_task / task_action / save_recap_tasks) */
+  task?: TaskCommandContext;
 }
 
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
 // web_search: thông tin CÔNG KHAI (giá vàng, tỷ giá, báo cáo tài chính công ty niêm yết…) — mở cho nhóm 08/10/2026 (đại ca);
 // câu tìm vẫn không được chứa dữ liệu nội bộ (luật chung + mô tả công cụ)
-export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "web_search", ...TICKET_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
+export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "web_search", ...TICKET_TOOL_NAMES, ...TASK_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
   name: "web_search",
@@ -482,6 +486,8 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
     runCancelMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, meetingScopeTag(context.scopeGroupId)),
   ...Object.fromEntries([...TICKET_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) => runTicketTool(context.ticket, name, args, context.now)])),
+  ...Object.fromEntries([...TASK_TOOL_NAMES].map((name) => [name,
+    (context: ToolContext, args: Record<string, unknown>) => runTaskTool(context.task, name, args, context.now)])),
   ...Object.fromEntries([...ALERT_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) =>
       runAlertTool(context.alertTools, context.alertAsker, name, args, context.now, context.turnStartedAt ?? Date.now())])),

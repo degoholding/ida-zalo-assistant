@@ -173,8 +173,9 @@ export async function overdueItems(db: Db, recipient: AlertRecipient, now = new 
 export async function remindersSentToday(db: Db, recipientId: number, now = new Date()): Promise<number> {
   const dayStart = new Date(Math.floor((now.getTime() + 7 * 3_600_000) / 86_400_000) * 86_400_000 - 7 * 3_600_000);
   const [rows] = await db.query<RowDataPacket[]>(
-    "SELECT COUNT(DISTINCT batch_id) AS n FROM alert_log WHERE recipient_id = ? AND kind = ? AND sent_at >= ?",
-    [recipientId, AlertKind.Reminder, dayStart]);
+    // Nhắc tin chờ + báo việc quá hạn chung một trần «N lần báo / ngày» (IDA câu 9)
+    "SELECT COUNT(DISTINCT batch_id) AS n FROM alert_log WHERE recipient_id = ? AND kind IN (?, ?) AND sent_at >= ?",
+    [recipientId, AlertKind.Reminder, AlertKind.TaskOverdue, dayStart]);
   return Number(rows[0]?.n ?? 0);
 }
 

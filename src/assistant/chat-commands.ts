@@ -1,10 +1,14 @@
 import type { RowDataPacket } from "mysql2";
 import type { AppConfig } from "../config.js";
-import { ContactKind, ContactRole } from "../constants.js";
+import { ContactRole } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { parseKeywordList } from "../alerts/keyword-matcher.js";
 import { dropPendingChanges, latestPendingChange, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { runTicketCommand, type TicketCommand, type TicketCommandContext } from "../tickets/ticket-commands.js";
+import { describeContactChoices, pickContactMatch, searchContactsByName } from "../sync/contact-search.js";
+import { foldKeepLength } from "./fold-text.js";
+import { isTaskCommandKind, parseTaskCommand, type TaskCommand } from "../tasks/task-command-parser.js";
+import { runTaskCommand, type TaskCommandContext } from "../tasks/task-commands.js";
 
 // Lệnh gõ sẵn trong chat với bot (đại ca 08/10/2026: gõ «hướng dẫn» ra hướng dẫn cơ bản, có lệnh cấu hình luôn). Chạy TRƯỚC mô
 // hình: trả lời ngay, không tốn token, không phụ thuộc AI hiểu đúng. Gõ có dấu hay không dấu đều nhận. Câu không khớp lệnh nào
@@ -21,18 +25,14 @@ export type ChatCommand =
   | { kind: "vip"; add: boolean; name: string }
   | { kind: "confirm" }
   | { kind: "cancel" }
-  | TicketCommand;
+  | TicketCommand
+  | TaskCommand;
 
 /** Lệnh ticket (báo / xem / nhận / xong / hủy / bổ sung) — người chưa có vai trò cũng dùng được (src/tickets/). */
 export const isTicketCommand = (command: ChatCommand | null): command is TicketCommand => Boolean(command?.kind.startsWith("ticket_"));
 
-/** Bỏ dấu GIỮ NGUYÊN độ dài chuỗi (mỗi ký tự → một ký tự) — để cắt phần đối số từ câu gốc đúng vị trí. */
-function foldKeepLength(text: string): string {
-  return text.split("").map((char) => {
-    const base = char.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
-    return base.length === 1 ? base : char;
-  }).join("");
-}
+/** Lệnh việc (phase 7: «việc», «xong V-12», «giao Minh: …») — người phụ trách chưa có vai trò cũng dùng được (quyền kiểm theo việc). */
+export const isTaskCommand = (command: ChatCommand | null): command is TaskCommand => isTaskCommandKind(command?.kind);
 
 const TICKET_TEXT_MAX = 3000;
 
@@ -66,6 +66,8 @@ function parseTicketTextCommand(input: string): TicketCommand | null {
 export function parseChatCommand(input: string): ChatCommand | null {
   const ticketText = parseTicketTextCommand(input);
   if (ticketText) return ticketText;
+  const taskCommand = parseTaskCommand(input);
+  if (taskCommand) return taskCommand;
   const original = input.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?…]+$/u, "").trim();
   if (!original || original.length > 120) return null;
   const folded = foldKeepLength(original);
@@ -110,6 +112,8 @@ export interface ChatCommandContext {
   now: Date;
   /** Ticket: người hỏi + cuộc đang hỏi. Không có = không có lệnh ticket. */
   ticket?: TicketCommandContext;
+  /** Việc (checklist): người hỏi + cuộc đang hỏi. Không có = không có lệnh việc. */
+  task?: TaskCommandContext;
   /** Người chỉ được dùng lệnh ticket (chưa có vai trò, không là người nhận) — «hướng dẫn» chỉ nói phần ticket */
   ticketOnly?: boolean;
 }
@@ -126,6 +130,21 @@ const TICKET_HELP = [
   "- xong T-12 — tự báo đã ổn (đóng ticket); hủy T-12 — hủy ticket báo nhầm",
 ];
 
+const TASK_HELP = [
+  "VIỆC (checklist, bot nhắc theo hạn):",
+  "- việc — việc anh/chị đang phụ trách / đã giao; việc quá hạn",
+  "- giao Minh: <việc> hạn <thứ 6 / 20/10 / mai 17h> — giao việc (trong nhóm thì bot tag người đó)",
+  "- xong V-12 <ghi chú> — báo đã xong (bot báo người giao)",
+  "- dời V-12 <hạn> · giao lại V-12 <tên> · hủy V-12 · V-12: <ghi chú> · V-12 — xem",
+];
+
+/** Người chỉ dùng được lệnh ticket / việc được giao (chưa có vai trò): chỉ lệnh của người phụ trách */
+const TASK_ASSIGNEE_HELP = [
+  "VIỆC ĐƯỢC GIAO:",
+  "- việc — các việc anh/chị đang phụ trách",
+  "- xong V-12 <ghi chú> — báo đã xong · V-12: <ghi chú> — nhắn người giao",
+];
+
 const TICKET_HANDLER_HELP = [
   "XỬ LÝ TICKET (người xử lý):",
   "- ticket — các ticket đang mở",
@@ -135,8 +154,8 @@ const TICKET_HANDLER_HELP = [
 ];
 
 export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, options: { ticketOnly?: boolean; ticketHandler?: boolean } = {}): string {
-  const ticketLines = ["", ...TICKET_HELP, ...(options.ticketHandler ? ["", ...TICKET_HANDLER_HELP] : [])];
-  if (options.ticketOnly) return ["HƯỚNG DẪN DÙNG BOT TRỢ LÝ", ...ticketLines.slice(1)].join("\n");
+  const ticketLines = ["", ...TASK_HELP, "", ...TICKET_HELP, ...(options.ticketHandler ? ["", ...TICKET_HANDLER_HELP] : [])];
+  if (options.ticketOnly) return ["HƯỚNG DẪN DÙNG BOT TRỢ LÝ", ...TASK_ASSIGNEE_HELP, "", ...TICKET_HELP, ...(options.ticketHandler ? ["", ...TICKET_HANDLER_HELP] : [])].join("\n");
   if (inGroup) {
     return [
       "HƯỚNG DẪN DÙNG BOT TRONG NHÓM",
@@ -150,6 +169,7 @@ export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, option
       "Muốn xem tin cần xử lý hay đổi cấu hình cảnh báo thì nhắn RIÊNG cho bot.",
       "",
       "BÁO TICKET: gọi tên bot rồi «báo lỗi: <nội dung>» (có ảnh thì gửi ảnh trước).",
+      "VIỆC: gọi tên bot rồi «giao Minh: <việc> hạn thứ 6», «việc nhóm», «xong V-12».",
     ].join("\n");
   }
   const lines = [
@@ -226,26 +246,11 @@ async function listPendingText(ctx: ChatCommandContext, deps: AlertToolsDeps, as
 }
 
 async function findPersonForVip(ctx: ChatCommandContext, recipientId: number, name: string, add: boolean): Promise<{ uid: string } | { reply: string }> {
-  // Bảng đối chiếu utf8mb4_unicode_ci không phân biệt dấu / hoa thường: «nam» khớp «Nam», «Nắm»
-  const like = `%${name.replace(/[%_\\]/g, (char) => `\\${char}`)}%`;
-  const [rows] = await ctx.db.query<RowDataPacket[]>(
-    `SELECT c.zalo_uid, COALESCE(NULLIF(c.display_name, ''), c.zalo_name) AS name, c.kind,
-            (COALESCE(NULLIF(c.display_name, ''), c.zalo_name) = ?) AS exact
-     FROM contact c
-     WHERE (c.display_name LIKE ? OR c.zalo_name LIKE ?)
-       AND c.zalo_uid NOT IN (SELECT zalo_uid FROM bot_account WHERE zalo_uid IS NOT NULL)
-       ${add ? "" : "AND c.id IN (SELECT contact_id FROM recipient_vip WHERE recipient_id = ?)"}
-     ORDER BY exact DESC, c.last_dm_at IS NULL, name LIMIT 8`,
-    add ? [name, like, like] : [name, like, like, recipientId]);
+  const rows = await searchContactsByName(ctx.db, name, add ? {} : { vipOfRecipientId: recipientId });
   if (!rows.length) return { reply: add ? `Em không tìm thấy ai tên «${name}» trong Danh bạ.` : `Trong VIP của anh/chị không có ai tên «${name}».` };
-  const exact = rows.filter((row) => Number(row.exact) === 1);
-  if (rows.length === 1 || exact.length === 1) return { uid: String((exact[0] ?? rows[0]).zalo_uid) };
-  const kindLabel = (kind: number) => (kind === ContactKind.Customer ? "khách" : kind === ContactKind.Staff ? "nhân sự" : "chưa phân loại");
-  return {
-    reply: [`Có ${rows.length}${rows.length === 8 ? "+" : ""} người khớp «${name}»:`,
-      ...rows.map((row, index) => `${index + 1}. ${row.name} (${kindLabel(Number(row.kind))})`),
-      `Anh/chị nhắn lại «${add ? "thêm" : "bỏ"} vip <tên đầy đủ>» giúp em.`].join("\n"),
-  };
+  const picked = pickContactMatch(rows);
+  if (picked) return { uid: picked.uid };
+  return { reply: describeContactChoices(rows, name, `${add ? "thêm" : "bỏ"} vip <tên đầy đủ>`) };
 }
 
 /** Một bước đề xuất: trả câu xem trước + nhắc xác nhận, hoặc câu báo lỗi. */
@@ -262,6 +267,7 @@ export async function runChatCommand(ctx: ChatCommandContext, command: ChatComma
     return buildHelpText(ctx.inGroup ? null : ctx.asker, ctx.inGroup, { ticketOnly: ctx.ticketOnly, ticketHandler });
   }
   if (isTicketCommand(command)) return ctx.ticket ? runTicketCommand(ctx.ticket, command, ctx.now) : null;
+  if (isTaskCommand(command)) return ctx.task ? runTaskCommand(ctx.task, command, ctx.now) : null;
   if (ctx.inGroup || ctx.ticketOnly) return null;
   const { asker, alertTools: deps } = ctx;
   if (command.kind === "confirm" || command.kind === "cancel") {

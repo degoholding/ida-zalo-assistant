@@ -9,6 +9,8 @@ import { runAiReview } from "./alerts/ai-review.js";
 import { runReminders } from "./alerts/reminders.js";
 import { telegramSenderFor, watchSessions } from "./alerts/session-watch.js";
 import { backfillMessageSearch } from "./search/message-search-index.js";
+import { runTaskReminders } from "./tasks/task-reminders.js";
+import { runTaskExtraction } from "./tasks/task-proposals.js";
 import { uploadBackups } from "./storage/backup-uploader.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
@@ -65,6 +67,8 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     "alert-reminders": () => runReminders(db, config, safeCalendar()),
     "alert-ai-review": () => runAiReview(db, config),
     "session-watch": () => watchSessions(db, telegramSenderFor(config)),
+    "task-reminders": () => runTaskReminders(db, config, safeCalendar()),
+    "task-extract": () => runTaskExtraction(db, config, safeCalendar()),
     "search-index": async () => {
       const copied = await backfillMessageSearch(db);
       if (copied) log.info(`chép ${copied} tin cũ vào bảng tìm`);

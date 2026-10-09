@@ -16,7 +16,7 @@ function buildPermissions(role: 'admin' | 'manager' | 'staff') {
     ENTITIES.map((entity) => {
       if (role === 'admin') return [entity, { read: true, write: true, export: true, create: true }]
       if (ADMIN_ONLY.includes(entity)) return [entity, { read: false, write: false, export: false, create: false }]
-      const canWrite = role === 'manager' && ['conversation', 'contact', 'group', 'file', 'ticket'].includes(entity)
+      const canWrite = role === 'manager' && ['conversation', 'contact', 'group', 'file', 'ticket', 'task'].includes(entity)
       return [entity, { read: true, write: canWrite, export: role === 'manager', create: false }]
     }),
   ) as Record<string, Record<string, boolean>>
@@ -36,7 +36,7 @@ describe('sidebar gating by role', () => {
 
   it('hides every admin-only screen from a staff member', () => {
     // «Tìm tin» (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Công ty'])
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Công ty'])
   })
 
   it('gives a manager the same menu as staff — write rights do not unlock admin screens', () => {
@@ -59,6 +59,11 @@ describe('menu items point at registered screens', () => {
   it('has a menu entry for the Ticket list that staff can see (read-only)', () => {
     expect(NAV_ITEMS.find((item) => item.path === appRoutes.tickets.list)?.entity).toBe('ticket')
     expect(visibleLabels('staff')).toContain('Ticket')
+  })
+
+  it('has a menu entry for the Việc (task) list that staff can see (read-only)', () => {
+    expect(NAV_ITEMS.find((item) => item.path === appRoutes.tasks.list)?.entity).toBe('task')
+    expect(visibleLabels('staff')).toContain('Việc')
   })
 
   it('never repeats a path — the breadcrumb picks the first prefix match', () => {

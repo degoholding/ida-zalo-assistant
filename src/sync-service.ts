@@ -41,7 +41,8 @@ import { AlertService } from "./alerts/alert-service.js";
 import { workCalendarFrom } from "./background.js";
 import { recordAudit } from "./web/api/audit-log.js";
 import { findThreadById, GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
-import type { ContactMessagePayload, TicketDeps } from "./tickets/ticket-service.js";
+import type { TicketDeps } from "./tickets/ticket-service.js";
+import type { ContactMessagePayload } from "./messaging/contact-message.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
 import type { FriendRequestManager } from "./zalo/friend-requests.js";
@@ -155,7 +156,7 @@ export class SyncService {
       const thread = await findThreadById(this.db, payload.threadId);
       if (!thread) return;
       const runner = await this.runnerForThread(thread);
-      if (payload.text) await runner.sendThreadText(thread, payload.text);
+      if (payload.text) await runner.sendThreadText(thread, payload.text, payload.mentionUids);
       for (const id of ready) await runner.sendThreadStoredFile(thread, id);
       return;
     }

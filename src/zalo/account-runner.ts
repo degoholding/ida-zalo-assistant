@@ -19,6 +19,7 @@ import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUP
 import { decryptJson } from "../crypto/session-cipher.js";
 import type { RowDataPacket } from "mysql2";
 import type { Db } from "../db/pool.js";
+import { buildMentions, type MentionableMember } from "./group-mentions.js";
 import { createLogger, describeError } from "../logger.js";
 import { sanitizeFileName, type AttachmentDownloader } from "../sync/attachment-downloader.js";
 import type { FileStorage } from "../storage/file-storage.js";
@@ -55,7 +56,7 @@ import { AckTracker, enqueueDirectReply, type AckState, type DirectReplyPayload,
 import type { JobRow } from "../jobs/job-queue.js";
 import { recordReaction } from "../flags/message-flags.js";
 import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
-import { isTicketCommand, parseChatCommand } from "../assistant/chat-commands.js";
+import { isTaskCommand, isTicketCommand, parseChatCommand } from "../assistant/chat-commands.js";
 import { toStyledContent } from "./rich-text.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
 import {
@@ -500,7 +501,8 @@ export class AccountRunner {
     const command = parsed.kind === MessageKind.Text ? parseChatCommand(parsed.text) : null;
     // Ticket (đại ca 08/10/2026): AI nhắn được cho bot đều báo / theo dõi ticket được, kể cả khách — chỉ lệnh ticket +
     // «hướng dẫn»; câu hỏi khác của người chưa có vai trò vẫn không trả lời.
-    const ticketAllowed = isTicketCommand(command) || command?.kind === "help";
+    // Lệnh việc: người phụ trách (nhân viên chưa có vai trò) báo «xong V-12» trong tin riêng — quyền kiểm theo từng việc
+    const ticketAllowed = isTicketCommand(command) || isTaskCommand(command) || command?.kind === "help";
     const canAsk = result.contact.role !== ContactRole.None || await isActiveRecipientUid(this.db, incoming.senderUid) || ticketAllowed;
     if (!this.assistant || !canAsk) {
       this.log.info(`tin riêng từ ${who}: đã lưu, không trả lời (${this.assistant ? "chưa có vai trò" : "trợ lý tắt"})`);
@@ -731,15 +733,28 @@ export class AccountRunner {
     if (msgId) await recordOutgoingMessage(this.db, thread, { uid: this.ownUid, name: this.account.display_name || this.account.label }, String(msgId), text);
   }
 
-  /** Bot tự nhắn vào một cuộc có sẵn (riêng / nhóm) — báo ticket (08/10/2026). Lưu như tin bot gửi. */
-  async sendThreadText(thread: GroupRow, text: string): Promise<void> {
+  /**
+   * Bot tự nhắn vào một cuộc có sẵn (riêng / nhóm) — báo ticket (08/10/2026), nhắc việc (phase 7). Lưu như tin bot gửi.
+   * `mentionUids` (chỉ nhóm): «@Tên» trong chữ thành thẻ nhắc thật cho những người này — họ nhận thông báo của Zalo.
+   */
+  async sendThreadText(thread: GroupRow, text: string, mentionUids: string[] = []): Promise<void> {
     const api = this.api;
     if (!api) throw new Error("bot chưa kết nối");
     const { peer, type } = this.threadTarget(thread);
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
+    let members: MentionableMember[] = [];
+    if (type === ThreadType.Group && mentionUids.length) {
+      const [rows] = await this.db.query<RowDataPacket[]>(
+        "SELECT zalo_uid, display_name, zalo_name FROM group_member WHERE group_id = ? AND left_at IS NULL AND zalo_uid IN (?)",
+        [thread.id, mentionUids]);
+      members = rows.flatMap((row) => [...new Set([String(row.display_name ?? ""), String(row.zalo_name ?? "")])]
+        .filter(Boolean).map((name) => ({ uid: String(row.zalo_uid), name })));
+    }
     for (const chunk of splitForZalo(text)) {
       const styled = toStyledContent(chunk);
-      const response = await this.sender.send(() => api.sendMessage(styled, peer, type));
+      const mentions = members.length ? buildMentions(styled.msg, members) : [];
+      const content = mentions.length ? { ...styled, mentions } : styled;
+      const response = await this.sender.send(() => api.sendMessage(content, peer, type));
       const msgId = response.message?.msgId;
       if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), styled.msg);
     }

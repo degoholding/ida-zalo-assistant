@@ -135,6 +135,12 @@ khởi động lại MySQL TRƯỚC khi deploy; chưa có thì tự lùi về qu
 `src/web/api/message-search-api.ts`, `src/assistant/search-messages-tool.ts`, `web/src/modules/message-search/`. Chi tiết,
 số đo: doc 06 mục Phase 6.
 
+**Checklist công việc** (phase 7, 09/10/2026): bảng `task` (migration 024), mã `V-12`. Việc vào từ lệnh («giao Minh: <việc>
+hạn thứ 6») / câu tự nhiên với trợ lý (`create_task`, `task_action`, `list_tasks`), recap họp (`save_recap_tasks`), hoặc AI tự
+bắt câu giao việc trong nhóm (việc nền `task-extract`, chờ người giao «ok V-12»). Bot nhắc người phụ trách 3 mốc, tag trong
+nhóm (việc nền `task-reminders`); quá hạn báo người giao + sếp. Mã: `src/tasks/` (service một chỗ cho Zalo + web, khuôn
+ticket), màn web «Việc» `web/src/modules/tasks/`. Chi tiết: doc 06 mục Phase 7.
+
 **Quy trình báo cáo** (07/10/2026): câu hỏi có «báo cáo / tổng hợp / thống kê / xuất file / Excel / PDF / recap»
 (`isReportRequest`) → chạy mô hình VIỆC NẶNG ngay từ đầu, tối đa 10 vòng gọi công cụ, prompt gắn thêm quy trình 4 bước (chốt phạm
 vi → lấy đủ dữ liệu → tự kiểm số → khung chuẩn: tóm tắt có số / chi tiết có cột Nguồn / bất thường / việc cần làm) kèm 1 ví dụ

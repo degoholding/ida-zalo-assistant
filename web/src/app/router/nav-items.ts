@@ -7,6 +7,7 @@ import {
   FileText,
   History,
   LifeBuoy,
+  ListChecks,
   MessageCircle,
   MessageSquareText,
   Search,
@@ -43,6 +44,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Nhóm', path: appRoutes.groups.list, icon: Users, entity: 'group' },
   { label: 'Tệp', path: appRoutes.files.list, icon: FileText, entity: 'file' },
   { label: 'Ticket', path: appRoutes.tickets.list, icon: LifeBuoy, entity: 'ticket' },
+  { label: 'Việc', path: appRoutes.tasks.list, icon: ListChecks, entity: 'task' },
   //  `/api/imports` cũng vậy — chỉ quản trị.
   { label: 'Nhập lịch sử', path: appRoutes.imports.zaloWeb, icon: History, entity: 'setting', action: 'write' },
   { label: 'Công ty', path: appRoutes.companies.list, icon: Building2, entity: 'company' },

@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.2 · 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1` @ `2cb61ac` (đang chạy trên VPS, botida.degoholding.vn).
+> Bản 1.3 · 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1` @ `2cb61ac` (đang chạy trên VPS, botida.degoholding.vn).
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -23,16 +23,16 @@
 | **5** | N1 — Check tin nhắn và cảnh báo | **Xong** 08/10 | 9 / 9 |
 | **11** | Ticket qua bot (đại ca thêm 08/10, làm trước phase 6) | **Xong** 08/10 | 7 / 7 |
 | **6** | N4 — Tìm kiếm tin nhắn | **Xong** 09/10 (phần GĐ1) | 5 / 6 |
-| **7** | N5 — Checklist công việc | **Chưa** | 0 / 5 |
+| **7** | N5 — Checklist công việc | **Xong** 09/10 | 5 / 5 |
 | **8** | N6 — Bản tin và báo cáo | Một phần | 3 / 7 |
 | **9** | N7 — Gửi tin theo lệnh | Một phần | 1 / 6 |
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 1 / 9 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
-08/10; tìm tin (phase 6) xong 09/10 — tiếp theo là phase 7 (checklist).
+08/10; tìm tin (phase 6) và checklist công việc (phase 7) xong 09/10 — tiếp theo là phase 8 (bản tin và báo cáo).
 
-Đối chiếu 27 câu của IDA (mục 9): **9 Đạt · 12 Một phần · 6 Chưa** sau phase 6 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
+Đối chiếu 27 câu của IDA (mục 9): **11 Đạt · 12 Một phần · 4 Chưa** sau phase 7 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
 
 ## 1. Đã chốt
@@ -265,15 +265,61 @@ Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/a
 | Màn tìm tin trên web, nút «xem các tin trước và sau» | 21 | Xong 09/10 |
 | Tìm bằng câu tự nhiên (giai đoạn 2) | 21 | Một phần (trợ lý hiểu câu hỏi tự nhiên rồi tự chọn từ khóa; chưa tìm theo nghĩa) |
 
-### Phase 7 — N5 Checklist (Chưa)
+### Phase 7 — N5 Checklist (Xong 09/10)
+
+Plan: `plans/261009-1416-phase-07-checklist/`. **Đã chốt (đại ca, 09/10):** nhắc 3 mốc gửi NGƯỜI PHỤ TRÁCH (tag trong nhóm
+nguồn, không ở nhóm thì nhắn riêng), quá hạn báo thêm người giao + sếp (chung trần 3 báo / ngày); việc vào từ lệnh / câu tự
+nhiên + recap họp + AI tự bắt; việc AI bắt phải được NGƯỜI GIAO (hoặc sếp) xác nhận mới vào checklist.
+
+**Đã làm (09/10):**
+- **Bảng việc** (migration 024: `task` + nhật ký `task_event`), mã `V-12`, trạng thái chờ xác nhận / đang làm / xong / hủy,
+  ưu tiên, người phụ trách + người giao (người trên Zalo), nhóm + tin nguồn, hạn (ngày hoặc ngày giờ). Một service cho Zalo
+  và web (`src/tasks/task-service.ts`, khuôn ticket); báo tin qua hàng đợi `job` — trong nhóm thì TAG người đó (Zalo báo cho
+  họ; `sendThreadText` nay gắn được thẻ nhắc).
+- **Lệnh gõ** (có dấu hay không): «việc», «việc nhóm», «việc quá hạn», «việc chờ xác nhận», «giao Minh: <việc> hạn thứ 6»,
+  «xong V-12 <ghi chú>», «dời V-12 mai 17h», «giao lại V-12 <tên>», «hủy V-12», «mở lại V-12», «ok / bỏ V-12», «V-12: …»,
+  «V-12». Đọc hạn: hôm nay / mai / mốt / thứ 2…CN / tuần sau / dd/mm[/yyyy] / giờ «17h30», «3h chiều» / cuối tuần / cuối tháng;
+  không hiểu thì hỏi lại, không đoán. «giao hàng: …» không bị hiểu nhầm là giao việc (tên phải viết hoa hoặc «giao cho / @»).
+- **Câu tự nhiên** qua công cụ trợ lý `list_tasks` / `create_task` / `task_action` — đi đúng đường lệnh gõ, cùng luật quyền.
+  **Recap họp** hỏi «lưu các việc này vào checklist và nhắc theo hạn?» → `save_recap_tasks` (thay nhắc hẹn Zalo lặp hằng ngày).
+- **Quyền**: sếp (có vai trò / người nhận) làm mọi thứ; người giao: dời hạn, giao lại, hủy, xác nhận; người phụ trách: xong,
+  ghi chú; trong nhóm chỉ thấy việc của nhóm đó. Chỉ nhân sự / sếp được giao việc (khách nhắn «giao …» bị chặn); người phụ
+  trách chưa có vai trò vẫn nhắn riêng «xong V-12» được (cổng tin riêng mở cho lệnh việc).
+- **Nhắc 3 mốc** (worker mỗi phút, `task-reminders`): đầu giờ làm ngày làm việc liền trước ngày hạn · đầu giờ làm ngày hạn ·
+  quá hạn (hạn có giờ: sau 1 giờ làm việc; hạn chỉ ngày: đầu giờ ngày làm việc kế tiếp). Gộp mọi việc của một người trong
+  một nhóm thành MỘT tin; mỗi mốc một lần; chỉ gửi mốc cao nhất (bot tắt mấy ngày không gửi bù); không nhắc giờ yên lặng /
+  ngày nghỉ; giao / dời hạn sau một mốc thì bỏ mốc đó. Quá hạn: người giao nhận tin riêng, sếp theo dõi nhóm nhận «VIỆC QUÁ
+  HẠN» (loại báo `TaskOverdue`, chung trần với nhắc tin chờ).
+- **AI tự bắt câu giao việc** (worker 5 phút, `task-extract`): lượt RIÊNG (lượt AI bắt tin khẩn bỏ qua tin đã dính từ khóa
+  «công nợ», «hóa đơn» — đúng chỗ hay có câu giao việc); chỉ tin của nhân sự / sếp có dấu hiệu giao việc (@nhắc, «nhờ»,
+  «giao», «hạn», «trước thứ…») mới đưa AI; che dữ liệu cá nhân, không đưa nhóm Mật, tính vào trần token ngày. Đề xuất → việc
+  «chờ xác nhận», nhắn riêng NGƯỜI NÓI câu đó; «ok V-12» → vào checklist, tag người làm. ~2 ngày làm việc không ai xác nhận
+  → tự bỏ. Một câu chỉ sinh một đề xuất dù lượt chạy lại.
+- **Màn web «Việc»** (menu trái, quyền `task`: mọi vai trò xem trong phạm vi nhóm, quản trị + quản lý sửa / tạo): danh sách
+  (mặc định chờ xác nhận + đang làm, hạn gần nhất trước; lọc trạng thái, quá hạn, thiếu người, thiếu hạn, người phụ trách,
+  nhóm, hạn), chi tiết + «Xem tin nguồn» + nhật ký, nút xác nhận / bỏ / xong / dời hạn / giao lại / hủy / mở lại / ghi chú
+  (đi đúng service như trên Zalo, có «Lịch sử thao tác»), tạo việc trên web. Việc không gắn nhóm chỉ người dùng không bị giới
+  hạn nhóm thấy. Dòng thời gian sự kiện dùng chung với Ticket (`web/src/shared/event-timeline/`). Kèm sửa: màn Ticket từng
+  lỗi «Lịch sử thao tác» (API không nhận thực thể `ticket`).
+- Chạy thật trên DB local (mô hình AI giả cho lượt bắt việc): giao trong nhóm → tag đúng người; khách bị chặn; người ngoài
+  không thấy việc; nhắc gộp «quá hạn + tới hạn hôm nay»; chạy lại không gửi trùng; đề xuất → «ok» → vào checklist.
+- **Review (agent, 09/10) — đã sửa:** (1) khóa chống trùng của tin nhắc gồm cả hạn + người phụ trách (dời hạn / giao lại rồi
+  tới cùng mốc thì tin nhắc mới từng bị nuốt im lặng 14 ngày); (2) chỉ TAG trong nhóm NỘI BỘ bot còn ở — nhóm khách hàng không
+  bao giờ thấy việc nội bộ, nhắn riêng thay; (3) hạn «dd/mm» lùi quá 7 ngày hiểu là năm sau, hạn vô lý (trước hôm qua / quá
+  2 năm) bị từ chối, hạn đã qua lúc giao thì coi như đã nhắc quá hạn (không bắn tin cho 3 bên); (4) đổi trạng thái kèm điều
+  kiện «trạng thái vẫn như lúc đọc» (hai người cùng bấm không ghi đè nhau); (5) lưu recap chống tạo trùng + MỘT tin gộp vào
+  nhóm thay vì tối đa 30 tin; (6) lượt bắt việc không bỏ sót khi lô bị cắt, tin đề xuất giờ yên lặng hoãn tới đầu giờ làm;
+  (7) «v3», «ok v2» trong câu thường không còn bị hiểu là lệnh; «xong V-12 rồi nhé» không lưu «rồi nhé» làm ghi chú; đọc được
+  hạn đúng dạng bot in («T6 16/10»). **Chưa làm:** giới hạn số lệnh việc có báo tin / người / giờ (lệnh gõ chưa tính vào trần
+  câu hỏi / giờ); sếp vượt trần ngày thì việc quá hạn lượt đó không báo sếp (chưa có bản tin gom — phase 8).
 
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
-| Bảng việc (việc, người, hạn, trạng thái, tin nguồn) + màn web | 22 | Chưa |
-| Bot đề xuất việc từ tin nhắn, người nhận xác nhận mới vào checklist | 22 | Chưa |
-| Cập nhật bằng câu tự nhiên («xong việc…», «dời hạn…») | 22 | Chưa |
-| Nhắc người nhận 3 mốc: trước hạn 1 ngày, đúng hạn, quá hạn | 23 | Chưa |
-| Nhắc người phụ trách khi người nhận ra lệnh và xác nhận | 23 | Chưa |
+| Bảng việc (việc, người, hạn, trạng thái, tin nguồn) + màn web | 22 | Xong 09/10 |
+| Bot đề xuất việc từ tin nhắn, người giao / sếp xác nhận mới vào checklist | 22 | Xong 09/10 (chưa đo tỉ lệ bắt đúng trên tin thật) |
+| Cập nhật bằng lệnh / câu tự nhiên («xong việc…», «dời hạn…») | 22 | Xong 09/10 |
+| Nhắc người phụ trách 3 mốc: trước hạn 1 ngày, đúng hạn, quá hạn | 23 | Xong 09/10 |
+| Quá hạn: báo người giao + sếp (trong trần báo / ngày) | 23 | Xong 09/10 |
 
 ### Phase 8 — N6 Bản tin và báo cáo (Một phần)
 
@@ -337,8 +383,8 @@ Mã: `src/tickets/`, lệnh ở `src/assistant/chat-commands.ts`, API `src/web/a
 | 19 | Excel qua Zalo + lưu web | 8 | Đạt |
 | 20 | Lưu 24 tháng / tệp 6 tháng | 1, 3 | Đạt (08/10) |
 | 21 | Tìm tin + xem trước / sau | 6 | Đạt (09/10) |
-| 22 | Checklist | 7 | Chưa |
-| 23 | Nhắc hạn | 7 | Chưa |
+| 22 | Checklist | 7 | Đạt (09/10) |
+| 23 | Nhắc hạn | 7 | Đạt (09/10) |
 | 24 | Bản tin sáng | 8 | Chưa |
 | 25 | Báo cáo tuần / tháng | 8 | Một phần |
 | 26 | Gửi theo lệnh | 9 | Chưa |

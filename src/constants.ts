@@ -125,12 +125,68 @@ export enum TicketEventKind {
   Reopened = 6,
 }
 
+/** Trạng thái việc (bảng task, phase 7). Giao diện chép sang web/src/modules/tasks/types. */
+export enum TaskStatus {
+  // Đề xuất (AI bắt từ tin) chờ người giao / sếp xác nhận
+  Proposed = 1,
+  Open = 2,
+  Done = 3,
+  Cancelled = 4,
+}
+
+/** Mức ưu tiên của việc — như cột «Ưu tiên» của recap họp. */
+export enum TaskPriority {
+  High = 1,
+  Normal = 2,
+  Low = 3,
+}
+
+/** Việc vào checklist từ đâu. */
+export enum TaskSource {
+  // Lệnh gõ «giao …»
+  Command = 1,
+  // Câu tự nhiên với trợ lý (công cụ create_task)
+  Assistant = 2,
+  // Phân công trong recap họp
+  Recap = 3,
+  // AI tự bắt câu giao việc trong nhóm (lượt đọc tin 5 phút)
+  AiReview = 4,
+  Web = 5,
+}
+
+/** Mốc nhắc hạn đã gửi (task.remind_stage). */
+export enum TaskRemindStage {
+  None = 0,
+  // Ngày làm việc liền trước ngày hạn, đầu giờ làm
+  DayBefore = 1,
+  Due = 2,
+  Overdue = 3,
+}
+
+/** Loại dòng nhật ký việc (bảng task_event). */
+export enum TaskEventKind {
+  Created = 1,
+  Confirmed = 2,
+  Rejected = 3,
+  Done = 4,
+  Reopened = 5,
+  Rescheduled = 6,
+  Reassigned = 7,
+  Cancelled = 8,
+  Note = 9,
+  Reminded = 10,
+  // Đề xuất không ai xác nhận, tự bỏ
+  Expired = 11,
+}
+
 /** Loại báo trong bảng alert_log (phase 5). */
 export enum AlertKind {
   // Tin KHẨN / VIP — báo ngay, kể cả giờ yên lặng, không tính vào trần mỗi ngày
   Urgent = 1,
   // Nhắc tin chờ quá giờ chưa ai trả lời — tối đa N lần báo / ngày, không báo trong giờ yên lặng
   Reminder = 2,
+  // Việc trong checklist quá hạn (phase 7) — chung trần N lần báo / ngày với Reminder; cột message_id giữ id VIỆC
+  TaskOverdue = 3,
 }
 
 /** Mức ưu tiên của một tin (bảng message_flag). */

@@ -21,7 +21,7 @@ export interface Principal {
 export const SYSTEM_PRINCIPAL: Principal = { userId: null, tenantId: 1, fullName: "Hệ thống", email: "", role: UserRole.Admin, groupIds: null };
 
 /** Thực thể của giao diện — phải khớp `ENTITIES` ở web/src/core/authorization/permission-types.ts. */
-export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket"] as const;
+export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task"] as const;
 export type Entity = (typeof ENTITIES)[number];
 export type Action = "read" | "write" | "create" | "export";
 export type PermissionMap = Record<string, Record<Action, boolean>>;
@@ -38,7 +38,8 @@ export function permissionsFor(role: UserRole): PermissionMap {
     if (role === UserRole.Admin) return [entity, { read: true, write: true, export: true, create: CREATABLE.has(entity) }];
     const adminOnly = ["bot_account", "setting", "user", "recipient", "audit"].includes(entity);
     if (adminOnly) return [entity, NONE];
-    const canWrite = role === UserRole.Manager && ["conversation", "contact", "group", "file", "ticket"].includes(entity);
+    // Việc (phase 7): quản lý tạo / thao tác như ticket; nhân viên chỉ xem.
+    const canWrite = role === UserRole.Manager && ["conversation", "contact", "group", "file", "ticket", "task"].includes(entity);
     return [entity, { read: true, write: canWrite, export: role === UserRole.Manager, create: false }];
   })) as PermissionMap;
 }

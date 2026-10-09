@@ -44,6 +44,8 @@ export const ENTITIES = [
   'recipient',
   // Màn Ticket (08/10/2026): Quản trị mọi quyền; Quản lý xem + thao tác (nhận / xong / hủy / nhắn); Nhân viên chỉ xem.
   'ticket',
+  // Màn Việc (phase 7, 09/10/2026): cùng luật quyền như ticket — Quản trị + Quản lý tạo / thao tác, Nhân viên chỉ xem.
+  'task',
 ] as const
 
 export type PermissionEntity = (typeof ENTITIES)[number]

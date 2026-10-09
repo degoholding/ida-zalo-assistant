@@ -69,7 +69,7 @@ export function parseReviewAnswer(text: string): { id: number; level: "khan" | "
   });
 }
 
-async function systemTokensToday(db: Db, now: Date): Promise<number> {
+export async function systemTokensToday(db: Db, now: Date): Promise<number> {
   const dayStart = new Date(Math.floor((now.getTime() + 7 * 3_600_000) / 86_400_000) * 86_400_000 - 7 * 3_600_000);
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT (SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM assistant_turn WHERE created_at >= ?)

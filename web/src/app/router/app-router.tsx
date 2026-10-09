@@ -13,6 +13,7 @@ import { groupsModule } from '@/modules/groups/routes'
 import { importsModule } from '@/modules/imports/routes'
 import { recipientsModule } from '@/modules/recipients/routes'
 import { settingsModule } from '@/modules/settings/routes'
+import { tasksModule } from '@/modules/tasks/routes'
 import { ticketsModule } from '@/modules/tickets/routes'
 import { usersModule } from '@/modules/users/routes'
 import { appRoutes } from '@/shared/constants/app-routes'
@@ -31,6 +32,7 @@ const MODULE_ROUTES = [
   filesModule,
   messageSearchModule,
   ticketsModule,
+  tasksModule,
   importsModule,
   companiesModule,
   recipientsModule,

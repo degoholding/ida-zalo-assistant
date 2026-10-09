@@ -28,6 +28,10 @@ const RULES: Rule[] = [
   // Ticket (08/10/2026): xem + thao tác theo quyền «ticket»; sửa danh sách người xử lý KHÔNG khai → chỉ quản trị
   ["GET", /^\/api\/(tickets|ticket-handlers)(\/|$)/, "ticket", "read"],
   ["WRITE", /^\/api\/tickets\/\d+\/actions$/, "ticket", "write"],
+  // Việc (phase 7): xem = mọi vai trò trong phạm vi nhóm; tạo / thao tác = quản trị + quản lý (quyền «task»)
+  ["GET", /^\/api\/tasks(\/|$)/, "task", "read"],
+  ["WRITE", /^\/api\/tasks$/, "task", "write"],
+  ["WRITE", /^\/api\/tasks\/\d+\/actions$/, "task", "write"],
   ["WRITE", /^\/api\/accounts(\/|$)/, "bot_account", "write"],
 ];
 

@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { AttachmentStatus, ConversationType, JobKind, TicketEventKind, TicketStatus } from "../constants.js";
+import { AttachmentStatus, ConversationType, TicketEventKind, TicketStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
-import { enqueueJob } from "../jobs/job-queue.js";
+import { enqueueContactMessage } from "../messaging/contact-message.js";
 
 // Ticket qua bot (08/10/2026, đại ca chốt: việc chung của IDA, chỉ trong bot, không nối ERP). Một chỗ cho mọi thao tác —
 // lệnh gõ trên Zalo (src/assistant/chat-commands.ts) và màn Ticket trên web (src/web/api/tickets-api.ts) đều gọi vào đây,
@@ -43,15 +43,6 @@ export interface TicketRow {
   handler_name: string;
   resolution: string;
   created_at: Date;
-}
-
-export interface ContactMessagePayload {
-  /** Nhắn vào một cuộc có sẵn (riêng / nhóm) — hoặc nhắn riêng một người theo mã Zalo */
-  threadId?: number;
-  zaloUid?: string;
-  name?: string;
-  text?: string;
-  attachmentIds?: number[];
 }
 
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
@@ -101,15 +92,7 @@ export async function isTicketHandler(db: Db, zaloUid: string, tenantId = 1): Pr
   return rows.length > 0;
 }
 
-/** Tin riêng / tin vào một cuộc — xếp hàng đợi. Lỗi gửi thì hàng đợi thử lại; báo trễ quá 6 giờ thì thôi. */
-async function enqueueMessage(deps: TicketDeps, payload: ContactMessagePayload, dedupeKey: string, delayMs = 0): Promise<void> {
-  const target = payload.threadId ? `thread:${payload.threadId}` : `uid:${payload.zaloUid}`;
-  await enqueueJob(deps.db, {
-    kind: JobKind.ContactMessage, payload, dedupeKey, serialKey: `contact:${target}`,
-    runAfter: delayMs ? new Date(Date.now() + delayMs) : undefined, expiresInMs: 6 * 60 * 60_000, maxAttempts: 4,
-  });
-  deps.wakeJobs?.();
-}
+const enqueueMessage = enqueueContactMessage;
 
 async function recordEvent(db: Db, ticketId: number, kind: TicketEventKind, actor: TicketActor, note = ""): Promise<void> {
   await db.query("INSERT INTO ticket_event (ticket_id, kind, actor_name, via, note) VALUES (?, ?, ?, ?, ?)",

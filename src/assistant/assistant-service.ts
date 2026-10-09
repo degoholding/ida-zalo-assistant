@@ -24,6 +24,8 @@ import { ALERT_TOOL_DECLARATIONS, ALERT_TOOLS_PROMPT, resolveAlertAsker, type Al
 import { parseChatCommand, runChatCommand } from "./chat-commands.js";
 import { buildTicketContext } from "../tickets/ticket-commands.js";
 import { TICKET_TOOL_DECLARATIONS, TICKET_TOOLS_PROMPT } from "../tickets/ticket-tools.js";
+import { buildTaskContext } from "../tasks/task-commands.js";
+import { TASK_TOOL_DECLARATIONS, TASK_TOOLS_PROMPT } from "../tasks/task-tools.js";
 import type { TicketDeps } from "../tickets/ticket-service.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
@@ -96,8 +98,8 @@ function groupScopePrompt(groupName: string, memberNames: string[]): string {
   Xuất file (PDF tóm tắt, Excel / Google Sheets) được — tệp gửi thẳng vào nhóm, link Sheets gửi vào nhóm.
   Tạo cuộc họp Google Meet: create_meeting (nếu có) rồi gửi link Meet vào nhóm, kèm create_reminder cùng giờ để cả nhóm được báo.
   Thiếu giờ / nội dung thì hỏi lại. Làm xong báo rõ đã làm gì (tiêu đề, giờ Việt Nam, lặp lại).
-- Người hỏi đồng ý «nhắc hằng ngày» sau một bản recap: tạo MỘT create_reminder repeat=daily (mặc định 8:30 sáng mai nếu không nói giờ),
-  tiêu đề gom việc theo người («Việc sau họp K52: @A — …; @B — …», ngắn gọn) — không tạo mỗi việc một nhắc hẹn.${members}`;
+- Người hỏi đồng ý lưu việc sau một bản recap: save_recap_tasks với ĐÚNG danh sách «Phân công» của bản recap (người, việc, hạn) — bot
+  tự nhắc từng người theo hạn trong nhóm này; KHÔNG tạo nhắc hẹn Zalo lặp hằng ngày. Báo lại các việc đã lưu + dòng cần bổ sung.${members}`;
 }
 
 export interface AssistantReply {
@@ -134,7 +136,9 @@ Việc bạn làm được:
    (create_meeting_recap_pdf: TL;DR, các phần nội dung, quyết định, công việc cần làm — người / hạn / ưu tiên, mốc thời gian, vấn đề còn mở).
    Nội dung không phải cuộc họp / không có việc gì thì chỉ tóm tắt, không xuất PDF. Câu trả lời trên Zalo NGẮN: 2–3 ý TL;DR, rồi
    «Phân công:» mỗi dòng «- Tên: việc (hạn)» gom theo người; nói tệp PDF đang được gửi; KẾT THÚC bằng câu hỏi
-   «Anh/chị có muốn em nhắc các việc này hằng ngày trong nhóm không ạ?» (chỉ hỏi khi có việc được giao). Chỉ ghi người / hạn khi trong ghi âm có nói, không đoán.
+   «Anh/chị có muốn em lưu các việc này vào checklist và nhắc từng người theo hạn không ạ?» (chỉ hỏi khi có việc được giao). Chỉ ghi người / hạn khi trong ghi âm có nói, không đoán.
+- Tìm lại một trao đổi cũ theo từ khóa («ai nhắc tới…», «tìm tin về…», «X nói gì về…»): search_messages (nhanh, không phải đọc cả
+  nhóm); trả lời kèm nhóm · người · giờ của từng tin tìm được. Không thấy thì nói không thấy, gợi ý từ khóa khác.
 9. Đọc LINK người dùng gửi (read_link): Google Sheets (mọi sheet), Google Docs, Slides, tệp Google Drive, trang web. «Đọc / recap link (của X)»
    thì tìm link trong các tin gần nhất (hoặc get_group_messages) rồi read_link — KHÔNG đọc tệp khác thay cho link; không thấy link thì hỏi lại.
 10. XUẤT FILE từ tài liệu / link đã đọc: người hỏi muốn «xuất file / PDF / gửi file» → create_summary_pdf (mặc định); muốn «Excel / Sheets / bảng»
@@ -219,6 +223,11 @@ export class AssistantService {
       contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role },
       threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
     }) : undefined;
+    // Việc (checklist, phase 7) đi cùng ticket: cùng hàng đợi báo tin
+    const task = tickets ? buildTaskContext({ db: this.db, wakeJobs: tickets.wakeJobs }, {
+      contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role, kind: request.contact.kind },
+      threadId: request.threadId, messageId: request.questionMessageId, groupId: request.groupScope?.groupId ?? null,
+    }) : undefined;
     const command = parseChatCommand(request.question);
     if (command) {
       const alertTools = this.options.alertTools;
@@ -226,7 +235,7 @@ export class AssistantService {
       const contact = request.contact;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
-      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, ticketOnly }, command);
+      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, ticketOnly }, command);
       if (text !== null) {
         await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: command }], model: "lệnh" });
         return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };
@@ -311,6 +320,7 @@ export class AssistantService {
     };
     context.meetings = this.options.meetingScheduler;
     context.ticket = ticket;
+    context.task = task;
     const scope = request.groupScope;
     // Công cụ cảnh báo: chỉ tin riêng, người hỏi có vai trò hoặc là người nhận
     const alertAsker = !scope && this.options.alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
@@ -335,11 +345,12 @@ export class AssistantService {
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
       ...(alertAsker ? ALERT_TOOL_DECLARATIONS : []),
       ...(ticket ? TICKET_TOOL_DECLARATIONS : []),
+      ...(task ? TASK_TOOL_DECLARATIONS : []),
     ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
     const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
-      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "");
+      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "") + (task ? TASK_TOOLS_PROMPT : "");
     const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
     const contents = scope ? [] : mask(await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid));
     // Câu hỏi của chính người hỏi giữ nguyên (họ có thể đang hỏi đúng một số điện thoại); ngữ cảnh nhóm kèm theo thì che
