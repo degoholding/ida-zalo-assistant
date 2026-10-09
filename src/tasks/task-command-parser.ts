@@ -7,6 +7,7 @@ import type { TaskPriority, TaskSource } from "../constants.js";
 //   giao Minh: <việc> [hạn <…>] · giao việc cho anh Minh: … · giao @Minh: …
 //   V-12 · V-12: <ghi chú> · xong V-12 [ghi chú] · V-12 xong rồi · dời V-12 <hạn> · giao lại V-12 <tên>
 //   hủy V-12 [lý do] · mở lại V-12 · ok V-12 / bỏ V-12 (đề xuất)
+//   Gõ kiểu lệnh của đặc tả IDA cũng được: /viec, /xong V-12, /doihan V-12 05/10, /giao Minh: …
 
 export type TaskListScope = "mine" | "group" | "overdue" | "proposed";
 
@@ -47,7 +48,8 @@ function splitTitleAndDue(raw: string): { title: string; dueText: string } {
 }
 
 export function parseTaskCommand(input: string): TaskCommand | null {
-  const raw = input.normalize("NFC").trim();
+  // «/xong V-12», «/doihan V-12 05/10», «/viec» — đúng cách gõ trong tiêu chí nghiệm thu N5 của IDA: bỏ «/» đầu câu
+  const raw = input.normalize("NFC").trim().replace(/^\/\s*/, "");
   if (!raw || raw.length > MAX_INPUT) return null;
   const folded = foldKeepLength(raw.toLowerCase());
   const rest = (match: RegExpMatchArray) => raw.slice((match.index ?? 0) + match[0].length).trim();
@@ -83,7 +85,7 @@ export function parseTaskCommand(input: string): TaskCommand | null {
   }
   match = folded.match(new RegExp(String.raw`^${ID}\s+(?:da\s+)?(?:xong|hoan thanh)(?:\s+roi)?\s*[.!]*$`));
   if (match) return { kind: "task_done", taskId: id(match[1]), note: "" };
-  match = folded.match(new RegExp(String.raw`^(?:doi han|doi|gia han|lui han|dat han)\s+(?:viec\s+)?${ID}\s+(?:sang\s+|den\s+|toi\s+|thanh\s+|la\s+|:\s*)?`));
+  match = folded.match(new RegExp(String.raw`^(?:doi han|doihan|doi|gia han|giahan|lui han|dat han)\s+(?:viec\s+)?${ID}\s+(?:sang\s+|den\s+|toi\s+|thanh\s+|la\s+|:\s*)?`));
   if (match) {
     const dueText = rest(match);
     return dueText ? { kind: "task_reschedule", taskId: id(match[1]), dueText } : null;

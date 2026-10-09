@@ -59,6 +59,17 @@ test("thao tác theo mã: xong / dời / giao lại / hủy / mở lại / ok / 
   assert.equal(parseTaskCommand("dời V-12"), null);
 });
 
+// Tiêu chí nghiệm thu N5 (sheet IDA): «Cập nhật được bằng lệnh /xong, /doihan»
+test("gõ kiểu lệnh của đặc tả IDA: /viec, /xong, /doihan, /giao", () => {
+  assert.deepEqual(parseTaskCommand("/viec"), { kind: "task_list", scope: "mine" });
+  assert.deepEqual(parseTaskCommand("/xong V-12"), { kind: "task_done", taskId: 12, note: "" });
+  assert.deepEqual(parseTaskCommand("/doihan V-12 05/10"), { kind: "task_reschedule", taskId: 12, dueText: "05/10" });
+  assert.deepEqual(parseTaskCommand("/ doi han v12 sang thứ 2"), { kind: "task_reschedule", taskId: 12, dueText: "thứ 2" });
+  assert.deepEqual(parseTaskCommand("/giao Tâm: gửi báo giá ĐL Tân Phú hạn 30/10"),
+    { kind: "task_create", assigneeName: "Tâm", title: "gửi báo giá ĐL Tân Phú", dueText: "30/10" });
+  assert.equal(parseTaskCommand("/xong 1234"), null, "«xong <số tin>» là lệnh tin cần xử lý, không phải lệnh việc");
+});
+
 test("không đụng lệnh có sẵn: ticket T-12, «xong 1234» (tin cần xử lý), «ok» đứng một mình", () => {
   assert.equal(parseTaskCommand("xong T-12"), null);
   assert.equal(parseTaskCommand("xong 1234"), null);
