@@ -71,6 +71,9 @@ test("biến thể «kỳ này»: tuần / tháng tính tới hiện tại thay 
   assert.equal(iso(week.from), iso(vn("2026-10-12T00:00:00")));
   assert.equal(iso(week.to), iso(vn("2026-10-14T10:00:00")));
   assert.equal(week.periodKey, "2026-W42");
+  // Nhãn vẫn là cả tuần (T2–CN), kể cả gọi ngay sáng T2
+  assert.equal(week.periodLabel, "Tuần 42/2026 (12/10–18/10)");
+  assert.equal(briefPeriod(BriefKind.Weekly, vn("2026-10-12T08:00:00"), calendar, "current").periodLabel, "Tuần 42/2026 (12/10–18/10)");
 
   const month = briefPeriod(BriefKind.Monthly, vn("2026-10-15T10:00:00"), calendar, "current");
   assert.equal(iso(month.from), iso(vn("2026-10-01T00:00:00")));

@@ -66,7 +66,9 @@ function weeklyPeriod(now: Date, variant: BriefPeriodVariant): BriefPeriod {
   const from = variant === "current" ? thisMonday : new Date(thisMonday.getTime() - 7 * DAY_MS);
   const to = variant === "current" ? now : thisMonday;
   const { year, week } = isoWeek(from);
-  const sunday = new Date(to.getTime() - DAY_MS);
+  // Chủ nhật của tuần ghi nhãn — tính từ `from` (thứ 2), KHÔNG từ `to`: «kỳ này» có `to` = lúc gọi nên `to − 1 ngày`
+  // ra nhãn sai («(12/10–13/10)» khi gọi T4, «(12/10–11/10)» khi gọi sáng T2)
+  const sunday = new Date(from.getTime() + 6 * DAY_MS);
   return {
     from, to,
     periodKey: `${year}-W${pad2(week)}`,
