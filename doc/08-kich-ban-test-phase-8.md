@@ -142,7 +142,7 @@ Xem đủ: màn Bản tin trên web
 |---|---|---|---|---|---|
 | N-23 | 07:30 | Chị Mi | Chờ | Mục 1 **không còn** tin vón cục (đã xử lý hôm qua). Mục 2 có câu hỏi giá Flowertop của anh Sáu (chờ quá giờ từ hôm qua). Mục 3 «1 quá hạn»: «V-m Tâm · Gửi báo giá ĐL Thành Công · quá 1 ngày». Mục 5 «Điểm tin hôm qua» có ý về lô Blaze vón cục, đuôi [TEST ĐL Thành Công · Anh Sáu · 08:40] | |
 | N-24 | 07:45 | Anh Phong | Chờ | Mục 1 **vẫn còn** tin Hòa Bình G3 (chưa ai xử lý — khẩn chưa xử lý hiện tiếp tới 7 ngày). Mục 3 có V-m quá hạn (G1). Mục 5 không có ý nào từ G3 | |
-| N-25 | 07:30 | Chị Mi | Đối chiếu mục 4 | «Ticket mở: 1 (0 mới)» — T-k (tạo trong tin riêng của Huy) vẫn hiện với chị Mi «mọi nhóm» | |
+| N-25 | 07:30 | Chị Mi | Đối chiếu mục 4 | «Ticket mở: 1 (1 mới)» — T-k (tạo trong tin riêng của Huy) vẫn hiện với chị Mi «mọi nhóm». «Mới» tính từ đầu ngày làm việc trước nên ticket tạo hôm qua vẫn là mới | |
 | N-26 | 08:45 | Chị Hằng · G3 | **Trả lời trích dẫn** tin Hòa Bình: `Em đã gửi công văn nhắc nợ ĐL Hòa Bình sáng nay rồi anh` | Tin Hòa Bình «đã xử lý» | |
 | N-27 | 08:50 | Anh Phong · Riêng | `bản tin sáng` | Nhận lại bản tin sáng soạn TẠI LÚC GỌI: mục 1 không còn tin Hòa Bình | |
 | N-28 | 09:00 | Chị Hằng · Riêng | `báo cáo tuần này` | Nhận «BÁO CÁO TUẦN Tuần 42/2026 (12/10–18/10)…» + PDF + Excel. Sheet «Việc» **có V-p** (việc ở G3 dù chị Hằng không chọn G3 — vì là việc của chính chị, chốt 09/10). **Không** có việc / tin nào của G2 | |
