@@ -5,10 +5,11 @@ import { runListContacts } from "./contact-directory-tool.js";
 import { runExportReport, type ExportReport } from "./export-report-tool.js";
 import { GROUP_ACTION_TOOL_NAMES, runGroupAction, type GroupActions } from "./group-action-tools.js";
 import { runCreateRecapPdf, type CreateRecapPdf } from "./meeting-recap-tool.js";
+import { runRecapDriveRecording, type RecapDriveRecording } from "./drive-recap-tool.js";
 import { runReadLink, type ReadLink } from "./read-link-tool.js";
 import { runSearchMessages } from "./search-messages-tool.js";
 import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings, type MeetingCreator } from "./meeting-tool.js";
-import type { ReadFileResult } from "./file-reader.js";
+import { isRetryableFileSourceUrl, type ReadFileResult } from "./file-reader.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
 import { ALERT_TOOL_NAMES, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { runTicketTool, TICKET_TOOL_NAMES } from "../tickets/ticket-tools.js";
@@ -41,6 +42,9 @@ export interface ToolContext {
   usage?: { inputTokens: number; outputTokens: number };
   /** Đọc chữ của một tệp trong kho (file-reader). Không có = bot không có công cụ read_file. */
   readFile?: (attachmentId: number) => Promise<ReadFileResult | { error: string }>;
+  /** Tệp Skip/Failed/Pending còn link Zalo (`source_url`) — người hỏi CHỦ ĐỘNG muốn đọc (read_file) thì đưa lại hàng
+   * tải rồi CHỜ ít lâu trong lượt hỏi này. Không có = không tự tải lại, báo luôn «chưa có trong kho» như trước. */
+  requestFileDownload?: (attachmentId: number) => Promise<"stored" | "pending" | "failed">;
   /** Báo cho vòng hỏi đáp: dữ liệu vừa kéo về nặng → lượt trả lời nên đi bản mô hình nặng. */
   markHeavy?: (reason: string) => void;
   /** Xuất báo cáo ra Google Sheets / Excel. Không có = trợ lý không có công cụ export_report. */
@@ -62,6 +66,8 @@ export interface ToolContext {
   actionCounter?: { done: number };
   /** Tạo cuộc họp Google Meet (tài khoản «Kết nối Google»). Không có / chưa kết nối = không có công cụ create_meeting. */
   meetings?: MeetingCreator;
+  /** Recap ghi âm trong thư mục Drive khi không có file ghi âm trong chat (phase 6). Không có = ẩn recap_drive_recording. */
+  onDemandRecap?: RecapDriveRecording;
   /** Công cụ cảnh báo (phase 5) — chỉ tin riêng, người hỏi là quản lý / người nhận. */
   alertTools?: AlertToolsDeps;
   alertAsker?: AlertAsker;
@@ -79,7 +85,7 @@ export interface ToolContext {
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
 // web_search: thông tin CÔNG KHAI (giá vàng, tỷ giá, báo cáo tài chính công ty niêm yết…) — mở cho nhóm 08/10/2026 (đại ca);
 // câu tìm vẫn không được chứa dữ liệu nội bộ (luật chung + mô tả công cụ)
-export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "web_search", ...TICKET_TOOL_NAMES, ...TASK_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
+export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "recap_drive_recording", "web_search", ...TICKET_TOOL_NAMES, ...TASK_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
   name: "web_search",
@@ -400,16 +406,28 @@ async function searchFiles(context: ToolContext, args: Record<string, unknown>) 
 
 /** Chữ đưa cho mô hình tối đa ngần này ký tự một lượt — hơn thì cắt và nói rõ. */
 const READ_FILE_MAX_CHARS = 60_000;
+/** Đúng câu báo của readAttachmentText (file-reader.ts) khi tệp chưa Stored — chỉ khi khớp câu NÀY mới thử tải lại,
+ * tránh tải lại oan cho lỗi khác (đuôi tệp bị chặn, quá cỡ…) vẫn đi qua cùng nhánh "error" in result. */
+const NOT_STORED_ERROR_PATTERN = /chưa có trong kho/;
 
 async function readFile(context: ToolContext, args: Record<string, unknown>) {
   if (!context.readFile) return { error: "Bot chưa bật đọc tệp" };
   const attachmentId = Number(args.attachment_id);
   if (!Number.isSafeInteger(attachmentId) || attachmentId <= 0) return { error: "Thiếu attachment_id" };
   const [owner] = await context.db.query<RowDataPacket[]>(
-    "SELECT a.group_id, g.is_confidential FROM attachment a JOIN zalo_group g ON g.id = a.group_id WHERE a.id = ?", [attachmentId]);
+    "SELECT a.group_id, a.source_url, g.is_confidential FROM attachment a JOIN zalo_group g ON g.id = a.group_id WHERE a.id = ?", [attachmentId]);
   if (context.scopeGroupId && Number(owner[0]?.group_id) !== context.scopeGroupId) return { error: "Tệp này không thuộc nhóm đang hỏi." };
   if (owner[0]?.is_confidential) return { error: CONFIDENTIAL_ERROR };
-  const result = await context.readFile(attachmentId);
+  let result = await context.readFile(attachmentId);
+  // Tệp chưa có trong kho (Skip / Failed / Pending) nhưng còn link Zalo (`source_url`) — người hỏi CHỦ ĐỘNG muốn đọc
+  // (không chỉ "nhóm chưa bật lấy file" là xong chuyện): đưa lại hàng tải rồi CHỜ ít lâu, đọc luôn trong lượt này thay
+  // vì bắt người hỏi gửi lại tệp (real case VPS 10/10/2026: nhóm capture_files=0, link Zalo vẫn còn hiệu lực).
+  if ("error" in result && context.requestFileDownload && isRetryableFileSourceUrl(owner[0]?.source_url) && NOT_STORED_ERROR_PATTERN.test(String(result.error))) {
+    const outcome = await context.requestFileDownload(attachmentId);
+    if (outcome === "pending") return { error: "Em đang tải tệp này về, anh/chị hỏi lại giúp em sau ít phút nhé." };
+    if (outcome === "failed") return { error: "Link tệp này trên Zalo đã hết hạn — anh/chị gửi lại tệp giúp em nhé." };
+    result = await context.readFile(attachmentId); // outcome === "stored" → đọc lại, cỡ tệp / đuôi tệp vẫn được kiểm như bình thường
+  }
   if ("error" in result) return result;
   if (context.usage) {
     context.usage.inputTokens += result.inputTokens;
@@ -489,6 +507,7 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   list_meetings: (context) => runListMeetings(context.meetings, meetingScopeTag(context.scopeGroupId)),
   cancel_meeting: (context, args) =>
     runCancelMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, meetingScopeTag(context.scopeGroupId)),
+  recap_drive_recording: (context, args) => runRecapDriveRecording(context.onDemandRecap, args),
   ...Object.fromEntries([...TICKET_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) => runTicketTool(context.ticket, name, args, context.now)])),
   ...Object.fromEntries([...TASK_TOOL_NAMES].map((name) => [name,

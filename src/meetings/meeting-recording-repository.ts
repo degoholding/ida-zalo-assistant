@@ -58,6 +58,9 @@ export async function existingDriveFileIds(db: Db, driveFileIds: string[]): Prom
 export interface ClaimedRecording {
   id: number;
   tenantId: number;
+  /** Phase 4 (claimNext) luôn gọi SAU khi đã tự chuyển Processing nên không cần đọc; phase 6 (findByDriveFileId) đọc
+   * dòng CHƯA chắc Processing — cần biết Done / Processing / còn lại để quyết định resend / báo đang xử lý / requeue. */
+  status: MeetingRecordingStatus;
   driveFileId: string;
   fileName: string;
   mime: string;
@@ -77,7 +80,7 @@ export interface ClaimedRecording {
 
 function mapRow(row: RowDataPacket): ClaimedRecording {
   return {
-    id: Number(row.id), tenantId: Number(row.tenant_id), driveFileId: String(row.drive_file_id),
+    id: Number(row.id), tenantId: Number(row.tenant_id), status: Number(row.status), driveFileId: String(row.drive_file_id),
     fileName: String(row.file_name), mime: String(row.mime), sizeBytes: Number(row.size_bytes),
     driveCreatedAt: new Date(row.drive_created_at),
     eventId: row.event_id ? String(row.event_id) : null,
@@ -95,6 +98,42 @@ function mapRow(row: RowDataPacket): ClaimedRecording {
 export async function findById(db: Db, id: number): Promise<ClaimedRecording | null> {
   const [rows] = await db.query<RowDataPacket[]>("SELECT * FROM meeting_recording WHERE id = ?", [id]);
   return rows[0] ? mapRow(rows[0]) : null;
+}
+
+/** Dòng theo `drive_file_id` — recap theo yêu cầu chat (phase 6, meeting-recap-ondemand.ts) kiểm tệp đã có dòng chưa
+ * trước khi tạo mới / xếp lại hàng (resend nếu Done, báo đang xử lý nếu Processing, requeue nếu còn lại). */
+export async function findByDriveFileId(db: Db, driveFileId: string): Promise<ClaimedRecording | null> {
+  const [rows] = await db.query<RowDataPacket[]>("SELECT * FROM meeting_recording WHERE drive_file_id = ?", [driveFileId]);
+  return rows[0] ? mapRow(rows[0]) : null;
+}
+
+export interface OndemandRequeuePatch {
+  targetThreadId?: number;
+  requesterUid?: string;
+  eventId?: string;
+  meetingTitle?: string;
+  meetingStart?: Date;
+  meetingEnd?: Date;
+}
+
+/**
+ * Recap theo yêu cầu chat (phase 6) cho một dòng ĐÃ CÓ (Queued / Unmatched / Skipped / Failed — Processing và Done đã
+ * được xử lý riêng ở meeting-recap-ondemand.ts trước khi gọi tới đây): đặt lại `Queued`, đích gửi = CUỘC ĐANG HỎI (ghi
+ * đè thẳng, có thể khác đích cũ nếu lần quét trước đoán sai / chưa rõ), RESET `attempts` về 0 (người dùng chủ động hỏi
+ * lại — không tính lỗi / số lần thử cũ), xóa `retry_after` / `note` / `error`. GIỮ `recap_json` / `files` / `task_ids`
+ * nếu dòng cũ đã lỡ dở sau bước nghe AI (thử lại không tốn AI / PDF / việc lần hai).
+ */
+export async function requeueOndemand(db: Db, id: number, patch: OndemandRequeuePatch): Promise<void> {
+  await db.query(
+    `UPDATE meeting_recording
+     SET status = ?, attempts = 0, retry_after = NULL, note = '', error = '', claimed_at = NULL, done_at = NULL,
+         target_thread_id = ?, requester_uid = ?,
+         event_id = COALESCE(?, event_id), meeting_title = COALESCE(?, meeting_title),
+         meeting_start = COALESCE(?, meeting_start), meeting_end = COALESCE(?, meeting_end)
+     WHERE id = ?`,
+    [MeetingRecordingStatus.Queued, patch.targetThreadId ?? null, patch.requesterUid ?? null,
+     patch.eventId ?? null, patch.meetingTitle ?? null, patch.meetingStart ?? null, patch.meetingEnd ?? null, id],
+  );
 }
 
 /**

@@ -31,7 +31,10 @@ function buildWebSearchChain(tavilyApiKey: string): (query: string) => Promise<W
   };
 }
 import { MeetingScheduler } from "./google/calendar-meetings.js";
-import { AttachmentDownloader } from "./sync/attachment-downloader.js";
+import { DriveClient } from "./google/drive-client.js";
+import { hasDriveScope } from "./google/google-oauth.js";
+import { runOndemandRecap } from "./meetings/meeting-recap-ondemand.js";
+import { AttachmentDownloader, requestAndAwaitDownload } from "./sync/attachment-downloader.js";
 import { BriefKind, BriefTrigger, ConversationType, JobKind } from "./constants.js";
 import { CpuPool } from "./cpu/cpu-pool.js";
 import type { JobRow } from "./jobs/job-queue.js";
@@ -288,8 +291,19 @@ export class SyncService {
     const settings = this.config.assistant;
     const { apiKey, openaiApiKey, maxPerHour, dailyTokenCap, dailyTokenCapPerBot, maxReadFileBytes, readableFileTypes, showTokenUsage } = settings;
     const limits = { maxPerHour, dailyTokenCap, dailyTokenCapPerBot };
+    // Dùng chung cho công cụ create_meeting/list_meetings (narrow MeetingCreator) VÀ recap theo yêu cầu chat (phase 6,
+    // cần listMeetingsBetween — chỉ có ở kiểu đầy đủ MeetingScheduler) — một instance, đọc config.google lúc gọi.
+    const meetingScheduler = new MeetingScheduler(() => this.config.google);
     const options = {
       storage: this.storage, maxReadFileBytes, readableFileTypes, showTokenUsage,
+      requestFileDownload: (attachmentId: number) => requestAndAwaitDownload(this.db, this.downloader, attachmentId),
+      meetingRecapOnDemand: {
+        isAvailable: () => Boolean(this.config.meetingRecap.folderId) && hasDriveScope(this.config.google.calendarAccount),
+        run: (args: Record<string, unknown>, destination: { targetThreadId: number | null; requesterUid: string }, now: Date) => runOndemandRecap(
+          this.db, { drive: new DriveClient(() => this.config.google, this.config.meetingRecap.folderId), calendar: meetingScheduler },
+          args, destination, now,
+        ),
+      },
       heavyExtract: (task: "sheet" | "docx", data: Buffer) => this.cpu.run(task, data),
       privacy: { maskPersonalData: this.config.privacy.maskPersonalData, blockWebForAgroTechnical: this.config.privacy.blockWebForAgroTechnical },
       alertTools: {
@@ -313,7 +327,7 @@ export class SyncService {
       } satisfies BriefChatDeps,
       webSearch: buildWebSearchChain(this.config.assistant.tavilyApiKey),
       reportExporter: new ReportExporter(this.storage, () => this.config.google),
-      meetingScheduler: new MeetingScheduler(() => this.config.google),
+      meetingScheduler,
     };
     // Bảng Khóa AI có khóa → chuỗi khóa (khóa số 1 trước, hỏng thì khóa kế); bảng rỗng → cài đặt cũ như trước 07/10/2026
     const chainKeys = this.aiKeys?.buildChainKeys(this.config.privacy.allowedAiProviders) ?? [];

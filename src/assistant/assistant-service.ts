@@ -16,6 +16,8 @@ import { REPORT_MAX_TOOL_ROUNDS, REPORT_PLAYBOOK_PROMPT, isReportRequest } from 
 import { appendTokenFooter, stripTokenFooter } from "./token-usage-footer.js";
 import { GROUP_ACTION_DECLARATIONS, type GroupActions } from "./group-action-tools.js";
 import { CREATE_MEETING_DECLARATION, MEETING_MANAGE_DECLARATIONS, type MeetingCreator } from "./meeting-tool.js";
+import { RECAP_DRIVE_RECORDING_DECLARATION } from "./drive-recap-tool.js";
+import type { OndemandRecapOutcome } from "../meetings/meeting-recap-ondemand.js";
 import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
 import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, formatVnDay, runTool, type ToolContext } from "./tools.js";
 import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
@@ -73,6 +75,15 @@ export interface AssistantOptions {
   briefs?: BriefChatDeps;
   /** Tìm web riêng (Tavily). Có thì dùng trước; lỗi / hết hạn mức thì lùi về tìm web của mô hình (Gemini) nếu có. */
   webSearch?: (query: string) => Promise<WebSearchResult>;
+  /** Recap ghi âm trong thư mục Drive theo yêu cầu chat (phase 6). Không có / `isAvailable()` false = ẩn công cụ
+   * recap_drive_recording (chưa cấu hình thư mục hoặc chưa có quyền Drive). */
+  meetingRecapOnDemand?: {
+    isAvailable: () => boolean;
+    run: (args: Record<string, unknown>, destination: { targetThreadId: number | null; requesterUid: string }, now: Date) => Promise<OndemandRecapOutcome>;
+  };
+  /** Tệp Skip/Failed/Pending còn link Zalo — read_file chủ động đưa lại hàng tải rồi chờ ít lâu (phase 6). Không có =
+   * read_file báo ngay «chưa có trong kho» như trước. */
+  requestFileDownload?: (attachmentId: number) => Promise<"stored" | "pending" | "failed">;
 }
 
 export interface AssistantRequest {
@@ -141,6 +152,11 @@ Việc bạn làm được:
    Nội dung không phải cuộc họp / không có việc gì thì chỉ tóm tắt, không xuất PDF. Câu trả lời trên Zalo NGẮN: 2–3 ý TL;DR, rồi
    «Phân công:» mỗi dòng «- Tên: việc (hạn)» gom theo người; nói tệp PDF đang được gửi; KẾT THÚC bằng câu hỏi
    «Anh/chị có muốn em lưu các việc này vào checklist và nhắc từng người theo hạn không ạ?» (chỉ hỏi khi có việc được giao). Chỉ ghi người / hạn khi trong ghi âm có nói, không đoán.
+- Recap cuộc họp mà KHÔNG có file ghi âm / biên bản trong các tin gần đây và KHÔNG có link: recap_drive_recording (nếu có công cụ)
+  tìm trong thư mục Drive «Ghi âm họp» của công ty — không nói tên tệp → lấy ghi âm MỚI NHẤT trong 7 ngày gần đây; có nói tên → tìm
+  theo tên; vài tệp tên gần giống → liệt kê (candidates: tên, giờ tải lên) rồi HỎI LẠI muốn recap tệp nào, hỏi xong gọi lại kèm
+  file_id đã chọn; thư mục trống hoặc chưa cấu hình → báo đúng vậy, không suy diễn. Công cụ trả sẵn trường "reply" khi đã bắt đầu xử
+  lý / đang xử lý / gửi lại recap cũ — trả lời ĐÚNG NGUYÊN VĂN "reply", không soạn lại, không thêm PDF giả.
 - Tìm lại một trao đổi cũ theo từ khóa («ai nhắc tới…», «tìm tin về…», «X nói gì về…»): search_messages (nhanh, không phải đọc cả
   nhóm); trả lời kèm nhóm · người · giờ của từng tin tìm được. Không thấy thì nói không thấy, gợi ý từ khóa khác.
 9. Đọc LINK người dùng gửi (read_link): Google Sheets (mọi sheet), Google Docs, Slides, tệp Google Drive (kể cả GHI ÂM .mp3/.m4a/.wav — nhận
@@ -323,6 +339,7 @@ export class AssistantService {
         ? (attachmentId) => readAttachmentText({ db: this.db, storage, readDocument, maxFileBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024,
           allowedExtensions: this.options.readableFileTypes, heavyExtract: this.options.heavyExtract }, attachmentId)
         : undefined,
+      requestFileDownload: this.options.requestFileDownload,
       markHeavy: () => { heavy = true; },
       // H3: ghi âm từ link nghe CHẢY THẲNG qua readAudioSource (Gemini, như worker recap họp) khi mô hình hỗ trợ —
       // app không đệm cả tệp vào RAM; readAudioSource không có (vd chỉ còn OpenAI) thì link-reader.ts tự lùi về
@@ -340,6 +357,16 @@ export class AssistantService {
     context.ticket = ticket;
     context.task = task;
     const scope = request.groupScope;
+    const onDemandRecap = this.options.meetingRecapOnDemand;
+    const onDemandRecapAvailable = Boolean(onDemandRecap?.isAvailable());
+    if (onDemandRecap && onDemandRecapAvailable) {
+      context.onDemandRecap = async (args) => {
+        const destination = { targetThreadId: scope?.groupId ?? null, requesterUid: request.contact.zalo_uid };
+        const outcome = await onDemandRecap.run(args, destination, now);
+        if (outcome.file) reportFiles.push(outcome.file);
+        return outcome.response;
+      };
+    }
     // Công cụ cảnh báo + công cụ bản tin (send_brief): chỉ tin riêng, người hỏi có vai trò hoặc là người nhận — một
     // lượt resolveAlertAsker dùng chung cho cả hai (asker.recipientId quyết định có công cụ send_brief hay không)
     const asker = !scope && (this.options.alertTools || this.options.briefs) ? await resolveAlertAsker(this.db, request.contact) : null;
@@ -368,6 +395,7 @@ export class AssistantService {
       ...(exporter ? [EXPORT_REPORT_DECLARATION, MEETING_RECAP_PDF_DECLARATION, SUMMARY_PDF_DECLARATION] : []),
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
+      ...(onDemandRecapAvailable ? [RECAP_DRIVE_RECORDING_DECLARATION] : []),
       ...(alertAsker ? ALERT_TOOL_DECLARATIONS : []),
       ...(ticket ? TICKET_TOOL_DECLARATIONS : []),
       ...(task ? TASK_TOOL_DECLARATIONS : []),

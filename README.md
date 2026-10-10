@@ -119,6 +119,14 @@ thành viên khớp tên — rồi hỏi «có muốn em nhắc các việc này
 pdfmake (JS thuần) + font Be Vietnam Pro / Noto Symbols trong `assets/` (Dockerfile chép `assets`). Mã: `src/reports/meeting-recap-*.ts`,
 `pdf-text-runs.ts`, `src/assistant/meeting-recap-tool.ts`, `src/zalo/group-mentions.ts`.
 
+**Recap ghi âm từ Drive bằng chat** (10/10/2026): «bot recap cuộc họp» / «recap file hop-giao-ban» mà KHÔNG gửi kèm ghi âm /
+link trong tin → công cụ `recap_drive_recording` tìm trong thư mục Drive «Ghi âm họp» của công ty (Cài đặt → Google): không
+nói tên → ghi âm mới nhất trong 7 ngày; nói tên → tìm gần đúng (gạch ngang / gạch dưới coi như khoảng trắng); vài tệp giống
+tên → liệt kê rồi hỏi lại. Tạo / dùng lại đúng một dòng theo dõi, đích gửi = cuộc đang hỏi (nhóm hay tin riêng), bot trả lời
+ngay «đang nghe bản ghi…», việc nền xử lý trong ≤ 1 phút rồi gửi recap như quét tự động; hỏi lại một ghi âm đã xong thì nhận
+lại đúng PDF cũ, không tốn AI lần hai. Chạy được dù tắt «Recap họp tự động từ Drive» — chỉ cần đã cấu hình thư mục + quyền
+Drive. Mã: `src/meetings/meeting-recap-ondemand.ts`, `src/assistant/drive-recap-tool.ts`.
+
 **Đọc link** (07/10/2026): «bot đọc link của X rồi recap» → công cụ `read_link` tải link Google Sheets (xuất xlsx — mọi sheet),
 Docs / Slides (xuất txt), tệp Drive, hoặc trang web (lấy chữ HTML). Link Google chỉ cần chia sẻ «Bất kỳ ai có đường liên kết».
 Chỉ đọc link đã có trong tin nhắn / câu hỏi (chống mô hình bị dụ nhét dữ liệu vào đường dẫn); chặn địa chỉ nội bộ ở mọi bước
@@ -344,6 +352,8 @@ Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng b�
   pdf / ảnh nhờ Gemini đọc, ghi âm (mp3, m4a, wav, aac) nhờ Gemini nghe — gỡ băng + tóm tắt (đo 06/10/2026: bản lite
   3,6 giây / đoạn 15 giây); video không đọc. Loại được đọc: Cài đặt → «Loại tệp bot được đọc» (chặn cả chữ đã bóc sẵn). Chữ bóc ra CẤT ở `attachment_text` (migration 012): bot và màn Tệp tìm được theo
   nội dung, đọc lại không tốn token. Tối đa `ASSISTANT_MAX_READ_FILE_MB` (5). Lượt có đọc tệp hoặc dữ liệu
-  công cụ > 24.000 ký tự đi mô hình `GEMINI_MODEL_HEAVY` (flash) thay vì lite.
+  công cụ > 24.000 ký tự đi mô hình `GEMINI_MODEL_HEAVY` (flash) thay vì lite. Tệp chưa có trong kho vì nhóm tắt «Lấy
+  file» / tải lỗi lần trước nhưng link Zalo còn hiệu lực (10/10/2026): `read_file` tự đưa lại hàng tải và chờ tới ~25
+  giây để đọc luôn trong lượt hỏi này, không bắt người dùng gửi lại tệp; link đã hết hạn hoặc còn đang tải thì báo rõ.
 - Giao diện theo khuôn ERP DEGO (bảng màu trong `web/src/index.css`); mọi màn mới phải đi qua `CrudListPage` / `CrudDetailPage`, không vẽ tay.
 - `zca-js` 2.2.0 đóng gói lỗi kiểu (`index.d.ts` gốc trỏ thư mục) — `tsconfig.json` có `paths` vá chỗ đó.

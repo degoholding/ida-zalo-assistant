@@ -10,7 +10,7 @@ import { runReminders } from "./alerts/reminders.js";
 import { telegramSenderFor, watchSessions } from "./alerts/session-watch.js";
 import { runBriefs } from "./briefs/brief-runner.js";
 import { MeetingScheduler } from "./google/calendar-meetings.js";
-import { runMeetingRecordings } from "./meetings/meeting-recording-watcher.js";
+import { runMeetingRecapProcessing, runMeetingRecordings } from "./meetings/meeting-recording-watcher.js";
 import { backfillMessageSearch } from "./search/message-search-index.js";
 import { runTaskReminders } from "./tasks/task-reminders.js";
 import { runTaskExtraction } from "./tasks/task-proposals.js";
@@ -79,6 +79,9 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     "meeting-recordings": () => runMeetingRecordings(db, config, meetingScheduler, {
       storage, calendar: safeCalendar(), buildModel: () => buildAlertModelClient(db, config),
     }),
+    // Phase 6: xử lý TỐI ĐA MỘT dòng Queued, KHÔNG quét Drive — độc lập với `meeting_auto_recap_enabled` (xem
+    // recapInfraReady trong meeting-recording-watcher.ts) để ghi âm xếp hàng qua chat vẫn được gỡ băng dù tắt quét tự động.
+    "meeting-recap-process": () => runMeetingRecapProcessing(db, config, { storage, calendar: safeCalendar(), buildModel: () => buildAlertModelClient(db, config) }),
     "search-index": async () => {
       const copied = await backfillMessageSearch(db);
       if (copied) log.info(`chép ${copied} tin cũ vào bảng tìm`);

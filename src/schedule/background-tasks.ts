@@ -17,6 +17,10 @@ export const BACKGROUND_TASKS = [
   { name: "task-extract", label: "AI bắt câu giao việc trong nhóm", spec: { every: "minutes", minutes: 5 } },
   { name: "briefs", label: "Gửi bản tin / báo cáo", spec: { every: "minutes", minutes: 1 } },
   { name: "meeting-recordings", label: "Theo dõi ghi âm họp (Drive)", spec: { every: "minutes", minutes: 5 } },
+  // Xử lý nhanh ghi âm Queued (gỡ băng) — riêng, không quét Drive — để recap gọi bằng chat (phase 6) được nhận trong
+  // ≤ 1 phút thay vì chờ tới lượt quét 5 phút kế tiếp; claimNext giành bằng UPDATE có điều kiện nên không xử lý trùng
+  // với "meeting-recordings" ở trên.
+  { name: "meeting-recap-process", label: "Xử lý nhanh ghi âm đã xếp hàng (recap)", spec: { every: "minutes", minutes: 1 } },
 ] as const satisfies readonly { name: string; label: string; spec: ScheduleSpec }[];
 
 export type BackgroundTaskName = (typeof BACKGROUND_TASKS)[number]["name"];

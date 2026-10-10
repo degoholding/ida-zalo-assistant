@@ -160,3 +160,40 @@ export class AttachmentDownloader {
 }
 
 class PermanentDownloadError extends Error {}
+
+/** Phần của `AttachmentDownloader` mà `requestAndAwaitDownload` cần — tách riêng để test tiêm được bản giả, không cần
+ * dựng cả `AttachmentDownloader` thật (storage, fetcher…). `AttachmentDownloader` khớp kiểu này sẵn (cấu trúc, không
+ * cần khai `implements`). */
+export interface DownloadEnqueuer {
+  enqueue(attachmentId: number): void;
+}
+
+/** Chờ `process()` cập nhật status tới ngần này ms, hỏi lại DB mỗi ngần này ms — xem `requestAndAwaitDownload`. */
+const REDOWNLOAD_POLL_MS = 3_000;
+const REDOWNLOAD_TIMEOUT_MS = 25_000;
+
+/**
+ * Trợ lý AI muốn ĐỌC một tệp Skip (nhóm không bật «Lấy file») / Failed (tải lỗi lần trước) / Pending còn link Zalo
+ * (`source_url`) — đưa về `Pending` (reset số lần thử nếu đang Failed/Skipped, khuôn giống nút «Tải vào kho» của web,
+ * `POST /api/files/:id/retry`) rồi xếp lại hàng tải, CHỜ tới `timeoutMs` để đọc được luôn trong lượt hỏi này thay vì
+ * bắt người dùng gửi lại tệp. KHÔNG đụng cài đặt «Lấy file» của nhóm — chỉ tải đúng tệp người hỏi vừa nhắc tới.
+ */
+export async function requestAndAwaitDownload(
+  db: Db, downloader: DownloadEnqueuer, attachmentId: number,
+  pollMs = REDOWNLOAD_POLL_MS, timeoutMs = REDOWNLOAD_TIMEOUT_MS,
+): Promise<"stored" | "pending" | "failed"> {
+  await db.query(
+    "UPDATE attachment SET status = ?, attempts = 0, last_error = '' WHERE id = ? AND status IN (?, ?)",
+    [AttachmentStatus.Pending, attachmentId, AttachmentStatus.Failed, AttachmentStatus.Skipped],
+  );
+  downloader.enqueue(attachmentId);
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const [rows] = await db.query<RowDataPacket[]>("SELECT status FROM attachment WHERE id = ?", [attachmentId]);
+    const status = Number(rows[0]?.status);
+    if (status === AttachmentStatus.Stored) return "stored";
+    if (status === AttachmentStatus.Failed) return "failed";
+    if (Date.now() >= deadline) return "pending";
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+}

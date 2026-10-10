@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import { GoogleUserAuth, hasDriveScope, oauthClientOf } from "./google-oauth.js";
-import { describeDriveFailure, NOT_A_FOLDER_TEXT } from "./drive-error-messages.js";
+import { describeDriveFailure, FOLDER_NOT_FOUND_TEXT, NOT_A_FOLDER_TEXT } from "./drive-error-messages.js";
 import { GoogleSheetsError, NETWORK_ERROR_TEXT } from "./sheets-error-messages.js";
 
 // Đọc thư mục «Ghi âm họp» trên Google Drive — qua access token OAuth của Gmail đã «Kết nối Google»
@@ -100,6 +100,34 @@ export class DriveClient {
       pageToken = data.nextPageToken;
     }
     return files;
+  }
+
+  /**
+   * Metadata MỘT tệp theo id (không tải nội dung) — dùng khi đã biết chắc `file_id` (vd recap theo yêu cầu chat,
+   * meeting-recap-ondemand.ts: mô hình chọn lại đúng tệp từ danh sách ứng viên của lượt hỏi trước). Vẫn kiểm `parents`
+   * như `openDownload` — id hợp lệ trên Drive nhưng nằm ngoài thư mục đã cấu hình vẫn bị từ chối.
+   */
+  async getFileMeta(fileId: string): Promise<DriveFileInfo> {
+    let data: { id?: string; name?: string; mimeType?: string; size?: string; createdTime?: string; parents?: string[] };
+    try {
+      data = await this.call(
+        `${DRIVE_API}/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size,createdTime,parents&supportsAllDrives=true`,
+      ) as typeof data;
+    } catch (error) {
+      // describeDriveFailure dùng chung câu «không thấy thư mục» cho mọi tệp/thư mục không tìm thấy — đổi lại cho đúng
+      // ngữ cảnh đang tìm một TỆP, không phải thư mục.
+      if (error instanceof GoogleSheetsError && error.message === FOLDER_NOT_FOUND_TEXT) {
+        throw new GoogleSheetsError("Không thấy tệp này trong thư mục «Ghi âm họp» — sai mã tệp hoặc tệp đã bị xóa / di chuyển.");
+      }
+      throw error;
+    }
+    if (!data.parents?.includes(this.folderId)) {
+      throw new GoogleSheetsError("Tệp không nằm trong thư mục «Ghi âm họp» đã cấu hình — bot từ chối đọc để tránh đọc nhầm thư mục khác trong Drive.");
+    }
+    return {
+      id: data.id ?? fileId, name: data.name ?? "", mimeType: data.mimeType ?? "application/octet-stream",
+      size: Number(data.size ?? 0), createdTime: data.createdTime ?? new Date().toISOString(),
+    };
   }
 
   /** Luồng tải thẳng — KHÔNG đọc vào RAM. Kiểm `parents` trước để chỉ tải đúng tệp trong thư mục đã cấu hình. */

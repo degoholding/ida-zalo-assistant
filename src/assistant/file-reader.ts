@@ -79,6 +79,13 @@ const IMAGE_INSTRUCTION =
   "Đây là ảnh gửi trong nhóm làm việc. Nếu ảnh có chữ (hóa đơn, báo giá, chụp màn hình, biển hiệu…) thì chép lại toàn bộ chữ theo đúng thứ tự, " +
   "bảng giữ dạng từng dòng, các ô cách nhau bằng ' | '. Sau đó thêm một dòng 'Mô tả: …' tả ngắn gọn ảnh có gì (bằng tiếng Việt). Không bịa chữ không có trong ảnh.";
 
+/** `source_url` còn là link http(s) tải lại được không (Zalo CDN) — tệp Skip/Failed/Pending nhập từ Zalo Web có thể
+ * mang `data:` (ảnh nhúng sẵn) hoặc rỗng (link đã xóa lúc Stored xong), không tải lại được thì đừng thử (phase 6,
+ * tools.ts dùng để quyết định có gọi lại hàng tải hay báo ngay «chưa có trong kho»). Hàm thuần. */
+export function isRetryableFileSourceUrl(url: unknown): url is string {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}
+
 export function extensionOf(fileName: string, fileExt: string): string {
   const fromName = /\.([a-z0-9]{1,10})$/i.exec(fileName)?.[1];
   return (fileExt || fromName || "").toLowerCase();

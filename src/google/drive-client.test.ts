@@ -94,6 +94,24 @@ test("openDownload streams the body straight through without buffering it", asyn
   assert.equal(download.body, stream, "phải trả đúng ReadableStream gốc — không đọc vào Buffer / mảng trung gian");
 });
 
+test("getFileMeta returns the file's metadata when it sits in the configured folder", async () => {
+  const { fetcher } = fakeFetch(() => ({ body: { id: "f1", name: "giao-ban.mp3", mimeType: "audio/mpeg", size: "1000", createdTime: "2026-10-10T01:00:00Z", parents: [FOLDER_ID] } }));
+  const client = new DriveClient(() => GOOGLE_WITH_DRIVE, FOLDER_ID, { fetcher });
+  assert.deepEqual(await client.getFileMeta("f1"), { id: "f1", name: "giao-ban.mp3", mimeType: "audio/mpeg", size: 1000, createdTime: "2026-10-10T01:00:00Z" });
+});
+
+test("getFileMeta refuses a file outside the configured folder", async () => {
+  const { fetcher } = fakeFetch(() => ({ body: { id: "f1", name: "x.mp3", mimeType: "audio/mpeg", size: "10", parents: ["mot-thu-muc-khac"] } }));
+  const client = new DriveClient(() => GOOGLE_WITH_DRIVE, FOLDER_ID, { fetcher });
+  await assert.rejects(client.getFileMeta("f1"), (error) => error instanceof GoogleSheetsError && /không nằm trong thư mục/.test(error.message));
+});
+
+test("getFileMeta turns a 404 into a file-specific (not folder-specific) message", async () => {
+  const { fetcher } = fakeFetch(() => ({ status: 404, body: { error: { message: "File not found" } } }));
+  const client = new DriveClient(() => GOOGLE_WITH_DRIVE, FOLDER_ID, { fetcher });
+  await assert.rejects(client.getFileMeta("khong-co"), (error) => error instanceof GoogleSheetsError && /Không thấy tệp này/.test(error.message));
+});
+
 test("not connected to Google is reported before any Drive call", async () => {
   const { fetcher, urls } = fakeFetch(() => ({ body: {} }));
   const client = new DriveClient(() => GOOGLE_NOT_CONNECTED, FOLDER_ID, { fetcher });

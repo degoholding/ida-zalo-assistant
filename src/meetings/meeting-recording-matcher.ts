@@ -11,6 +11,10 @@ export const RECORDING_SCAN_LOOKBACK_MS = 48 * 60 * 60_000;
 /** Cửa sổ sau khi cuộc họp kết thúc mà tệp tải lên vẫn còn tính là khớp (người họp tải mp3 trễ). Export để watcher dùng
  * lại khi tính mốc gọi Calendar (L10: trước đây định nghĩa lặp ở hai tệp, dễ sửa một chỗ quên chỗ kia). */
 export const MATCH_WINDOW_AFTER_END_MS = 24 * 60 * 60_000;
+/** Họp dài nhất bot tạo được (create_meeting trần 480 phút) — lùi thêm khi tính mốc gọi Calendar để chắc chắn phủ hết
+ * cuộc họp cũ nhất trong lô tệp / tệp đang xét. Dùng chung bởi watcher (quét theo lô) và meeting-recap-ondemand.ts
+ * (khớp một tệp theo yêu cầu chat, phase 6). */
+export const LONGEST_MEETING_MS = 480 * 60_000;
 
 /** Mốc giờ bắt đầu quét — tệp Drive `createdTime` trước mốc này bị bỏ qua (THUẦN, test được 48h cutoff). */
 export function scanCutoff(now: Date): Date {
@@ -38,8 +42,9 @@ export interface PickMeetingResult {
   candidates: RecordingCandidateMeeting[];
 }
 
-/** Bỏ dấu + chữ thường, so khớp tên tệp chứa tên cuộc họp không phân biệt dấu / hoa thường. */
-function normalize(text: string): string {
+/** Bỏ dấu + chữ thường, so khớp tên tệp chứa tên cuộc họp (hoặc tên tệp người hỏi gõ, phase 6) không phân biệt dấu /
+ * hoa thường. Export cho meeting-recap-ondemand.ts dùng lại (chọn tệp theo tên khi recap qua chat). */
+export function normalizeForMatch(text: string): string {
   return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
@@ -62,8 +67,8 @@ export function pickMeetingForFile(file: RecordingFile, meetings: RecordingCandi
     (meeting) => file.createdAtMs >= meeting.startTime && file.createdAtMs <= meeting.endTime + MATCH_WINDOW_AFTER_END_MS,
   );
   if (!candidates.length) return { meeting: null, candidates };
-  const fileName = normalize(file.name);
-  const byTitle = candidates.filter((meeting) => meeting.title.trim() && fileName.includes(normalize(meeting.title)));
+  const fileName = normalizeForMatch(file.name);
+  const byTitle = candidates.filter((meeting) => meeting.title.trim() && fileName.includes(normalizeForMatch(meeting.title)));
   const pool = byTitle.length ? byTitle : candidates;
   const [best] = [...pool].sort((a, b) => rank(b, file.createdAtMs) - rank(a, file.createdAtMs));
   return { meeting: best, candidates };
@@ -81,4 +86,11 @@ export function resolveDestination(meeting: RecordingCandidateMeeting): Recordin
   if (groupMatch) return { kind: "group", targetThreadId: Number(groupMatch[1]), requesterUid: meeting.requesterUid };
   if (meeting.requesterUid) return { kind: "direct", requesterUid: meeting.requesterUid };
   return { kind: "unresolved" };
+}
+
+/** `BotMeeting` (Google Calendar, kiểu đầy đủ ở calendar-meetings.ts) → `RecordingCandidateMeeting` rút gọn cho
+ * `pickMeetingForFile` — `endTime` mặc định = `startTime` khi Calendar không trả (never xảy ra với listMeetingsBetween,
+ * chỉ để kiểu khớp). Dùng chung bởi watcher (một lô tệp) và meeting-recap-ondemand.ts (một tệp theo yêu cầu chat). */
+export function toRecordingCandidate(meeting: { id: string; title: string; startTime: number; endTime?: number; scopeTag?: string; requesterUid?: string }): RecordingCandidateMeeting {
+  return { id: meeting.id, title: meeting.title, startTime: meeting.startTime, endTime: meeting.endTime ?? meeting.startTime, scopeTag: meeting.scopeTag, requesterUid: meeting.requesterUid };
 }

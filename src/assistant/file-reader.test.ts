@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deflateRawSync } from "node:zlib";
 import * as XLSX from "xlsx";
-import { audioMimeFor, classifyForReading, extensionOf, extractDocx, extractSheet, MAX_SHEET_ROWS } from "./file-reader.js";
+import { audioMimeFor, classifyForReading, extensionOf, extractDocx, extractSheet, isRetryableFileSourceUrl, MAX_SHEET_ROWS } from "./file-reader.js";
 
 function docxOf(xml: string): Buffer {
   const name = Buffer.from("word/document.xml");
@@ -76,4 +76,14 @@ test("audioMimeFor: nhận ra âm thanh qua content-type chuẩn, qua đuôi tê
   assert.deepEqual(audioMimeFor("audio/x-la-chua-biet", ""), { mime: "audio/x-la-chua-biet", ext: "mp3" });
   assert.equal(audioMimeFor("application/octet-stream", "bao-cao.xlsx"), null);
   assert.equal(audioMimeFor("video/mp4", "clip.mp4"), null);
+});
+
+// Phase 6 (10/10/2026): read_file tự tải lại tệp Skip/Failed/Pending còn link Zalo — chỉ thử khi link còn tải lại được.
+test("isRetryableFileSourceUrl: chỉ nhận link http(s), không nhận data: URL / rỗng / thiếu", () => {
+  assert.equal(isRetryableFileSourceUrl("https://tcareer.zdn.vn/file/abc"), true);
+  assert.equal(isRetryableFileSourceUrl("http://tcareer.zdn.vn/file/abc"), true);
+  assert.equal(isRetryableFileSourceUrl("data:image/png;base64,abc"), false);
+  assert.equal(isRetryableFileSourceUrl(""), false);
+  assert.equal(isRetryableFileSourceUrl(null), false);
+  assert.equal(isRetryableFileSourceUrl(undefined), false);
 });

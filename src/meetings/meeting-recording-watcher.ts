@@ -8,7 +8,7 @@ import type { MeetingScheduler } from "../google/calendar-meetings.js";
 import { createLogger, describeError } from "../logger.js";
 import type { WorkCalendar } from "../schedule/work-calendar.js";
 import type { FileStorage } from "../storage/file-storage.js";
-import { isAudioFile, MATCH_WINDOW_AFTER_END_MS, pickMeetingForFile, resolveDestination, scanCutoff } from "./meeting-recording-matcher.js";
+import { isAudioFile, LONGEST_MEETING_MS, MATCH_WINDOW_AFTER_END_MS, pickMeetingForFile, resolveDestination, scanCutoff, toRecordingCandidate } from "./meeting-recording-matcher.js";
 import { MEETING_RECAP_MAX_ATTEMPTS, processRecording } from "./meeting-recap-pipeline.js";
 import { claimNext, existingDriveFileIds, insertDiscovered, releaseStale } from "./meeting-recording-repository.js";
 
@@ -25,8 +25,6 @@ import { claimNext, existingDriveFileIds, insertDiscovered, releaseStale } from 
 // luôn các ghi âm ĐÃ Queued từ lượt trước tới lượt xử lý.
 
 const log = createLogger("meeting-recordings");
-/** Họp dài nhất bot tạo được (create_meeting trần 480 phút) — lùi thêm khi tính mốc gọi Calendar để chắc chắn phủ hết cuộc họp cũ nhất trong lô. */
-const LONGEST_MEETING_MS = 480 * 60_000;
 
 /** Phụ thuộc của phần xử lý (phase 4) — tách khỏi deps quét (Drive/Calendar) vì watcher tự dựng `DriveClient` riêng. */
 export interface MeetingRecapRunDeps {
@@ -50,32 +48,49 @@ export interface RunMeetingRecordingsResult {
 
 const DISABLED_RESULT: RunMeetingRecordingsResult = { scanned: 0, queued: 0, unmatched: 0, skipped: 0, released: 0, processed: false };
 
-function toRecordingCandidate(meeting: { id: string; title: string; startTime: number; endTime?: number; scopeTag?: string; requesterUid?: string }) {
-  return { id: meeting.id, title: meeting.title, startTime: meeting.startTime, endTime: meeting.endTime ?? meeting.startTime, scopeTag: meeting.scopeTag, requesterUid: meeting.requesterUid };
+/** Hạ tầng xử lý (gỡ băng) sẵn sàng chưa — CHỈ cần thư mục + quyền Drive, ĐỘC LẬP với cờ bật QUÉT tự động
+ * (`meeting_auto_recap_enabled`): recap theo yêu cầu chat (phase 6, meeting-recap-ondemand.ts) vẫn phải xử lý được dù
+ * quản trị tắt quét tự động — chỉ phần SCAN mới cần cờ đó. */
+function recapInfraReady(config: AppConfig): boolean {
+  return Boolean(config.meetingRecap.folderId) && hasDriveScope(config.google.calendarAccount);
 }
 
-export async function runMeetingRecordings(
-  db: Db, config: AppConfig, calendar: MeetingScheduler, recap: MeetingRecapRunDeps, now: Date = new Date(),
-): Promise<RunMeetingRecordingsResult> {
-  // Tắt tính năng / chưa cấu hình / chưa kết nối Google / chưa có quyền Drive → thoát sớm, không đụng DB (rollback
-  // "tắt cài đặt → việc nền thoát sớm").
-  if (!config.meetingRecap.enabled || !config.meetingRecap.folderId) return DISABLED_RESULT;
-  if (!calendar.connected) return DISABLED_RESULT;
-  if (!hasDriveScope(config.google.calendarAccount)) return DISABLED_RESULT;
+/**
+ * Giành + xử lý TỐI ĐA MỘT dòng `Queued` — KHÔNG quét Drive. Việc nền riêng (1 phút/lần, nhanh hơn lượt quét 5 phút)
+ * để ghi âm xếp hàng qua chat (phase 6) được gỡ băng sớm; `runMeetingRecordings` (5 phút) cũng gọi lại hàm này trước
+ * khi quét — `claimNext` giành bằng UPDATE có điều kiện nên hai việc nền cùng gọi không xử lý trùng một dòng.
+ */
+export async function runMeetingRecapProcessing(
+  db: Db, config: AppConfig, recap: MeetingRecapRunDeps, now: Date = new Date(),
+): Promise<{ released: number; processed: boolean }> {
+  if (!recapInfraReady(config)) return { released: 0, processed: false };
 
   const released = await releaseStale(db, now);
   if (released) log.info(`${released} ghi âm kẹt Processing quá 45 phút, đã trả về Queued`);
 
-  // L5: giành + xử lý TỐI ĐA MỘT dòng Queued TRƯỚC khi quét Drive/Calendar — lượt quét bên dưới có thể ném lỗi (mạng,
-  // hết hạn kết nối), không được để lỗi đó chặn luôn ghi âm ĐÃ Queued từ lượt trước.
   const claimed = await claimNext(db, now, MEETING_RECAP_MAX_ATTEMPTS);
   if (claimed) {
     await processRecording({ db, config, storage: recap.storage, calendar: recap.calendar, buildModel: recap.buildModel, wakeJobs: recap.wakeJobs }, claimed, now)
       .catch((error) => log.error(`xử lý ghi âm #${claimed.id} lỗi (ngoài dự kiến, processRecording lẽ ra tự bắt)`, describeError(error)));
   }
+  return { released, processed: Boolean(claimed) };
+}
+
+export async function runMeetingRecordings(
+  db: Db, config: AppConfig, calendar: MeetingScheduler, recap: MeetingRecapRunDeps, now: Date = new Date(),
+): Promise<RunMeetingRecordingsResult> {
+  // Tắt QUÉT tự động / chưa cấu hình / chưa kết nối Google / chưa có quyền Drive → thoát sớm, không đụng DB (rollback
+  // "tắt cài đặt → việc nền thoát sớm"). Phần XỬ LÝ (runMeetingRecapProcessing) có việc nền riêng, không phụ thuộc
+  // `enabled` — recap theo yêu cầu chat vẫn chạy dù tắt quét tự động.
+  if (!config.meetingRecap.enabled || !recapInfraReady(config)) return DISABLED_RESULT;
+  if (!calendar.connected) return DISABLED_RESULT;
+
+  // L5: giành + xử lý TỐI ĐA MỘT dòng Queued TRƯỚC khi quét Drive/Calendar — lượt quét bên dưới có thể ném lỗi (mạng,
+  // hết hạn kết nối), không được để lỗi đó chặn luôn ghi âm ĐÃ Queued từ lượt trước.
+  const { released, processed } = await runMeetingRecapProcessing(db, config, recap, now);
 
   const scan = await scanNewRecordings(db, config, calendar, now);
-  return { ...scan, released, processed: Boolean(claimed) };
+  return { ...scan, released, processed };
 }
 
 /** Quét Drive + khớp cuộc họp — không đụng dòng Queued cũ, chỉ ghi dòng cho tệp MỚI thấy lần này. */
