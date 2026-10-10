@@ -3,7 +3,7 @@ import type { RowDataPacket } from "mysql2";
 import type { AppConfig } from "../config.js";
 import { AlertKind, ConversationType, JobKind, JobStatus, MessagePriority, ReplyState } from "../constants.js";
 import type { Db } from "../db/pool.js";
-import { markFlagHandled, upsertMessageFlag } from "../flags/message-flags.js";
+import { markFlagHandled, openFlagSql, upsertMessageFlag } from "../flags/message-flags.js";
 import { enqueueJob } from "../jobs/job-queue.js";
 import type { WorkCalendar } from "../schedule/work-calendar.js";
 import { parseKeywordList } from "./keyword-matcher.js";
@@ -75,8 +75,8 @@ export async function saveDecision(
 }
 
 /**
- * Một tin mới có làm tin đang chờ thành «đã xử lý» không (IDA câu 8): trả lời TRÍCH DẪN đúng tin đó, hoặc nhắc tên người
- * hỏi — bởi người khác người hỏi. Trả về số tin vừa đóng.
+ * Một tin mới có làm tin đang chờ (hoặc tin khẩn / quan trọng chưa xử lý) thành «đã xử lý» không (IDA câu 8): trả lời
+ * TRÍCH DẪN đúng tin đó, hoặc nhắc tên người hỏi — bởi người khác người hỏi. Trả về số tin vừa đóng.
  */
 export async function closeAnsweredFlags(
   db: Db, message: { id: number; groupId: number; senderUid: string; quoteZaloMsgId: string | null; mentionUids: string[]; sentAt: Date },
@@ -85,8 +85,8 @@ export async function closeAnsweredFlags(
   if (message.quoteZaloMsgId) {
     const [rows] = await db.query<RowDataPacket[]>(
       `SELECT f.message_id FROM message_flag f JOIN message m ON m.id = f.message_id
-       WHERE m.group_id = ? AND m.zalo_msg_id = ? AND m.sender_uid <> ? AND f.reply_state IN (?, ?)`,
-      [message.groupId, message.quoteZaloMsgId, message.senderUid, ReplyState.Waiting, ReplyState.Seen]);
+       WHERE m.group_id = ? AND m.zalo_msg_id = ? AND m.sender_uid <> ? AND ${openFlagSql("f.")}`,
+      [message.groupId, message.quoteZaloMsgId, message.senderUid]);
     for (const row of rows) if (await markFlagHandled(db, Number(row.message_id), message.senderUid, message.id, message.sentAt)) closed += 1;
   }
   const others = message.mentionUids.filter((uid) => uid !== message.senderUid);
@@ -94,8 +94,8 @@ export async function closeAnsweredFlags(
     // Nhắc tên người hỏi = đang trả lời người đó: đóng các tin của họ còn chờ trong nhóm (24 giờ gần nhất)
     const [rows] = await db.query<RowDataPacket[]>(
       `SELECT f.message_id FROM message_flag f JOIN message m ON m.id = f.message_id
-       WHERE m.group_id = ? AND m.sender_uid IN (?) AND f.reply_state IN (?, ?) AND m.sent_at > ? AND m.id < ?`,
-      [message.groupId, others, ReplyState.Waiting, ReplyState.Seen, new Date(message.sentAt.getTime() - 86_400_000), message.id]);
+       WHERE m.group_id = ? AND m.sender_uid IN (?) AND ${openFlagSql("f.")} AND m.sent_at > ? AND m.id < ?`,
+      [message.groupId, others, new Date(message.sentAt.getTime() - 86_400_000), message.id]);
     for (const row of rows) if (await markFlagHandled(db, Number(row.message_id), message.senderUid, message.id, message.sentAt)) closed += 1;
   }
   return closed;

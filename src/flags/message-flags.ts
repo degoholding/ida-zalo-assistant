@@ -54,12 +54,20 @@ export async function markFlagSeen(db: Db, messageId: number, byUid: string, at:
   return result.affectedRows === 1;
 }
 
+/**
+ * Cờ còn «mở» — đóng được khi có người trả lời: tin đang chờ / đã xem, HOẶC tin KHẨN / QUAN TRỌNG không cần chờ trả lời
+ * (AI bắt, từ khóa) chưa ai xử lý — để bản tin (phase 8) thôi hiện «khẩn chưa xử lý» khi đã có người trả lời trích dẫn /
+ * nhắc tên người gửi. `alias` = tiền tố bảng («f.» hoặc rỗng).
+ */
+export const openFlagSql = (alias = "") =>
+  `(${alias}reply_state IN (${ReplyState.Waiting}, ${ReplyState.Seen}) OR (${alias}reply_state = ${ReplyState.NotNeeded} AND ${alias}priority > ${MessagePriority.Normal}))`;
+
 /** Tin đã được xử lý: bằng một tin trả lời (`replyMessageId`) hoặc đánh dấu tay (null). */
 export async function markFlagHandled(db: Db, messageId: number, byUid: string, replyMessageId: number | null, at: Date): Promise<boolean> {
   const [result] = await db.query<ResultSetHeader>(
     `UPDATE message_flag SET reply_state = ?, handled_at = ?, handled_by_uid = ?, handled_message_id = ?
-     WHERE message_id = ? AND reply_state IN (?, ?)`,
-    [ReplyState.Handled, at, byUid.slice(0, 40), replyMessageId, messageId, ReplyState.Waiting, ReplyState.Seen]);
+     WHERE message_id = ? AND ${openFlagSql()}`,
+    [ReplyState.Handled, at, byUid.slice(0, 40), replyMessageId, messageId]);
   return result.affectedRows === 1;
 }
 

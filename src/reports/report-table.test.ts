@@ -68,6 +68,8 @@ test("file names follow the IDA convention «Tên công việc - Thời gian - T
   // Không có kỳ → ngày lập; không rõ người hỏi → Bot-tro-ly; tiêu đề toàn ký tự lạ → Bao-cao
   assert.equal(reportFileName("!!!", "", "", "07/10/2026"), "Bao-cao - 07-10-2026 - Bot-tro-ly.xlsx");
   assert.equal(reportFileName("Doanh số", "01.10–07.10.2026", "An", "07/10/2026"), "Doanh-so - 01.10-07.10.2026 - An.xlsx");
+  // Đuôi tệp tùy chọn (phase 3: báo cáo tuần / tháng xuất cả PDF lẫn Excel cùng quy ước tên)
+  assert.equal(reportFileName("Bao cao tuan", "Tuan 41-2026", "Tran Duoc", "07/10/2026", "pdf"), "Bao-cao-tuan - Tuan-41-2026 - Tran-Duoc.pdf");
 });
 
 test("extra sheets become their own tabs with unique names; a broken extra sheet is reported to the model", () => {

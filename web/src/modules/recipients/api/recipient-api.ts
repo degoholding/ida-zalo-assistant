@@ -16,6 +16,11 @@ export const recipientApi = {
     const res = await httpClient.post<SuccessEnvelope<null>>(`${RECIPIENTS_API_PATH}/${id}/test`)
     return res.data.message
   },
+  /** Gửi thử một bản tin / báo cáo (`kind` khớp `BriefKind` ở `src/constants.ts`) vào chat riêng với bot. */
+  sendBriefTest: async (id: number, kind: number) => {
+    const res = await httpClient.post<SuccessEnvelope<null>>(`${RECIPIENTS_API_PATH}/${id}/brief-test`, { kind })
+    return res.data.message
+  },
   listUserOptions: async () =>
     (await apiGet<PaginatedResult<RecipientUserOption>>('/api/users', { params: { page_size: USER_OPTIONS_PAGE_SIZE } })).items,
 }

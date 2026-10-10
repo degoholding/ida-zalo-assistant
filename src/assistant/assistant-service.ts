@@ -27,6 +27,8 @@ import { TICKET_TOOL_DECLARATIONS, TICKET_TOOLS_PROMPT } from "../tickets/ticket
 import { buildTaskContext } from "../tasks/task-commands.js";
 import { TASK_TOOL_DECLARATIONS, TASK_TOOLS_PROMPT } from "../tasks/task-tools.js";
 import type { TicketDeps } from "../tickets/ticket-service.js";
+import type { BriefChatDeps } from "../briefs/brief-commands.js";
+import { BRIEF_TOOL_PROMPT, SEND_BRIEF_DECLARATION } from "../briefs/brief-tool.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
 // (tối đa MAX_TOOL_ROUNDS vòng) → ghi nhật ký assistant_turn. Không tự gửi Zalo — trả về câu trả
@@ -67,6 +69,8 @@ export interface AssistantOptions {
   alertTools?: AlertToolsDeps;
   /** Ticket qua bot (08/10/2026): «báo lỗi: …», «nhận / xong T-12». Bỏ trống = không có lệnh ticket. */
   tickets?: TicketDeps;
+  /** Bản tin / báo cáo gọi tay (phase 8): «bản tin sáng», «báo cáo tuần»… Bỏ trống = không có. */
+  briefs?: BriefChatDeps;
   /** Tìm web riêng (Tavily). Có thì dùng trước; lỗi / hết hạn mức thì lùi về tìm web của mô hình (Gemini) nếu có. */
   webSearch?: (query: string) => Promise<WebSearchResult>;
 }
@@ -231,11 +235,14 @@ export class AssistantService {
     const command = parseChatCommand(request.question);
     if (command) {
       const alertTools = this.options.alertTools;
-      const asker = !request.groupScope && alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
+      const brief = this.options.briefs;
+      // Người nhận cảnh báo (asker.recipientId) dùng chung cho cả công cụ cảnh báo lẫn lệnh bản tin — dựng asker khi
+      // một trong hai bật, không chỉ khi có alertTools (một bot có thể bật bản tin mà chưa bật cảnh báo qua chat)
+      const asker = !request.groupScope && (alertTools || brief) ? await resolveAlertAsker(this.db, request.contact) : null;
       const contact = request.contact;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
-      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, ticketOnly }, command);
+      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly }, command);
       if (text !== null) {
         await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: command }], model: "lệnh" });
         return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };
@@ -322,12 +329,19 @@ export class AssistantService {
     context.ticket = ticket;
     context.task = task;
     const scope = request.groupScope;
-    // Công cụ cảnh báo: chỉ tin riêng, người hỏi có vai trò hoặc là người nhận
-    const alertAsker = !scope && this.options.alertTools ? await resolveAlertAsker(this.db, request.contact) : null;
+    // Công cụ cảnh báo + công cụ bản tin (send_brief): chỉ tin riêng, người hỏi có vai trò hoặc là người nhận — một
+    // lượt resolveAlertAsker dùng chung cho cả hai (asker.recipientId quyết định có công cụ send_brief hay không)
+    const asker = !scope && (this.options.alertTools || this.options.briefs) ? await resolveAlertAsker(this.db, request.contact) : null;
+    const alertAsker = this.options.alertTools ? asker : null;
     if (alertAsker) {
       context.alertTools = this.options.alertTools;
       context.alertAsker = alertAsker;
       context.turnStartedAt = Date.now();
+    }
+    const briefAsker = this.options.briefs && asker?.recipientId ? asker : null;
+    if (briefAsker) {
+      context.brief = this.options.briefs;
+      context.briefAsker = briefAsker;
     }
     if (scope) {
       context.scopeGroupId = scope.groupId;
@@ -346,11 +360,13 @@ export class AssistantService {
       ...(alertAsker ? ALERT_TOOL_DECLARATIONS : []),
       ...(ticket ? TICKET_TOOL_DECLARATIONS : []),
       ...(task ? TASK_TOOL_DECLARATIONS : []),
+      ...(briefAsker ? [SEND_BRIEF_DECLARATION] : []),
     ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
     const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
-      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "") + (task ? TASK_TOOLS_PROMPT : "");
+      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "")
+      + (task ? TASK_TOOLS_PROMPT : "") + (briefAsker ? BRIEF_TOOL_PROMPT : "");
     const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
     const contents = scope ? [] : mask(await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid));
     // Câu hỏi của chính người hỏi giữ nguyên (họ có thể đang hỏi đúng một số điện thoại); ngữ cảnh nhóm kèm theo thì che

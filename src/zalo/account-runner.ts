@@ -502,6 +502,9 @@ export class AccountRunner {
     // Ticket (đại ca 08/10/2026): AI nhắn được cho bot đều báo / theo dõi ticket được, kể cả khách — chỉ lệnh ticket +
     // «hướng dẫn»; câu hỏi khác của người chưa có vai trò vẫn không trả lời.
     // Lệnh việc: người phụ trách (nhân viên chưa có vai trò) báo «xong V-12» trong tin riêng — quyền kiểm theo từng việc
+    // Bản tin / báo cáo (phase 8, «bản tin sáng», «báo cáo tuần»…): KHÔNG thêm vào ticketAllowed — cổng tin riêng này
+    // đã cho người nhận đang bật qua (isActiveRecipientUid), runBriefCommand (chat-commands.ts) chỉ cần kiểm lại
+    // asker.recipientId; người lạ gõ đúng câu đó vẫn bị chặn ở đây như mọi câu hỏi khác (không lộ câu từ chối ra ngoài).
     const ticketAllowed = isTicketCommand(command) || isTaskCommand(command) || command?.kind === "help";
     const canAsk = result.contact.role !== ContactRole.None || await isActiveRecipientUid(this.db, incoming.senderUid) || ticketAllowed;
     if (!this.assistant || !canAsk) {
@@ -658,6 +661,17 @@ export class AccountRunner {
     await recordOutgoingMessage(this.db, thread, bot, String(msgId), file.fileName, {
       kind: MessageKind.File, file: { name: file.fileName, ext: reportFileExtension(file.fileName), storageKey: file.storageKey, bytes: file.bytes },
     });
+  }
+
+  /**
+   * Tệp báo cáo (PDF / Excel, phase 3 — báo cáo tuần / tháng) gửi riêng cho một người nhận: tạo cuộc riêng nếu chưa có
+   * (như `sendDirectText`) rồi gửi tệp vào đó. Nhiều tệp của cùng một báo cáo gọi hàm này nhiều lần (mỗi tệp một job,
+   * giữ thứ tự qua `serialKey recipient:<id>` của hàng đợi — xem `recipient-repository.ts`).
+   */
+  async sendDirectReportFile(peerUid: string, peerName: string, file: GeneratedReportFile): Promise<void> {
+    const { group: thread } = await ensureThread(this.db, directKey(this.account.id, peerUid),
+      { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles }, peerName);
+    await this.sendReportFile(thread, file);
   }
 
   /** Thread Zalo (riêng / nhóm) của một cuộc trong kho. */

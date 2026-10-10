@@ -46,6 +46,9 @@ export const ENTITIES = [
   'ticket',
   // Màn Việc (phase 7, 09/10/2026): cùng luật quyền như ticket — Quản trị + Quản lý tạo / thao tác, Nhân viên chỉ xem.
   'task',
+  // Màn Bản tin (phase 8, phase 5 — 09/10/2026): CHỈ ĐỌC, mọi vai trò — phạm vi DÒNG (không phải vai trò) lọc ở máy chủ:
+  // quản trị thấy hết, người khác chỉ thấy bản tin của người nhận gắn với tài khoản mình.
+  'brief',
 ] as const
 
 export type PermissionEntity = (typeof ENTITIES)[number]

@@ -429,6 +429,18 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     envName: "BACKUP_KEEP_DAYS", defaultValue: 30, min: 3, max: 365,
     applyTo: (config, value) => { config.backup.keepDays = asNumber(value); },
   },
+  {
+    key: "brief_ai_highlights_enabled", group: "operations", label: "Điểm tin AI trong bản tin", type: "bool", secret: false,
+    help: "Mục 5 của bản tin sáng / cuối ngày: AI chọn tối đa 3 ý nổi bật. Tắt thì bản tin vẫn gửi, chỉ bỏ mục này.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.briefs.aiHighlightsEnabled = value === true; },
+  },
+  {
+    key: "periodic_reports_enabled", group: "operations", label: "Tự gửi báo cáo tuần / tháng", type: "bool", secret: false,
+    help: "Báo cáo tuần (08:00 thứ 2) / tháng (ngày 3) tự soạn và gửi cho mọi người nhận đang bật.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.briefs.periodicReportsEnabled = value === true; },
+  },
 ];
 
 const BY_KEY = new Map(SETTING_DEFINITIONS.map((definition) => [definition.key, definition]));

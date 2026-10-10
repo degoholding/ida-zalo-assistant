@@ -21,7 +21,7 @@ export interface Principal {
 export const SYSTEM_PRINCIPAL: Principal = { userId: null, tenantId: 1, fullName: "Hệ thống", email: "", role: UserRole.Admin, groupIds: null };
 
 /** Thực thể của giao diện — phải khớp `ENTITIES` ở web/src/core/authorization/permission-types.ts. */
-export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task"] as const;
+export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task", "brief"] as const;
 export type Entity = (typeof ENTITIES)[number];
 export type Action = "read" | "write" | "create" | "export";
 export type PermissionMap = Record<string, Record<Action, boolean>>;

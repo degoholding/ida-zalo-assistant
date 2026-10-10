@@ -4,6 +4,8 @@ import { ContactRole } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { parseKeywordList } from "../alerts/keyword-matcher.js";
 import { dropPendingChanges, latestPendingChange, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
+import { isBriefCommand, parseBriefCommand, type BriefCommand } from "../briefs/brief-command-parser.js";
+import { runBriefCommand, type BriefChatDeps } from "../briefs/brief-commands.js";
 import { runTicketCommand, type TicketCommand, type TicketCommandContext } from "../tickets/ticket-commands.js";
 import { describeContactChoices, pickContactMatch, searchContactsByName } from "../sync/contact-search.js";
 import { foldKeepLength } from "./fold-text.js";
@@ -26,7 +28,8 @@ export type ChatCommand =
   | { kind: "confirm" }
   | { kind: "cancel" }
   | TicketCommand
-  | TaskCommand;
+  | TaskCommand
+  | BriefCommand;
 
 /** Lệnh ticket (báo / xem / nhận / xong / hủy / bổ sung) — người chưa có vai trò cũng dùng được (src/tickets/). */
 export const isTicketCommand = (command: ChatCommand | null): command is TicketCommand => Boolean(command?.kind.startsWith("ticket_"));
@@ -68,6 +71,8 @@ export function parseChatCommand(input: string): ChatCommand | null {
   if (ticketText) return ticketText;
   const taskCommand = parseTaskCommand(input);
   if (taskCommand) return taskCommand;
+  const briefCommand = parseBriefCommand(input);
+  if (briefCommand) return briefCommand;
   const original = input.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?…]+$/u, "").trim();
   if (!original || original.length > 120) return null;
   const folded = foldKeepLength(original);
@@ -114,6 +119,8 @@ export interface ChatCommandContext {
   ticket?: TicketCommandContext;
   /** Việc (checklist): người hỏi + cuộc đang hỏi. Không có = không có lệnh việc. */
   task?: TaskCommandContext;
+  /** Bản tin / báo cáo gọi tay (phase 8): không có = không có lệnh bản tin (chạy tiếp lệnh khác / mô hình AI). */
+  brief?: BriefChatDeps;
   /** Người chỉ được dùng lệnh ticket (chưa có vai trò, không là người nhận) — «hướng dẫn» chỉ nói phần ticket */
   ticketOnly?: boolean;
 }
@@ -187,7 +194,12 @@ export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, option
       "- cần xử lý — tin KHẨN và tin đang chờ trả lời",
       "- xong 1234 — đánh dấu tin số 1234 đã xử lý (số lấy từ danh sách trên)",
       "- cấu hình — xem cấu hình cảnh báo đang dùng");
-    if (asker.recipientId) lines.push("- thêm vip <tên> / bỏ vip <tên> — VIP của riêng anh/chị");
+    if (asker.recipientId) {
+      lines.push("- thêm vip <tên> / bỏ vip <tên> — VIP của riêng anh/chị");
+      lines.push("", "BẢN TIN, BÁO CÁO (gọi ngay, không cần chờ giờ hẹn):",
+        "- bản tin sáng / bản tin cuối ngày — xem lại bản tin của hôm nay",
+        "- báo cáo tuần / báo cáo tháng (thêm «trước» hoặc «này» để chọn kỳ) — PDF + Excel gửi kèm");
+    }
     if (canChangeGlobal(asker)) {
       lines.push("", "ĐỔI CẤU HÌNH CHUNG (quản lý / trưởng phòng):",
         "- thêm từ khẩn <từ> / bỏ từ khẩn <từ>",
@@ -268,6 +280,9 @@ export async function runChatCommand(ctx: ChatCommandContext, command: ChatComma
   }
   if (isTicketCommand(command)) return ctx.ticket ? runTicketCommand(ctx.ticket, command, ctx.now) : null;
   if (isTaskCommand(command)) return ctx.task ? runTaskCommand(ctx.task, command, ctx.now) : null;
+  // Bản tin / báo cáo: CHỈ tin riêng (lộ dữ liệu phạm vi / Mật ra nhóm) — kiểm ngay ở đây, không chờ cổng ticketOnly
+  // bên dưới vì câu từ chối ("không phải người nhận") vẫn phải trả lời cả người không có vai trò nào.
+  if (isBriefCommand(command)) return ctx.inGroup ? null : ctx.brief ? runBriefCommand(ctx.brief, ctx.asker, command, ctx.now) : null;
   if (ctx.inGroup || ctx.ticketOnly) return null;
   const { asker, alertTools: deps } = ctx;
   if (command.kind === "confirm" || command.kind === "cancel") {

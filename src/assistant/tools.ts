@@ -15,6 +15,8 @@ import { runTicketTool, TICKET_TOOL_NAMES } from "../tickets/ticket-tools.js";
 import type { TicketCommandContext } from "../tickets/ticket-commands.js";
 import type { TaskCommandContext } from "../tasks/task-commands.js";
 import { runTaskTool, TASK_TOOL_NAMES } from "../tasks/task-tools.js";
+import type { BriefChatDeps } from "../briefs/brief-commands.js";
+import { runSendBriefTool } from "../briefs/brief-tool.js";
 
 // Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file và export_report — send_file chỉ gửi cho
 // chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
@@ -69,6 +71,9 @@ export interface ToolContext {
   ticket?: TicketCommandContext;
   /** Việc (checklist): người hỏi + cuộc đang hỏi (list_tasks / create_task / task_action / save_recap_tasks) */
   task?: TaskCommandContext;
+  /** Bản tin / báo cáo gọi tay (phase 8, công cụ send_brief) — chỉ gắn khi người hỏi là người nhận, tin riêng. */
+  brief?: BriefChatDeps;
+  briefAsker?: AlertAsker;
 }
 
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
@@ -488,6 +493,7 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
     (context: ToolContext, args: Record<string, unknown>) => runTicketTool(context.ticket, name, args, context.now)])),
   ...Object.fromEntries([...TASK_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) => runTaskTool(context.task, name, args, context.now)])),
+  send_brief: (context, args) => runSendBriefTool(context.brief, context.briefAsker, args, context.now),
   ...Object.fromEntries([...ALERT_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) =>
       runAlertTool(context.alertTools, context.alertAsker, name, args, context.now, context.turnStartedAt ?? Date.now())])),

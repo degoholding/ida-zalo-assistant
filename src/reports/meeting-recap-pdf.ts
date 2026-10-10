@@ -1,22 +1,11 @@
-import { createRequire } from "node:module";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { MeetingRecap, RecapSection, RecapVariant, TaskPriority } from "./meeting-recap-input.js";
+import { COLOR, LOGO, MAIN_FONT, getEngine } from "./pdf-engine.js";
 import { GlyphCoverage, toTextRuns } from "./pdf-text-runs.js";
 
 // Dựng PDF recap cuộc họp theo mẫu «Meeting Recap» của DEGO (06/10/2026): logo + «RECAP HỌP» · tiêu đề lớn · bảng
 // thông tin · khung TL;DR vàng · thanh mục xanh · bảng · định hướng ✓ · công việc (ưu tiên tô màu) · mốc thời gian ·
-// vấn đề mở · người tham dự. pdfmake (JS thuần, không cần Chrome) + font Be Vietnam Pro (OFL) trong assets/fonts.
+// vấn đề mở · người tham dự. Máy dựng PDF dùng chung (pdfmake + font + logo) nằm ở pdf-engine.ts (phase 3, 09/10/2026).
 
-const ASSETS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../assets");
-const FONT_DIR = path.join(ASSETS, "fonts");
-const LOGO = path.join(ASSETS, "brand", "dego-holding-logo.png");
-const MAIN_FONT = "BeVietnam";
-
-const COLOR = {
-  teal: "#1f7a99", tealText: "#1d5f78", tealLight: "#eef5f9", green: "#7cc242", border: "#cfdde6",
-  muted: "#6b7c88", tldrBg: "#fff8e6", tldrBorder: "#f5a623", text: "#1f2a33",
-};
 const PRIORITY_STYLE: Record<TaskPriority, { fill: string; color: string }> = {
   Cao: { fill: "#fde4e4", color: "#c0392b" }, TB: { fill: "#fff3d6", color: "#b7791f" }, Thấp: { fill: "#e5f5ea", color: "#2f855a" },
 };
@@ -32,35 +21,6 @@ const LABELS: Record<RecapVariant, { kicker: string; kickerEn: string; decisions
     sourcePrefix: "Tài liệu gốc", footer: "Bản tóm tắt nội bộ", subject: "Document Summary",
   },
 };
-
-interface PdfMake {
-  addFonts(fonts: Record<string, Record<string, string>>): void;
-  setLocalAccessPolicy(callback: (filePath: string) => boolean): void;
-  setUrlAccessPolicy(callback: (url: string) => boolean): void;
-  createPdf(doc: object): { getBuffer(): Promise<Buffer> };
-}
-
-let engine: { pdfmake: PdfMake; coverage: GlyphCoverage } | null = null;
-
-/** Nạp pdfmake + font một lần cho cả tiến trình; chỉ cho đọc tệp trong assets, cấm tải URL. */
-function getEngine() {
-  if (engine) return engine;
-  const require = createRequire(import.meta.url);
-  const pdfmake = require("pdfmake") as PdfMake;
-  const font = (name: string) => path.join(FONT_DIR, name);
-  pdfmake.addFonts({
-    [MAIN_FONT]: { normal: font("BeVietnamPro-Regular.ttf"), bold: font("BeVietnamPro-SemiBold.ttf"), italics: font("BeVietnamPro-Italic.ttf"), bolditalics: font("BeVietnamPro-BoldItalic.ttf") },
-    SymbolsMath: { normal: font("NotoSansMath-Regular.ttf"), bold: font("NotoSansMath-Regular.ttf"), italics: font("NotoSansMath-Regular.ttf"), bolditalics: font("NotoSansMath-Regular.ttf") },
-    Symbols2: { normal: font("NotoSansSymbols2-Regular.ttf"), bold: font("NotoSansSymbols2-Regular.ttf"), italics: font("NotoSansSymbols2-Regular.ttf"), bolditalics: font("NotoSansSymbols2-Regular.ttf") },
-  });
-  pdfmake.setLocalAccessPolicy((filePath) => path.resolve(filePath).startsWith(ASSETS));
-  pdfmake.setUrlAccessPolicy(() => false);
-  const coverage = new GlyphCoverage(MAIN_FONT, [
-    { name: "SymbolsMath", path: font("NotoSansMath-Regular.ttf") }, { name: "Symbols2", path: font("NotoSansSymbols2-Regular.ttf") },
-  ], font("BeVietnamPro-Regular.ttf"));
-  engine = { pdfmake, coverage };
-  return engine;
-}
 
 export function buildRecapDocument(recap: MeetingRecap, coverage: Pick<GlyphCoverage, "fontFor">, logoPath: string | null = LOGO): object {
   const rich = (value: string) => toTextRuns(value, coverage, COLOR.tealText, MAIN_FONT);

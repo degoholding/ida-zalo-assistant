@@ -8,6 +8,7 @@ import { buildWorkCalendar, type WorkCalendar } from "./schedule/work-calendar.j
 import { runAiReview } from "./alerts/ai-review.js";
 import { runReminders } from "./alerts/reminders.js";
 import { telegramSenderFor, watchSessions } from "./alerts/session-watch.js";
+import { runBriefs } from "./briefs/brief-runner.js";
 import { backfillMessageSearch } from "./search/message-search-index.js";
 import { runTaskReminders } from "./tasks/task-reminders.js";
 import { runTaskExtraction } from "./tasks/task-proposals.js";
@@ -69,6 +70,7 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     "session-watch": () => watchSessions(db, telegramSenderFor(config)),
     "task-reminders": () => runTaskReminders(db, config, safeCalendar()),
     "task-extract": () => runTaskExtraction(db, config, safeCalendar()),
+    briefs: () => runBriefs(db, config, safeCalendar(), storage),
     "search-index": async () => {
       const copied = await backfillMessageSearch(db);
       if (copied) log.info(`chép ${copied} tin cũ vào bảng tìm`);

@@ -36,7 +36,8 @@ describe('sidebar gating by role', () => {
 
   it('hides every admin-only screen from a staff member', () => {
     // «Tìm tin» (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Công ty'])
+    // «Bản tin» (phase 8) cũng đọc được — phạm vi DÒNG (không phải vai trò) lọc ở máy chủ
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Công ty'])
   })
 
   it('gives a manager the same menu as staff — write rights do not unlock admin screens', () => {
@@ -64,6 +65,11 @@ describe('menu items point at registered screens', () => {
   it('has a menu entry for the Việc (task) list that staff can see (read-only)', () => {
     expect(NAV_ITEMS.find((item) => item.path === appRoutes.tasks.list)?.entity).toBe('task')
     expect(visibleLabels('staff')).toContain('Việc')
+  })
+
+  it('has a menu entry for the Bản tin (brief) list that staff can see (read-only, scoped by row server-side)', () => {
+    expect(NAV_ITEMS.find((item) => item.path === appRoutes.briefs.list)?.entity).toBe('brief')
+    expect(visibleLabels('staff')).toContain('Bản tin')
   })
 
   it('never repeats a path — the breadcrumb picks the first prefix match', () => {

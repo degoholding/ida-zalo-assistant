@@ -101,6 +101,13 @@ export interface AppConfig {
   };
   /** Sao lưu CSDL: số ngày giữ bản sao lưu trên kho tệp. */
   backup: { keepDays: number };
+  /** Bản tin / báo cáo (phase 8, N6). */
+  briefs: {
+    /** Mục 5 (điểm tin AI) bản tin sáng / cuối ngày — tắt thì bỏ mục, không gọi AI. */
+    aiHighlightsEnabled: boolean;
+    /** Báo cáo tuần / tháng tự gửi (phase 3) — tắt chung cho mọi người nhận. */
+    periodicReportsEnabled: boolean;
+  };
   /** Chỉ đặt được trên màn Cài đặt (bảng app_setting) — không có biến .env. */
   google: {
     serviceAccount: unknown; spreadsheetUrl: string;
@@ -200,6 +207,7 @@ export function loadConfig(): AppConfig {
     calendar: { workHours: DEFAULT_WORK_HOURS, workDays: DEFAULT_WORK_DAYS, quietHours: DEFAULT_QUIET_HOURS, holidays: DEFAULT_HOLIDAYS },
     privacy: { maskPersonalData: true, blockWebForAgroTechnical: true, allowedAiProviders: ALL_AI_PROVIDER_CODES },
     backup: { keepDays: readInt("BACKUP_KEEP_DAYS", 30) },
+    briefs: { aiHighlightsEnabled: true, periodicReportsEnabled: true },
     alerts: {
       enabled: true, urgentKeywords: DEFAULT_URGENT_KEYWORDS, importantKeywords: DEFAULT_IMPORTANT_KEYWORDS, strictKeywords: DEFAULT_STRICT_KEYWORDS,
       replyWaitMinutes: 120, vipWaitMinutes: 30, dailyReminderCap: 3, urgentMergeSeconds: 120, aiEnabled: true,

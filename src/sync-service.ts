@@ -32,13 +32,20 @@ function buildWebSearchChain(tavilyApiKey: string): (query: string) => Promise<W
 }
 import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { AttachmentDownloader } from "./sync/attachment-downloader.js";
-import { ConversationType, JobKind } from "./constants.js";
+import { BriefKind, BriefTrigger, ConversationType, JobKind } from "./constants.js";
 import { CpuPool } from "./cpu/cpu-pool.js";
 import type { JobRow } from "./jobs/job-queue.js";
 import { JobRunner } from "./jobs/job-runner.js";
+import { markBriefFailed, markBriefSent } from "./briefs/brief-log-repository.js";
+import type { BriefChatDeps } from "./briefs/brief-commands.js";
+import { HighlightCache } from "./briefs/brief-ai-highlights.js";
+import { produceBrief, type BriefDeps, type ProducedBrief } from "./briefs/brief-delivery.js";
 import { findRecipient, type RecipientMessagePayload } from "./recipients/recipient-repository.js";
+import { PeriodicStatsCache } from "./reports/periodic-report-stats-cache.js";
 import { AlertService } from "./alerts/alert-service.js";
+import { buildAlertModelClient } from "./alerts/ai-review.js";
 import { workCalendarFrom } from "./background.js";
+import type { WorkCalendar } from "./schedule/work-calendar.js";
 import { recordAudit } from "./web/api/audit-log.js";
 import { findThreadById, GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
 import type { TicketDeps } from "./tickets/ticket-service.js";
@@ -76,6 +83,9 @@ export class SyncService {
   readonly alerts: AlertService;
   /** Ticket qua bot (08/10/2026): lệnh trên Zalo + màn Ticket trên web dùng chung. */
   readonly tickets: TicketDeps;
+  /** Lịch làm việc hiện hành (phase 8: bản tin / báo cáo gọi tay cần lịch để tính kỳ) — dựng ngay đầu constructor để
+   * `buildAssistant()` (gọi ngay sau) dùng được; cùng một cái với `AlertService`, dựng lại khi cài đặt lịch đổi. */
+  private readonly getCalendar: () => WorkCalendar;
   private currentAssistant: AssistantService | null;
   private readonly runners = new Map<number, AccountRunner>();
 
@@ -96,20 +106,49 @@ export class SyncService {
       requestDownload: (ids) => { for (const id of ids) this.downloader.enqueue(id); },
       wakeJobs: () => this.jobs?.wake(),
     };
+    this.getCalendar = workCalendarFrom(config);
     this.currentAssistant = this.buildAssistant();
     this.jobs = new JobRunner({
       db, role: "app", concurrency: config.assistant.concurrency,
       handlers: {
         [JobKind.AssistantDirectReply]: (job) => this.runnerForJob(job).runDirectReplyJob(job),
         [JobKind.AssistantGroupReply]: (job) => this.runnerForJob(job).runGroupReplyJob(job),
-        [JobKind.RecipientMessage]: (job) => this.sendRecipientMessage(job.payload as RecipientMessagePayload),
+        [JobKind.RecipientMessage]: (job) => this.sendRecipientMessage(job.payload as RecipientMessagePayload, job),
         [JobKind.AlertDispatch]: (job) => this.alerts.runDispatchJob(job),
         [JobKind.ContactMessage]: (job) => this.sendContactMessage(job),
       },
     });
-    const getCalendar = workCalendarFrom(config);
-    this.alerts = new AlertService(db, config, () => getCalendar(), () => this.jobs.wake(),
+    this.alerts = new AlertService(db, config, () => this.getCalendar(), () => this.jobs.wake(),
       (recipientId, text) => this.sendRecipientMessage({ recipientId, text }));
+  }
+
+  /** Lịch cài sai (CalendarInputError) thì báo lỗi ở bản tin thay vì sập — khuôn giống `background.ts` `safeCalendar`. */
+  private safeCalendar(): WorkCalendar | null {
+    try {
+      return this.getCalendar();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Nút «Gửi thử bản tin» màn Người nhận (phase 4, quản trị) — soạn + xếp hàng gửi NGAY, trigger `WebTest` nên không
+   * dùng `dedupe_key` (không chặn bản theo lịch chạy trong ngày). `recipients-api.ts` đã kiểm người nhận này tồn tại
+   * (404 nếu không) trước khi gọi; ở đây kiểm lại `is_active` vì `produceBrief` cần `RecipientRow` đầy đủ.
+   */
+  async sendTestBrief(recipientId: number, kind: BriefKind, now: Date = new Date()): Promise<ProducedBrief | null> {
+    const recipient = await findRecipient(this.db, recipientId);
+    if (!recipient || !recipient.is_active) throw new Error("Người nhận này đang tắt — bật «Đang dùng» rồi thử lại.");
+    const calendar = this.safeCalendar();
+    if (!calendar) throw new Error("Lịch làm việc đang cấu hình sai — kiểm tra ở màn Cài đặt.");
+    const deps: BriefDeps = {
+      db: this.db, config: this.config, calendar, storage: this.storage,
+      client: () => buildAlertModelClient(this.db, this.config), highlightCache: new HighlightCache(),
+      messageStatsCache: new PeriodicStatsCache(),
+    };
+    const result = await produceBrief(deps, recipient, kind, BriefTrigger.WebTest, now);
+    this.jobs.wake();
+    return result;
   }
 
   /** Việc trả lời phải chạy đúng tài khoản bot đã nhận câu hỏi (phiên Zalo của tài khoản đó gửi câu trả lời). */
@@ -121,11 +160,18 @@ export class SyncService {
   }
 
   /**
-   * Nhắn riêng cho một người nhận (kênh báo / lệnh, phase 4). Gửi bằng tài khoản bot đã có cuộc riêng với người đó
-   * (người nhận đã kết bạn / từng nhắn với bot đó); chưa có thì tài khoản bot đầu tiên đang chạy. Lỗi thì ném — hàng
-   * đợi thử lại.
+   * Nhắn riêng cho một người nhận (kênh báo / lệnh, phase 4), hoặc gửi bản tóm tắt + tệp báo cáo (`reportFiles`, phase 3
+   * — báo cáo tuần / tháng: MỘT job gửi chữ rồi tới từng tệp, xem brief-delivery.ts `enqueuePeriodicReportJob`, review
+   * phase 8 M2+M3). Gửi bằng tài khoản bot đã có cuộc riêng với người đó (người nhận đã kết bạn / từng nhắn với bot
+   * đó); chưa có thì tài khoản bot đầu tiên đang chạy.
+   *
+   * `job` (có khi gọi từ hàng đợi, không có khi `AlertService` gọi thẳng) dùng để: (1) ghi lại đã gửi tới đâu
+   * (`textSent` / `sentFileCount`) ngay vào payload của CHÍNH job này sau mỗi phần thành công — thử lại (lỗi giữa
+   * chừng) không gửi lặp phần đã xong; (2) biết đây có phải LƯỢT THỬ CUỐI để ghi `brief_log` Failed kèm lỗi thật thay
+   * vì chỉ im lặng hết hạn (job hết hạn hàng đợi mà KHÔNG qua đây thì `reconcileExpiredBriefJobs` dọn, brief-runner.ts).
+   * Lỗi gửi thì ném tiếp — hàng đợi tự thử lại theo `retryDelayMs`.
    */
-  private async sendRecipientMessage(payload: RecipientMessagePayload): Promise<void> {
+  private async sendRecipientMessage(payload: RecipientMessagePayload, job?: JobRow): Promise<void> {
     const recipient = await findRecipient(this.db, payload.recipientId);
     if (!recipient || !recipient.is_active) return;
     const [threads] = await this.db.query<RowDataPacket[]>(
@@ -134,7 +180,34 @@ export class SyncService {
     const ownerIds = threads.map((row) => Number(row.owner_bot_id));
     const runner = ownerIds.map((id) => this.runners.get(id)).find(Boolean) ?? [...this.runners.values()][0];
     if (!runner) throw new Error("không có tài khoản bot nào đang chạy để nhắn người nhận");
-    await runner.sendDirectText(recipient.zalo_uid, recipient.name, payload.text);
+
+    const persistProgress = async (patch: Partial<RecipientMessagePayload>): Promise<void> => {
+      Object.assign(payload, patch);
+      if (job) await this.db.query("UPDATE job SET payload = ? WHERE id = ?", [JSON.stringify(payload), job.id]);
+    };
+    try {
+      if (payload.text && !payload.textSent) {
+        await runner.sendDirectText(recipient.zalo_uid, recipient.name, payload.text);
+        await persistProgress({ textSent: true });
+      }
+      const files = payload.reportFiles ?? [];
+      for (let index = payload.sentFileCount ?? 0; index < files.length; index += 1) {
+        await runner.sendDirectReportFile(recipient.zalo_uid, recipient.name, files[index]);
+        await persistProgress({ sentFileCount: index + 1 });
+      }
+    } catch (error) {
+      // Lượt thử CUỐI mà vẫn lỗi: ghi brief_log Failed kèm lý do thay vì để Queued mãi (review phase 8, M3)
+      if (payload.briefLogId && job && job.attempts >= job.maxAttempts) {
+        await markBriefFailed(this.db, payload.briefLogId, describeError(error)).catch((dbError) =>
+          log.error(`ghi brief_log #${payload.briefLogId} Failed lỗi`, describeError(dbError)));
+      }
+      throw error;
+    }
+    if (payload.briefLogId) {
+      // Gửi đã xong — lỗi ghi Sent không được bắt gửi lại nguyên bản tin lần nữa, chỉ log (review phase 8, M1)
+      await markBriefSent(this.db, payload.briefLogId).catch((error) =>
+        log.error(`đánh dấu brief_log #${payload.briefLogId} Sent lỗi`, describeError(error)));
+    }
   }
 
   /**
@@ -211,6 +284,12 @@ export class SyncService {
         invalidate: () => this.alerts.invalidate(),
       },
       tickets: this.tickets,
+      briefs: {
+        db: this.db, config: this.config, storage: this.storage,
+        calendar: () => this.safeCalendar(),
+        buildClient: () => buildAlertModelClient(this.db, this.config),
+        wakeJobs: () => this.jobs?.wake(),
+      } satisfies BriefChatDeps,
       webSearch: buildWebSearchChain(this.config.assistant.tavilyApiKey),
       reportExporter: new ReportExporter(this.storage, () => this.config.google),
       meetingScheduler: new MeetingScheduler(() => this.config.google),

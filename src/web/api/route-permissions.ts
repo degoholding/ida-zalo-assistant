@@ -23,7 +23,7 @@ const RULES: Rule[] = [
   ["GET", /^\/api\/users(\/|$)/, "user", "read"],
   ["WRITE", /^\/api\/users(\/\d+)?$/, "user", "write"],
   ["GET", /^\/api\/recipients(\/|$)/, "recipient", "read"],
-  ["WRITE", /^\/api\/recipients(\/\d+(\/test)?)?$/, "recipient", "write"],
+  ["WRITE", /^\/api\/recipients(\/\d+(\/test|\/brief-test)?)?$/, "recipient", "write"],
   ["GET", /^\/api\/accounts(\/|$)/, "bot_account", "read"],
   // Ticket (08/10/2026): xem + thao tác theo quyền «ticket»; sửa danh sách người xử lý KHÔNG khai → chỉ quản trị
   ["GET", /^\/api\/(tickets|ticket-handlers)(\/|$)/, "ticket", "read"],
@@ -32,6 +32,8 @@ const RULES: Rule[] = [
   ["GET", /^\/api\/tasks(\/|$)/, "task", "read"],
   ["WRITE", /^\/api\/tasks$/, "task", "write"],
   ["WRITE", /^\/api\/tasks\/\d+\/actions$/, "task", "write"],
+  // Bản tin (phase 8, màn web phase 5): chỉ đọc — phạm vi dòng (quản trị thấy hết, người khác chỉ thấy bản của mình) kiểm trong API
+  ["GET", /^\/api\/briefs(\/|$)/, "brief", "read"],
   ["WRITE", /^\/api\/accounts(\/|$)/, "bot_account", "write"],
 ];
 

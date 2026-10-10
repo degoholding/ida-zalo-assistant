@@ -95,10 +95,11 @@ const asciiSlug = (text: string, max: number) => text.normalize("NFD").replace(/
 /**
  * Tên tệp theo quy ước IDA «Tên công việc - Thời gian - Tên nhân viên» (đặc tả N6), bỏ dấu cho Zalo / đĩa, vd
  * «Bao-cao-cong-no - Tuan-41-2026 - Tran-Duoc.xlsx». Không có kỳ thì lấy ngày lập; không rõ người hỏi thì «Bot-tro-ly».
+ * `extension` (phase 3, báo cáo tuần / tháng có cả PDF lẫn Excel) mặc định «xlsx» — nơi gọi cũ không phải đổi.
  */
-export function reportFileName(title: string, period: string, requester: string, dateText: string): string {
+export function reportFileName(title: string, period: string, requester: string, dateText: string, extension = "xlsx"): string {
   const parts = [asciiSlug(title, 60) || "Bao-cao", asciiSlug(period, 30) || asciiSlug(dateText, 30), asciiSlug(requester, 30) || "Bot-tro-ly"];
-  return `${parts.join(" - ")}.xlsx`;
+  return `${parts.join(" - ")}.${extension}`;
 }
 
 /** Một tab Excel: độ rộng cột theo chữ dài nhất (trần 60), lọc nhanh trên hàng tiêu đề cột. */

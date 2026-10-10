@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { ConversationType } from "../../constants.js";
+import { BriefKind, ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { enqueueRecipientMessage } from "../../recipients/recipient-repository.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
@@ -15,6 +15,13 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_GROUPS = 500;
 const MAX_VIPS = 50;
 const TEST_TEXT = "Dạ đây là tin thử kênh báo của Bot trợ lý — từ giờ cảnh báo tin khẩn, việc đến hạn và bản tin sẽ gửi vào chat này ạ.";
+
+/** Loại bản tin nút «Gửi thử bản tin» gọi được — khớp `BriefKind` (src/constants.ts). */
+const BRIEF_TEST_KINDS = new Set<number>([BriefKind.Morning, BriefKind.Evening, BriefKind.Weekly, BriefKind.Monthly]);
+const BRIEF_TEST_LABELS: Record<number, string> = {
+  [BriefKind.Morning]: "bản tin sáng", [BriefKind.Evening]: "bản tin cuối ngày",
+  [BriefKind.Weekly]: "báo cáo tuần", [BriefKind.Monthly]: "báo cáo tháng",
+};
 
 export const RECIPIENT_LIST_SPEC: ListSpec = {
   fields: {
@@ -194,5 +201,16 @@ export const recipientRoutes: ApiRoute[] = [
     service.jobs.wake();
     await recordAudit(service.db, { entity: "recipient", entityId: id, action: "test_message", message: "Gửi thử kênh báo" });
     sendOk(response, null, "Đã xếp tin thử vào hàng gửi — người nhận thấy tin trong chat riêng với bot sau vài giây");
+  }],
+  // Gửi thử một bản tin / báo cáo vào chat riêng của người nhận (phase 8) — trigger WebTest, không chặn bản theo lịch
+  ["POST", /^\/api\/recipients\/(\d+)\/brief-test$/, async ({ request, response, match, service }) => {
+    const id = parseId(match[1]);
+    await getRecipientDetail(service.db, id);
+    const body = await readJson(request);
+    const kind = Number(body.kind);
+    if (!BRIEF_TEST_KINDS.has(kind)) throw invalid("Loại bản tin không hợp lệ — chọn bản tin sáng / cuối ngày / báo cáo tuần / tháng");
+    await service.sendTestBrief(id, kind as BriefKind);
+    await recordAudit(service.db, { entity: "recipient", entityId: id, action: "brief_test", message: `Gửi thử ${BRIEF_TEST_LABELS[kind]}` });
+    sendOk(response, null, "Đã xếp bản tin vào hàng gửi — người nhận thấy tin trong chat riêng với bot sau vài giây");
   }],
 ];

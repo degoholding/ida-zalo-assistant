@@ -12,8 +12,6 @@ import { shortTaskCode, type TaskRow } from "./task-repository.js";
 
 const DAY_MS = 86_400_000;
 const OVERDUE_GRACE_WORK_MINUTES = 60;
-/** Ngày hạn rơi vào kỳ nghỉ dài (Tết) — tìm ngày làm việc liền trước trong ngần này ngày */
-const MAX_LOOKBACK_DAYS = 20;
 
 export interface ReminderStageTimes {
   dayBefore: Date | null;
@@ -23,21 +21,13 @@ export interface ReminderStageTimes {
 
 const dayStartOf = (at: Date) => vnLocalTime(at).dayStartMs;
 
-/** Đầu giờ làm của ngày làm việc liền trước ngày `dayStartMs`. */
-function previousWorkdayStart(calendar: WorkCalendar, dayStartMs: number): Date | null {
-  for (let back = 1; back <= MAX_LOOKBACK_DAYS; back += 1) {
-    const day = dayStartMs - back * DAY_MS;
-    if (calendar.isWorkingDay(new Date(day + 12 * 3_600_000))) return calendar.addWorkingMinutes(new Date(day), 0);
-  }
-  return null;
-}
-
 export function reminderStageTimes(dueAt: Date, hasTime: boolean, calendar: WorkCalendar): ReminderStageTimes {
   const dueDay = dayStartOf(dueAt);
   const deadline = hasTime ? dueAt : new Date(dueDay + DAY_MS);
   const dueStage = calendar.addWorkingMinutes(new Date(dueDay), 0);
   return {
-    dayBefore: previousWorkdayStart(calendar, dueDay),
+    // previousWorkingDayStart nhấc lên WorkCalendar (DRY với kỳ bản tin sáng, phase 8)
+    dayBefore: calendar.previousWorkingDayStart(new Date(dueDay)),
     // Hạn trước giờ vào làm / hạn rơi vào ngày nghỉ: «tới hạn hôm nay» sẽ tới SAU hạn — bỏ, để mốc quá hạn nói đúng
     due: dueStage && dueStage.getTime() < deadline.getTime() ? dueStage : null,
     overdue: calendar.addWorkingMinutes(deadline, hasTime ? OVERDUE_GRACE_WORK_MINUTES : 0) ?? deadline,

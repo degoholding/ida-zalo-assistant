@@ -266,3 +266,31 @@ export enum FriendRequestStatus {
   // Bên gửi rút lại lời mời
   Cancelled = 3,
 }
+
+/** Loại bản tin / báo cáo (bảng brief_log, phase 8). Giao diện chép sang web/src/modules/briefs/types (phase 5). */
+export enum BriefKind {
+  Morning = 1,
+  Evening = 2,
+  Weekly = 3,
+  Monthly = 4,
+}
+
+/** Cái gì làm một bản tin / báo cáo được soạn. */
+export enum BriefTrigger {
+  // Việc nền theo giờ hẹn của người nhận / lịch tuần-tháng
+  Schedule = 1,
+  // Câu tự nhiên nhắn bot («bản tin sáng», «báo cáo tuần»)
+  Chat = 2,
+  // Nút «Gửi thử bản tin» trên web
+  WebTest = 3,
+}
+
+/** Một dòng brief_log tới đâu rồi. */
+export enum BriefStatus {
+  // Đang soạn (vừa giành lượt bằng INSERT IGNORE) — kẹt quá 15 phút thì lượt sau soạn lại
+  Composing = 1,
+  // Đã soạn xong, đã xếp vào hàng đợi gửi
+  Queued = 2,
+  Sent = 3,
+  Failed = 4,
+}

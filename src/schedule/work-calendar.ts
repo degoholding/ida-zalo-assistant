@@ -5,6 +5,8 @@
 const VN_OFFSET_MS = 7 * 60 * 60_000;
 const DAY_MS = 86_400_000;
 const MINUTES_PER_DAY = 24 * 60;
+/** Ngày hạn / kỳ rơi vào kỳ nghỉ dài (Tết) — tìm ngày làm việc liền kề trong ngần này ngày thì thôi. */
+const MAX_ADJACENT_LOOKUP_DAYS = 20;
 
 /** Khoảng giờ trong ngày, tính bằng phút từ 00:00. `end` < `start` = vắt qua nửa đêm (vd 21:00–06:30). */
 export interface TimeRange {
@@ -178,6 +180,38 @@ export class WorkCalendar {
     }
     return null;
   }
+
+  /** Ngày làm việc liền trước ngày chứa `at` (00:00 giờ VN, KHÔNG phải đầu giờ làm). null = không tìm thấy trong tầm nhìn. */
+  previousWorkingDay(at: Date, lookupDays = MAX_ADJACENT_LOOKUP_DAYS): Date | null {
+    const dayStartMs = toLocal(at).dayStartMs;
+    for (let back = 1; back <= lookupDays; back += 1) {
+      const day = dayStartMs - back * DAY_MS;
+      if (this.isWorkingDay(new Date(day + 12 * 3_600_000))) return new Date(day);
+    }
+    return null;
+  }
+
+  /** Đầu giờ làm của ngày làm việc liền trước (dùng cho mốc nhắc hạn — việc, phase 7). */
+  previousWorkingDayStart(at: Date, lookupDays = MAX_ADJACENT_LOOKUP_DAYS): Date | null {
+    const day = this.previousWorkingDay(at, lookupDays);
+    return day ? this.addWorkingMinutes(day, 0) : null;
+  }
+
+  /** Ngày làm việc kế tiếp sau ngày chứa `at` (00:00 giờ VN, không tính chính ngày `at`). */
+  nextWorkingDay(at: Date, lookupDays = MAX_ADJACENT_LOOKUP_DAYS): Date | null {
+    const dayStartMs = toLocal(at).dayStartMs;
+    for (let forward = 1; forward <= lookupDays; forward += 1) {
+      const day = dayStartMs + forward * DAY_MS;
+      if (this.isWorkingDay(new Date(day + 12 * 3_600_000))) return new Date(day);
+    }
+    return null;
+  }
+
+  /** Đầu giờ làm của ngày làm việc kế tiếp. */
+  nextWorkingDayStart(at: Date, lookupDays = MAX_ADJACENT_LOOKUP_DAYS): Date | null {
+    const day = this.nextWorkingDay(at, lookupDays);
+    return day ? this.addWorkingMinutes(day, 0) : null;
+  }
 }
 
 /** Chuỗi cài đặt → lịch. Sai thì ném CalendarInputError (câu cho người sửa cài đặt đọc). */
@@ -193,4 +227,10 @@ export function buildWorkCalendar(settings: { workHours: string; workDays: (stri
 /** Ngày giờ VN của một mốc: «2026-10-08», phút trong ngày, thứ — cho bộ lập lịch. */
 export function vnLocalTime(at: Date): LocalTime {
   return toLocal(at);
+}
+
+/** «2026-10-08» → đúng 00:00 giờ VN của ngày đó (mốc UTC thật) — nghịch đảo của `vnLocalTime(...).date`. */
+export function vnMidnight(dateIso: string): Date {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day) - VN_OFFSET_MS);
 }

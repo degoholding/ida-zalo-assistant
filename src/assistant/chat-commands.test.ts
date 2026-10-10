@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ContactRole } from "../constants.js";
-import { buildHelpText, parseChatCommand } from "./chat-commands.js";
+import { buildHelpText, parseChatCommand, runChatCommand } from "./chat-commands.js";
 
 test("help is recognised with or without diacritics, including the way people actually type it", () => {
   for (const text of ["hướng dẫn", "Hướng dẫn tôi", "huong dan", "HUONG DAN SU DUNG", "/help", "menu", "hướng dẫn cho em!", "trợ giúp?"]) {
@@ -84,6 +84,35 @@ test("help for a ticket-only user lists only ticket commands; handlers also see 
   assert.match(only, /báo lỗi:/);
   assert.doesNotMatch(only, /Tóm tắt nhóm|cần xử lý/);
   assert.match(buildHelpText(null, false, { ticketOnly: true, ticketHandler: true }), /nhận T-12/);
+});
+
+test("brief / report requests are recognised by parseChatCommand (phase 8)", () => {
+  assert.deepEqual(parseChatCommand("bản tin sáng"), { kind: "brief_request", request: "morning", variant: "standard" });
+  assert.deepEqual(parseChatCommand("gửi anh báo cáo tuần nhé"), { kind: "brief_request", request: "weekly", variant: "standard" });
+  // Câu dài hơn vẫn để công cụ AI export_report lo, không bị lệnh bản tin nuốt
+  assert.equal(parseChatCommand("báo cáo tuần doanh số đại lý A ra Excel"), null);
+});
+
+test("runChatCommand: brief requests only run in a private chat, and only for an active recipient", async () => {
+  const now = new Date("2026-10-09T08:00:00+07:00");
+  // runBriefCommand trả ngay khi asker không có recipientId — không chạm trường nào của `brief`, nên để rỗng ở đây.
+  const brief = {} as unknown as import("../briefs/brief-commands.js").BriefChatDeps;
+  const inGroupReply = await runChatCommand(
+    { db: undefined as never, asker: null, inGroup: true, now, brief }, { kind: "brief_request", request: "morning", variant: "standard" });
+  assert.equal(inGroupReply, null);
+  const noDepsReply = await runChatCommand(
+    { db: undefined as never, asker: null, inGroup: false, now }, { kind: "brief_request", request: "morning", variant: "standard" });
+  assert.equal(noDepsReply, null);
+  const rejected = await runChatCommand(
+    { db: undefined as never, asker: null, inGroup: false, now, brief }, { kind: "brief_request", request: "morning", variant: "standard" });
+  assert.match(rejected ?? "", /Bản tin dành cho người nhận/);
+});
+
+test("help mentions «BẢN TIN, BÁO CÁO» only for an active recipient", () => {
+  const recipient = buildHelpText({ uid: "u", name: "A", role: ContactRole.None, recipientId: 3 }, false);
+  assert.match(recipient, /BẢN TIN, BÁO CÁO/);
+  const staff = buildHelpText({ uid: "u", name: "A", role: ContactRole.Manager, recipientId: null }, false);
+  assert.doesNotMatch(staff, /BẢN TIN, BÁO CÁO/);
 });
 
 test("natural ticket phrasings people actually typed (08/10/2026)", () => {

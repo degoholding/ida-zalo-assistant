@@ -10,6 +10,7 @@ import {
   ListChecks,
   MessageCircle,
   MessageSquareText,
+  Newspaper,
   Search,
   Settings,
   UserCog,
@@ -45,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Tệp', path: appRoutes.files.list, icon: FileText, entity: 'file' },
   { label: 'Ticket', path: appRoutes.tickets.list, icon: LifeBuoy, entity: 'ticket' },
   { label: 'Việc', path: appRoutes.tasks.list, icon: ListChecks, entity: 'task' },
+  { label: 'Bản tin', path: appRoutes.briefs.list, icon: Newspaper, entity: 'brief' },
   //  `/api/imports` cũng vậy — chỉ quản trị.
   { label: 'Nhập lịch sử', path: appRoutes.imports.zaloWeb, icon: History, entity: 'setting', action: 'write' },
   { label: 'Công ty', path: appRoutes.companies.list, icon: Building2, entity: 'company' },

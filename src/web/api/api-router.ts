@@ -10,6 +10,7 @@ import { aiKeyRoutes } from "./ai-keys-api.js";
 import { ApiError, readJson, sendFail, sendOk } from "./api-http.js";
 import type { ApiContext, ApiRoute } from "./api-route.js";
 import { auditRoutes, recordAudit } from "./audit-log.js";
+import { briefRoutes } from "./briefs-api.js";
 import { companyRoutes } from "./companies-api.js";
 import { contactRoutes } from "./contacts-api.js";
 import { eventRoutes } from "./events-api.js";
@@ -35,7 +36,7 @@ const log = createLogger("api");
 
 const routes: ApiRoute[] = [
   ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...accountFriendRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
-  ...userRoutes, ...recipientRoutes, ...ticketRoutes, ...taskRoutes, ...messageSearchRoutes,
+  ...userRoutes, ...recipientRoutes, ...ticketRoutes, ...taskRoutes, ...messageSearchRoutes, ...briefRoutes,
 ];
 
 export interface ApiDeps {

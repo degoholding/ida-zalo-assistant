@@ -85,6 +85,18 @@ describe('recipient detail actions', () => {
     render(withQueryClient(recipientCrudConfig.detailActions?.(makeRecipient())))
     expect(screen.queryByRole('button', { name: 'Gửi thử' })).toBeNull()
   })
+
+  it('offers «Gửi thử bản tin» alongside «Gửi thử» to someone who may edit recipients', () => {
+    permissions = { recipient: { read: true, write: true } }
+    render(withQueryClient(recipientCrudConfig.detailActions?.(makeRecipient())))
+    expect(screen.getByRole('button', { name: 'Gửi thử bản tin' })).toBeInTheDocument()
+  })
+
+  it('hides «Gửi thử bản tin» from a read-only viewer — the server would answer 403', () => {
+    permissions = { recipient: { read: true, write: false } }
+    render(withQueryClient(recipientCrudConfig.detailActions?.(makeRecipient())))
+    expect(screen.queryByRole('button', { name: 'Gửi thử bản tin' })).toBeNull()
+  })
 })
 
 describe('recipient form', () => {

@@ -11,6 +11,7 @@ import { GroupMultiSelectField } from '@/shared/form-pickers/group-multi-select-
 import { Pill } from '@/shared/ui/pill'
 import { formatDateTime } from '@/shared/utils/format-date'
 import { RECIPIENTS_API_PATH } from '../api/recipient-api'
+import { RecipientBriefTestButton } from '../components/recipient-brief-test-button'
 import { RecipientTestButton } from '../components/recipient-test-button'
 import { RecipientUserField } from '../components/recipient-user-field'
 import type { RecipientDetail } from '../types/recipient'
@@ -227,6 +228,7 @@ export const recipientCrudConfig: CrudConfig<RecipientDetail> = {
   detailActions: (recipient) => (
     <PermissionGate entity="recipient" action="write">
       <RecipientTestButton recipientId={recipient.id} />
+      <RecipientBriefTestButton recipientId={recipient.id} />
     </PermissionGate>
   ),
 }

@@ -15,6 +15,7 @@ export const BACKGROUND_TASKS = [
   { name: "search-index", label: "Chép tin cũ vào bảng tìm tin", spec: { every: "minutes", minutes: 1 } },
   { name: "task-reminders", label: "Nhắc hạn việc trong checklist", spec: { every: "minutes", minutes: 1 } },
   { name: "task-extract", label: "AI bắt câu giao việc trong nhóm", spec: { every: "minutes", minutes: 5 } },
+  { name: "briefs", label: "Gửi bản tin / báo cáo", spec: { every: "minutes", minutes: 1 } },
 ] as const satisfies readonly { name: string; label: string; spec: ScheduleSpec }[];
 
 export type BackgroundTaskName = (typeof BACKGROUND_TASKS)[number]["name"];

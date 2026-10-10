@@ -31,6 +31,10 @@ export const appRoutes = {
     list: '/tasks',
     detail: (id: number | string) => `/tasks/${id}`,
   },
+  briefs: {
+    list: '/briefs',
+    detail: (id: number | string) => `/briefs/${id}`,
+  },
   imports: { zaloWeb: '/imports/zalo-web' },
   companies: {
     list: '/companies',
