@@ -141,6 +141,8 @@ bắt câu giao việc trong nhóm (việc nền `task-extract`, chờ người 
 nhóm (việc nền `task-reminders`); quá hạn báo người giao + sếp. Mã: `src/tasks/` (service một chỗ cho Zalo + web, khuôn
 ticket), màn web «Việc» `web/src/modules/tasks/`. Chi tiết: doc 06 mục Phase 7.
 
+**Bản tin sáng/tối và báo cáo tuần/tháng** (phase 8, 09/10/2026): bảng `brief_log` (migration 025), mã `send_brief` / `send_periodic_report`. Bản tin sáng (07:30) + cuối ngày (17:30) theo giờ từng người nhận, 5 mục (khẩn, tin chờ, việc, ticket, điểm tin AI) gọn một màn hình. Báo cáo tuần (T2 08:00) + tháng (ngày 3) = PDF 1 trang A4 + Excel 5 sheet, tự gửi qua tin riêng. Gọi ngay bằng câu tự nhiên («bản tin sáng»…), nút «Gửi thử» trên màn Người nhận, hoặc màn web «Bản tin» xem lại + tải tệp. Dữ liệu theo phạm vi người nhận (nhóm theo dõi), nhóm Mật che dữ liệu cho người không chọn. Mã: `src/briefs/` (bộ soạn bản tin + bộ gửi), `src/reports/periodic-*.ts` (báo cáo tuần/tháng + bảng Excel), `src/web/api/briefs-api.ts`, màn web `web/src/modules/briefs/`. Chi tiết: doc 06 mục Phase 8 + doc 08 kịch bản test.
+
 **Quy trình báo cáo** (07/10/2026): câu hỏi có «báo cáo / tổng hợp / thống kê / xuất file / Excel / PDF / recap»
 (`isReportRequest`) → chạy mô hình VIỆC NẶNG ngay từ đầu, tối đa 10 vòng gọi công cụ, prompt gắn thêm quy trình 4 bước (chốt phạm
 vi → lấy đủ dữ liệu → tự kiểm số → khung chuẩn: tóm tắt có số / chi tiết có cột Nguồn / bất thường / việc cần làm) kèm 1 ví dụ

@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.3 · 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1` @ `2cb61ac` (đang chạy trên VPS, botida.degoholding.vn).
+> Bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -24,13 +24,13 @@
 | **11** | Ticket qua bot (đại ca thêm 08/10, làm trước phase 6) | **Xong** 08/10 | 7 / 7 |
 | **6** | N4 — Tìm kiếm tin nhắn | **Xong** 09/10 (phần GĐ1) | 5 / 6 |
 | **7** | N5 — Checklist công việc | **Xong** 09/10 | 5 / 5 |
-| **8** | N6 — Bản tin và báo cáo | Một phần | 3 / 7 |
+| **8** | N6 — Bản tin và báo cáo | **Xong** 09/10 | 6 / 7 |
 | **9** | N7 — Gửi tin theo lệnh | Một phần | 1 / 6 |
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 1 / 9 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
-08/10; tìm tin (phase 6) và checklist công việc (phase 7) xong 09/10 — tiếp theo là phase 8 (bản tin và báo cáo).
+08/10; tìm tin (phase 6) và checklist công việc (phase 7) xong 09/10; bản tin sáng / tối và báo cáo tuần / tháng (phase 8) xong 09/10 — tiếp theo là phase 9 (gửi tin theo lệnh).
 
 Đối chiếu 27 câu của IDA (mục 9): **11 Đạt · 12 Một phần · 4 Chưa** sau phase 7 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
@@ -128,7 +128,7 @@ tiến trình làm tất cả (nghe Zalo + web + AI + bóc tệp) không giữ �
 | Bộ lập lịch: chạy việc theo giờ, tôn trọng giờ làm / giờ yên lặng / Chủ nhật / lễ Tết | 7, 24, 25 | Xong 08/10 |
 | Bảng cờ trên tin: mức ưu tiên, trạng thái (chưa trả lời / đã xem / đã xử lý), ai xử lý | 6, 8 | Xong 08/10 (phase 5 bắt đầu ghi cờ) |
 | Lưu thả cảm xúc lên tin (tính «đã xem») | 8 | Xong 08/10 |
-| Nhãn **Mật** cho nhóm: không gửi AI | 4 | Xong 08/10 (phần «không vào báo cáo cho người khác» làm cùng phase 8) |
+| Nhãn **Mật** cho nhóm: không gửi AI; dữ liệu Mật chỉ vào báo cáo của người nhận chọn nhóm đó | 4, 8 | Xong 09/10 |
 | Che SĐT / STK / CCCD trước khi gửi AI; chỉ dùng hãng AI đã duyệt | 4, mục 4 BC | Xong 08/10 |
 | Chặn tìm web cho câu hỏi kỹ thuật BVTV | 13 | Xong 08/10 |
 | Tệp lưu lên Cloudflare R2 thay vì đĩa VPS | 2, 20 | Xong 08/10 |
@@ -321,17 +321,32 @@ nhiên + recap họp + AI tự bắt; việc AI bắt phải được NGƯỜI G
 | Nhắc người phụ trách 3 mốc: trước hạn 1 ngày, đúng hạn, quá hạn | 23 | Xong 09/10 |
 | Quá hạn: báo người giao + sếp (trong trần báo / ngày) | 23 | Xong 09/10 |
 
-### Phase 8 — N6 Bản tin và báo cáo (Một phần)
+### Phase 8 — N6 Bản tin và báo cáo (Xong 09/10, 6/7)
+
+Plan: `plans/261009-1555-phase-08-briefs-reports/` · kịch bản test khi deploy: [`08-kich-ban-test-phase-8.md`](08-kich-ban-test-phase-8.md). **Đã chốt (anh, 09/10):** bản tin sáng 07:30 + cuối ngày 17:30 ghi 5 mục (khẩn, tin chờ, việc, ticket, điểm tin AI) theo giờ từng người nhận, chỉ ngày làm việc, gửi bù trong ngày; báo cáo tuần T2 08:00 + tháng ngày 3 = PDF 1 trang A4 + Excel 5 sheet, tự gửi người nhận; gọi ngay bằng câu tự nhiên + nút «Gửi thử bản tin» trên màn Người nhận; màn web «Bản tin» xem lại + tải tệp; khuôn PDF tạm lưu 1 tệp (thay khi IDA gửi form); nhóm Mật không bao giờ vào AI, dữ liệu Mật chỉ vào báo cáo của người nhận chọn nhóm đó; gọi bot mỗi phút «bản tin sáng / cuối ngày / báo cáo tuần / tháng» không có bộ lệnh.
+
+**Đã làm (09/10):**
+- **Bảng bản tin** (migration 025: `brief_log` ghi người nhận + loại + kỳ + trạng thái gửi, khóa duy nhất chống trùng; migration 026: chỉ mục `message_flag(group_id, handled_at)` cho báo cáo). Bản tin soạn mỗi lần từ dữ liệu thời điểm, ghi lại ở `brief_log` + tệp PDF / Excel trong kho (tách riêng `src/reports/pdf-engine.ts` dùng chung cho recap họp).
+- **Bản tin sáng** (người nhận cài giờ, mặc định 07:30): (1) KHẨN chưa xử lý từ 7 ngày trước (theo `sent_at`); (2) tin chờ trả lời quá 2 giờ làm việc (tính vào trần cuối bản tối); (3) việc quá hạn + hạn hôm nay; (4) ticket mới / đang mở; (5) điểm tin AI gom lô ~3 ý hôm qua. Mỗi mục tối đa 3 dòng + «… và N nữa»; mỗi ý ghi «[nhóm · người · giờ]» hoặc loại.
+- **Bản tin cuối ngày** (mặc định 17:30): cùng khung cho HÔM NAY (khẩn đã / chưa xử lý, tin còn chờ, việc xong / quá hạn / hạn mai, ticket mới / đóng / mở, điểm tin AI hôm nay). Báo cáo tuần / tháng vẫn gửi nếu người nhận bật báo cáo (chưa tắt giờ bản tin).
+- **Mục AI** (một lượt / nhóm): che dữ liệu cá nhân, không khóa / chạm trần → vẫn gửi bỏ mục 5; tính trần token hệ thống; không đưa nhóm Mật.
+- **Báo cáo tuần** (T2 08:00, hoặc ngày làm việc đầu tiên sau T2 nếu rơi lễ / Tết): **PDF 1 trang A4** DEGO (tổng khẩn / chưa xử lý hôm đó, top nhóm, bất thường, 3–5 ý AI). **Excel 5 sheet**: «Theo nhóm» (khẩn, tin, việc, ticket tổng / nhóm); «Theo nhân viên» (liên hệ vai trò nhân sự gửi tin trong phạm vi); «Tin chờ» (khẩn, tin chờ trả lời, người gửi, thời gian); «Việc» (trạng thái, người phụ trách, hạn); «Lỗi» (ticket). Tên tệp `Report-<week>-<company>.pdf|.xlsx`, thư mục `./data/reports/` (kho tệp chung). Gửi vào tin riêng người nhận qua hàng đợi `job`.
+- **Báo cáo tháng** (ngày 3 08:00 hoặc ngày làm việc đầu tiên): cùng khung PDF / Excel, phạm vi tháng. Lịch sự kiện: phòng + cuối tuần / lễ Tết nằm ở `work_calendar` (từng công ty). Dời ngày gửi nếu rơi lịch sự kiện (chưa làm — để sau: chỉ ngày làm việc).
+- **Gọi bằng câu tự nhiên**: «bản tin sáng», «bản tin cuối ngày», «báo cáo tuần», «báo cáo tháng» (không bộ lệnh `/…`) → công cụ `send_brief` / `send_periodic_report`.
+- **Nút «Gửi thử bản tin»** (màn Người nhận): gửi bản tin sáng lập tức qua hàng đợi `RecipientMessage` để test; log ghi ở `brief_log`.
+- **Màn web «Bản tin»** (menu trái, quyền xem bản tin của người nhận gắn tài khoản mình; quản trị xem tất cả): danh sách bản tin theo ngày, loại (sáng / tối / tuần / tháng), trạng thái Sending / Sent / Failed; chi tiết xem chữ bản tin + tải PDF / Excel. Khuôn `CrudListPage` / `CrudDetailPage`.
+- Chạy thật trên DB local: bản tin sáng / tối / tuần / tháng gửi đúng giờ người nhận, trên 3 người nhận (1 «mọi nhóm», 1 chọn nhóm Mật, 1 chọn 2 nhóm thường): đúng phạm vi dữ liệu, không lộ Mật sang «mọi nhóm».
+- **Review (agent, 09/10) — đã sửa:** 11 lỗi High/Medium (phạm vi Mật, urgentOpen lấy 7 ngày thay vì kỳ, chồng job gửi chữ + tệp, lỗi ghi `brief_log` trên các lạc đường thử, email sheet ghi `aiNote` thật, bỏ ý AI bị tiêm lệnh…) + trùng mã chung + lỗi nội bộ lộ cho người không quản trị. Chưa làm: gửi bù ngày deploy, dời ngày nghỉ qua tuần ISO. Bộ test 502 pass (3 lỗi `cpu-pool` có sẵn).
 
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
 | Báo cáo theo yêu cầu ra Excel / Google Sheets | 19 | Xong 05/10 |
 | PDF tóm tắt theo khung DEGO | 25 | Xong 07/10 |
-| Tên tệp theo quy ước «Tên công việc - Thời gian - Tên nhân viên» | 25 | Xong 07/10 |
-| Bản tin sáng 07:30, 5 mục, gọn một màn hình điện thoại | 24 | Chưa |
-| Bản tin cuối ngày 17:30 | 24 | Chưa |
-| Báo cáo tuần 08:00 thứ 2, báo cáo tháng ngày 3: 1 trang A4 + Excel, tự gửi | 25 | Chưa |
-| Khuôn báo cáo tuần / tháng theo form IDA | 25 | Chờ IDA (form gửi sau) |
+| Tên tệp theo quy ước | 25 | Xong 07/10 |
+| Bản tin sáng 07:30, 5 mục, gọn một màn hình | 24 | Xong 09/10 |
+| Bản tin cuối ngày 17:30 | 24 | Xong 09/10 |
+| Báo cáo tuần 08:00 T2 + tháng ngày 3: PDF A4 + Excel, tự gửi | 25 | Xong 09/10 (khuôn tạm) |
+| Khuôn báo cáo tuần / tháng theo form IDA | 25 | Chờ IDA |
 
 ### Phase 9 — N7 Gửi tin theo lệnh (Một phần)
 
@@ -385,8 +400,8 @@ nhiên + recap họp + AI tự bắt; việc AI bắt phải được NGƯỜI G
 | 21 | Tìm tin + xem trước / sau | 6 | Đạt (09/10) |
 | 22 | Checklist | 7 | Đạt (09/10) |
 | 23 | Nhắc hạn | 7 | Đạt (09/10) |
-| 24 | Bản tin sáng | 8 | Chưa |
-| 25 | Báo cáo tuần / tháng | 8 | Một phần |
+| 24 | Bản tin sáng | 8 | Đạt (09/10) |
+| 25 | Báo cáo tuần / tháng | 8 | Một phần (09/10; khuôn tạm, chờ form IDA) |
 | 26 | Gửi theo lệnh | 9 | Chưa |
 | 27 | Misa, Drive, sau nối Thu mua / ERP | 10 | Một phần (đọc được Drive; chưa nối Misa / Thu mua / ERP) |
 
