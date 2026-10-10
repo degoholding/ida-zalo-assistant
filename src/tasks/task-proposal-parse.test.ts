@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatSentForPrompt, looksLikeAssignment, parseExtractAnswer } from "./task-proposal-parse.js";
+import { formatSentForPrompt, isBotCall, looksLikeAssignment, parseExtractAnswer } from "./task-proposal-parse.js";
 
 test("looksLikeAssignment: câu giao việc / có @nhắc thì đưa AI; chào hỏi, báo cáo thường thì không", () => {
   for (const text of [
@@ -38,4 +38,18 @@ test("parseExtractAnswer: câu trả lời hỏng / thiếu id / việc quá ng�
   assert.deepEqual(parseExtractAnswer("[{\"id\": 5, \"viec\": \"Gửi"), []);
   assert.deepEqual(parseExtractAnswer("{\"id\": 5}"), []);
   assert.deepEqual(parseExtractAnswer("[null, 3, {\"id\": 6, \"viec\": \"Gọi lại khách\"}]"), [{ id: 6, person: "", task: "Gọi lại khách", due: null }]);
+});
+
+test("isBotCall: câu gọi bot (từ khóa / @nhắc bot) không phải câu giao việc giữa người với người", () => {
+  const keywords = ["bot", "bot ơi", "trợ lý ơi", "@bot"];
+  const bots = ["u-bot"];
+  // Ca thật 10/10: từng thành đề xuất «V-2 bot — kiểm tra thông tin file trên drive»
+  assert.equal(isBotCall("bot kiểm tra thông tin file trên drive", null, bots, keywords), true);
+  assert.equal(isBotCall("Bot ơi nhờ kiểm tra công nợ ĐL A", null, bots, keywords), true);
+  assert.equal(isBotCall("@Thảo Thơ kiểm tra giúp anh file này", [{ uid: "u-bot", pos: 0, len: 9 }], bots, keywords), true);
+  // Giao việc thật cho người: vẫn đưa AI
+  assert.equal(isBotCall("@Huy kiểm tra giúp anh đơn ĐL A trước thứ 6", [{ uid: "u-huy", pos: 0, len: 4 }], bots, keywords), false);
+  assert.equal(isBotCall("Tâm gửi báo giá robot phun thuốc cho khách nhé", null, bots, keywords), false);
+  // Bảng bot trống vẫn nhận ra từ khóa
+  assert.equal(isBotCall("bot kiểm tra giúp", null, [], keywords), true);
 });

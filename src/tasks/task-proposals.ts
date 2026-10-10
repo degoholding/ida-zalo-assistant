@@ -13,7 +13,7 @@ import { cleanPersonName, pickContactMatch, searchContactsByName } from "../sync
 import { parseDueArgument } from "./task-due-parser.js";
 import { formatDue } from "./task-format.js";
 import {
-  composeProposalMessage, formatSentForPrompt, looksLikeAssignment, parseExtractAnswer, TASK_EXTRACT_PROMPT,
+  composeProposalMessage, formatSentForPrompt, isBotCall, looksLikeAssignment, parseExtractAnswer, TASK_EXTRACT_PROMPT,
 } from "./task-proposal-parse.js";
 import { shortTaskCode, type TaskParty, type TaskRow } from "./task-repository.js";
 import { createTask } from "./task-service.js";
@@ -43,16 +43,23 @@ interface Candidate {
   mentionUids: string[];
 }
 
-function mentionUids(raw: unknown): string[] {
+type MentionList = { uid: string; pos: number; len: number }[];
+
+/** Cột `message.mentions` (JSON, có khi về dạng chuỗi) → danh sách @nhắc; hỏng / rỗng → []. */
+function parseMentions(raw: unknown): MentionList {
   try {
     const list = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return Array.isArray(list) ? list.map((item) => String((item as { uid?: unknown }).uid ?? "")).filter(Boolean) : [];
+    if (!Array.isArray(list)) return [];
+    return list.map((item) => {
+      const row = item as { uid?: unknown; pos?: unknown; len?: unknown };
+      return { uid: String(row.uid ?? ""), pos: Number(row.pos ?? -1), len: Number(row.len ?? 0) };
+    }).filter((mention) => mention.uid);
   } catch {
     return [];
   }
 }
 
-async function loadCandidates(db: Db, now: Date): Promise<{ items: Candidate[]; newCursor: number; botUids: Set<string> }> {
+async function loadCandidates(db: Db, now: Date, triggerKeywords: string[]): Promise<{ items: Candidate[]; newCursor: number; botUids: Set<string> }> {
   const [cursorRows] = await db.query<RowDataPacket[]>("SELECT last_message_id FROM alert_cursor WHERE name = ?", [CURSOR]);
   const cursor = Number(cursorRows[0]?.last_message_id ?? 0);
   const [bots] = await db.query<RowDataPacket[]>("SELECT zalo_uid FROM bot_account WHERE zalo_uid IS NOT NULL");
@@ -71,8 +78,10 @@ async function loadCandidates(db: Db, now: Date): Promise<{ items: Candidate[]; 
     const uid = String(row.sender_uid);
     const staff = Number(row.kind) === ContactKind.Staff || Number(row.role) > 0;
     if (botUids.has(uid) || !staff || row.contact_id === null) return [];
-    const mentions = mentionUids(row.mentions).filter((mention) => mention !== uid && !botUids.has(mention));
     const text = String(row.text ?? "");
+    const rawMentions = parseMentions(row.mentions);
+    if (isBotCall(text, rawMentions, botUids, triggerKeywords)) return [];
+    const mentions = rawMentions.map((mention) => mention.uid).filter((mention) => mention !== uid && !botUids.has(mention));
     if (!looksLikeAssignment(text, mentions.length > 0)) return [];
     return [{
       id: Number(row.id), groupId: Number(row.group_id), groupName: String(row.group_name ?? ""), text, sentAt: new Date(row.sent_at), mentionUids: mentions,
@@ -112,7 +121,7 @@ export interface ExtractResult {
 /** Một lượt bắt câu giao việc. `client` = null thì tự dựng từ bảng Khóa AI (truyền vào để thử). */
 export async function runTaskExtraction(db: Db, config: AppConfig, calendar: WorkCalendar | null, now = new Date(), client?: ModelClient | null): Promise<ExtractResult> {
   if (!config.alerts.aiEnabled) return { reviewed: 0, proposed: 0, skipped: "AI xét tin đang tắt" };
-  const { items, newCursor } = await loadCandidates(db, now);
+  const { items, newCursor } = await loadCandidates(db, now, config.assistant.groupTriggerKeywords);
   if (!items.length) {
     await saveCursor(db, newCursor);
     return { reviewed: 0, proposed: 0, skipped: "" };
