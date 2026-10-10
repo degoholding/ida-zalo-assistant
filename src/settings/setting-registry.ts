@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config.js";
 import type { GoogleAccountLink } from "../google/google-oauth.js";
+import { parseDriveFolderId } from "../google/drive-error-messages.js";
 import { parseServiceAccount, parseSpreadsheetId } from "../google/service-account.js";
 import { ApiError } from "../web/api/api-http.js";
 import { ALL_AI_PROVIDER_CODES, DEFAULT_HOLIDAYS, DEFAULT_IMPORTANT_KEYWORDS, DEFAULT_QUIET_HOURS, DEFAULT_STRICT_KEYWORDS, DEFAULT_URGENT_KEYWORDS, DEFAULT_WORK_DAYS, DEFAULT_WORK_HOURS } from "../config.js";
@@ -321,6 +322,30 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     help: "Refresh token sau «Kết nối Google» — máy chủ tự ghi.",
     envName: null, defaultValue: null,
     applyTo: (config, value) => { config.google.calendarAccount = (value as unknown as GoogleAccountLink | null) ?? null; },
+  },
+  // Recap họp tự động từ ghi âm trên Drive (phase 1, 10/10/2026) — đọc qua CHÍNH Gmail đã «Kết nối Google» phía
+  // trên (quyền Drive tùy chọn), không phải service account; cần tick thêm quyền Drive lúc «Kết nối Google».
+  {
+    key: "meeting_auto_recap_enabled", group: "google", label: "Recap họp tự động từ Drive", type: "bool", secret: false,
+    help: "Bật thì bot tự quét thư mục ghi âm mỗi 5 phút, khớp đúng cuộc họp đã đặt, gỡ băng và gửi recap PDF vào nhóm / người đặt họp.",
+    envName: null, defaultValue: false,
+    applyTo: (config, value) => { config.meetingRecap.enabled = value === true; },
+  },
+  {
+    key: "google_drive_recording_folder", group: "google", label: "Thư mục ghi âm họp (Drive)", type: "string", secret: false,
+    help: "Link (hoặc mã) thư mục «Ghi âm họp» trong Drive của Gmail đã «Kết nối Google» ở trên — bot chỉ đọc đúng thư mục này, không đụng tệp nào khác trong Drive.",
+    envName: null, defaultValue: "", maxLength: 500, allowEmpty: true,
+    normalize: (value) => { if (value) parseDriveFolderId(String(value)); return value; },
+    applyTo: (config, value) => {
+      const raw = asString(value);
+      config.meetingRecap.folderId = raw ? parseDriveFolderId(raw) : "";
+    },
+  },
+  {
+    key: "meeting_auto_recap_max_mb", group: "google", label: "Trần ghi âm tự động recap (MB)", type: "int", secret: false,
+    help: "Ghi âm lớn hơn mức này thì bot bỏ qua + báo, không recap tự động (tránh tốn token AI với tệp quá dài).",
+    envName: null, defaultValue: 150, min: 10, max: 500,
+    applyTo: (config, value) => { config.meetingRecap.maxBytes = asNumber(value) * MB; },
   },
   {
     key: "google_spreadsheet_url", group: "google", label: "Link trang tính", type: "string", secret: false,

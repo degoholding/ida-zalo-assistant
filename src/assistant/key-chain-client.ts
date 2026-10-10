@@ -2,6 +2,7 @@ import { createLogger } from "../logger.js";
 import {
   GeminiHttpError,
   WebSearchUnavailableError,
+  type AudioSource,
   type DocumentReadResult,
   type GeminiResult,
   type GenerateRequest,
@@ -190,6 +191,15 @@ export class KeyChainClient implements ModelClient {
   readDocument(mime: string, data: Buffer, instruction: string, model?: string): Promise<DocumentReadResult> {
     const keys = orderKeys(this.keys, this.ledger, this.now()).filter((key) => key.client.readDocument);
     return this.run(keys, (key) => key.client.readDocument!(mime, data, instruction, this.modelFor(key, model)));
+  }
+
+  /** Nghe ghi âm chảy thẳng (phase 4) chỉ có ở khóa Gemini — chuỗi không có khóa nào hỗ trợ thì trả undefined. */
+  get readAudioSource(): ((source: AudioSource, instruction: string, model?: string) => Promise<DocumentReadResult>) | undefined {
+    if (!this.keys.some((key) => key.client.readAudioSource)) return undefined;
+    return (source, instruction, model) => {
+      const keys = orderKeys(this.keys, this.ledger, this.now()).filter((key) => key.client.readAudioSource);
+      return this.run(keys, (key) => key.client.readAudioSource!(source, instruction, this.modelFor(key, model)));
+    };
   }
 
   /** Tìm web chỉ có ở khóa Gemini — chuỗi không có khóa Gemini thì trợ lý không có công cụ tìm web. */

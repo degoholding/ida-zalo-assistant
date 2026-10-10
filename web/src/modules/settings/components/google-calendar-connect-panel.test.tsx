@@ -22,6 +22,7 @@ function makeStatus(overrides: Partial<GoogleOauthStatus>): GoogleOauthStatus {
     connected: false,
     email: '',
     redirect_uri: 'http://localhost:8090/api/google/oauth/callback',
+    drive_scope_granted: false,
     ...overrides,
   }
 }

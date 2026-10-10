@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  GoogleUserAuth, RECONNECT_TEXT, buildAuthUrl, consumeOAuthState, createOAuthState, emailFromIdToken, exchangeAuthCode, oauthClientOf,
+  GoogleUserAuth, RECONNECT_TEXT, buildAuthUrl, consumeOAuthState, createOAuthState, emailFromIdToken, exchangeAuthCode, hasDriveScope, oauthClientOf,
 } from "./google-oauth.js";
 import { GoogleSheetsError } from "./sheets-error-messages.js";
 
@@ -19,12 +19,14 @@ test("the OAuth client comes from the Client ID + Client secret boxes; both are 
   assert.equal(oauthClientOf({ oauthClientId: "", oauthClientSecret: "s" }), null);
 });
 
-test("the consent URL asks for offline access, calendar scope and carries the state", () => {
+test("the consent URL asks for offline access, calendar + Drive scope and carries the state", () => {
   const url = new URL(buildAuthUrl(CLIENT, "http://localhost:8090/api/google/oauth/callback", "st4te"));
   assert.equal(url.searchParams.get("access_type"), "offline");
   assert.equal(url.searchParams.get("prompt"), "consent");
   assert.equal(url.searchParams.get("state"), "st4te");
   assert.match(url.searchParams.get("scope") ?? "", /calendar\.events/);
+  // Quyền Drive (recap họp, 10/10/2026) xin CÙNG lúc nhưng là tùy chọn — thiếu không chặn kết nối Lịch
+  assert.match(url.searchParams.get("scope") ?? "", /drive\.readonly/);
   assert.equal(url.searchParams.get("redirect_uri"), "http://localhost:8090/api/google/oauth/callback");
 });
 
@@ -37,14 +39,29 @@ test("state values are single-use and expire after ten minutes", () => {
   assert.equal(consumeOAuthState("bia-ra", 0), null);
 });
 
-test("exchanging the code returns the refresh token and the account email", async () => {
+test("exchanging the code returns the refresh token, account email and granted scopes", async () => {
   const calls: { body: string }[] = [];
   const account = await exchangeAuthCode(CLIENT, "c0de", "http://localhost:8090/cb",
     fakeFetch(200, { refresh_token: "1//rt", access_token: "at", scope: "openid https://www.googleapis.com/auth/calendar.events email", id_token: idToken({ email: "duoc@gmail.com" }) }, calls));
-  assert.deepEqual(account, { email: "duoc@gmail.com", refresh_token: "1//rt" });
+  assert.deepEqual(account, {
+    email: "duoc@gmail.com", refresh_token: "1//rt",
+    granted_scopes: ["openid", "https://www.googleapis.com/auth/calendar.events", "email"],
+  });
   assert.equal(new URLSearchParams(calls[0].body).get("grant_type"), "authorization_code");
   await assert.rejects(exchangeAuthCode(CLIENT, "c0de", "x", fakeFetch(200, { access_token: "at", scope: "https://www.googleapis.com/auth/calendar.events" })), /refresh token/);
   assert.equal(emailFromIdToken("khong-phai-jwt"), "");
+});
+
+// Quyền Drive KHÔNG bắt buộc để kết nối (chỉ cần calendar.events) — nhưng thiếu nó thì recap họp phải tắt
+test("hasDriveScope reflects whether Drive permission was actually granted", () => {
+  assert.equal(hasDriveScope(null), false);
+  assert.equal(hasDriveScope(undefined), false);
+  assert.equal(hasDriveScope({ email: "a@gmail.com", refresh_token: "rt" }), false, "kết nối từ trước phase recap không có trường granted_scopes");
+  assert.equal(hasDriveScope({ email: "a@gmail.com", refresh_token: "rt", granted_scopes: ["https://www.googleapis.com/auth/calendar.events"] }), false);
+  assert.equal(hasDriveScope({
+    email: "a@gmail.com", refresh_token: "rt",
+    granted_scopes: ["https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/drive.readonly"],
+  }), true);
 });
 
 // Gặp thật 06/10/2026: ô tick quyền lịch để trống → Google chỉ cấp email; phải báo ngay, không lưu kết nối nửa vời

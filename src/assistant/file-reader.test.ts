@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deflateRawSync } from "node:zlib";
 import * as XLSX from "xlsx";
-import { classifyForReading, extensionOf, extractDocx, extractSheet, MAX_SHEET_ROWS } from "./file-reader.js";
+import { audioMimeFor, classifyForReading, extensionOf, extractDocx, extractSheet, MAX_SHEET_ROWS } from "./file-reader.js";
 
 function docxOf(xml: string): Buffer {
   const name = Buffer.from("word/document.xml");
@@ -63,4 +63,17 @@ test("classifies audio, video and documents, and applies the admin's allow list"
   assert.deepEqual(classifyForReading("jpg", []), { kind: "image", allowed: true }); // danh sách rỗng = mọi loại
   assert.deepEqual(classifyForReading("exe", undefined), { kind: "unknown", allowed: true });
   assert.deepEqual(classifyForReading("", allowed), { kind: "unknown", allowed: false });
+});
+
+// 10/10/2026: read_link tải ghi âm Drive — biết loại qua content-type HOẶC đuôi trong Content-Disposition (Drive hay trả octet-stream chung chung)
+test("audioMimeFor: nhận ra âm thanh qua content-type chuẩn, qua đuôi tên tệp khi content-type chung chung, và loại không phải âm thanh", () => {
+  assert.deepEqual(audioMimeFor("audio/mpeg", "ghi-am.mp3"), { mime: "audio/mpeg", ext: "mp3" });
+  // Drive trả application/octet-stream — phải đoán theo đuôi tên tệp trong Content-Disposition
+  assert.deepEqual(audioMimeFor("application/octet-stream", "cuoc-hop-10-10.m4a"), { mime: "audio/mp4", ext: "m4a" });
+  // content-type chuẩn hóa khác bảng (audio/mp4 thay vì theo đuôi) nhưng tên tệp không có đuôi rõ
+  assert.deepEqual(audioMimeFor("audio/mp4; charset=binary", "tep-khong-duoi"), { mime: "audio/mp4", ext: "m4a" });
+  // audio/* lạ, không khớp bảng, không có đuôi — vẫn nhận là âm thanh (coi như mp3 để báo người dùng)
+  assert.deepEqual(audioMimeFor("audio/x-la-chua-biet", ""), { mime: "audio/x-la-chua-biet", ext: "mp3" });
+  assert.equal(audioMimeFor("application/octet-stream", "bao-cao.xlsx"), null);
+  assert.equal(audioMimeFor("video/mp4", "clip.mp4"), null);
 });

@@ -47,3 +47,8 @@ export function useResetSetting() {
 export function useTestGoogleConnection() {
   return useMutation({ mutationFn: settingApi.testGoogleConnection })
 }
+
+/** Nút «Kiểm tra thư mục» của khối «Recap họp tự động» — cùng khuôn hiện kết quả ngay dưới nút như Sheets. */
+export function useTestDriveFolder() {
+  return useMutation({ mutationFn: settingApi.testDriveFolder })
+}

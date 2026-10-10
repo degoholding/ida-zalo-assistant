@@ -15,6 +15,7 @@ import {
   KeyRound,
   LogIn,
   MessageCircle,
+  Mic,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -147,6 +148,14 @@ export const GOOGLE_SECTIONS: SettingsSection[] = [
     description: 'Chép Client ID + Client secret của OAuth client rồi bấm «Kết nối Google».',
     icon: CalendarClock,
     keys: ['google_oauth_client_id', 'google_oauth_client_secret'],
+  },
+  {
+    id: 'recap',
+    title: 'Recap họp tự động (Drive)',
+    description:
+      'Đọc ghi âm qua CHÍNH Gmail đã «Kết nối Google» ở trên (không phải service account) — cần kết nối lại và tick thêm quyền Drive (chỉ xem).',
+    icon: Mic,
+    keys: ['meeting_auto_recap_enabled', 'google_drive_recording_folder', 'meeting_auto_recap_max_mb'],
   },
 ]
 

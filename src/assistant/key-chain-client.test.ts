@@ -206,3 +206,30 @@ test("classifyKeyError: unknown errors still have a short label, status shown wh
 test("KeyChainClient refuses an empty chain instead of silently answering nothing", () => {
   assert.throws(() => new KeyChainClient([], new KeyUsageLedger()));
 });
+
+// Phase 4 (recap họp): readAudioSource chỉ có khi ÍT NHẤT một khóa trong chuỗi hỗ trợ — chuỗi gồm toàn khóa không nghe
+// được ghi âm dài (vd chỉ OpenAI) thì không có công cụ này, như searchWeb.
+test("readAudioSource: chỉ dùng được khi có ít nhất một khóa hỗ trợ, bỏ qua khóa không hỗ trợ", async () => {
+  const source = { mime: "audio/mpeg", size: 1000, displayName: "x.mp3", open: async () => new ReadableStream() };
+  const withoutAudio = fakeKey(1, null);
+  const { ledger: ledgerNone } = recordingLedger();
+  assert.equal(new KeyChainClient([withoutAudio], ledgerNone, () => NOW).readAudioSource, undefined);
+
+  const calls: (string | undefined)[] = [];
+  const withAudio: ChainKey = {
+    id: 2, label: "số 2", model: "gemini-x", heavyModel: "", dailyCap: 0,
+    client: {
+      async generate() { throw new Error("không dùng ở bài kiểm này"); },
+      async readAudioSource(_source, _instruction, model) {
+        calls.push(model);
+        return { text: '{"title":"x"}', inputTokens: 10, outputTokens: 5 };
+      },
+    },
+  };
+  const { ledger } = recordingLedger();
+  const chain = new KeyChainClient([withoutAudio, withAudio], ledger, () => NOW);
+  assert.ok(chain.readAudioSource);
+  const result = await chain.readAudioSource!(source, "nghe đi");
+  assert.equal(result.text, '{"title":"x"}');
+  assert.deepEqual(calls, [undefined], "khóa không khai bản nặng thì không gửi tên mô hình xuống hãng");
+});

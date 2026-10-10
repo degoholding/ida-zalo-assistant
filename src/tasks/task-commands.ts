@@ -1,11 +1,12 @@
 import { ContactKind, ContactRole, TaskSource, TaskStatus } from "../constants.js";
+import { findLatestRecapTaskIds } from "../meetings/meeting-recording-repository.js";
 import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
 import { cleanPersonName, describeContactChoices, pickContactMatch, searchContactsByName } from "../sync/contact-search.js";
 import type { TaskCommand, TaskListScope } from "./task-command-parser.js";
 import { parseDueArgument } from "./task-due-parser.js";
 import { describeTask, describeTaskLine, formatDue } from "./task-format.js";
 import { canManageTask, canViewTask, canWorkOnTask, type TaskViewer } from "./task-permissions.js";
-import { findTask, listTasks, shortTaskCode, type TaskActor, type TaskParty } from "./task-repository.js";
+import { findTask, listTasks, shortTaskCode, type TaskActor, type TaskParty, type TaskRow } from "./task-repository.js";
 import {
   addTaskNote, cancelTask, confirmTask, createTask, finishTask, rejectTask, reopenTask, reassignTask, rescheduleTask, TaskActionError,
   type TaskDeps,
@@ -67,10 +68,49 @@ async function listText(ctx: TaskCommandContext, viewer: TaskViewer, scope: Task
   return [`${titles[scope]} (${count})`, ...tasks.map((task) => describeTaskLine(task, now)), "", hint].join("\n");
 }
 
-export async function runTaskCommand(ctx: TaskCommandContext, command: TaskCommand, now: Date): Promise<string> {
+/**
+ * «ok hết» / «lưu hết» / «đồng ý hết» / «bỏ hết» (phase 4, recap họp tự động): gộp xác nhận / bỏ các việc Proposed của
+ * ĐÚNG recap tự động GẦN NHẤT gửi vào cuộc đang hỏi (M3 review 10/10/2026: trước đây gộp theo cửa sổ 3 ngày + cùng
+ * nguồn Recap — có thể cướp luồng «recap tay» (save_recap_tasks, cũng dùng `TaskSource.Recap`) hoặc gộp nhầm đề xuất
+ * của MỘT cuộc họp khác). Không dùng cửa sổ ngày: việc quá hạn 2 ngày làm việc đã tự bỏ ở task-reminders.ts
+ * (`expireStaleProposals`) nên khỏi cần đồng bộ TTL ở đây — còn Proposed tức còn sống.
+ * Không có recap nào khớp (hoặc việc của nó không còn Proposed / không đủ quyền) → null, để AI trả lời như câu hỏi
+ * thường — luồng «recap tay» (mục 8 system prompt, hỏi rồi gọi save_recap_tasks) vẫn chạy được.
+ */
+async function runRecapBulkCommand(ctx: TaskCommandContext, viewer: TaskViewer, actor: TaskActor, confirm: boolean): Promise<string | null> {
+  // Tin riêng mà không rõ ai đang hỏi (contact.uid rỗng, vd lỗi đồng bộ danh bạ) — không có cách lọc đúng người, TỪ
+  // CHỐI thay vì bỏ qua bộ lọc người giao rồi gộp nhầm việc của toàn hệ thống.
+  if (ctx.groupId === null && !ctx.contact.uid) return null;
+  const destination = ctx.groupId !== null ? { targetThreadId: ctx.groupId } : { requesterUid: ctx.contact.uid };
+  const taskIds = await findLatestRecapTaskIds(ctx.deps.db, destination);
+  if (!taskIds?.length) return null;
+  const found = await Promise.all(taskIds.map((id) => findTask(ctx.deps.db, id)));
+  const tasks = found.filter((task): task is TaskRow => task !== null && task.status === TaskStatus.Proposed);
+  const allowed = tasks.filter((task) => canManageTask(viewer, task));
+  if (!allowed.length) return null;
+  const codes: string[] = [];
+  for (const task of allowed) {
+    try {
+      await (confirm ? confirmTask(ctx.deps, task, actor) : rejectTask(ctx.deps, task, actor));
+      codes.push(shortTaskCode(task));
+    } catch (error) {
+      // Việc vừa được người khác xác nhận / bỏ giữa chừng (vd «ok V-12» từng mã) — bỏ qua, không chặn các việc còn lại
+      if (!(error instanceof TaskActionError)) throw error;
+    }
+  }
+  if (!codes.length) return `Không còn đề xuất nào để ${confirm ? "lưu" : "bỏ"} (có thể vừa được xử lý).`;
+  return confirm
+    ? `Dạ đã lưu ${codes.length} việc vào checklist: ${codes.join(", ")}.`
+    : `Dạ đã bỏ ${codes.length} đề xuất: ${codes.join(", ")}.`;
+}
+
+export async function runTaskCommand(ctx: TaskCommandContext, command: TaskCommand, now: Date): Promise<string | null> {
   const { deps, contact } = ctx;
   const actor: TaskActor = { contactId: contact.id, uid: contact.uid, name: contact.name, via: "zalo" };
   const viewer: TaskViewer = { uid: contact.uid, contactId: contact.id, overseer: await ctx.isOverseer(), groupId: ctx.groupId };
+  if (command.kind === "task_confirm_recap" || command.kind === "task_reject_recap") {
+    return runRecapBulkCommand(ctx, viewer, actor, command.kind === "task_confirm_recap");
+  }
   if (command.kind === "task_list") return listText(ctx, viewer, command.scope, now);
   if (command.kind === "task_create") {
     // Cổng tin riêng cho lệnh việc qua với mọi người (để người phụ trách báo xong) — giao việc thì chỉ nhân sự / sếp

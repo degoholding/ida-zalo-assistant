@@ -98,13 +98,15 @@ export async function runCreateMeeting(
   args: Record<string, unknown>,
   now: Date,
   scopeTag?: string,
+  /** Mã Zalo người hỏi — ghi vào sự kiện (phase 3 recap Drive dùng để gửi riêng khi cuộc họp không đặt trong nhóm). */
+  requesterUid?: string,
 ): Promise<Record<string, unknown>> {
   if (!meetings?.connected) return { error: "Chưa kết nối Google — quản trị vào Cài đặt → Google bấm «Kết nối Google» thì bot mới tạo được cuộc họp Meet." };
   if (counter.done >= MAX_ACTIONS_PER_TURN) return { error: `Mỗi lần hỏi chỉ làm tối đa ${MAX_ACTIONS_PER_TURN} việc.` };
   const parsed = parseMeetingInput(args, now);
   if (!parsed.ok) return { error: parsed.error };
   try {
-    const meeting = await meetings.createMeeting({ ...parsed.value, scopeTag });
+    const meeting = await meetings.createMeeting({ ...parsed.value, scopeTag, requesterUid });
     counter.done += 1;
     return {
       created: "cuộc họp Google Meet",

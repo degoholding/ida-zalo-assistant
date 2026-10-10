@@ -1,4 +1,4 @@
-import { GeminiClient, type DocumentReadResult, type GeminiResult, type GenerateRequest, type ModelClient, type WebSearchResult } from "./gemini-client.js";
+import { GeminiClient, type AudioSource, type DocumentReadResult, type GeminiResult, type GenerateRequest, type ModelClient, type WebSearchResult } from "./gemini-client.js";
 import { createLogger } from "../logger.js";
 import { OpenAIClient } from "./openai-client.js";
 
@@ -122,6 +122,16 @@ export class ModelRouterClient implements ModelClient {
       (client) => client.readDocument(mime, data, instruction, model),
       (client) => client.readDocument(mime, data, instruction, this.openai ? this.geminiModelFor(model) : model),
     );
+  }
+
+  /**
+   * Nghe ghi âm chảy thẳng (phase 4, recap họp) — CHỈ Gemini hỗ trợ (OpenAI không có Files API cho ghi âm dài), nên
+   * không đi qua `run()` kiểu ưu tiên OpenAI: chế độ nào có khóa Gemini thì dùng thẳng Gemini, không thì không có.
+   */
+  get readAudioSource(): ((source: AudioSource, instruction: string, model?: string) => Promise<DocumentReadResult>) | undefined {
+    const gemini = this.gemini;
+    if (!gemini) return undefined;
+    return (source, instruction, model) => gemini.readAudioSource(source, instruction, this.openai ? this.geminiModelFor(model) : model);
   }
 
   /** Tìm web chỉ có ở Gemini (Google Search) — chế độ «chỉ OpenAI» thì không có công cụ tìm web. */

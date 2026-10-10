@@ -294,3 +294,20 @@ export enum BriefStatus {
   Sent = 3,
   Failed = 4,
 }
+
+/**
+ * Một dòng meeting_recording (bảng chống trùng ghi âm Drive, phase 3 recap họp) tới đâu rồi. Lý do Skipped ghi ở cột
+ * `note`: nhóm Mật, quá cỡ, không rõ nơi gửi, không phải ghi âm, AI không cho phép.
+ */
+export enum MeetingRecordingStatus {
+  // Không khớp cuộc họp nào trong cửa sổ — không thử lại (gọi Calendar đã thành công, chỉ là không có ứng viên)
+  Unmatched = 1,
+  // Đã khớp cuộc họp + rõ nơi gửi — chờ phase 4 gỡ băng
+  Queued = 2,
+  // Đã giành lượt xử lý (claimed_at) — kẹt quá 45 phút thì lượt sau trả về Queued
+  Processing = 3,
+  Done = 4,
+  // Hết số lần thử (phase 4) mà vẫn lỗi
+  Failed = 5,
+  Skipped = 6,
+}

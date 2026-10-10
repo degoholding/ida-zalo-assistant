@@ -16,9 +16,10 @@ const LINK_LOOKBACK_DAYS = 60;
 export const READ_LINK_DECLARATION: FunctionDeclaration = {
   name: "read_link",
   description:
-    "Đọc NỘI DUNG một link: Google Sheets (mọi sheet), Google Docs, Google Slides, tệp Google Drive, trang web. Dùng khi người hỏi " +
-    "nói «đọc link», «recap link / tài liệu của X» mà trong tin có link — KHÔNG lấy tệp khác thay cho link. Link phải nằm trong tin nhắn " +
-    "hoặc câu hỏi (tìm trong các tin gần nhất / get_group_messages); chép NGUYÊN VĂN link.",
+    "Đọc NỘI DUNG một link: Google Sheets (mọi sheet), Google Docs, Google Slides, tệp Google Drive (kể cả GHI ÂM mp3 / m4a / wav — nhận lại " +
+    "bản gỡ băng + tóm tắt), trang web. Dùng khi người hỏi nói «đọc link», «recap link / tài liệu của X», «recap cuộc họp từ link này» mà " +
+    "trong tin có link — KHÔNG lấy tệp khác thay cho link. Link phải nằm trong tin nhắn hoặc câu hỏi (tìm trong các tin gần nhất / " +
+    "get_group_messages); chép NGUYÊN VĂN link.",
   parameters: {
     type: "object",
     properties: { url: { type: "string", description: "Link đầy đủ, vd https://docs.google.com/spreadsheets/d/…/edit" } },

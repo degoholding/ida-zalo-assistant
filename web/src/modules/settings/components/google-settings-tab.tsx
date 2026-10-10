@@ -7,6 +7,7 @@ import { GOOGLE_SECTIONS } from '../config/settings-sections'
 import { useTestGoogleConnection } from '../hooks/use-settings'
 import { getGoogleTestAvailability } from '../utils/google-test-availability'
 import type { GoogleTestResult, SettingView } from '../types/setting'
+import { DriveRecordingFolderPanel } from './drive-recording-folder-panel'
 import { GoogleCalendarConnectPanel } from './google-calendar-connect-panel'
 import { SettingGuideDetails } from './setting-guide-details'
 import { SettingsSectionsForm } from './settings-sections-form'
@@ -98,6 +99,7 @@ export function GoogleSettingsTab({ settings, disabled }: GoogleSettingsTabProps
       extras={{
         sheets: <GoogleSheetsTestPanel settings={settings} disabled={disabled} />,
         calendar: <GoogleCalendarConnectPanel disabled={disabled} />,
+        recap: <DriveRecordingFolderPanel settings={settings} disabled={disabled} />,
       }}
     />
   )

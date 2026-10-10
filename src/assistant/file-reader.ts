@@ -45,8 +45,15 @@ export const MAX_TEXT_CHARS = 200_000;
 const TEXT_EXTENSIONS = new Set(["txt", "csv", "md", "json", "xml", "html", "htm", "log", "tsv"]);
 const SHEET_EXTENSIONS = new Set(["xlsx", "xlsm", "xls", "ods"]);
 const IMAGE_MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
-const AUDIO_MIME: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac" };
+export const AUDIO_MIME: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac" };
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "avi", "mkv", "webm", "3gp", "wmv", "flv"]);
+// Drive (và vài máy chủ khác) hay trả content-type chuẩn hóa khác bảng trên (vd "audio/mp4" thay vì theo đuôi) — quy đổi
+// về đúng đuôi để báo lỗi / lọc theo «Loại tệp bot được đọc» cho đúng.
+const AUDIO_CONTENT_TYPE_EXT: Record<string, string> = {
+  "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/aac": "aac",
+  "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav", "audio/vnd.wave": "wav",
+  "audio/ogg": "ogg", "audio/flac": "flac", "audio/x-flac": "flac",
+};
 
 export type FileKind = "text" | "sheet" | "docx" | "pdf" | "image" | "audio" | "video" | "unknown";
 
@@ -75,6 +82,23 @@ const IMAGE_INSTRUCTION =
 export function extensionOf(fileName: string, fileExt: string): string {
   const fromName = /\.([a-z0-9]{1,10})$/i.exec(fileName)?.[1];
   return (fileExt || fromName || "").toLowerCase();
+}
+
+/**
+ * Loại âm thanh theo content-type HOẶC đuôi tên tệp — dùng chung cho `read_link` (link Drive hay trả content-type
+ * chung chung `application/octet-stream`, chỉ có tên tệp trong Content-Disposition để đoán đuôi). Hàm thuần.
+ * Trả về null nếu không nhận ra là âm thanh (contentType không phải audio/* và đuôi không nằm trong AUDIO_MIME).
+ */
+export function audioMimeFor(contentType: string, fileName: string): { mime: string; ext: string } | null {
+  const ext = extensionOf(fileName, "");
+  if (AUDIO_MIME[ext]) return { mime: AUDIO_MIME[ext], ext };
+  const ct = contentType.split(";")[0].trim().toLowerCase();
+  const extFromType = AUDIO_CONTENT_TYPE_EXT[ct];
+  if (extFromType) return { mime: AUDIO_MIME[extFromType], ext: extFromType };
+  // content-type xác nhận là âm thanh nhưng không khớp bảng trên và tên tệp không có đuôi rõ — vẫn cho đọc (mô hình
+  // nghe được theo content-type thật), coi như mp3 khi cần báo đuôi cho người dùng
+  if (ct.startsWith("audio/")) return { mime: ct, ext: ext || "mp3" };
+  return null;
 }
 
 function decodeXmlText(fragment: string): string {

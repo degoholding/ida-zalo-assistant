@@ -22,7 +22,11 @@ export type TaskCommand =
   | { kind: "task_confirm"; taskId: number }
   | { kind: "task_reject"; taskId: number }
   | { kind: "task_reopen"; taskId: number; note: string }
-  | { kind: "task_note"; taskId: number; note: string };
+  | { kind: "task_note"; taskId: number; note: string }
+  // «ok hết» / «lưu hết» / «đồng ý hết» / «bỏ hết» (phase 4, recap họp): xác nhận / bỏ MỌI đề xuất Recap của CÙNG cuộc
+  // đang hỏi — không có đề xuất nào khớp thì task-commands.ts trả null (để AI trả lời như câu thường).
+  | { kind: "task_confirm_recap" }
+  | { kind: "task_reject_recap" };
 
 const MAX_INPUT = 1500;
 // Mã việc: «V-12», «V12», «v-0012». Dạng đứng trần (xem / ok / bỏ) BẮT BUỘC có gạch nối — «v3», «ok v2» trong câu thường
@@ -94,6 +98,12 @@ export function parseTaskCommand(input: string): TaskCommand | null {
   if (match) return { kind: "task_cancel", taskId: id(match[1]), note: rest(match) };
   match = folded.match(new RegExp(String.raw`^mo lai\s+(?:viec\s+)?${ID}${TAIL}`));
   if (match) return { kind: "task_reopen", taskId: id(match[1]), note: rest(match) };
+  // «ok hết» / «lưu hết» / «đồng ý hết» / «bỏ hết» (phase 4): gộp mọi đề xuất recap của cùng cuộc đang hỏi — kiểm TRƯỚC
+  // dạng «ok V-12» (cùng nhóm động từ, khác phần đuôi) để không bị STRICT_ID nuốt nhầm.
+  if (/^(?:ok|oke|okay|dong y|xac nhan|luu|chot|duyet)\s+het$/.test(whole)) return { kind: "task_confirm_recap" };
+  // M3 (review 10/10/2026): bỏ bare «khong» khỏi nhóm từ bỏ — «không hết» là câu nói thường hay gặp (vd trả lời một câu
+  // hỏi khác), «khong phai hết» cụ thể hơn thì vẫn giữ.
+  if (/^(?:bo|khong phai|sai|loai)\s+het$/.test(whole)) return { kind: "task_reject_recap" };
   match = whole.match(new RegExp(String.raw`^(?:ok|oke|okay|dong y|xac nhan|luu|chot|duyet)\s+(?:viec\s+)?${STRICT_ID}$`));
   if (match) return { kind: "task_confirm", taskId: id(match[1]) };
   match = whole.match(new RegExp(String.raw`^(?:bo|khong phai|sai|khong|loai)\s+(?:viec\s+)?${STRICT_ID}$`));

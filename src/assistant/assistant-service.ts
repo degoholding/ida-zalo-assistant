@@ -143,8 +143,10 @@ Việc bạn làm được:
    «Anh/chị có muốn em lưu các việc này vào checklist và nhắc từng người theo hạn không ạ?» (chỉ hỏi khi có việc được giao). Chỉ ghi người / hạn khi trong ghi âm có nói, không đoán.
 - Tìm lại một trao đổi cũ theo từ khóa («ai nhắc tới…», «tìm tin về…», «X nói gì về…»): search_messages (nhanh, không phải đọc cả
   nhóm); trả lời kèm nhóm · người · giờ của từng tin tìm được. Không thấy thì nói không thấy, gợi ý từ khóa khác.
-9. Đọc LINK người dùng gửi (read_link): Google Sheets (mọi sheet), Google Docs, Slides, tệp Google Drive, trang web. «Đọc / recap link (của X)»
-   thì tìm link trong các tin gần nhất (hoặc get_group_messages) rồi read_link — KHÔNG đọc tệp khác thay cho link; không thấy link thì hỏi lại.
+9. Đọc LINK người dùng gửi (read_link): Google Sheets (mọi sheet), Google Docs, Slides, tệp Google Drive (kể cả GHI ÂM .mp3/.m4a/.wav — nhận
+   bản gỡ băng + tóm tắt), trang web. «Đọc / recap link (của X)», «recap cuộc họp từ link này» thì tìm link trong các tin gần nhất (hoặc
+   get_group_messages) rồi read_link — KHÔNG đọc tệp khác thay cho link; không thấy link thì hỏi lại. Link Drive là GHI ÂM cuộc họp → đọc xong
+   làm tiếp như mục 8 (create_meeting_recap_pdf + hỏi lưu việc).
 10. XUẤT FILE từ tài liệu / link đã đọc: người hỏi muốn «xuất file / PDF / gửi file» → create_summary_pdf (mặc định); muốn «Excel / Sheets / bảng»
    → export_report (một bảng các số chính). Gọi NGAY lượt này; tài liệu đọc ở lượt trước thì read_file / read_link LẠI để lấy đúng số (đừng chép từ
    câu trả lời cũ — đã bị cắt bớt). Xuất xong câu trả lời chỉ 2–3 ý chính + báo tệp đang được gửi, không chép lại cả bản tóm tắt.
@@ -322,7 +324,16 @@ export class AssistantService {
           allowedExtensions: this.options.readableFileTypes, heavyExtract: this.options.heavyExtract }, attachmentId)
         : undefined,
       markHeavy: () => { heavy = true; },
-      readLink: (url) => readLinkContent(url, readDocument),
+      // H3: ghi âm từ link nghe CHẢY THẲNG qua readAudioSource (Gemini, như worker recap họp) khi mô hình hỗ trợ —
+      // app không đệm cả tệp vào RAM; readAudioSource không có (vd chỉ còn OpenAI) thì link-reader.ts tự lùi về
+      // readDocument (Buffer, trần thấp hơn, xem FALLBACK_AUDIO_MAX_BYTES)
+      readLink: (url) => readLinkContent(url, readDocument, {
+        maxAudioBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024,
+        allowedExtensions: this.options.readableFileTypes,
+        readAudioSource: this.client.readAudioSource
+          ? (source, instruction) => this.client.readAudioSource!(source, instruction, this.options.heavyModel)
+          : undefined,
+      }),
       question: request.question,
     };
     context.meetings = this.options.meetingScheduler;

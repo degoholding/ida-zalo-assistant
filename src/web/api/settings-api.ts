@@ -3,6 +3,7 @@ import { listScheduleStatus } from "../../schedule/scheduler.js";
 import { parseServiceAccount, parseSpreadsheetId } from "../../google/service-account.js";
 import { GoogleSheetsClient, testSheetsConnection } from "../../google/sheets-client.js";
 import { GoogleSheetsError } from "../../google/sheets-error-messages.js";
+import { DriveClient, isAudioFile } from "../../google/drive-client.js";
 import { findSetting } from "../../settings/setting-registry.js";
 import type { SyncService } from "../../sync-service.js";
 import { ApiError, readJson, sendOk } from "./api-http.js";
@@ -27,6 +28,13 @@ function buildSheetsTarget(service: SyncService): { client: GoogleSheetsClient; 
   const url = service.config.google.spreadsheetUrl;
   if (!url) throw new ApiError(422, "validation_error", "Chưa có link trang tính");
   return { client: new GoogleSheetsClient(parseServiceAccount(account)), spreadsheetId: parseSpreadsheetId(url) };
+}
+
+/** Thư mục đọc qua Gmail đã «Kết nối Google» (xem `src/google/drive-client.ts`) — thiếu kết nối / link thì 422, không gọi mạng. */
+function buildDriveTarget(service: SyncService): DriveClient {
+  if (!service.config.google.calendarAccount) throw new ApiError(422, "validation_error", "Chưa kết nối Google — bấm «Kết nối Google» ở mục Calendar & Meet trước");
+  if (!service.config.meetingRecap.folderId) throw new ApiError(422, "validation_error", "Chưa có link thư mục ghi âm");
+  return new DriveClient(() => service.config.google, service.config.meetingRecap.folderId);
 }
 
 export const settingRoutes: ApiRoute[] = [
@@ -64,6 +72,26 @@ export const settingRoutes: ApiRoute[] = [
         entity: "setting", entityId: SETTINGS_ENTITY_ID, action: "test_connection", message: `Kết nối Google Sheets lỗi: ${error.message}`,
       });
       throw new ApiError(422, "google_sheets_error", error.message);
+    }
+  }],
+
+  ["POST", /^\/api\/settings\/google\/drive-test$/, async ({ response, service }) => {
+    const client = buildDriveTarget(service);
+    try {
+      const folder = await client.checkFolder();
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60_000);
+      const files = await client.listNewFiles(since);
+      const audioCount = files.filter((file) => isAudioFile(file)).length;
+      await recordAudit(service.db, {
+        entity: "setting", entityId: SETTINGS_ENTITY_ID, action: "test_connection", message: `Kiểm tra thư mục Drive: thành công («${folder.name}»)`,
+      });
+      sendOk(response, { ok: true, folder_name: folder.name, audio_files_7d: audioCount }, `Thấy thư mục «${folder.name}», ${audioCount} ghi âm trong 7 ngày`);
+    } catch (error) {
+      if (!(error instanceof GoogleSheetsError)) throw error;
+      await recordAudit(service.db, {
+        entity: "setting", entityId: SETTINGS_ENTITY_ID, action: "test_connection", message: `Kiểm tra thư mục Drive lỗi: ${error.message}`,
+      });
+      throw new ApiError(422, "google_drive_error", error.message);
     }
   }],
 

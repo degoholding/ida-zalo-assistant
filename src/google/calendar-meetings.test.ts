@@ -104,3 +104,78 @@ test("new meetings carry the bot mark and the group scope", () => {
   const event = buildMeetingEvent({ title: "x", startTime: 0, durationMinutes: 60, description: "", scopeTag: "group-91" }, "r");
   assert.deepEqual(event.extendedProperties, { private: { createdBy: "bot-tro-ly", scope: "group-91" } });
 });
+
+// 10/10/2026 (phase 3): mọi cuộc họp mới (nhóm lẫn riêng) ghi thêm requester — để recap Drive biết gửi riêng khi không có scope nhóm
+test("new meetings also carry the requester — direct chats included, so recap can DM the asker later", () => {
+  const groupEvent = buildMeetingEvent({ title: "x", startTime: 0, durationMinutes: 60, description: "", scopeTag: "group-91", requesterUid: "uid-1" }, "r");
+  assert.deepEqual(groupEvent.extendedProperties, { private: { createdBy: "bot-tro-ly", scope: "group-91", requester: "uid-1" } });
+  const directEvent = buildMeetingEvent({ title: "x", startTime: 0, durationMinutes: 60, description: "", requesterUid: "uid-2" }, "r");
+  assert.deepEqual(directEvent.extendedProperties, { private: { createdBy: "bot-tro-ly", requester: "uid-2" } });
+});
+
+test("runCreateMeeting forwards the asker's Zalo uid as requester on the created event", async () => {
+  let postedBody: Record<string, unknown> = {};
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).includes("oauth2")) return new Response(JSON.stringify({ access_token: "at" }));
+    postedBody = JSON.parse(String(init?.body ?? "{}"));
+    return new Response(JSON.stringify({ id: "ev1", hangoutLink: "https://meet.google.com/x" }));
+  }) as typeof fetch;
+  await runCreateMeeting(new MeetingScheduler(() => GOOGLE, fetcher), { done: 0 }, { title: "Giao ban", start_time: "2026-10-07T09:00:00" }, NOW, undefined, "uid-asker");
+  assert.equal((postedBody.extendedProperties as { private: { requester: string } }).private.requester, "uid-asker");
+});
+
+// listMeetingsBetween (phase 3, khớp ghi âm Drive) — không giới hạn "sắp tới" như listMeetings, trả kèm endTime / scopeTag / requesterUid
+test("listMeetingsBetween queries the given window and surfaces endTime, scope and requester from private properties", async () => {
+  const urls: string[] = [];
+  const fetcher = (async (url: string | URL | Request) => {
+    urls.push(String(url));
+    if (String(url).includes("oauth2")) return new Response(JSON.stringify({ access_token: "at" }));
+    return new Response(JSON.stringify({
+      items: [{
+        id: "ev1", summary: "Giao ban K52",
+        start: { dateTime: "2026-10-07T09:00:00+07:00" }, end: { dateTime: "2026-10-07T10:00:00+07:00" },
+        hangoutLink: "https://meet.google.com/x",
+        extendedProperties: { private: { createdBy: "bot-tro-ly", scope: "group-91", requester: "uid-1" } },
+      }],
+    }));
+  }) as typeof fetch;
+  const timeMin = new Date("2026-10-06T00:00:00Z");
+  const timeMax = new Date("2026-10-08T00:00:00Z");
+  const result = await new MeetingScheduler(() => GOOGLE, fetcher).listMeetingsBetween(timeMin, timeMax);
+  assert.deepEqual(result, [{
+    id: "ev1", title: "Giao ban K52",
+    startTime: Date.parse("2026-10-07T02:00:00Z"), endTime: Date.parse("2026-10-07T03:00:00Z"),
+    meetLink: "https://meet.google.com/x", scopeTag: "group-91", requesterUid: "uid-1",
+  }]);
+  const query = new URL(urls[1]);
+  assert.equal(query.searchParams.get("timeMin"), timeMin.toISOString());
+  assert.equal(query.searchParams.get("timeMax"), timeMax.toISOString());
+  assert.deepEqual(query.searchParams.getAll("privateExtendedProperty"), ["createdBy=bot-tro-ly"]);
+});
+
+// M1 (review 10/10/2026): >250 cuộc họp bot tạo trong cửa sổ (lô tệp lớn / sự cố kéo dài) — phải lặp nextPageToken,
+// không được cắt mất cuộc MỚI NHẤT như trần 50 cũ.
+test("listMeetingsBetween follows nextPageToken across multiple pages", async () => {
+  const urls: string[] = [];
+  let calls = 0;
+  const fetcher = (async (url: string | URL | Request) => {
+    const s = String(url);
+    urls.push(s);
+    if (s.includes("oauth2")) return new Response(JSON.stringify({ access_token: "at" }));
+    calls += 1;
+    if (calls === 1) {
+      return new Response(JSON.stringify({
+        items: [{ id: "ev1", summary: "Họp 1", start: { dateTime: "2026-10-07T09:00:00+07:00" }, end: { dateTime: "2026-10-07T10:00:00+07:00" } }],
+        nextPageToken: "page-2",
+      }));
+    }
+    return new Response(JSON.stringify({
+      items: [{ id: "ev2", summary: "Họp 2", start: { dateTime: "2026-10-07T11:00:00+07:00" }, end: { dateTime: "2026-10-07T12:00:00+07:00" } }],
+    }));
+  }) as typeof fetch;
+  const result = await new MeetingScheduler(() => GOOGLE, fetcher).listMeetingsBetween(new Date("2026-10-06T00:00:00Z"), new Date("2026-10-08T00:00:00Z"));
+  assert.deepEqual(result.map((m) => m.id), ["ev1", "ev2"]);
+  assert.equal(calls, 2);
+  // urls: [oauth, events trang 1, oauth, events trang 2] — mỗi lượt request() tự lấy token riêng (MeetingScheduler hiện tại)
+  assert.equal(new URL(urls[3]).searchParams.get("pageToken"), "page-2");
+});

@@ -63,6 +63,15 @@ export interface GoogleOauthStatus {
   email: string
   /** URL chính xác phải khai ở "Authorized redirect URIs" trên Google Cloud. */
   redirect_uri: string
+  /** Đã tick quyền đọc Drive (chỉ xem) lúc đồng ý — cần cho «Recap họp tự động». Kết nối từ trước phase này = false. */
+  drive_scope_granted: boolean
+}
+
+/** `POST /api/settings/google/drive-test` thành công — kiểm thư mục «Ghi âm họp» qua Gmail đã kết nối. */
+export interface DriveTestResult {
+  ok: true
+  folder_name: string
+  audio_files_7d: number
 }
 
 /** `POST /api/google/oauth/start` thành công — URL đưa trình duyệt sang màn xin quyền của Google. */

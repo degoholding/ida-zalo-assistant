@@ -6,6 +6,7 @@ import { ContactKind, ConversationType, MessageKind, TaskSource } from "../const
 import type { Db } from "../db/pool.js";
 import { createLogger } from "../logger.js";
 import type { WorkCalendar } from "../schedule/work-calendar.js";
+import { quietDelayMs } from "../schedule/quiet-delay.js";
 import { enqueueContactMessage } from "../messaging/contact-message.js";
 import { maskPersonalData } from "../privacy/personal-data.js";
 import { cleanPersonName, pickContactMatch, searchContactsByName } from "../sync/contact-search.js";
@@ -96,13 +97,6 @@ async function resolveProposedAssignee(db: Db, item: Candidate, personName: stri
   if (!name) return null;
   const picked = pickContactMatch(await searchContactsByName(db, name, { groupId: item.groupId }));
   return picked ? { contactId: picked.id, uid: picked.uid, name: picked.name } : { contactId: null, uid: null, name };
-}
-
-/** Giờ yên lặng / ngày nghỉ: hoãn tin đề xuất tới đầu giờ làm kế tiếp (không nhắn đêm vì nhóm nói chuyện khuya). */
-function quietDelayMs(calendar: WorkCalendar | null, now: Date): number {
-  if (!calendar?.isQuietTime(now)) return 0;
-  const next = calendar.addWorkingMinutes(now, 0);
-  return next ? Math.max(0, next.getTime() - now.getTime()) : 0;
 }
 
 const saveCursor = (db: Db, id: number) => db.query(

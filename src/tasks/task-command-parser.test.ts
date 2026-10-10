@@ -80,3 +80,23 @@ test("không đụng lệnh có sẵn: ticket T-12, «xong 1234» (tin cần x�
   assert.equal(parseChatCommand("xong V-12")?.kind, "task_done");
   assert.equal(parseChatCommand("ok")?.kind, "confirm");
 });
+
+// Phase 4 (recap họp): «ok hết» / «bỏ hết» gộp xác nhận mọi đề xuất Recap của cuộc đang hỏi — không cần gõ từng mã V-n.
+test("«ok hết» / «bỏ hết» (recap họp): các cách nói, không nhầm với lệnh có mã việc hoặc câu thường", () => {
+  assert.deepEqual(parseTaskCommand("ok hết"), { kind: "task_confirm_recap" });
+  assert.deepEqual(parseTaskCommand("Lưu hết"), { kind: "task_confirm_recap" });
+  assert.deepEqual(parseTaskCommand("đồng ý hết"), { kind: "task_confirm_recap" });
+  assert.deepEqual(parseTaskCommand("chốt hết."), { kind: "task_confirm_recap" });
+  assert.deepEqual(parseTaskCommand("bỏ hết"), { kind: "task_reject_recap" });
+  assert.deepEqual(parseTaskCommand("không phải hết"), { kind: "task_reject_recap" });
+  // M3 (review 10/10/2026): «không hết» bỏ khỏi nhóm bỏ — câu nói thường (vd trả lời câu hỏi khác), rủi ro nuốt nhầm
+  assert.equal(parseTaskCommand("Không hết!"), null);
+  assert.equal(parseTaskCommand("không hết"), null);
+  // Có mã việc thì vẫn là lệnh theo mã, không phải lệnh gộp
+  assert.deepEqual(parseTaskCommand("ok V-12"), { kind: "task_confirm", taskId: 12 });
+  assert.deepEqual(parseTaskCommand("bỏ V-12"), { kind: "task_reject", taskId: 12 });
+  // Câu thường có chữ «hết» không bị nuốt thành lệnh
+  assert.equal(parseTaskCommand("hết hàng rồi"), null);
+  assert.equal(parseTaskCommand("ok hết việc chưa anh"), null);
+  assert.equal(parseTaskCommand("hết"), null);
+});

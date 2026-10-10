@@ -2,7 +2,7 @@
 //
 // ⚠️ Lượt của mô hình phải đưa NGUYÊN VẸN trở lại lịch sử (kể cả các phần thoughtSignature của
 // dòng Gemini 3): bóc riêng functionCall ra rồi dựng lại là API từ chối lượt gọi hàm kế tiếp.
-import { INLINE_MAX_BYTES, deleteGeminiFile, uploadGeminiFile } from "./gemini-files.js";
+import { INLINE_MAX_BYTES, deleteGeminiFile, uploadGeminiFile, uploadGeminiFileStream } from "./gemini-files.js";
 
 export interface GeminiPart {
   text?: string;
@@ -51,10 +51,23 @@ export interface DocumentReadResult {
   outputTokens: number;
 }
 
+/**
+ * Nguồn âm thanh CHẢY THẲNG (phase 4, recap họp từ Drive) — `open()` mở luồng MỚI mỗi lần gọi (thử lại khóa kế vẫn tải
+ * lại được), không đọc trước vào RAM. `size` / `mime` biết trước (Drive trả sẵn) để Gemini xác nhận lúc mở phiên tải.
+ */
+export interface AudioSource {
+  mime: string;
+  size: number;
+  displayName: string;
+  open(): Promise<ReadableStream<Uint8Array>>;
+}
+
 export interface ModelClient {
   generate(request: GenerateRequest): Promise<GeminiResult>;
   /** Đọc tài liệu nhị phân (pdf, ảnh) thành chữ. Không có thì bot chỉ đọc được tệp văn bản. */
   readDocument?(mime: string, data: Buffer, instruction: string, model?: string): Promise<DocumentReadResult>;
+  /** Nghe ghi âm chảy thẳng (ghi âm cuộc họp dài, không đệm RAM) — chỉ Gemini (Files API) có, OpenAI không hỗ trợ. */
+  readAudioSource?(source: AudioSource, instruction: string, model?: string): Promise<DocumentReadResult>;
   /** Tìm web bằng Google Search (grounding). Không có thì trợ lý không có công cụ tìm web. */
   searchWeb?(query: string): Promise<WebSearchResult>;
 }
@@ -69,6 +82,8 @@ const RETRY_DELAYS_MS = [1000];
 // Mô hình dự phòng vừa trả lời được thì dùng thẳng nó trong ngần này, khỏi chờ mô hình chính lỗi lại.
 // Đo thật 01/10/2026: không có chỗ nhớ này, mỗi câu hỏi mất 50–100 giây chờ mô hình chính quá tải.
 const PREFER_FALLBACK_MS = 10 * 60 * 1000;
+/** Nghe ghi âm chảy thẳng (phase 4, recap họp) — cuộc họp dài có thể cần vài phút tải + vài phút nghe. */
+const AUDIO_SOURCE_TIMEOUT_MS = 15 * 60_000;
 
 /** Lỗi HTTP của Gemini — chuỗi «Khóa AI» đọc mã để biết khóa hết tiền / hết hạn mức / sai mà nhảy sang khóa kế. */
 export class GeminiHttpError extends Error {
@@ -232,6 +247,31 @@ export class GeminiClient implements ModelClient {
       return await this.readWithModels(models, filePart, instruction, timeoutMs);
     } finally {
       if (uploaded) await deleteGeminiFile(this.apiKey, uploaded.name);
+    }
+  }
+
+  /**
+   * Nghe ghi âm chảy thẳng từ `source.open()` (phase 4: Drive → Gemini, worker chỉ có 256 MB RAM nên không đệm) — tải
+   * lên Files API rồi hỏi, mọi mô hình dự phòng dùng CHUNG một tệp đã tải (như `readDocument`). Timeout dài hơn đọc
+   * tài liệu thường (ghi âm cuộc họp có thể 1–2 giờ).
+   */
+  async readAudioSource(source: AudioSource, instruction: string, model?: string): Promise<DocumentReadResult> {
+    const base = [this.model, ...this.fallbackModels.filter((name) => name && name !== this.model)];
+    const models = model ? [model, ...base.filter((name) => name !== model)] : base;
+    const stream = await source.open();
+    let uploaded: Awaited<ReturnType<typeof uploadGeminiFileStream>>;
+    try {
+      uploaded = await uploadGeminiFileStream(this.apiKey, source.mime, source.size, stream, source.displayName);
+    } catch (error) {
+      // L1 (review 10/10/2026): startUpload (hoặc upload) lỗi — hủy luôn luồng Drive đang mở, khỏi giữ socket chờ vô ích
+      await stream.cancel().catch(() => undefined);
+      throw error;
+    }
+    const filePart = { fileData: { mimeType: source.mime, fileUri: uploaded.uri } };
+    try {
+      return await this.readWithModels(models, filePart, instruction, AUDIO_SOURCE_TIMEOUT_MS);
+    } finally {
+      await deleteGeminiFile(this.apiKey, uploaded.name);
     }
   }
 

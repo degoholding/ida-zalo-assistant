@@ -1,5 +1,5 @@
 import { apiGet, apiPost, httpClient, type SuccessEnvelope } from '@/core/api'
-import type { GoogleTestResult, SettingView } from '../types/setting'
+import type { DriveTestResult, GoogleTestResult, SettingView } from '../types/setting'
 
 export const settingApi = {
   list: () => apiGet<SettingView[]>('/api/settings'),
@@ -14,4 +14,6 @@ export const settingApi = {
     return { data: res.data.data, message: res.data.message ?? 'Đã khôi phục mặc định' }
   },
   testGoogleConnection: () => apiPost<GoogleTestResult>('/api/settings/google/test'),
+  /** «Kiểm tra thư mục» của khối «Recap họp tự động» — đọc qua Gmail đã «Kết nối Google», không phải service account. */
+  testDriveFolder: () => apiPost<DriveTestResult>('/api/settings/google/drive-test'),
 }

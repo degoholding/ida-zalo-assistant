@@ -12,6 +12,8 @@ const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/eve
 const TIME_ZONE = "Asia/Ho_Chi_Minh";
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 20_000;
+/** `listMeetingsBetween` lấy tối đa ngần này trang (250 sự kiện / trang) — phòng lô bất thường vẫn không gọi vô hạn (M1). */
+const LIST_BETWEEN_MAX_PAGES = 5;
 /** Dấu bot trên sự kiện — lọc bằng privateExtendedProperty. */
 export const BOT_MARK = "bot-tro-ly";
 
@@ -22,6 +24,8 @@ export interface MeetingInput {
   description: string;
   /** Nơi tạo (vd «group-91»): trong nhóm chỉ thấy / hủy cuộc họp của nhóm đó. */
   scopeTag?: string;
+  /** Mã Zalo người đặt họp — gắn vào extendedProperties.private để phase 3 (recap Drive) biết gửi riêng khi không scope nhóm. */
+  requesterUid?: string;
 }
 
 export interface CreatedMeeting {
@@ -35,6 +39,10 @@ export interface BotMeeting {
   title: string;
   startTime: number;
   meetLink: string;
+  /** Chỉ có ở listMeetingsBetween (phase 3) — giờ kết thúc, nơi tạo, người đặt, để khớp ghi âm Drive. */
+  endTime?: number;
+  scopeTag?: string;
+  requesterUid?: string;
 }
 
 /** Giờ Việt Nam dạng RFC3339 «2026-10-07T09:00:00+07:00» (Calendar nhận kèm timeZone). */
@@ -49,7 +57,13 @@ export function buildMeetingEvent(input: MeetingInput, requestId: string): Recor
     start: { dateTime: toVnRfc3339(input.startTime), timeZone: TIME_ZONE },
     end: { dateTime: toVnRfc3339(input.startTime + input.durationMinutes * 60_000), timeZone: TIME_ZONE },
     conferenceData: { createRequest: { requestId, conferenceSolutionKey: { type: "hangoutsMeet" } } },
-    extendedProperties: { private: { createdBy: BOT_MARK, ...(input.scopeTag ? { scope: input.scopeTag } : {}) } },
+    extendedProperties: {
+      private: {
+        createdBy: BOT_MARK,
+        ...(input.scopeTag ? { scope: input.scopeTag } : {}),
+        ...(input.requesterUid ? { requester: input.requesterUid } : {}),
+      },
+    },
   };
 }
 
@@ -106,6 +120,45 @@ export class MeetingScheduler {
       startTime: Date.parse(String((item.start as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
       meetLink: meetLinkOf(item),
     }));
+  }
+
+  /**
+   * Cuộc họp bot tạo chồng lấn khoảng [timeMin, timeMax) — phase 3 (recap Drive) gọi MỘT lần cho cả lô tệp mới để khớp
+   * ghi âm, không giới hạn "sắp tới" như listMeetings. CHÚ Ý: Calendar lọc `timeMin` theo GIỜ KẾT THÚC sự kiện (sự kiện
+   * kết thúc sau timeMin thì vẫn vào, kể cả bắt đầu trước đó) và `timeMax` theo GIỜ BẮT ĐẦU — không phải cả hai cùng lọc
+   * theo giờ bắt đầu như tên gọi dễ nhầm; nơi gọi (watcher) đã lùi `timeMin` thêm độ dài họp dài nhất để bù phần này.
+   * Lặp `nextPageToken` (M1 review 10/10/2026: >50 cuộc họp trong cửa sổ từng làm rớt cuộc MỚI NHẤT — sắp theo startTime
+   * tăng dần, trần cũ 50 kết quả cắt đúng chỗ cần nhất) tới khi hết trang hoặc chạm `LIST_BETWEEN_MAX_PAGES`. Trả kèm
+   * endTime / scopeTag / requesterUid đọc từ extendedProperties.private để matcher (meeting-recording-matcher.ts)
+   * quyết định đích gửi.
+   */
+  async listMeetingsBetween(timeMin: Date, timeMax: Date): Promise<BotMeeting[]> {
+    const out: BotMeeting[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < LIST_BETWEEN_MAX_PAGES; page += 1) {
+      const params = new URLSearchParams({
+        timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "250",
+      });
+      params.append("privateExtendedProperty", `createdBy=${BOT_MARK}`);
+      if (pageToken) params.append("pageToken", pageToken);
+      const body = await this.request(`${EVENTS_URL}?${params}`, { method: "GET" });
+      out.push(...((body.items ?? []) as Record<string, unknown>[]).map((item) => {
+        const priv = ((item.extendedProperties as { private?: Record<string, string> } | undefined)?.private) ?? {};
+        return {
+          id: String(item.id ?? ""),
+          title: String(item.summary ?? ""),
+          startTime: Date.parse(String((item.start as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
+          endTime: Date.parse(String((item.end as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
+          meetLink: meetLinkOf(item),
+          scopeTag: priv.scope,
+          requesterUid: priv.requester,
+        };
+      }));
+      const next = typeof body.nextPageToken === "string" ? body.nextPageToken : undefined;
+      if (!next) break;
+      pageToken = next;
+    }
+    return out;
   }
 
   /** Hủy (xóa) một cuộc họp — chỉ khi id nằm trong danh sách cuộc họp CỦA BOT ở phạm vi này. */

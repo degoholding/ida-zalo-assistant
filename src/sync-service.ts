@@ -211,9 +211,11 @@ export class SyncService {
   }
 
   /**
-   * Tin báo ticket: vào một cuộc có sẵn (`threadId` — tin riêng thì đúng tài khoản bot chủ cuộc, nhóm thì tài khoản bot
-   * đang ở nhóm) hoặc nhắn riêng một người (`zaloUid`). Tệp kèm: tệp chưa vào kho thì đợi lượt thử sau; lượt cuối gửi
-   * những tệp đã có. Lỗi thì ném — hàng đợi thử lại.
+   * Tin báo ticket / việc / recap họp (phase 4): vào một cuộc có sẵn (`threadId` — tin riêng thì đúng tài khoản bot chủ
+   * cuộc, nhóm thì tài khoản bot đang ở nhóm) hoặc nhắn riêng một người (`zaloUid`). Tệp đính kèm cũ (`attachmentIds`)
+   * chưa vào kho thì đợi lượt thử sau; lượt cuối gửi những tệp đã có. `reportFiles` (PDF recap…) gửi SAU chữ + tệp đính
+   * kèm, tự ghi tiến độ (`textSent` / `sentFileCount`) vào CHÍNH payload của job — thử lại không gửi lặp phần đã xong
+   * (khuôn giống `sendRecipientMessage`). Lỗi thì ném — hàng đợi thử lại.
    */
   private async sendContactMessage(job: JobRow): Promise<void> {
     const payload = job.payload as ContactMessagePayload;
@@ -225,12 +227,24 @@ export class SyncService {
       const lastAttempt = job.attempts >= job.maxAttempts;
       if (ready.length < attachmentIds.length && !lastAttempt) throw new Error(`còn ${attachmentIds.length - ready.length} tệp chưa tải về kho`);
     }
+    const persistProgress = async (patch: Partial<ContactMessagePayload>): Promise<void> => {
+      Object.assign(payload, patch);
+      await this.db.query("UPDATE job SET payload = ? WHERE id = ?", [JSON.stringify(payload), job.id]);
+    };
+    const files = payload.reportFiles ?? [];
     if (payload.threadId) {
       const thread = await findThreadById(this.db, payload.threadId);
       if (!thread) return;
       const runner = await this.runnerForThread(thread);
-      if (payload.text) await runner.sendThreadText(thread, payload.text, payload.mentionUids);
+      if (payload.text && !payload.textSent) {
+        await runner.sendThreadText(thread, payload.text, payload.mentionUids);
+        await persistProgress({ textSent: true });
+      }
       for (const id of ready) await runner.sendThreadStoredFile(thread, id);
+      for (let index = payload.sentFileCount ?? 0; index < files.length; index += 1) {
+        await runner.sendReportFile(thread, files[index]);
+        await persistProgress({ sentFileCount: index + 1 });
+      }
       return;
     }
     if (!payload.zaloUid) return;
@@ -239,8 +253,15 @@ export class SyncService {
       [ConversationType.Direct, payload.zaloUid]);
     const runner = threads.map((row) => this.runners.get(Number(row.owner_bot_id))).find(Boolean) ?? [...this.runners.values()][0];
     if (!runner) throw new Error("không có tài khoản bot nào đang chạy");
-    if (payload.text) await runner.sendDirectText(payload.zaloUid, payload.name ?? "", payload.text);
+    if (payload.text && !payload.textSent) {
+      await runner.sendDirectText(payload.zaloUid, payload.name ?? "", payload.text);
+      await persistProgress({ textSent: true });
+    }
     for (const id of ready) await runner.sendDirectStoredFile(payload.zaloUid, id);
+    for (let index = payload.sentFileCount ?? 0; index < files.length; index += 1) {
+      await runner.sendDirectReportFile(payload.zaloUid, payload.name ?? "", files[index]);
+      await persistProgress({ sentFileCount: index + 1 });
+    }
   }
 
   /** Tài khoản bot gửi được vào một cuộc: tin riêng → bot chủ cuộc; nhóm → bot đang ở nhóm. */

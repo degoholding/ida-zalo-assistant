@@ -5,10 +5,12 @@ import { createLogger } from "./logger.js";
 import { BACKGROUND_TASKS, type BackgroundTaskName } from "./schedule/background-tasks.js";
 import { Scheduler } from "./schedule/scheduler.js";
 import { buildWorkCalendar, type WorkCalendar } from "./schedule/work-calendar.js";
-import { runAiReview } from "./alerts/ai-review.js";
+import { buildAlertModelClient, runAiReview } from "./alerts/ai-review.js";
 import { runReminders } from "./alerts/reminders.js";
 import { telegramSenderFor, watchSessions } from "./alerts/session-watch.js";
 import { runBriefs } from "./briefs/brief-runner.js";
+import { MeetingScheduler } from "./google/calendar-meetings.js";
+import { runMeetingRecordings } from "./meetings/meeting-recording-watcher.js";
 import { backfillMessageSearch } from "./search/message-search-index.js";
 import { runTaskReminders } from "./tasks/task-reminders.js";
 import { runTaskExtraction } from "./tasks/task-proposals.js";
@@ -48,6 +50,9 @@ export function workCalendarFrom(config: AppConfig): () => WorkCalendar {
 }
 
 export async function startBackgroundTasks(db: Db, storage: FileStorage, config: AppConfig): Promise<BackgroundTasks> {
+  // Đọc lại config.google lúc gọi (khuôn giống MeetingScheduler của assistant) — «Kết nối Google» / ngắt kết nối trên
+  // Cài đặt có hiệu lực ngay, không cần khởi động lại worker.
+  const meetingScheduler = new MeetingScheduler(() => config.google);
   const runners: Record<BackgroundTaskName, () => Promise<unknown>> = {
     avatars: () => cacheAvatars(db, storage),
     retention: async () => {
@@ -71,6 +76,9 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     "task-reminders": () => runTaskReminders(db, config, safeCalendar()),
     "task-extract": () => runTaskExtraction(db, config, safeCalendar()),
     briefs: () => runBriefs(db, config, safeCalendar(), storage),
+    "meeting-recordings": () => runMeetingRecordings(db, config, meetingScheduler, {
+      storage, calendar: safeCalendar(), buildModel: () => buildAlertModelClient(db, config),
+    }),
     "search-index": async () => {
       const copied = await backfillMessageSearch(db);
       if (copied) log.info(`chép ${copied} tin cũ vào bảng tìm`);

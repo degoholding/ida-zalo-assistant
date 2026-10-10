@@ -1,3 +1,5 @@
+import type { GoogleAccountLink } from "./google/google-oauth.js";
+
 // Đọc cấu hình từ biến môi trường một lần, kiểm ngay lúc khởi động — thiếu thì dừng sớm,
 // đừng để chạy nửa chừng mới nổ.
 
@@ -116,7 +118,18 @@ export interface AppConfig {
     /** Client ID của nút «Đăng nhập bằng Google» (Google Identity Services) — phase 4. */
     loginClientId: string;
     oauthClientSecret: string;
-    calendarAccount: { email: string; refresh_token: string } | null;
+    calendarAccount: GoogleAccountLink | null;
+  };
+  /**
+   * Recap họp tự động từ ghi âm trên Google Drive (phase 1, 10/10/2026) — đọc qua CHÍNH tài khoản Google đã
+   * «Kết nối Google» (quyền Drive tùy chọn, xem `hasDriveScope`), KHÔNG dùng service account.
+   */
+  meetingRecap: {
+    enabled: boolean;
+    /** Mã thư mục Drive «Ghi âm họp» đã phân tích từ link (rỗng = chưa cấu hình). */
+    folderId: string;
+    /** Ghi âm lớn hơn ngần này byte thì bỏ qua + báo, không recap tự động. */
+    maxBytes: number;
   };
 }
 
@@ -214,5 +227,6 @@ export function loadConfig(): AppConfig {
       telegramBotToken: (process.env.ALERT_TELEGRAM_BOT_TOKEN ?? "").trim(), telegramChatId: (process.env.ALERT_TELEGRAM_CHAT_ID ?? "").trim(),
     },
     google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null, loginClientId: "" },
+    meetingRecap: { enabled: false, folderId: "", maxBytes: 150 * 1024 * 1024 },
   };
 }

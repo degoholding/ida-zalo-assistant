@@ -4,6 +4,7 @@ import {
   consumeOAuthState,
   createOAuthState,
   exchangeAuthCode,
+  hasDriveScope,
   oauthClientOf,
 } from "../../google/google-oauth.js";
 import { GoogleSheetsError } from "../../google/sheets-error-messages.js";
@@ -38,6 +39,8 @@ function status(service: SyncService, request: http.IncomingMessage) {
     connected: Boolean(calendarAccount),
     email: calendarAccount?.email ?? "",
     redirect_uri: redirectUriFor(request),
+    // Recap họp tự động (phase 1, 10/10/2026) cần quyền Drive — tùy chọn, kết nối Lịch vẫn chạy được khi thiếu
+    drive_scope_granted: hasDriveScope(calendarAccount),
   };
 }
 

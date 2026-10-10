@@ -63,10 +63,24 @@ export async function findTask(db: Db, id: number, tenantId = 1): Promise<TaskRo
   return rows[0] ? toTask(rows[0]) : null;
 }
 
+/** Việc đã tạo trước đó theo `dedupeKey` — thử lại sau lỗi dở dang (M4, recap họp) dùng để lấy lại việc đã có thay vì
+ * bỏ qua, không rơi khỏi tin / `task_ids`. */
+export async function findTaskByDedupeKey(db: Db, dedupeKey: string, tenantId = 1): Promise<TaskRow | null> {
+  const [rows] = await db.query<RowDataPacket[]>(`SELECT ${TASK_COLUMNS} FROM task t WHERE t.dedupe_key = ? AND t.tenant_id = ?`, [dedupeKey, tenantId]);
+  return rows[0] ? toTask(rows[0]) : null;
+}
+
 export interface TaskListFilter {
   statuses: TaskStatus[];
   /** Người này là người phụ trách HOẶC người giao */
   involvingUid?: string;
+  /** Chỉ việc có người giao (assigner) đúng người này — khác `involvingUid` (không tính người PHỤ TRÁCH). Dùng cho
+   * «ok hết» / «bỏ hết» (phase 4, recap họp) khi hỏi ở tin riêng: phạm vi = đề xuất CHÍNH người hỏi đã tạo ra. */
+  assignerUid?: string;
+  /** Chỉ việc nguồn này (phase 4: «ok hết» / «bỏ hết» chỉ gộp đề xuất Recap, không đụng đề xuất AI khác). */
+  source?: TaskSource;
+  /** Chỉ việc tạo từ mốc này trở đi (phase 4: đề xuất Recap trong vài ngày gần đây). */
+  createdAfter?: Date;
   /** Chỉ việc giao trong cuộc này (hỏi trong nhóm = việc của nhóm đó) */
   threadId?: number;
   /** Chỉ việc đã quá hạn tại mốc này */
@@ -81,6 +95,18 @@ export async function listTasks(db: Db, filter: TaskListFilter, tenantId = 1): P
   if (filter.involvingUid) {
     where.push("(t.assignee_uid = ? OR t.assigner_uid = ?)");
     params.push(filter.involvingUid, filter.involvingUid);
+  }
+  if (filter.assignerUid) {
+    where.push("t.assigner_uid = ?");
+    params.push(filter.assignerUid);
+  }
+  if (filter.source !== undefined) {
+    where.push("t.source = ?");
+    params.push(filter.source);
+  }
+  if (filter.createdAfter) {
+    where.push("t.created_at >= ?");
+    params.push(filter.createdAfter);
   }
   if (filter.threadId) {
     where.push("t.source_thread_id = ?");

@@ -485,7 +485,7 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   create_meeting_recap_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now),
   create_summary_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now, "document"),
   create_meeting: (context, args) =>
-    runCreateMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, context.now, meetingScopeTag(context.scopeGroupId)),
+    runCreateMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, context.now, meetingScopeTag(context.scopeGroupId), context.askerUid),
   list_meetings: (context) => runListMeetings(context.meetings, meetingScopeTag(context.scopeGroupId)),
   cancel_meeting: (context, args) =>
     runCancelMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, meetingScopeTag(context.scopeGroupId)),
