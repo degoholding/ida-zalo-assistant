@@ -1,5 +1,5 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 import { createLogger } from "../logger.js";
 import type { CpuRequest, CpuResponse, CpuTask } from "./cpu-worker.js";
@@ -11,10 +11,21 @@ import type { CpuRequest, CpuResponse, CpuTask } from "./cpu-worker.js";
 const log = createLogger("cpu");
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-// Chạy mã đã build (dist/*.js) hay qua tsx (src/*.ts): luồng phụ dùng cùng đuôi với tệp này. Luồng phụ thừa hưởng
-// execArgv của tiến trình (vd `--import tsx`) nên đọc được .ts khi chạy dev / bài kiểm.
+// Chạy mã đã build (dist/*.js) hay qua tsx (src/*.ts): luồng phụ dùng cùng đuôi với tệp này.
 const selfPath = fileURLToPath(import.meta.url);
 const WORKER_PATH = path.join(path.dirname(selfPath), `cpu-worker${path.extname(selfPath)}`);
+
+/**
+ * Điểm vào của luồng phụ. Bản build: thẳng tệp .js. Chạy từ mã nguồn (dev / bài kiểm qua `--import tsx`): cờ `--import tsx`
+ * KHÔNG có tác dụng trong luồng phụ (Node 22 + tsx 4 — luồng phụ báo «Unknown file extension ".ts"») nên dựng một mô-đun
+ * mồi nhỏ: tự `register()` bộ nạp tsx trong luồng phụ rồi mới nạp cpu-worker.ts.
+ */
+function workerEntry(): string | URL {
+  if (path.extname(selfPath) !== ".ts") return WORKER_PATH;
+  const tsxApi = import.meta.resolve("tsx/esm/api");
+  const bootstrap = `import { register } from ${JSON.stringify(tsxApi)}; register(); await import(${JSON.stringify(pathToFileURL(WORKER_PATH).href)});`;
+  return new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`);
+}
 
 interface PendingTask {
   id: number;
@@ -66,7 +77,7 @@ export class CpuPool {
   }
 
   private spawn(): Slot {
-    const worker = new Worker(WORKER_PATH);
+    const worker = new Worker(workerEntry());
     const slot: Slot = { worker, busy: null, timer: null };
     worker.on("message", (response: CpuResponse) => {
       const pending = slot.busy;
