@@ -1,6 +1,6 @@
 # Đối chiếu đặc tả IDA («CÁC NHU CẦU.xlsx») với Bot trợ lý hiện có
 
-> Bản 1.1 · 02/10/2026: câu 1 mục 4 đã chốt (câu tự nhiên, bỏ lệnh gạch chéo); thêm phase B (Cài đặt +
+> Bản 1.2 · 12/10/2026 (phase 9: gửi tin theo lệnh, tắt bot khẩn) · bản 1.1 · 02/10/2026: câu 1 mục 4 đã chốt (câu tự nhiên, bỏ lệnh gạch chéo); thêm phase B (Cài đặt +
 > Google Sheets) trước đợt 0; mục 5 cập nhật đường lấy tin cũ. Lộ trình gộp và trạng thái từng phase:
 > [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md) mục 7.
 >
@@ -37,7 +37,7 @@
 | N4 | Tìm kiếm tin nhắn | **Một phần** | Tìm tệp theo tên + **nội dung** đã bóc (pdf / Excel); AI tìm theo người, nhóm, khoảng ngày; chữ bóc có FULLTEXT | Tìm **tin nhắn** theo từ khóa trên web (hiện chỉ có tìm cuộc); lệnh tìm đa điều kiện (từ khóa + người + nhóm + ngày + loại tin); kết quả kèm đường dẫn về tin gốc; voice → chữ; mốc ≤ 5 giây / 6 tháng chưa đo |
 | N5 | Checklist công việc | **Chưa** | — | Bảng việc; bot đề xuất việc từ tin, chủ xác nhận; /xong /doihan /giao; nhắc trước hạn – đến hạn – quá hạn; gắn cờ thiếu owner / deadline |
 | N6 | Tổng hợp báo cáo | **Một phần** | Tóm tắt nhóm theo khoảng thời gian, theo người, theo yêu cầu (câu tự nhiên); đã chuyển bản flash cho tóm tắt dài | Morning / End-of-day Brief gửi đúng giờ; báo cáo theo mẫu, theo khách hàng / nhân viên; mọi ý truy ngược về tin gốc; xuất Excel / Word / PDF; tên tệp theo quy ước |
-| N7 | Gửi tin theo lệnh | **Một phần** | Gửi chữ + tệp vào người / nhóm dưới tên bot (từ web); giãn cách gửi 1,5 s; tin gửi có ghi kho và nhãn «quản trị» | Ra lệnh từ Zalo (/gui, /hengio, /guihangloat); **xem trước → xác nhận → gửi → báo kết quả**; hẹn giờ; gửi hàng loạt có báo thành công / lỗi; /huy và /tatbot; nhật ký gửi có trạng thái |
+| N7 | Gửi tin theo lệnh | **Đạt (phần GĐ1)** | Gửi chữ + tệp vào người / nhóm dưới tên bot (từ web); giãn cách gửi 1,5 s; tin gửi có ghi kho và nhãn «quản trị»; ra lệnh từ Zalo; xem trước → xác nhận → gửi → báo kết quả; hẹn giờ; tắt bot khẩn; nhật ký gửi có trạng thái | Gửi hàng loạt lớn / danh sách / mẫu → giai đoạn 2 |
 
 ## 2. Giai đoạn 1 — 44 tính năng P1 (sheet DANH MỤC VÍ DỤ)
 
@@ -62,13 +62,13 @@
 | B13 | Tìm kiếm đa điều kiện | tệp: có; tin: lọc theo người / nhóm / ngày qua AI | từ khóa + loại tin; màn tìm tin trên web | M |
 | B16 | Trích dẫn nguồn | kết quả tìm tệp có nhóm, người, ngày | link mở tin gốc (web có route `/conversations/:id`, cần thêm neo tới tin) | S |
 | B26 | Báo cáo theo yêu cầu | tóm tắt on-demand bằng câu tự nhiên | dạng «báo cáo» có tóm tắt đầu + bảng chi tiết, xuất tệp | M |
-| B27 | Gửi tin tới 1 người / nhóm | gửi được từ web (chữ + tệp) | ra lệnh từ Zalo; xem trước → xác nhận | M |
+| B27 | Gửi tin tới 1 người / nhóm | gửi được từ web (chữ + tệp); ra lệnh từ Zalo; xem trước → xác nhận | ≤10 nơi Nội bộ / lệnh; hàng loạt → giai đoạn 2 | M |
 | B17 | Thống kê hoạt động | số tin / nhóm, số tin riêng / người (web) | theo ngày, theo người; thời gian phản hồi TB; tin chưa xử lý; lệnh /thongke | M |
 | TN091 | Audit Trail | nhật ký thao tác web, lượt hỏi bot, tin bot gửi (nguồn AI / quản trị) | log lệnh gửi từ Zalo (chưa có lệnh), evidence | S |
 | TN135 | Permission Control | chỉ người có vai trò được hỏi; quyền hiện MỞ HẾT (mọi vai trò hỏi mọi nhóm) | khoanh trưởng phòng theo nhóm họ ở (đã thiết kế ở doc 01, chưa làm); từ chối câu hỏi ngoài quyền | M |
 | TN136 | Confidentiality | whitelist nhóm | nhãn «Mật» cho nhóm → loại khỏi báo cáo gửi người khác | S |
-| B33 | Nhật ký gửi & trạng thái | tin gửi được lưu | trạng thái đã gửi / lỗi, gửi lại; lệnh /nhatky | S |
-| B38 | Kill switch | tắt tài khoản bot trên web (dừng ngay) | lệnh /tatbot từ Zalo, dừng cả lịch hẹn | S |
+| B33 | Nhật ký gửi & trạng thái | tin gửi được lưu; nhật ký lệnh Zalo; trạng thái từng nơi (Sent / Failed), hủy lệnh hẹn, gửi lại lỗi | S |
+| B38 | Kill switch | dừng mọi tin gửi ra (trả lời, lệnh gửi, nhắc, cảnh báo, bản tin, ticket) | lệnh «tắt bot» từ Zalo, không hỏi lại; «bật bot» hoặc quản trị web bật lại | S |
 | B40 | Giám sát kết nối Zalo | trạng thái «Hết phiên — cần quét QR» hiện trên web; sự kiện phiên có lưu | **chủ động báo** chủ + IT khi phiên văng (cần kênh dự phòng — Telegram theo doc 01 chưa làm) | S |
 
 ### 2.3 Chưa làm (24)
@@ -93,8 +93,8 @@
 | B20 | Xuất Excel / Google Sheets | Báo cáo / Thống kê (SheetJS đã có sẵn trong kho) | S |
 | B18 | Trích số liệu từ tin báo cáo sales | Thống kê | M |
 | B19 | Hỏi rõ đơn vị khi số liệu mơ hồ | Thống kê | S |
-| B28 | Hẹn giờ gửi | Gửi theo lệnh + lập lịch | S |
-| B32 | Xem trước, xác nhận & hủy | Gửi theo lệnh | M |
+| B28 | Hẹn giờ gửi | Gửi theo lệnh + lập lịch; cảnh báo nếu rơi giờ yên lặng | S |
+| B32 | Xem trước, xác nhận & hủy | Gửi theo lệnh; lệnh gõ xác nhận («đồng ý G-12») hoặc hủy («hủy G-12») | M |
 | B08 | Gợi ý 2–3 phương án trả lời | Gợi ý trả lời | M |
 | B09 | Thư viện mẫu trả lời nhanh | Gợi ý trả lời | S |
 | B36 | Che dữ liệu nhạy cảm trước khi gửi AI | Nền tảng | S |

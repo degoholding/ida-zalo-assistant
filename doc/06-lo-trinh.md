@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
+> Bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -25,12 +25,12 @@
 | **6** | N4 — Tìm kiếm tin nhắn | **Xong** 09/10 (phần GĐ1) | 5 / 6 |
 | **7** | N5 — Checklist công việc | **Xong** 09/10 | 5 / 5 |
 | **8** | N6 — Bản tin và báo cáo | **Xong** 09/10 | 6 / 7 |
-| **9** | N7 — Gửi tin theo lệnh | Một phần | 1 / 6 |
+| **9** | N7 — Gửi tin theo lệnh | **Xong** 12/10 (phần GĐ1: lệnh gửi + tắt khẩn) | 5 / 6 |
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 1 / 9 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
-08/10; tìm tin (phase 6) và checklist công việc (phase 7) xong 09/10; bản tin sáng / tối và báo cáo tuần / tháng (phase 8) xong 09/10 — tiếp theo là phase 9 (gửi tin theo lệnh).
+08/10; tìm tin (phase 6) và checklist công việc (phase 7) xong 09/10; bản tin sáng / tối và báo cáo tuần / tháng (phase 8) xong 09/10; gửi tin theo lệnh (phase 9 GĐ1) xong 12/10 — hàng loạt lớn giai đoạn 2.
 
 Đối chiếu 27 câu của IDA (mục 9): **11 Đạt · 12 Một phần · 4 Chưa** sau phase 7 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
@@ -348,16 +348,28 @@ Plan: `plans/261009-1555-phase-08-briefs-reports/` · kịch bản test khi depl
 | Báo cáo tuần 08:00 T2 + tháng ngày 3: PDF A4 + Excel, tự gửi | 25 | Xong 09/10 (khuôn tạm) |
 | Khuôn báo cáo tuần / tháng theo form IDA | 25 | Chờ IDA |
 
-### Phase 9 — N7 Gửi tin theo lệnh (Một phần)
+### Phase 9 — N7 Gửi tin theo lệnh (Xong 12/10, phần GĐ1)
+
+Plan: `plans/261012-0854-phase-09-send-on-command/` · kịch bản test khi deploy: [`09-kich-ban-test-phase-9.md`](09-kich-ban-test-phase-9.md). **Đã chốt (anh, 12/10):** ra lệnh gửi từ Zalo bằng câu tự nhiên («gửi nhóm Kho HN, anh Minh lúc 8h sáng mai: …») → server dựng bản xem trước → người ra lệnh «đồng ý» trong 15 phút → gửi tuần tự ≤10 nơi nội bộ → báo kết quả từng nơi; hẹn giờ gửi; «lệnh gửi» xem danh sách, «hủy G-12» hủy; «tắt bot» dừng MỌI tin gửi ra ngay, vẫn đồng bộ + lưu tin; «bật bot» bật lại; màn web «Gửi tin»: nhật ký, hủy lệnh hẹn, gửi lại nơi lỗi, nút Tắt / Bật bot; gửi hàng loạt / mẫu cá nhân hóa → giai đoạn 2.
+
+**Đã làm (12/10):**
+- **Bảng lệnh gửi** (migration 028: `send_command` + `send_command_target`), mã `G-<id>` tăng tự động. Một job `SendCommandTarget` / nơi. Trạng thái nháp (bản xem trước đang nằm) / xác nhận (người đã «đồng ý») / gửi (tuần tự) / lỗi + báo (từng nơi) / hết hạn + bỏ (15 phút).
+- **Lõi lệnh gửi**: parser (khớp câu gửi không dấu, cắt tên nơi + nội dung từ câu gốc), phân giải nơi nhận (≤10 nơi Nội bộ + nhân sự có cuộc riêng hoặc bạn Zalo), dựng bản xem trước, xác nhận qua lệnh gõ (15 phút giãn cách gửi ~1,5 s), báo kết quả từng nơi (Sent / Failed + lý do).
+- **Hẹn giờ gửi**: «lúc 8h sáng mai» rơi giờ yên lặng → cảnh báo trong xem trước. Lệnh từ Zalo / Web (tư vấn từ chat).
+- **Tắt bot khẩn**: khóa `bot_halt` (app_setting, cờ bộ nhớ + DB) → chặn ở `ZaloSender` (mọi tin Zalo) + bọc handler job + cổng lệnh trước xếp việc. Khi tắt: bot im lặng (chỉ trả 1 câu «bot tạm dừng» / người / lượt), MỘT câu lệnh tình trạng được qua, người lạ vẫn im lặng. Ai tắt được: người có quyền ra lệnh gửi. Ai bật được: người nhận bật + quản trị web bật.
+- **Màn web «Gửi tin»**: nhật ký lệnh Zalo + tin quản trị gửi từ web, trạng thái từng nơi, hủy lệnh hẹn, gửi lại nơi lỗi, Tắt / Bật bot (chỉ quản trị). Quản lý / Nhân viên thấy + hủy lệnh do mình ra. Mọi thao tác → `recordAudit`.
+- **Nhắc hẹn nhóm từ tin riêng + chặn «đã làm» giả** (sự cố prod 12/10: nhắn riêng bảo tạo nhắc hẹn nhóm, bot nói đã tạo nhưng không có công cụ, còn tạo trùng 2 cuộc họp Meet): migration 029 (`send_command.action_kind`, `reminder_at`, `reminder_repeat`); công cụ `propose_group_reminder` (chỉ tin riêng, chỉ nhóm, luật quyền như lệnh gửi) → «XEM TRƯỚC NHẮC HẸN G-n» → «đồng ý» → tạo nhắc hẹn Zalo thật qua `ZaloSender`; luật lời nhắc: chỉ báo đã làm khi công cụ vừa thành công; `create_meeting` trùng tiêu đề + giờ trả cuộc đã có; kết quả mọi hành động thật trong lượt hiện TRÊN bản xem trước (`action-notes.ts`). Plan: `plans/261012-1042-dm-group-reminder-and-no-fake-actions/`.
+- **Cơ chế chống trùng**: `claimConfirm` có điều kiện, `dedupeKey sendcmd:t<id>:a<lần>` → khởi động lại / «đồng ý» hai lần không gửi trùng. Hủy đổi nơi → job Pending → Expired. Báo kết quả giành `reported_at`.
+- **Ngoài phạm vi**: gửi hàng loạt / danh sách khách / mẫu cá nhân → giai đoạn 2; gửi vào nhóm khách bằng lệnh Zalo; duyệt lệnh hai người; tắt bot theo từng tài khoản; sửa lệnh đã hẹn.
+- Review (agent, 12/10): 14 phát hiện (11 đã sửa, 3 chưa sửa + phòng thủ). Tệp đã sửa: `src/send-commands/*`, `src/sync-service.ts`, `src/assistant/*`, `src/messaging/bot-halt*.ts`, `src/web/api/send-commands-api.ts`, `web/src/modules/send-commands/*`, 2 tệp test tích hợp mới.
 
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
-| Quản trị gửi chữ / tệp từ web dưới tên bot | 26 | Xong |
-| Ra lệnh gửi từ Zalo bằng câu tự nhiên → xem trước → xác nhận → gửi → báo kết quả | 26 | Chưa |
-| Hẹn giờ gửi, hủy lệnh | 26 | Chưa |
-| Tắt bot khẩn bằng lệnh | N7 | Chưa |
-| Nhật ký gửi (thành công / lỗi) | 26 | Chưa |
-| Gửi hàng loạt có giới hạn tốc độ (giai đoạn 2) | 26 | Chưa |
+| Ra lệnh gửi từ Zalo bằng câu tự nhiên → xem trước → xác nhận → gửi → báo kết quả | 26 | Xong 12/10 |
+| Hẹn giờ gửi, hủy lệnh | 26 | Xong 12/10 |
+| Tắt bot khẩn bằng lệnh (dừng mọi tin gửi ra) | 26 | Xong 12/10 |
+| Nhật ký gửi trên màn web (trạng thái từng nơi, hủy hẹn, gửi lại lỗi) | 26 | Xong 12/10 |
+| Gửi hàng loạt có giới hạn tốc độ (giai đoạn 2) | 26 | Một phần (lõi sẵn; danh sách / mẫu → giai đoạn 2) |
 
 ### Phase 10 — N3 Số liệu + N2 Gợi ý trả lời (Một phần)
 
