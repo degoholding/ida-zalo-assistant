@@ -14,6 +14,7 @@ import { READ_LINK_DECLARATION } from "./read-link-tool.js";
 import { SEARCH_MESSAGES_DECLARATION } from "./search-messages-tool.js";
 import { REPORT_MAX_TOOL_ROUNDS, REPORT_PLAYBOOK_PROMPT, isReportRequest } from "./report-playbook.js";
 import { appendTokenFooter, stripTokenFooter } from "./token-usage-footer.js";
+import { isAckText, UNCLEAR_REPLY } from "./assistant-ack-texts.js";
 import { GROUP_ACTION_DECLARATIONS, type GroupActions } from "./group-action-tools.js";
 import { CREATE_MEETING_DECLARATION, MEETING_MANAGE_DECLARATIONS, type MeetingCreator } from "./meeting-tool.js";
 import { RECAP_DRIVE_RECORDING_DECLARATION } from "./drive-recap-tool.js";
@@ -210,6 +211,8 @@ async function loadHistory(db: Db, threadId: number, beforeMessageId: number | n
     // Gemini đòi lượt user/model xen kẽ — gộp các tin liền nhau cùng phía
     // Dòng đo token dưới câu trả lời cũ không phải nội dung — bỏ đi, khỏi tốn token và khỏi để mô hình bắt chước
     const rowText = stripTokenFooter(String(row.text));
+    // Câu «chờ em xíu» của bot không phải câu trả lời — để lại thì mô hình bắt chước, trả đúng câu chờ rồi không làm gì
+    if (role === "model" && isAckText(rowText)) continue;
     if (last && last.role === role) last.parts[0].text = `${last.parts[0].text}\n${rowText}`;
     else contents.push({ role, parts: [{ text: rowText }] });
   }
@@ -465,7 +468,8 @@ export class AssistantService {
           const fixed = context.fixedReply === undefined ? undefined : [...(context.actionNotes ?? []), context.fixedReply].join("\n\n");
           const text = fixed ?? (result?.content.parts ?? []).map((part) => part.text ?? "").join("").trim();
           if (!text) throw new Error("Mô hình trả lời rỗng");
-          const cleaned = fixed !== undefined ? fixed : stripMarkdown(text);
+          // Mô hình trả đúng một câu «chờ em xíu» = không làm gì cả (tin chờ thật đã gửi rồi) — hỏi lại thay vì gửi câu chờ thứ hai
+          const cleaned = fixed !== undefined ? fixed : isAckText(text) ? UNCLEAR_REPLY : stripMarkdown(text);
           const totalIn = inputTokens + usage.inputTokens;
           const totalOut = outputTokens + usage.outputTokens;
           await this.logTurn(request, AssistantTurnStatus.Answered, {

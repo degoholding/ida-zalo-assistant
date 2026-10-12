@@ -115,8 +115,10 @@ export function parseChatCommand(input: string): ChatCommand | null {
   if (match) return { kind: "ticket_done", ticketId: Number(match[1]), note: "" };
   match = folded.match(/^(xem )?(ticket )?#?t ?-?(\d{1,6})( (sao roi|the nao|xong chua|tinh hinh|den dau roi|sao))?$/);
   if (match) return { kind: "ticket_status", ticketId: Number(match[3]) };
-  if (/^(dong y|ok|oke|okay|xac nhan|luu|yes|co|uh|u|chot)$/.test(folded)) return { kind: "confirm" };
-  if (/^(huy|thoi|khong|bo qua|cancel)$/.test(folded)) return { kind: "cancel" };
+  // Chỉ là lệnh khi đang có đề xuất / nháp chờ (xem runChatCommand) — nên nhận rộng cách gõ tắt: «okee», «okeee», «oki», «ừ»,
+  // «được», «gửi đi», kèm đuôi «nhé / nha / em». Trước 12/10/2026 «okee» lọt sang AI (không có quyền xác nhận) → nháp hết hạn.
+  if (/^(dong y|o+k+e*|oki+e?|okay|xac nhan|luu|yes|co|uh+|u+|um+|chot|duoc|dc|gui di|gui luon|lam di|tao di)( (nhe|nha|em|nhe em|nha em|luon|di))*$/.test(folded)) return { kind: "confirm" };
+  if (/^(huy|thoi|khong|bo qua|cancel)( (nhe|nha|em|di))*$/.test(folded)) return { kind: "cancel" };
   return null;
 }
 

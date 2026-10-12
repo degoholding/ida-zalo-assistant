@@ -31,6 +31,14 @@ test("wait, VIP, done, confirm and cancel commands", () => {
   assert.deepEqual(parseChatCommand("Đồng ý"), { kind: "confirm" });
   assert.deepEqual(parseChatCommand("ok"), { kind: "confirm" });
   assert.deepEqual(parseChatCommand("hủy"), { kind: "cancel" });
+  // Sự cố prod 12/10/2026: «okee» không khớp → lọt sang AI, nháp lệnh gửi hết hạn mà không gửi
+  for (const text of ["okee", "Okeee", "oki", "okie", "ok nhé", "oke em", "ừ", "được", "đc", "gửi đi", "gửi luôn nha", "đồng ý nhé"]) {
+    assert.deepEqual(parseChatCommand(text), { kind: "confirm" }, text);
+  }
+  assert.deepEqual(parseChatCommand("thôi nhé"), { kind: "cancel" });
+  // Câu thường có chữ «ok» / «được» không bị nuốt thành lệnh xác nhận
+  assert.equal(parseChatCommand("ok để em xem lại báo cáo"), null);
+  assert.equal(parseChatCommand("được không em"), null);
   assert.deepEqual(parseChatCommand("cấu hình"), { kind: "show_config" });
   assert.deepEqual(parseChatCommand("có gì cần xử lý?"), { kind: "list_pending" });
 });
