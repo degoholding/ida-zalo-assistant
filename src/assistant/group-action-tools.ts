@@ -9,8 +9,8 @@ import type { FunctionDeclaration } from "./gemini-client.js";
 export const MAX_ACTIONS_PER_TURN = 3;
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 const MAX_AHEAD_MS = 366 * 86_400_000;
-const REPEAT_MODES: Record<string, 0 | 1 | 2 | 3> = { none: 0, daily: 1, weekly: 2, monthly: 3 };
-const REPEAT_LABEL = ["không lặp", "hằng ngày", "hằng tuần", "hằng tháng"];
+export const REPEAT_MODES: Record<string, 0 | 1 | 2 | 3> = { none: 0, daily: 1, weekly: 2, monthly: 3 };
+export const REPEAT_LABEL = ["không lặp", "hằng ngày", "hằng tuần", "hằng tháng"];
 
 /** Việc làm trên Zalo, đã gắn sẵn nhóm đang hỏi — công cụ không chọn được nhóm khác. */
 export interface GroupActions {

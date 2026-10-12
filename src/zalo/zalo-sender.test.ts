@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { BotHaltedError } from "../messaging/bot-halted-error.js";
 import { ZaloSender } from "./zalo-sender.js";
 
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -59,4 +60,43 @@ test("việc tự bỏ (trả null — vd «chờ em xíu» mà đã trả lời
   await sender.send(async () => { sentAt.push(Date.now()); return "tin 2"; });
   // Tin 2 chỉ chờ đúng 1 khoảng giãn cách sau tin 1, không cộng thêm 2 lượt bỏ
   assert.ok(sentAt[0] - started < 110, `tin 2 gửi sau ${sentAt[0] - started} ms`);
+});
+
+// Tắt bot khẩn (phase 9)
+test("bot đang tắt: tin đã xếp sẵn bị từ chối BotHaltedError ngay, không gọi Zalo, không tốn giãn cách", async () => {
+  let halted = false;
+  const sender = new ZaloSender(200, () => halted);
+  const calls: string[] = [];
+  const first = sender.send(async () => { calls.push("tin 1"); });
+  const queued = [sender.send(async () => { calls.push("tin 2"); }), sender.send(async () => { calls.push("tin 3"); }, "low")];
+  await first;
+  halted = true;
+  const started = Date.now();
+  const results = await Promise.allSettled(queued);
+  assert.ok(results.every((result) => result.status === "rejected" && result.reason instanceof BotHaltedError));
+  assert.deepEqual(calls, ["tin 1"]);
+  // Từ chối ngay, không chờ khoảng giãn cách 200 ms của từng tin
+  assert.ok(Date.now() - started < 260, `từ chối sau ${Date.now() - started} ms`);
+  assert.equal(sender.pending, 0);
+});
+
+test("bot đang tắt: tin gửi mới bị từ chối, tin mức control vẫn đi và chen đầu hàng", async () => {
+  let halted = true;
+  const sender = new ZaloSender(0, () => halted);
+  await assert.rejects(sender.send(async () => "x"), BotHaltedError);
+  await assert.rejects(sender.send(async () => "x", "low"), BotHaltedError);
+  assert.equal(await sender.send(async () => "đã tắt", "control"), "đã tắt");
+  // Bật lại thì tin thường đi bình thường
+  halted = false;
+  assert.equal(await sender.send(async () => "ok"), "ok");
+});
+
+test("mức control chen trước tin thường và tin phụ đang chờ", async () => {
+  const sender = new ZaloSender(0);
+  const order: string[] = [];
+  const sent = (name: string) => async () => { order.push(name); };
+  const first = sender.send(sent("đang gửi"));
+  const rest = [sender.send(sent("thường"), "normal"), sender.send(sent("phụ"), "low"), sender.send(sent("control"), "control")];
+  await Promise.all([first, ...rest]);
+  assert.deepEqual(order, ["đang gửi", "control", "thường", "phụ"]);
 });

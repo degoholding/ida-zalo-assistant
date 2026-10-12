@@ -2,6 +2,7 @@ import type { AppConfig } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { purgeFinishedJobs, recoverStaleJobs, summarizeQueue } from "./jobs/job-queue.js";
 import { createLogger } from "./logger.js";
+import { isBotHalted } from "./messaging/bot-halt.js";
 import { BACKGROUND_TASKS, type BackgroundTaskName } from "./schedule/background-tasks.js";
 import { Scheduler } from "./schedule/scheduler.js";
 import { buildWorkCalendar, type WorkCalendar } from "./schedule/work-calendar.js";
@@ -12,6 +13,7 @@ import { runBriefs } from "./briefs/brief-runner.js";
 import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { runMeetingRecapProcessing, runMeetingRecordings } from "./meetings/meeting-recording-watcher.js";
 import { backfillMessageSearch } from "./search/message-search-index.js";
+import { runSendCommandWatch } from "./send-commands/send-command-watch.js";
 import { runTaskReminders } from "./tasks/task-reminders.js";
 import { runTaskExtraction } from "./tasks/task-proposals.js";
 import { uploadBackups } from "./storage/backup-uploader.js";
@@ -82,6 +84,8 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     // Phase 6: xử lý TỐI ĐA MỘT dòng Queued, KHÔNG quét Drive — độc lập với `meeting_auto_recap_enabled` (xem
     // recapInfraReady trong meeting-recording-watcher.ts) để ghi âm xếp hàng qua chat vẫn được gỡ băng dù tắt quét tự động.
     "meeting-recap-process": () => runMeetingRecapProcessing(db, config, { storage, calendar: safeCalendar(), buildModel: () => buildAlertModelClient(db, config) }),
+    // Lưới đỡ lệnh gửi (phase 9): nháp hết hạn, nơi mắc kẹt, báo kết quả bù. Lịch chỉ lệnh của app dùng (đọc lúc dùng — việc này không dùng tới)
+    "send-command-watch": () => runSendCommandWatch({ db, get calendar() { return getCalendar(); } }),
     "search-index": async () => {
       const copied = await backfillMessageSearch(db);
       if (copied) log.info(`chép ${copied} tin cũ vào bảng tìm`);
@@ -96,7 +100,25 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
       return null;
     }
   };
-  const scheduler = new Scheduler(db, BACKGROUND_TASKS.map((task) => ({ ...task, run: runners[task.name] })), getCalendar);
+  // Bot đang tắt khẩn (phase 9): việc có thể gửi tin bỏ lượt (bản tin tự gửi bù trong ngày khi bật lại; nhắc việc / cảnh báo
+  // quét lại ở lượt sau). Worker đọc lại cờ mỗi 60 giây; việc xếp trong khoảng trễ đó vẫn bị app bỏ ở handler job.
+  let loggedHaltSince: string | null = null;
+  const guarded = (task: (typeof BACKGROUND_TASKS)[number]): (() => Promise<unknown>) => {
+    const run = runners[task.name];
+    if (!("sendsMessages" in task) || !task.sendsMessages) return run;
+    return async () => {
+      if (isBotHalted(config)) {
+        // Ghi log một lần mỗi lượt tắt, tránh dội log mỗi phút
+        if (loggedHaltSince !== config.botHalt.since) {
+          loggedHaltSince = config.botHalt.since;
+          log.info(`bot đang tắt khẩn — các việc nền gửi tin bỏ lượt (đầu tiên: «${task.label}»)`);
+        }
+        return;
+      }
+      return run();
+    };
+  };
+  const scheduler = new Scheduler(db, BACKGROUND_TASKS.map((task) => ({ ...task, run: guarded(task) })), getCalendar);
   await scheduler.start();
   return { stop: () => scheduler.stop() };
 }

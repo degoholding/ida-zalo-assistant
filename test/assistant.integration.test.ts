@@ -236,9 +236,10 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
       groupScope: { groupId: group.id, groupName: "bán hàng" },
     });
     assert.equal(reply.status, AssistantTurnStatus.Answered);
-    // list_groups · get_group_messages · search_files · read_link (read_link mở cho nhóm từ 07/10/2026, 1abdf34);
+    // list_groups · get_group_messages · search_messages (mở cho nhóm từ phase 6 tìm tin, 89203a2) · search_files · read_link
+    // (read_link mở cho nhóm từ 07/10/2026, 1abdf34);
     // không có kho tệp / bộ xuất / lịch họp nên read_file, export_report, create_meeting… không được đưa
-    assert.equal(model.requests[0].toolCount, 4);
+    assert.equal(model.requests[0].toolCount, 5);
     assert.equal(model.requests[0].contents.length, 1);
   });
 

@@ -2,6 +2,7 @@ import type { AppConfig } from "../config.js";
 import type { GoogleAccountLink } from "../google/google-oauth.js";
 import { parseDriveFolderId } from "../google/drive-error-messages.js";
 import { parseServiceAccount, parseSpreadsheetId } from "../google/service-account.js";
+import { normalizeBotHaltState } from "../messaging/bot-halt-state.js";
 import { ApiError } from "../web/api/api-http.js";
 import { ALL_AI_PROVIDER_CODES, DEFAULT_HOLIDAYS, DEFAULT_IMPORTANT_KEYWORDS, DEFAULT_QUIET_HOURS, DEFAULT_STRICT_KEYWORDS, DEFAULT_URGENT_KEYWORDS, DEFAULT_WORK_DAYS, DEFAULT_WORK_HOURS } from "../config.js";
 import { CalendarInputError, parseHolidays, parseTimeRanges, parseWorkDays } from "../schedule/work-calendar.js";
@@ -322,6 +323,12 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     help: "Refresh token sau «Kết nối Google» — máy chủ tự ghi.",
     envName: null, defaultValue: null,
     applyTo: (config, value) => { config.google.calendarAccount = (value as unknown as GoogleAccountLink | null) ?? null; },
+  },
+  {
+    key: "bot_halt", group: "operations", label: "Tắt bot khẩn", type: "json", secret: false, hidden: true,
+    help: "Cờ tắt bot khẩn (phase 9) — máy chủ tự ghi qua BotHaltControl, không sửa tay.",
+    envName: null, defaultValue: null,
+    applyTo: (config, value) => { config.botHalt = normalizeBotHaltState(value); },
   },
   // Recap họp tự động từ ghi âm trên Drive (phase 1, 10/10/2026) — đọc qua CHÍNH Gmail đã «Kết nối Google» phía
   // trên (quyền Drive tùy chọn), không phải service account; cần tick thêm quyền Drive lúc «Kết nối Google».

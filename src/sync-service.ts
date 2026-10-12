@@ -38,7 +38,8 @@ import { AttachmentDownloader, requestAndAwaitDownload } from "./sync/attachment
 import { BriefKind, BriefTrigger, ConversationType, JobKind } from "./constants.js";
 import { CpuPool } from "./cpu/cpu-pool.js";
 import type { JobRow } from "./jobs/job-queue.js";
-import { JobRunner } from "./jobs/job-runner.js";
+import { JobSkippedError } from "./jobs/job-skipped-error.js";
+import { JobRunner, type JobHandler } from "./jobs/job-runner.js";
 import { markBriefFailed, markBriefSent } from "./briefs/brief-log-repository.js";
 import type { BriefChatDeps } from "./briefs/brief-commands.js";
 import { HighlightCache } from "./briefs/brief-ai-highlights.js";
@@ -46,13 +47,17 @@ import { produceBrief, type BriefDeps, type ProducedBrief } from "./briefs/brief
 import { findRecipient, type RecipientMessagePayload } from "./recipients/recipient-repository.js";
 import { PeriodicStatsCache } from "./reports/periodic-report-stats-cache.js";
 import { AlertService } from "./alerts/alert-service.js";
+import { assertNotHalted, BotHaltControl } from "./messaging/bot-halt.js";
 import { buildAlertModelClient } from "./alerts/ai-review.js";
 import { workCalendarFrom } from "./background.js";
 import type { WorkCalendar } from "./schedule/work-calendar.js";
 import { recordAudit } from "./web/api/audit-log.js";
-import { findThreadById, GROUP_COLUMNS, type GroupRow } from "./sync/group-repository.js";
+import { GROUP_COLUMNS, findThreadById, type GroupRow } from "./sync/group-repository.js";
 import type { TicketDeps } from "./tickets/ticket-service.js";
 import type { ContactMessagePayload } from "./messaging/contact-message.js";
+import { deliverContactMessage } from "./messaging/contact-message-delivery.js";
+import { runSendTargetJob } from "./send-commands/send-command-delivery.js";
+import type { SendCommandDeps, SendDeliveryDeps } from "./send-commands/send-command-deps.js";
 import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
 import type { FriendRequestManager } from "./zalo/friend-requests.js";
@@ -84,6 +89,8 @@ export class SyncService {
   readonly jobs: JobRunner;
   /** Cảnh báo tin nhắn (phase 5): phân loại tin mới, báo KHẨN / VIP cho người nhận. */
   readonly alerts: AlertService;
+  /** Tắt bot khẩn (phase 9): web API + lệnh Zalo cùng gọi `halt` / `resume` / `status` — app là nơi DUY NHẤT ghi cờ. */
+  readonly botHalt: BotHaltControl;
   /** Ticket qua bot (08/10/2026): lệnh trên Zalo + màn Ticket trên web dùng chung. */
   readonly tickets: TicketDeps;
   /** Lịch làm việc hiện hành (phase 8: bản tin / báo cáo gọi tay cần lịch để tính kỳ) — dựng ngay đầu constructor để
@@ -109,20 +116,59 @@ export class SyncService {
       requestDownload: (ids) => { for (const id of ids) this.downloader.enqueue(id); },
       wakeJobs: () => this.jobs?.wake(),
     };
+    this.botHalt = new BotHaltControl(db, config, settings);
     this.getCalendar = workCalendarFrom(config);
     this.currentAssistant = this.buildAssistant();
     this.jobs = new JobRunner({
       db, role: "app", concurrency: config.assistant.concurrency,
+      // Mọi handler đều là gửi tin ra Zalo → bọc `guard`: bot đang tắt khẩn thì ném BotHaltedError, JobRunner bỏ việc
+      // (Expired, không thử lại). Phase 4 thêm handler SendCommandTarget vào cùng `guard`.
       handlers: {
-        [JobKind.AssistantDirectReply]: (job) => this.runnerForJob(job).runDirectReplyJob(job),
-        [JobKind.AssistantGroupReply]: (job) => this.runnerForJob(job).runGroupReplyJob(job),
-        [JobKind.RecipientMessage]: (job) => this.sendRecipientMessage(job.payload as RecipientMessagePayload, job),
-        [JobKind.AlertDispatch]: (job) => this.alerts.runDispatchJob(job),
-        [JobKind.ContactMessage]: (job) => this.sendContactMessage(job),
+        [JobKind.AssistantDirectReply]: this.guard((job) => this.runnerForJob(job).runDirectReplyJob(job)),
+        [JobKind.AssistantGroupReply]: this.guard((job) => this.runnerForJob(job).runGroupReplyJob(job)),
+        [JobKind.RecipientMessage]: this.guard((job) => this.sendRecipientMessage(job.payload as RecipientMessagePayload, job)),
+        [JobKind.AlertDispatch]: this.guard((job) => this.alerts.runDispatchJob(job)),
+        [JobKind.ContactMessage]: this.guard((job) => this.sendContactMessage(job)),
+        // Lệnh gửi theo lệnh (phase 9): MỘT job / nơi nhận; tiến độ ghi vào payload (giữ targetId) qua cùng đường giao tin
+        [JobKind.SendCommandTarget]: this.guard((job) => runSendTargetJob(this.sendDeliveryDeps(), job)),
       },
     });
     this.alerts = new AlertService(db, config, () => this.getCalendar(), () => this.jobs.wake(),
       (recipientId, text) => this.sendRecipientMessage({ recipientId, text }));
+  }
+
+  /**
+   * Phụ thuộc của lõi lệnh gửi (phase 9): dùng chung cho trợ lý (lệnh gõ / công cụ AI), handler job và web. Lịch đọc LÚC DÙNG
+   * (getter): chỉ dựng nháp cần lịch — lịch cài sai không được làm sập khởi động, chặn giao tin hay chặn hủy lệnh trên web.
+   */
+  sendCommandDeps(): SendCommandDeps {
+    const getCalendar = this.getCalendar;
+    return {
+      db: this.db, wakeJobs: () => this.jobs?.wake(), requestDownload: (ids) => { for (const id of ids) this.downloader.enqueue(id); },
+      get calendar() { return getCalendar(); },
+    };
+  }
+
+  /** Không dùng spread (`...`) — spread gọi getter `calendar` ngay. */
+  private sendDeliveryDeps(): SendDeliveryDeps {
+    const deps = this.sendCommandDeps() as SendDeliveryDeps;
+    deps.port = {
+      deliver: (payload, job) => this.sendContactMessage(job, payload),
+      createReminder: async (request) => {
+        const thread = await findThreadById(this.db, request.threadId);
+        if (!thread) throw new JobSkippedError("nhóm không còn trong hệ thống");
+        await (await this.runnerForThread(thread)).createGroupReminder(thread, request, request.checkExisting);
+      },
+    };
+    return deps;
+  }
+
+  /** Bọc handler gửi tin: bot đang tắt khẩn thì không chạy (ném BotHaltedError → việc bị bỏ, không thử lại). */
+  private guard(handler: JobHandler): JobHandler {
+    return async (job) => {
+      assertNotHalted(this.config);
+      await handler(job);
+    };
   }
 
   /** Lịch cài sai (CalendarInputError) thì báo lỗi ở bản tin thay vì sập — khuôn giống `background.ts` `safeCalendar`. */
@@ -214,57 +260,24 @@ export class SyncService {
   }
 
   /**
-   * Tin báo ticket / việc / recap họp (phase 4): vào một cuộc có sẵn (`threadId` — tin riêng thì đúng tài khoản bot chủ
-   * cuộc, nhóm thì tài khoản bot đang ở nhóm) hoặc nhắn riêng một người (`zaloUid`). Tệp đính kèm cũ (`attachmentIds`)
-   * chưa vào kho thì đợi lượt thử sau; lượt cuối gửi những tệp đã có. `reportFiles` (PDF recap…) gửi SAU chữ + tệp đính
-   * kèm, tự ghi tiến độ (`textSent` / `sentFileCount`) vào CHÍNH payload của job — thử lại không gửi lặp phần đã xong
-   * (khuôn giống `sendRecipientMessage`). Lỗi thì ném — hàng đợi thử lại.
+   * Tin báo ticket / việc / recap họp (phase 4) và lệnh gửi (phase 9): giao qua `deliverContactMessage` — vào một cuộc có
+   * sẵn (tin riêng → đúng tài khoản bot chủ cuộc, nhóm → bot đang ở nhóm) hoặc nhắn riêng một người (`zaloUid`). Tiến độ
+   * chữ / tệp đính kèm / tệp báo cáo ghi vào CHÍNH payload của job — thử lại không gửi lặp phần đã xong.
    */
-  private async sendContactMessage(job: JobRow): Promise<void> {
-    const payload = job.payload as ContactMessagePayload;
-    const attachmentIds = payload.attachmentIds ?? [];
-    let ready = attachmentIds;
-    if (attachmentIds.length) {
-      const [rows] = await this.db.query<RowDataPacket[]>("SELECT id FROM attachment WHERE id IN (?) AND status = 1", [attachmentIds]);
-      ready = attachmentIds.filter((id) => rows.some((row) => Number(row.id) === id));
-      const lastAttempt = job.attempts >= job.maxAttempts;
-      if (ready.length < attachmentIds.length && !lastAttempt) throw new Error(`còn ${attachmentIds.length - ready.length} tệp chưa tải về kho`);
-    }
-    const persistProgress = async (patch: Partial<ContactMessagePayload>): Promise<void> => {
-      Object.assign(payload, patch);
-      await this.db.query("UPDATE job SET payload = ? WHERE id = ?", [JSON.stringify(payload), job.id]);
-    };
-    const files = payload.reportFiles ?? [];
-    if (payload.threadId) {
-      const thread = await findThreadById(this.db, payload.threadId);
-      if (!thread) return;
-      const runner = await this.runnerForThread(thread);
-      if (payload.text && !payload.textSent) {
-        await runner.sendThreadText(thread, payload.text, payload.mentionUids);
-        await persistProgress({ textSent: true });
-      }
-      for (const id of ready) await runner.sendThreadStoredFile(thread, id);
-      for (let index = payload.sentFileCount ?? 0; index < files.length; index += 1) {
-        await runner.sendReportFile(thread, files[index]);
-        await persistProgress({ sentFileCount: index + 1 });
-      }
-      return;
-    }
-    if (!payload.zaloUid) return;
+  private sendContactMessage(job: JobRow, payload: ContactMessagePayload = job.payload as ContactMessagePayload): Promise<void> {
+    return deliverContactMessage({
+      db: this.db, runnerForThread: (thread) => this.runnerForThread(thread), runnerForUid: (zaloUid) => this.runnerForUid(zaloUid),
+    }, payload, job);
+  }
+
+  /** Tài khoản bot nhắn riêng một người: bot đã có cuộc riêng với người đó (cuộc mới nhất); chưa có thì bot đầu tiên đang chạy. */
+  private async runnerForUid(zaloUid: string): Promise<AccountRunner> {
     const [threads] = await this.db.query<RowDataPacket[]>(
       "SELECT owner_bot_id FROM zalo_group WHERE thread_type = ? AND zalo_group_id = ? ORDER BY last_message_at DESC",
-      [ConversationType.Direct, payload.zaloUid]);
+      [ConversationType.Direct, zaloUid]);
     const runner = threads.map((row) => this.runners.get(Number(row.owner_bot_id))).find(Boolean) ?? [...this.runners.values()][0];
     if (!runner) throw new Error("không có tài khoản bot nào đang chạy");
-    if (payload.text && !payload.textSent) {
-      await runner.sendDirectText(payload.zaloUid, payload.name ?? "", payload.text);
-      await persistProgress({ textSent: true });
-    }
-    for (const id of ready) await runner.sendDirectStoredFile(payload.zaloUid, id);
-    for (let index = payload.sentFileCount ?? 0; index < files.length; index += 1) {
-      await runner.sendDirectReportFile(payload.zaloUid, payload.name ?? "", files[index]);
-      await persistProgress({ sentFileCount: index + 1 });
-    }
+    return runner;
   }
 
   /** Tài khoản bot gửi được vào một cuộc: tin riêng → bot chủ cuộc; nhóm → bot đang ở nhóm. */
@@ -319,6 +332,7 @@ export class SyncService {
         invalidate: () => this.alerts.invalidate(),
       },
       tickets: this.tickets,
+      sendCommands: this.sendCommandDeps(),
       briefs: {
         db: this.db, config: this.config, storage: this.storage,
         calendar: () => this.safeCalendar(),
@@ -487,12 +501,16 @@ export class SyncService {
     return { runner: this.runners.get(pick.bot_account_id as number)!, thread };
   }
 
+  // Kiểm tắt khẩn TRƯỚC khi chọn tài khoản: bot đang tắt thì luôn báo 409 «bot đang tắt» (màn Hội thoại), không lẫn với lỗi
+  // cuộc demo / tài khoản chưa kết nối — ZaloSender vẫn chặn lần nữa ở tầng gửi.
   async sendAdminText(threadId: number, text: string): Promise<number | null> {
+    assertNotHalted(this.config);
     const { runner, thread } = await this.pickRunnerForThread(threadId);
     return runner.sendAdminText(thread, text);
   }
 
   async sendAdminFile(threadId: number, data: Buffer, fileName: string, contentType: string): Promise<number | null> {
+    assertNotHalted(this.config);
     const { runner, thread } = await this.pickRunnerForThread(threadId);
     return runner.sendAdminFile(thread, data, fileName, contentType);
   }
@@ -507,7 +525,7 @@ export class SyncService {
   }
 
   private async startAccount(account: BotAccountRow): Promise<boolean> {
-    const runner = new AccountRunner(account, this.db, this.config, this.downloader, this.storage, this.assistant, this.jobs);
+    const runner = new AccountRunner(account, this.db, this.config, this.downloader, this.storage, this.assistant, this.jobs, this.botHalt);
     if (!(await runner.start())) return false;
     this.runners.set(account.id, runner);
     return true;

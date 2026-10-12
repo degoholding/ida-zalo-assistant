@@ -280,11 +280,11 @@ export async function runAlertTool(
 }
 
 /** Đề xuất mới nhất còn hạn của một người (lệnh gõ «đồng ý» xác nhận đúng đề xuất này). */
-export function latestPendingChange(askerUid: string): { id: string; preview: string } | null {
+export function latestPendingChange(askerUid: string): { id: string; preview: string; createdAt: number } | null {
   cleanupPending(Date.now());
   let latest: PendingChange | null = null;
   for (const change of pending.values()) if (change.askerUid === askerUid && (!latest || change.createdAt >= latest.createdAt)) latest = change;
-  return latest ? { id: latest.id, preview: latest.preview } : null;
+  return latest ? { id: latest.id, preview: latest.preview, createdAt: latest.createdAt } : null;
 }
 
 /** «Hủy»: bỏ mọi đề xuất đang chờ của một người. Trả số đề xuất đã bỏ. */

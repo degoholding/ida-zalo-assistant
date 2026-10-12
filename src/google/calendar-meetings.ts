@@ -43,6 +43,24 @@ export interface BotMeeting {
   endTime?: number;
   scopeTag?: string;
   requesterUid?: string;
+  /** Giờ sự kiện được tạo trên Calendar (trường `created`) — chọn «cuộc họp bot vừa tạo» khi gửi lời mời họp vào nhóm. */
+  createdAt?: number;
+}
+
+/** Một sự kiện Calendar → BotMeeting (dùng chung cho listMeetings / listMeetingsBetween). */
+function toBotMeeting(item: Record<string, unknown>): BotMeeting {
+  const priv = ((item.extendedProperties as { private?: Record<string, string> } | undefined)?.private) ?? {};
+  const createdAt = Date.parse(String(item.created ?? ""));
+  return {
+    id: String(item.id ?? ""),
+    title: String(item.summary ?? ""),
+    startTime: Date.parse(String((item.start as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
+    endTime: Date.parse(String((item.end as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
+    meetLink: meetLinkOf(item),
+    scopeTag: priv.scope,
+    requesterUid: priv.requester,
+    ...(Number.isFinite(createdAt) ? { createdAt } : {}),
+  };
 }
 
 /** Giờ Việt Nam dạng RFC3339 «2026-10-07T09:00:00+07:00» (Calendar nhận kèm timeZone). */
@@ -114,12 +132,7 @@ export class MeetingScheduler {
     params.append("privateExtendedProperty", `createdBy=${BOT_MARK}`);
     if (scopeTag) params.append("privateExtendedProperty", `scope=${scopeTag}`);
     const body = await this.request(`${EVENTS_URL}?${params}`, { method: "GET" });
-    return ((body.items ?? []) as Record<string, unknown>[]).map((item) => ({
-      id: String(item.id ?? ""),
-      title: String(item.summary ?? ""),
-      startTime: Date.parse(String((item.start as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
-      meetLink: meetLinkOf(item),
-    }));
+    return ((body.items ?? []) as Record<string, unknown>[]).map(toBotMeeting);
   }
 
   /**
@@ -142,18 +155,7 @@ export class MeetingScheduler {
       params.append("privateExtendedProperty", `createdBy=${BOT_MARK}`);
       if (pageToken) params.append("pageToken", pageToken);
       const body = await this.request(`${EVENTS_URL}?${params}`, { method: "GET" });
-      out.push(...((body.items ?? []) as Record<string, unknown>[]).map((item) => {
-        const priv = ((item.extendedProperties as { private?: Record<string, string> } | undefined)?.private) ?? {};
-        return {
-          id: String(item.id ?? ""),
-          title: String(item.summary ?? ""),
-          startTime: Date.parse(String((item.start as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
-          endTime: Date.parse(String((item.end as { dateTime?: string } | undefined)?.dateTime ?? "")) || 0,
-          meetLink: meetLinkOf(item),
-          scopeTag: priv.scope,
-          requesterUid: priv.requester,
-        };
-      }));
+      out.push(...((body.items ?? []) as Record<string, unknown>[]).map(toBotMeeting));
       const next = typeof body.nextPageToken === "string" ? body.nextPageToken : undefined;
       if (!next) break;
       pageToken = next;

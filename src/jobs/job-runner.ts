@@ -2,7 +2,8 @@ import os from "node:os";
 import type { JobKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
-import { claimJobs, completeJob, failJob, recoverOrphanedJobs, recoverStaleJobs, type JobRow } from "./job-queue.js";
+import { claimJobs, completeJob, failJob, recoverOrphanedJobs, recoverStaleJobs, skipJob, type JobRow } from "./job-queue.js";
+import { JobSkippedError } from "./job-skipped-error.js";
 
 // Bộ chạy việc: lấy việc từ bảng `job` theo loại mình xử lý, chạy song song tối đa `concurrency` việc. Có việc mới ghi
 // từ chính tiến trình này thì gọi wake() để lấy ngay; việc ghi từ tiến trình khác thì lượt quét định kỳ (pollMs) nhặt.
@@ -131,6 +132,12 @@ export class JobRunner {
       await completeJob(db, job.id);
     } catch (error) {
       const message = describeError(error);
+      if (error instanceof JobSkippedError) {
+        // Bỏ có chủ đích (bot tắt khẩn, lệnh đã hủy…): Expired, không thử lại, không phải lỗi
+        await skipJob(db, job.id, message).catch((dbError) => this.log.error(`ghi việc bỏ #${job.id} lỗi`, dbError));
+        this.log.info(`việc #${job.id} (loại ${job.kind}) bỏ: ${message}`);
+        return;
+      }
       const status = await failJob(db, job, message).catch((dbError) => {
         this.log.error(`ghi lỗi việc #${job.id} lỗi`, dbError);
         return null;

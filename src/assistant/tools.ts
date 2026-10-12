@@ -4,6 +4,7 @@ import type { Db } from "../db/pool.js";
 import { runListContacts } from "./contact-directory-tool.js";
 import { runExportReport, type ExportReport } from "./export-report-tool.js";
 import { GROUP_ACTION_TOOL_NAMES, runGroupAction, type GroupActions } from "./group-action-tools.js";
+import { recordActionNotes } from "./action-notes.js";
 import { runCreateRecapPdf, type CreateRecapPdf } from "./meeting-recap-tool.js";
 import { runRecapDriveRecording, type RecapDriveRecording } from "./drive-recap-tool.js";
 import { runReadLink, type ReadLink } from "./read-link-tool.js";
@@ -18,6 +19,10 @@ import type { TaskCommandContext } from "../tasks/task-commands.js";
 import { runTaskTool, TASK_TOOL_NAMES } from "../tasks/task-tools.js";
 import type { BriefChatDeps } from "../briefs/brief-commands.js";
 import { runSendBriefTool } from "../briefs/brief-tool.js";
+import type { SendChatContext } from "../send-commands/send-command-chat.js";
+import { runProposeSendTool } from "../send-commands/send-command-tool.js";
+import { runProposeMeetingAnnouncementTool } from "../send-commands/send-meeting-announcement-tool.js";
+import { runProposeReminderTool } from "../send-commands/send-reminder-tool.js";
 
 // Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file và export_report — send_file chỉ gửi cho
 // chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
@@ -80,6 +85,15 @@ export interface ToolContext {
   /** Bản tin / báo cáo gọi tay (phase 8, công cụ send_brief) — chỉ gắn khi người hỏi là người nhận, tin riêng. */
   brief?: BriefChatDeps;
   briefAsker?: AlertAsker;
+  /** Lệnh gửi tin (phase 9, công cụ propose_send_message) — chỉ gắn khi tin riêng, người hỏi được phép ra lệnh gửi. */
+  sendCommand?: SendChatContext;
+  /** Công cụ đặt câu trả lời CỦA CẢ LƯỢT (bản xem trước lệnh gửi do máy chủ dựng) — nơi gọi trả nó thay chữ của mô hình. */
+  fixedReply?: string;
+  /**
+   * Việc ĐÃ làm thật trong lượt (chữ do máy chủ dựng, vd cuộc họp Meet vừa tạo kèm link). Có `fixedReply` thì chữ mô hình bị bỏ, nên
+   * nơi gọi ghép các dòng này lên trước bản xem trước — không thì người hỏi không thấy link họp và dễ bảo tạo lại (trùng cuộc họp).
+   */
+  actionNotes?: string[];
 }
 
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
@@ -513,6 +527,24 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   ...Object.fromEntries([...TASK_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) => runTaskTool(context.task, name, args, context.now)])),
   send_brief: (context, args) => runSendBriefTool(context.brief, context.briefAsker, args, context.now),
+  propose_send_message: async (context, args) => {
+    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước lệnh gửi rồi — không tạo thêm." };
+    const outcome = await runProposeSendTool(context.sendCommand, args, context.now);
+    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
+    return outcome.response;
+  },
+  propose_group_reminder: async (context, args) => {
+    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước rồi — không tạo thêm." };
+    const outcome = await runProposeReminderTool(context.sendCommand, args, context.now);
+    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
+    return outcome.response;
+  },
+  propose_meeting_announcement: async (context, args) => {
+    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước rồi — không tạo thêm." };
+    const outcome = await runProposeMeetingAnnouncementTool(context.sendCommand, context.meetings, args, context.now);
+    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
+    return outcome.response;
+  },
   ...Object.fromEntries([...ALERT_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) =>
       runAlertTool(context.alertTools, context.alertAsker, name, args, context.now, context.turnStartedAt ?? Date.now())])),
@@ -526,7 +558,9 @@ export async function runTool(context: ToolContext, name: string, args: Record<s
   if (!executor) return { error: `Không có công cụ ${name}` };
   if (context.scopeGroupId && !GROUP_SCOPE_TOOL_NAMES.has(name)) return { error: "Hỏi trong nhóm chỉ dùng được dữ liệu của nhóm này." };
   try {
-    return (await executor(context, args ?? {})) as Record<string, unknown>;
+    const result = (await executor(context, args ?? {})) as Record<string, unknown>;
+    recordActionNotes(context, name, args ?? {}, result); // việc thật vừa làm → dòng do máy chủ dựng (xem action-notes.ts)
+    return result;
   } catch (error) {
     return { error: `Công cụ lỗi: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300) };
   }

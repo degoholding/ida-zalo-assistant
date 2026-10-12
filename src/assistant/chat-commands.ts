@@ -11,6 +11,13 @@ import { describeContactChoices, pickContactMatch, searchContactsByName } from "
 import { foldKeepLength } from "./fold-text.js";
 import { isTaskCommandKind, parseTaskCommand, type TaskCommand } from "../tasks/task-command-parser.js";
 import { runTaskCommand, type TaskCommandContext } from "../tasks/task-commands.js";
+import { cancelLatestDraft, confirmDraft } from "../send-commands/send-command-actions.js";
+import { GROUP_NOT_ALLOWED_REPLY, NOT_ALLOWED_REPLY, runSendChatCommand, type SendChatContext } from "../send-commands/send-command-chat.js";
+import { SEND_HELP } from "../send-commands/send-command-help.js";
+import { findLatestLiveDraft } from "../send-commands/send-command-lifecycle-queries.js";
+import { CONFIRM_TTL_MS } from "../send-commands/send-command-limits.js";
+import type { SendCommandRow } from "../send-commands/send-command-types.js";
+import { isSendCommandKind, parseSendCommand, type SendChatCommand } from "../send-commands/send-command-parser.js";
 
 // Lệnh gõ sẵn trong chat với bot (đại ca 08/10/2026: gõ «hướng dẫn» ra hướng dẫn cơ bản, có lệnh cấu hình luôn). Chạy TRƯỚC mô
 // hình: trả lời ngay, không tốn token, không phụ thuộc AI hiểu đúng. Gõ có dấu hay không dấu đều nhận. Câu không khớp lệnh nào
@@ -29,13 +36,17 @@ export type ChatCommand =
   | { kind: "cancel" }
   | TicketCommand
   | TaskCommand
-  | BriefCommand;
+  | BriefCommand
+  | SendChatCommand;
 
 /** Lệnh ticket (báo / xem / nhận / xong / hủy / bổ sung) — người chưa có vai trò cũng dùng được (src/tickets/). */
 export const isTicketCommand = (command: ChatCommand | null): command is TicketCommand => Boolean(command?.kind.startsWith("ticket_"));
 
 /** Lệnh việc (phase 7: «việc», «xong V-12», «giao Minh: …») — người phụ trách chưa có vai trò cũng dùng được (quyền kiểm theo việc). */
 export const isTaskCommand = (command: ChatCommand | null): command is TaskCommand => isTaskCommandKind(command?.kind);
+
+/** Lệnh gửi tin theo lệnh (phase 9: «gửi nhóm A: …», «lệnh gửi», «hủy G-12») — chỉ tin riêng, quyền kiểm ở src/send-commands/. */
+export const isSendCommand = (command: ChatCommand | null): command is SendChatCommand => isSendCommandKind(command?.kind);
 
 const TICKET_TEXT_MAX = 3000;
 
@@ -73,6 +84,9 @@ export function parseChatCommand(input: string): ChatCommand | null {
   if (taskCommand) return taskCommand;
   const briefCommand = parseBriefCommand(input);
   if (briefCommand) return briefCommand;
+  // Lệnh gửi: SAU việc / ticket / bản tin («giao Minh: …» vẫn là việc), TRƯỚC lệnh cấu hình — câu dài, không chịu trần 120 ký tự
+  const sendCommand = parseSendCommand(input);
+  if (sendCommand) return sendCommand;
   const original = input.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?…]+$/u, "").trim();
   if (!original || original.length > 120) return null;
   const folded = foldKeepLength(original);
@@ -121,6 +135,8 @@ export interface ChatCommandContext {
   task?: TaskCommandContext;
   /** Bản tin / báo cáo gọi tay (phase 8): không có = không có lệnh bản tin (chạy tiếp lệnh khác / mô hình AI). */
   brief?: BriefChatDeps;
+  /** Lệnh gửi tin (phase 9): chỉ gắn ở tin riêng. Không có = không có lệnh gửi (câu rơi xuống trợ lý AI). */
+  send?: SendChatContext;
   /** Người chỉ được dùng lệnh ticket (chưa có vai trò, không là người nhận) — «hướng dẫn» chỉ nói phần ticket */
   ticketOnly?: boolean;
 }
@@ -160,7 +176,7 @@ const TICKET_HANDLER_HELP = [
   "- T-12: <nội dung> — nhắn người gửi",
 ];
 
-export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, options: { ticketOnly?: boolean; ticketHandler?: boolean } = {}): string {
+export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, options: { ticketOnly?: boolean; ticketHandler?: boolean; canSend?: boolean } = {}): string {
   const ticketLines = ["", ...TASK_HELP, "", ...TICKET_HELP, ...(options.ticketHandler ? ["", ...TICKET_HANDLER_HELP] : [])];
   if (options.ticketOnly) return ["HƯỚNG DẪN DÙNG BOT TRỢ LÝ", ...TASK_ASSIGNEE_HELP, "", ...TICKET_HELP, ...(options.ticketHandler ? ["", ...TICKET_HANDLER_HELP] : [])].join("\n");
   if (inGroup) {
@@ -209,6 +225,7 @@ export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, option
     }
     lines.push("", "Lệnh đổi cấu hình: em đọc lại thay đổi, anh/chị nhắn «đồng ý» mới lưu, «hủy» để bỏ.");
   }
+  if (options.canSend) lines.push("", ...SEND_HELP);
   lines.push(...ticketLines);
   return lines.join("\n");
 }
@@ -273,21 +290,36 @@ async function propose(ctx: ChatCommandContext, deps: AlertToolsDeps, asker: Ale
 }
 
 /** Chạy lệnh. null = không xử lý ở đây (để trợ lý AI trả lời). */
+/** Lúc dựng nháp theo giờ APP: `confirm_expires_at` do app ghi = now + CONFIRM_TTL_MS. */
+function draftIssuedAt(draft: SendCommandRow): number {
+  return draft.confirmExpiresAt ? draft.confirmExpiresAt.getTime() - CONFIRM_TTL_MS : draft.createdAt.getTime();
+}
+
 export async function runChatCommand(ctx: ChatCommandContext, command: ChatCommand): Promise<string | null> {
   if (command.kind === "help") {
     const ticketHandler = ctx.ticket ? await ctx.ticket.isHandler() : false;
-    return buildHelpText(ctx.inGroup ? null : ctx.asker, ctx.inGroup, { ticketOnly: ctx.ticketOnly, ticketHandler });
+    return buildHelpText(ctx.inGroup ? null : ctx.asker, ctx.inGroup, { ticketOnly: ctx.ticketOnly, ticketHandler, canSend: Boolean(ctx.send?.requester) && !ctx.inGroup });
   }
   if (isTicketCommand(command)) return ctx.ticket ? runTicketCommand(ctx.ticket, command, ctx.now) : null;
   if (isTaskCommand(command)) return ctx.task ? runTaskCommand(ctx.task, command, ctx.now) : null;
   // Bản tin / báo cáo: CHỈ tin riêng (lộ dữ liệu phạm vi / Mật ra nhóm) — kiểm ngay ở đây, không chờ cổng ticketOnly
   // bên dưới vì câu từ chối ("không phải người nhận") vẫn phải trả lời cả người không có vai trò nào.
   if (isBriefCommand(command)) return ctx.inGroup ? null : ctx.brief ? runBriefCommand(ctx.brief, ctx.asker, command, ctx.now) : null;
-  if (ctx.inGroup || ctx.ticketOnly) return null;
+  // Lệnh gửi: trong nhóm không nhận (câu cố định, không tạo nháp); tin riêng chạy ở src/send-commands/. Không có ngữ cảnh gửi → AI.
+  if (isSendCommand(command)) return ctx.inGroup ? GROUP_NOT_ALLOWED_REPLY : ctx.send ? runSendChatCommand(command, ctx.send, ctx.now) : null;
+  if (ctx.inGroup) return null;
   const { asker, alertTools: deps } = ctx;
   if (command.kind === "confirm" || command.kind === "cancel") {
-    // «ok», «không»… chỉ là lệnh khi người này ĐANG có đề xuất chờ; ngược lại là câu nói thường — để AI trả lời
-    const change = asker ? latestPendingChange(asker.uid) : null;
+    // «ok», «không»… chỉ là lệnh khi người này ĐANG có đề xuất chờ (đổi cấu hình cảnh báo HOẶC nháp lệnh gửi); ngược lại là câu
+    // nói thường — để AI trả lời. Có cả hai kho thì lấy cái tạo SAU CÙNG (thứ người đó vừa nhìn thấy).
+    const send = ctx.send;
+    const draft = send ? await findLatestLiveDraft(send.deps.db, send.uid, ctx.now) : null;
+    const change = asker && deps ? latestPendingChange(asker.uid) : null;
+    // So CÙNG nguồn giờ app: lúc dựng nháp = hạn xác nhận − 15 phút (cả hai do app ghi), không dùng created_at (giờ DB, múi phiên DB)
+    if (send && draft && (!change || draftIssuedAt(draft) >= change.createdAt)) {
+      if (command.kind === "cancel") return (await cancelLatestDraft(send.deps, send.uid, send.name, ctx.now)).reply;
+      return send.requester ? (await confirmDraft(send.deps, send.requester, draft.id, ctx.now)).reply : NOT_ALLOWED_REPLY;
+    }
     if (!asker || !deps || !change) return null;
     if (command.kind === "cancel") {
       dropPendingChanges(asker.uid);
@@ -296,6 +328,7 @@ export async function runChatCommand(ctx: ChatCommandContext, command: ChatComma
     const result = await runAlertTool(deps, asker, "confirm_alert_change", { change_id: change.id }, ctx.now, Date.now());
     return typeof result.error === "string" ? result.error : String(result.message);
   }
+  if (ctx.ticketOnly) return null;
   if (!asker || !deps) {
     return command.kind === "show_config" ? null : "Lệnh này dành cho quản lý / trưởng phòng / người nhận cảnh báo. Gõ «hướng dẫn» để xem bot làm được gì.";
   }

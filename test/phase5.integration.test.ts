@@ -106,7 +106,7 @@ describe("phase 5 — cảnh báo tin nhắn", { skip: !databaseUrl && "chưa đ
   }
 
   async function runDispatch(recipientId: number) {
-    await alerts.runDispatchJob({ id: 0, kind: JobKind.AlertDispatch, payload: { recipientId }, serialKey: null, attempts: 1, maxAttempts: 3, createdAt: NOW });
+    await alerts.runDispatchJob({ id: 0, kind: JobKind.AlertDispatch, payload: { recipientId }, serialKey: null, attempts: 1, maxAttempts: 3, createdAt: NOW }, NOW);
   }
 
   test("urgent messages schedule one merged alert per watching recipient, and are never alerted twice", async () => {

@@ -92,6 +92,25 @@ export async function runCancelMeeting(
   }
 }
 
+/** So tiêu đề cuộc họp: bỏ hoa thường + khoảng trắng thừa, GIỮ dấu. */
+const sameTitle = (left: string, right: string): boolean => {
+  const norm = (value: string) => value.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim();
+  return norm(left) === norm(right);
+};
+
+/**
+ * Chốt cứng chống tạo trùng (sự cố prod 12/10/2026: mô hình gọi create_meeting lần hai, ra 2 cuộc họp Meet cùng 11:00): cuộc họp
+ * bot đã tạo trong phạm vi này, cùng tiêu đề + đúng giờ bắt đầu, thì trả lại cuộc đó. Liệt kê lỗi thì cứ tạo (không chặn việc chính).
+ */
+async function findSameMeeting(meetings: MeetingCreator, input: MeetingInput, scopeTag: string | undefined): Promise<BotMeeting | null> {
+  try {
+    const list = await meetings.listMeetings(scopeTag);
+    return list.find((item) => item.startTime === input.startTime && sameTitle(item.title, input.title)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function runCreateMeeting(
   meetings: MeetingCreator | undefined,
   counter: { done: number },
@@ -105,6 +124,15 @@ export async function runCreateMeeting(
   if (counter.done >= MAX_ACTIONS_PER_TURN) return { error: `Mỗi lần hỏi chỉ làm tối đa ${MAX_ACTIONS_PER_TURN} việc.` };
   const parsed = parseMeetingInput(args, now);
   if (!parsed.ok) return { error: parsed.error };
+  const existing = await findSameMeeting(meetings, parsed.value, scopeTag);
+  if (existing) {
+    return {
+      already_exists: "cuộc họp cùng tên + giờ đã có — KHÔNG tạo lại; gửi lại đúng link này, nói rõ là cuộc họp đã có từ trước",
+      title: existing.title,
+      time_vn: formatVnTime(existing.startTime),
+      meet_link: existing.meetLink || "(xem trong sự kiện Google Calendar)",
+    };
+  }
   try {
     const meeting = await meetings.createMeeting({ ...parsed.value, scopeTag, requesterUid });
     counter.done += 1;

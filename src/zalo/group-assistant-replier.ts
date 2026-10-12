@@ -15,6 +15,7 @@ import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { buildMentions, type MentionableMember } from "./group-mentions.js";
 import { toStyledContent } from "./rich-text.js";
 import { canCallBotInGroup, detectGroupTrigger } from "./group-trigger.js";
+import { isBotHalted } from "../messaging/bot-halt.js";
 import type { ZaloSender } from "./zalo-sender.js";
 import { AckTracker, enqueueGroupReply, type AckState, type GroupReplyPayload } from "./reply-jobs.js";
 
@@ -104,6 +105,8 @@ export class GroupAssistantReplier {
    */
   private async enqueue(message: GroupMessage, incoming: IncomingGroupMessage, question: string): Promise<void> {
     const { db, log, sender } = this.deps;
+    // Tắt bot khẩn (phase 9): nhóm im lặng hoàn toàn, kể cả câu cố định của nhóm Mật
+    if (isBotHalted(this.deps.config)) return;
     const group = await findGroupByZaloId(db, incoming.zaloGroupId);
     if (!group?.read_messages) return;
     const [linked] = await db.query<RowDataPacket[]>(
@@ -152,9 +155,12 @@ export class GroupAssistantReplier {
     }
   }
 
-  /** Việc làm trên Zalo, gắn cứng vào nhóm đang hỏi — mô hình không chọn được nhóm khác. */
+  /**
+   * Việc làm trên Zalo, gắn cứng vào nhóm đang hỏi — mô hình không chọn được nhóm khác. Năm việc GHI (tạo nhắc hẹn / ghi chú /
+   * bình chọn, hủy nhắc hẹn, bỏ ghim) đi qua hàng gửi: có giãn cách và bị chặn khi bot tắt khẩn (phase 9); việc ĐỌC thì không.
+   */
   private buildActions(api: API, zaloGroupId: string, groupName: string): GroupActions {
-    const { log } = this.deps;
+    const { log, sender } = this.deps;
     const listNotes = async () => {
       const board = await api.getListBoard({ count: 50 }, zaloGroupId);
       return board.items
@@ -166,17 +172,17 @@ export class GroupAssistantReplier {
     };
     return {
       createReminder: async ({ title, startTime, repeat }) => {
-        const created = await api.createReminder({ title, startTime, repeat }, zaloGroupId, ThreadType.Group);
+        const created = await sender.send(() => api.createReminder({ title, startTime, repeat }, zaloGroupId, ThreadType.Group));
         log.info(`tạo nhắc hẹn trong nhóm «${groupName}»`);
         return { id: String("id" in created ? created.id : created.reminderId) };
       },
       createPinnedNote: async ({ title }) => {
-        const note = await api.createNote({ title, pinAct: true }, zaloGroupId);
+        const note = await sender.send(() => api.createNote({ title, pinAct: true }, zaloGroupId));
         log.info(`ghim ghi chú trong nhóm «${groupName}»`);
         return { id: String(note.id) };
       },
       createPoll: async ({ question, options, allowMultiChoices }) => {
-        const poll = await api.createPoll({ question, options, allowMultiChoices }, zaloGroupId);
+        const poll = await sender.send(() => api.createPoll({ question, options, allowMultiChoices }, zaloGroupId));
         log.info(`tạo bình chọn trong nhóm «${groupName}»`);
         return { id: String(poll.poll_id) };
       },
@@ -185,7 +191,7 @@ export class GroupAssistantReplier {
         const note = (await listNotes()).find((item) => item.id === id);
         if (!note) throw new Error("không có ghi chú này");
         // Giữ nguyên nội dung, chỉ tắt ghim (pinAct = 0 — xem ensureUnpinApi)
-        await ensureUnpinApi(api)({ groupId: zaloGroupId, topicId: id, title: note.title });
+        await sender.send(() => ensureUnpinApi(api)({ groupId: zaloGroupId, topicId: id, title: note.title }));
         log.info(`bỏ ghim ghi chú trong nhóm «${groupName}»`);
       },
       listReminders: async () => {
@@ -195,7 +201,7 @@ export class GroupAssistantReplier {
         }));
       },
       cancelReminder: async (id) => {
-        await api.removeReminder(id, zaloGroupId, ThreadType.Group);
+        await sender.send(() => api.removeReminder(id, zaloGroupId, ThreadType.Group));
         log.info(`hủy nhắc hẹn trong nhóm «${groupName}»`);
       },
     };

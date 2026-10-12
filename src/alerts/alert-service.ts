@@ -119,12 +119,12 @@ export class AlertService {
   }
 
   /** Bộ chạy việc gọi: gom mọi tin khẩn / VIP chưa báo của người nhận thành MỘT tin rồi gửi. */
-  async runDispatchJob(job: JobRow): Promise<void> {
+  async runDispatchJob(job: JobRow, now: Date = new Date()): Promise<void> {
     const { recipientId } = job.payload as AlertDispatchPayload;
     const setup = await this.getSetup();
     const recipient = setup.recipients.find((item) => item.id === recipientId);
     if (!recipient) return;
-    const items = await pendingUrgentItems(this.db, recipient);
+    const items = await pendingUrgentItems(this.db, recipient, now);
     if (!items.length) return;
     await this.sendToRecipient(recipient.id, composeUrgentAlert(items));
     await recordAlertBatch(this.db, recipient.id, AlertKind.Urgent, items.map((item) => item.messageId));

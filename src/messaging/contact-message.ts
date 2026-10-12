@@ -4,7 +4,7 @@ import { enqueueJob } from "../jobs/job-queue.js";
 import type { GeneratedReportFile } from "../reports/report-exporter.js";
 
 // Bot nhắn một người / vào một cuộc có sẵn qua hàng đợi (JobKind.ContactMessage): ai cũng xếp được (worker không giữ phiên
-// Zalo), tiến trình app giữ phiên gửi (SyncService.sendContactMessage). Dùng chung cho ticket (phase 11), việc (phase 7)
+// Zalo), tiến trình app giữ phiên gửi (contact-message-delivery.ts). Dùng chung cho ticket (phase 11), việc (phase 7)
 // và recap họp tự động (phase 4, meeting-recap-delivery.ts — kèm PDF qua `reportFiles`).
 
 export interface ContactMessagePayload {
@@ -18,9 +18,11 @@ export interface ContactMessagePayload {
   mentionUids?: string[];
   /** Tệp báo cáo đã cất kho (PDF recap…) — gửi tuần tự SAU chữ + mọi `attachmentIds` (khuôn RecipientMessagePayload, phase 8). */
   reportFiles?: GeneratedReportFile[];
-  /** Tiến độ đã gửi của CHÍNH job này — sendContactMessage (sync-service.ts) tự ghi lại sau mỗi phần thành công để
+  /** Tiến độ đã gửi của CHÍNH job này — deliverContactMessage (contact-message-delivery.ts) tự ghi lại sau mỗi phần thành công để
    * thử lại (lỗi giữa chừng) không gửi lặp phần đã xong. */
   textSent?: boolean;
+  /** Số tệp ĐẦU của `attachmentIds` đã xử lý xong — thử lại tiếp tục từ chỉ số này (không gửi lặp tệp đính kèm). */
+  sentAttachmentCount?: number;
   /** Số tệp ĐẦU của `reportFiles` đã gửi xong — thử lại tiếp tục từ chỉ số này. */
   sentFileCount?: number;
 }

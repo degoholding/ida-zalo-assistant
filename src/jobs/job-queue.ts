@@ -135,6 +135,12 @@ export async function completeJob(db: Db, jobId: number): Promise<void> {
   await db.query("UPDATE job SET status = ?, finished_at = NOW(3), locked_by = NULL WHERE id = ?", [JobStatus.Done, jobId]);
 }
 
+/** Việc bị bỏ có chủ đích (JobSkippedError): Expired, KHÔNG thử lại, không tính là lỗi. */
+export async function skipJob(db: Db, jobId: number, reason: string): Promise<void> {
+  await db.query("UPDATE job SET status = ?, finished_at = NOW(3), locked_by = NULL, last_error = ? WHERE id = ?",
+    [JobStatus.Expired, reason.slice(0, 1000), jobId]);
+}
+
 /** Việc lỗi: còn lượt thì trả về hàng chờ sau một khoảng giãn, hết lượt thì Failed. */
 export async function failJob(db: Db, job: Pick<JobRow, "id" | "attempts" | "maxAttempts">, error: string): Promise<JobStatus> {
   const message = error.slice(0, 1000);

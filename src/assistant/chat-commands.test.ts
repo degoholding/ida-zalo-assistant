@@ -124,3 +124,37 @@ test("natural ticket phrasings people actually typed (08/10/2026)", () => {
   assert.deepEqual(parseChatCommand("có mấy ticket đang mở?"), { kind: "ticket_list" });
   assert.deepEqual(parseChatCommand("báo ticket meo meo truy cập chậm"), { kind: "ticket_create", text: "meo meo truy cập chậm" });
 });
+
+test("send commands parse after tasks / tickets and before config commands", () => {
+  assert.equal(parseChatCommand("gửi nhóm Kho HN, anh Minh: Chiều nay 3h họp kho")?.kind, "send_draft");
+  assert.deepEqual(parseChatCommand("lệnh gửi"), { kind: "send_list" });
+  assert.deepEqual(parseChatCommand("hủy G-12"), { kind: "send_cancel", commandId: 12 });
+  assert.deepEqual(parseChatCommand("đồng ý G-12"), { kind: "send_confirm", commandId: 12 });
+  // Việc / ticket giữ nguyên chỗ của chúng
+  assert.equal(parseChatCommand("giao Minh: gửi báo giá cho khách hạn thứ 6")?.kind, "task_create");
+  assert.equal(parseChatCommand("báo lỗi: gửi tin không được")?.kind, "ticket_create");
+  // «đồng ý» / «hủy» trần vẫn là confirm / cancel dùng chung
+  assert.deepEqual(parseChatCommand("đồng ý"), { kind: "confirm" });
+  assert.deepEqual(parseChatCommand("hủy"), { kind: "cancel" });
+});
+
+test("send commands typed in a group get the fixed reply and never reach the service", async () => {
+  const command = parseChatCommand("gửi nhóm Kho HN: họp 3h");
+  assert.ok(command);
+  const reply = await runChatCommand({
+    db: {} as never, asker: null, inGroup: true, now: new Date(), send: {} as never,
+  }, command);
+  assert.match(reply ?? "", /nhắn riêng/);
+});
+
+test("send commands without a send context fall through to the AI (null)", async () => {
+  const command = parseChatCommand("lệnh gửi");
+  assert.ok(command);
+  assert.equal(await runChatCommand({ db: {} as never, asker: null, inGroup: false, now: new Date() }, command), null);
+});
+
+test("help shows the send block only to people allowed to issue send commands", () => {
+  const asker = { uid: "u1", name: "Quản lý", role: ContactRole.Manager, recipientId: 1 };
+  assert.doesNotMatch(buildHelpText(asker, false), /GỬI TIN THEO LỆNH/);
+  assert.match(buildHelpText(asker, false, { canSend: true }), /GỬI TIN THEO LỆNH[\s\S]*tắt bot/);
+});

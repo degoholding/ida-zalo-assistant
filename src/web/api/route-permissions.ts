@@ -34,6 +34,11 @@ const RULES: Rule[] = [
   ["WRITE", /^\/api\/tasks\/\d+\/actions$/, "task", "write"],
   // Bản tin (phase 8, màn web phase 5): chỉ đọc — phạm vi dòng (quản trị thấy hết, người khác chỉ thấy bản của mình) kiểm trong API
   ["GET", /^\/api\/briefs(\/|$)/, "brief", "read"],
+  // Gửi tin (phase 9, màn web phase 5): phạm vi dòng + «gửi lại nơi lỗi chỉ quản trị» kiểm trong API. Tắt / Bật bot (POST
+  // /api/bot-halt) KHÔNG khai → chỉ quản trị; đọc tình trạng cho mọi người xem được hội thoại (dải đỏ trên mọi trang)
+  ["GET", /^\/api\/send-commands(\/|$)/, "send_command", "read"],
+  ["WRITE", /^\/api\/send-commands\/\d+\/actions$/, "send_command", "write"],
+  ["GET", /^\/api\/bot-halt$/, "conversation", "read"],
   ["WRITE", /^\/api\/accounts(\/|$)/, "bot_account", "write"],
 ];
 

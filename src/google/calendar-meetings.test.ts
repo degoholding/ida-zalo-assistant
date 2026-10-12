@@ -44,7 +44,10 @@ test("creating a meeting calls Calendar with conferenceDataVersion=1 and returns
   const result = await runCreateMeeting(scheduler, { done: 0 }, { title: "Giao ban K52", start_time: "2026-10-07T09:00:00+07:00" }, NOW);
   assert.equal(result.meet_link, "https://meet.google.com/abc-defg-hij");
   assert.equal(result.time_vn, "09:00 07/10/2026");
-  assert.ok(urls[1].includes("conferenceDataVersion=1"));
+  // Liệt kê cuộc họp sắp tới trước (chống tạo trùng cùng tên + giờ) rồi mới tạo
+  const listAt = urls.findIndex((url) => url.includes("privateExtendedProperty"));
+  const createAt = urls.findIndex((url) => url.includes("conferenceDataVersion=1"));
+  assert.ok(listAt > 0 && createAt > listAt);
 });
 
 test("without a Google connection the tool explains how to connect", async () => {
@@ -178,4 +181,21 @@ test("listMeetingsBetween follows nextPageToken across multiple pages", async ()
   assert.equal(calls, 2);
   // urls: [oauth, events trang 1, oauth, events trang 2] — mỗi lượt request() tự lấy token riêng (MeetingScheduler hiện tại)
   assert.equal(new URL(urls[3]).searchParams.get("pageToken"), "page-2");
+});
+
+test("listMeetings surfaces requester, scope, end and created time for the meeting announcement picker", async () => {
+  const fetcher = (async (url: string | URL | Request) => {
+    if (String(url).includes("oauth2")) return new Response(JSON.stringify({ access_token: "at" }));
+    return new Response(JSON.stringify({
+      items: [{
+        id: "ev1", summary: "Họp", created: "2026-10-12T03:50:00.000Z", hangoutLink: "https://meet.google.com/x",
+        start: { dateTime: "2026-10-12T12:00:00+07:00" }, end: { dateTime: "2026-10-12T13:00:00+07:00" },
+        extendedProperties: { private: { createdBy: "bot-tro-ly", requester: "uid-1" } },
+      }],
+    }));
+  }) as typeof fetch;
+  const [meeting] = await new MeetingScheduler(() => GOOGLE, fetcher).listMeetings();
+  assert.equal(meeting.requesterUid, "uid-1");
+  assert.equal(meeting.endTime, Date.parse("2026-10-12T06:00:00Z"));
+  assert.equal(meeting.createdAt, Date.parse("2026-10-12T03:50:00Z"));
 });

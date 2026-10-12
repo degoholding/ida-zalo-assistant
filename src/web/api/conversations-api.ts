@@ -4,6 +4,8 @@ import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { describeError } from "../../logger.js";
+import { BotHaltedError } from "../../messaging/bot-halted-error.js";
+import { recordWebSend } from "../../send-commands/send-command-web-actions.js";
 import { OUTGOING_SOURCE } from "../../sync/message-ingest.js";
 import { ApiError, parseId, readJson, readRawBody, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
@@ -200,13 +202,32 @@ export async function listMessages(db: Db, threadId: number, params: URLSearchPa
 
 const MAX_TEXT_LENGTH = 10_000;
 
-/** Lỗi gửi (bot tắt, Zalo từ chối…) → 502 kèm câu dễ hiểu; lỗi «không có cuộc» → 404. */
-async function translateSendError<T>(work: () => Promise<T>): Promise<T> {
+/** Thông tin một lần quản trị gửi từ web — để ghi một dòng vào nhật ký «Gửi tin» (đã gửi / lỗi). */
+interface WebSendLog {
+  db: Db;
+  principal: Principal;
+  threadId: number;
+  body: string;
+  fileName?: string;
+}
+
+/**
+ * Lỗi gửi (Zalo từ chối…) → 502 kèm câu dễ hiểu; lỗi «không có cuộc» → 404; bot tắt khẩn → 409. Gửi xong (hay lỗi) thì ghi
+ * nhật ký «Gửi tin» — `recordWebSend` không bao giờ ném nên không làm hỏng câu trả lời API. Bot tắt = chưa gửi gì → không ghi.
+ */
+async function translateSendError<T>(work: () => Promise<T>, log: WebSendLog): Promise<T> {
+  const record = (ok: boolean, error?: string) => recordWebSend(log.db, {
+    userId: log.principal.userId ?? 0, userName: log.principal.fullName, threadId: log.threadId, body: log.body, fileName: log.fileName, ok, error,
+  });
   try {
-    return await work();
+    const result = await work();
+    await record(true);
+    return result;
   } catch (error) {
+    if (error instanceof BotHaltedError) throw new ApiError(409, "bot_halted", "Bot đang tắt khẩn — bật lại ở màn Gửi tin.");
     const message = describeError(error);
     if (message.startsWith("Không có cuộc")) throw new ApiError(404, "not_found", message);
+    await record(false, message);
     throw new ApiError(502, "send_failed", `Gửi không được: ${message}`);
   }
 }
@@ -220,7 +241,7 @@ export const conversationRoutes: ApiRoute[] = [
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) throw new ApiError(422, "validation_error", "Chưa có nội dung tin");
     if (text.length > MAX_TEXT_LENGTH) throw new ApiError(422, "validation_error", `Tin tối đa ${MAX_TEXT_LENGTH} ký tự`);
-    const messageId = await translateSendError(() => service.sendAdminText(id, text));
+    const messageId = await translateSendError(() => service.sendAdminText(id, text), { db: service.db, principal, threadId: id, body: text });
     sendOk(response, { message_id: messageId }, "Đã gửi");
   }],
   // Tải tệp / ảnh lên rồi bot gửi đi: thân là nhị phân thuần, tên tệp ở header x-file-name (đã encodeURIComponent)
@@ -233,7 +254,7 @@ export const conversationRoutes: ApiRoute[] = [
     const contentType = String(request.headers["content-type"] ?? "application/octet-stream").split(";")[0].trim();
     const data = await readRawBody(request);
     if (!data.length) throw new ApiError(422, "validation_error", "Tệp rỗng");
-    const messageId = await translateSendError(() => service.sendAdminFile(id, data, fileName, contentType));
+    const messageId = await translateSendError(() => service.sendAdminFile(id, data, fileName, contentType), { db: service.db, principal, threadId: id, body: "", fileName });
     sendOk(response, { message_id: messageId }, `Đã gửi tệp ${fileName}`);
   }],
   ["GET", /^\/api\/conversations$/, async ({ response, url, service, principal }) => sendOk(response, await listConversations(service.db, url.searchParams, principal))],

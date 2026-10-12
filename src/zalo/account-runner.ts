@@ -48,7 +48,10 @@ import {
 import { parseZaloContent } from "./content-parser.js";
 import { describeGroupEvent, namesToLookup } from "./group-event-text.js";
 import { registerGroupHistoryApi, type HistoryPage } from "./group-history.js";
+import { isBotHalted, type BotHaltControl } from "../messaging/bot-halt.js";
+import { applyDirectHaltGate } from "./direct-halt-gate.js";
 import { ZaloSender } from "./zalo-sender.js";
+import { createGroupReminder, type GroupReminderRequest } from "./group-reminder-creator.js";
 import { FriendRequestManager } from "./friend-requests.js";
 import { GroupAssistantReplier } from "./group-assistant-replier.js";
 import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
@@ -157,9 +160,11 @@ export class AccountRunner {
     private readonly storage: FileStorage,
     private assistant: AssistantService | null,
     private readonly jobs: JobWaker,
+    /** Tắt bot khẩn (phase 9): cổng lệnh tắt / bật trên tin riêng. */
+    private readonly botHalt: BotHaltControl,
   ) {
     this.log = createLogger(`zalo:${account.label}`);
-    this.sender = new ZaloSender(config.assistant.sendIntervalMs);
+    this.sender = new ZaloSender(config.assistant.sendIntervalMs, () => isBotHalted(config));
     this.groupReplier = new GroupAssistantReplier({
       db, config, sender: this.sender, log: this.log, accountId: account.id,
       getApi: () => this.api,
@@ -498,6 +503,12 @@ export class AccountRunner {
     // Người lạ (chưa có vai trò): chỉ lưu, không trả lời — đại ca chốt 01/10/2026. Người nhận (phase 4) luôn được trả
     // lời: chat riêng với bot là kênh báo + ra lệnh của họ.
     const parsed = parseZaloContent(incoming.msgType, incoming.content);
+    // Tắt bot khẩn (phase 9): lệnh tắt / bật / tình trạng xử lý NGAY ở đây, trước hàng đợi; đang tắt thì không xếp việc nào
+    if (parsed.kind === MessageKind.Text && parsed.text.trim()) {
+      const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
+      const gate = { db: this.db, control: this.botHalt, sender: this.sender, log: this.log, getApi: () => this.api, getBot: () => bot };
+      if (await applyDirectHaltGate(gate, result.thread, result.contact, parsed.text)) return;
+    }
     const command = parsed.kind === MessageKind.Text ? parseChatCommand(parsed.text) : null;
     // Ticket (đại ca 08/10/2026): AI nhắn được cho bot đều báo / theo dõi ticket được, kể cả khách — chỉ lệnh ticket +
     // «hướng dẫn»; câu hỏi khác của người chưa có vai trò vẫn không trả lời.
@@ -772,6 +783,15 @@ export class AccountRunner {
       const msgId = response.message?.msgId;
       if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), styled.msg);
     }
+  }
+
+  /** Tạo nhắc hẹn Zalo cho một nhóm (lệnh nhắc hẹn từ tin riêng) — qua hàng gửi nên tắt bot khẩn chặn được. */
+  async createGroupReminder(thread: GroupRow, request: GroupReminderRequest, checkExisting: boolean): Promise<void> {
+    const api = this.api;
+    if (!api) throw new Error("bot chưa kết nối");
+    if (thread.thread_type !== ConversationType.Group) throw new Error("nhắc hẹn chỉ tạo cho nhóm");
+    await createGroupReminder(api, this.sender, thread.zalo_group_id, request, checkExisting);
+    this.log.info(`tạo nhắc hẹn trong nhóm «${thread.name || thread.zalo_group_id}»`);
   }
 
   /** Gửi một tệp đã cất trong kho vào một cuộc có sẵn (riêng / nhóm). */

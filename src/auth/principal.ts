@@ -21,7 +21,7 @@ export interface Principal {
 export const SYSTEM_PRINCIPAL: Principal = { userId: null, tenantId: 1, fullName: "Hệ thống", email: "", role: UserRole.Admin, groupIds: null };
 
 /** Thực thể của giao diện — phải khớp `ENTITIES` ở web/src/core/authorization/permission-types.ts. */
-export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task", "brief"] as const;
+export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task", "brief", "send_command"] as const;
 export type Entity = (typeof ENTITIES)[number];
 export type Action = "read" | "write" | "create" | "export";
 export type PermissionMap = Record<string, Record<Action, boolean>>;
@@ -39,7 +39,9 @@ export function permissionsFor(role: UserRole): PermissionMap {
     const adminOnly = ["bot_account", "setting", "user", "recipient", "audit"].includes(entity);
     if (adminOnly) return [entity, NONE];
     // Việc (phase 7): quản lý tạo / thao tác như ticket; nhân viên chỉ xem.
-    const canWrite = role === UserRole.Manager && ["conversation", "contact", "group", "file", "ticket", "task"].includes(entity);
+    const canWrite = role === UserRole.Manager && ["conversation", "contact", "group", "file", "ticket", "task"].includes(entity)
+      // Gửi tin (phase 9): mọi vai trò được hủy lệnh CỦA MÌNH — phạm vi dòng + «gửi lại» chỉ quản trị kiểm trong API
+      || entity === "send_command";
     return [entity, { read: true, write: canWrite, export: role === UserRole.Manager, create: false }];
   })) as PermissionMap;
 }

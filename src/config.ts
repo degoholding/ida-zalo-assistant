@@ -1,4 +1,5 @@
 import type { GoogleAccountLink } from "./google/google-oauth.js";
+import type { BotHaltState } from "./messaging/bot-halt-state.js";
 
 // Đọc cấu hình từ biến môi trường một lần, kiểm ngay lúc khởi động — thiếu thì dừng sớm,
 // đừng để chạy nửa chừng mới nổ.
@@ -120,6 +121,8 @@ export interface AppConfig {
     oauthClientSecret: string;
     calendarAccount: GoogleAccountLink | null;
   };
+  /** Tắt bot khẩn (phase 9) — chỉ app ghi (web + lệnh Zalo); worker đọc lại mỗi 60 giây. Khóa ẩn `bot_halt`. */
+  botHalt: BotHaltState;
   /**
    * Recap họp tự động từ ghi âm trên Google Drive (phase 1, 10/10/2026) — đọc qua CHÍNH tài khoản Google đã
    * «Kết nối Google» (quyền Drive tùy chọn, xem `hasDriveScope`), KHÔNG dùng service account.
@@ -227,6 +230,7 @@ export function loadConfig(): AppConfig {
       telegramBotToken: (process.env.ALERT_TELEGRAM_BOT_TOKEN ?? "").trim(), telegramChatId: (process.env.ALERT_TELEGRAM_CHAT_ID ?? "").trim(),
     },
     google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null, loginClientId: "" },
+    botHalt: { halted: false, since: null, by: "", via: "" },
     meetingRecap: { enabled: false, folderId: "", maxBytes: 150 * 1024 * 1024 },
   };
 }

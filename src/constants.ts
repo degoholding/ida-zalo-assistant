@@ -105,6 +105,8 @@ export enum JobKind {
   AlertDispatch = 4,
   // Bot nhắn một người (tin riêng) hoặc vào một cuộc có sẵn, kèm tệp đã cất — báo ticket (08/10/2026)
   ContactMessage = 5,
+  // Gửi tin cho MỘT nơi nhận của lệnh gửi (bảng send_command_target, phase 9) — serialKey `send:<lệnh>` giữ thứ tự
+  SendCommandTarget = 6,
 }
 
 /** Trạng thái ticket (bảng ticket). Giao diện chép sang web/src/modules/tickets/types. */
@@ -310,4 +312,48 @@ export enum MeetingRecordingStatus {
   // Hết số lần thử (phase 4) mà vẫn lỗi
   Failed = 5,
   Skipped = 6,
+}
+
+/** Nguồn của một lệnh gửi (bảng send_command, phase 9). Giao diện chép sang web/src/modules/send-commands/types. */
+export enum SendCommandSource {
+  // Quản lý nhắn bot trong cuộc riêng
+  Zalo = 1,
+  // Quản trị gửi từ màn web (chỉ ghi nhật ký)
+  Web = 2,
+}
+
+/** Việc một lệnh làm ở mỗi nơi nhận (cột send_command.action_kind). Giao diện chép sang web/src/modules/send-commands/types. */
+export enum SendActionKind {
+  // Gửi tin (mặc định, phase 9)
+  Message = 1,
+  // Tạo nhắc hẹn Zalo cho nhóm (chỉ nhóm) — từ tin riêng, có xem trước
+  Reminder = 2,
+}
+
+/** Vòng đời một lệnh gửi: Draft →(đồng ý)→ Scheduled | Sending → Done; Draft quá hạn → Expired; Draft / Scheduled → Cancelled. */
+export enum SendCommandStatus {
+  // Đã dựng bản xem trước, chờ «đồng ý» (15 phút)
+  Draft = 1,
+  // Đã đồng ý, chờ tới giờ hẹn
+  Scheduled = 2,
+  Sending = 3,
+  Done = 4,
+  Cancelled = 5,
+  // Nháp quá hạn xác nhận
+  Expired = 6,
+}
+
+/** Loại nơi nhận của lệnh gửi (bảng send_command_target). */
+export enum SendTargetKind {
+  Group = 1,
+  Person = 2,
+}
+
+/** Trạng thái từng nơi nhận: Pending → Queued → Sent | Failed; Failed →(gửi lại)→ Queued. */
+export enum SendTargetStatus {
+  Pending = 1,
+  Queued = 2,
+  Sent = 3,
+  Failed = 4,
+  Cancelled = 5,
 }
