@@ -114,7 +114,7 @@ describe('B2 — hình dạng hằng số', () => {
     //  Chép tay từ máy chủ — thiếu một khóa thì `can()` trả false im lặng và cả màn (Người dùng, Người nhận) biến
     //  khỏi menu của chính quản trị.
     expect([...ENTITIES]).toEqual([
-      'bot_account', 'conversation', 'contact', 'group', 'file', 'company', 'audit', 'setting', 'user', 'recipient', 'ticket', 'task',
+      'bot_account', 'conversation', 'contact', 'group', 'file', 'company', 'audit', 'setting', 'user', 'recipient', 'ticket', 'task', 'brief', 'send_command',
     ])
   })
 

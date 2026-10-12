@@ -35,6 +35,10 @@ export const appRoutes = {
     list: '/briefs',
     detail: (id: number | string) => `/briefs/${id}`,
   },
+  sendCommands: {
+    list: '/send-commands',
+    detail: (id: number | string) => `/send-commands/${id}`,
+  },
   imports: { zaloWeb: '/imports/zalo-web' },
   companies: {
     list: '/companies',

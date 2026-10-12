@@ -16,7 +16,7 @@ function buildPermissions(role: 'admin' | 'manager' | 'staff') {
     ENTITIES.map((entity) => {
       if (role === 'admin') return [entity, { read: true, write: true, export: true, create: true }]
       if (ADMIN_ONLY.includes(entity)) return [entity, { read: false, write: false, export: false, create: false }]
-      const canWrite = role === 'manager' && ['conversation', 'contact', 'group', 'file', 'ticket', 'task'].includes(entity)
+      const canWrite = (role === 'manager' && ['conversation', 'contact', 'group', 'file', 'ticket', 'task'].includes(entity)) || entity === 'send_command'
       return [entity, { read: true, write: canWrite, export: role === 'manager', create: false }]
     }),
   ) as Record<string, Record<string, boolean>>
@@ -37,7 +37,7 @@ describe('sidebar gating by role', () => {
   it('hides every admin-only screen from a staff member', () => {
     // «Tìm tin» (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
     // «Bản tin» (phase 8) cũng đọc được — phạm vi DÒNG (không phải vai trò) lọc ở máy chủ
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Công ty'])
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Gửi tin', 'Công ty'])
   })
 
   it('gives a manager the same menu as staff — write rights do not unlock admin screens', () => {
@@ -70,6 +70,11 @@ describe('menu items point at registered screens', () => {
   it('has a menu entry for the Bản tin (brief) list that staff can see (read-only, scoped by row server-side)', () => {
     expect(NAV_ITEMS.find((item) => item.path === appRoutes.briefs.list)?.entity).toBe('brief')
     expect(visibleLabels('staff')).toContain('Bản tin')
+  })
+
+  it('has a menu entry for Gửi tin (send commands) that staff can see (rows scoped to their own commands server-side)', () => {
+    expect(NAV_ITEMS.find((item) => item.path === appRoutes.sendCommands.list)?.entity).toBe('send_command')
+    expect(visibleLabels('staff')).toContain('Gửi tin')
   })
 
   it('never repeats a path — the breadcrumb picks the first prefix match', () => {

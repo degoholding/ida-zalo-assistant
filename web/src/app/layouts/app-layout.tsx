@@ -6,6 +6,7 @@ import { useAuthStore } from '@/core/auth/auth-store'
 import { getUserRoleLabel } from '@/core/auth/user-role'
 import { NAV_ITEMS } from '@/app/router/nav-items'
 import { appRoutes } from '@/shared/constants/app-routes'
+import { BotHaltBanner } from '@/shared/bot-halt/bot-halt-banner'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Separator } from '@/shared/ui/separator'
@@ -56,6 +57,7 @@ export function AppLayout() {
             </Button>
           </div>
         </header>
+        <BotHaltBanner />
         <main className="min-h-0 min-w-0 flex-1 overflow-auto bg-canvas">
           <Outlet />
         </main>

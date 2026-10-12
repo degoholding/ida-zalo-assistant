@@ -5,6 +5,7 @@ import { LoginPage } from '@/app/pages/login-page'
 import { accountsModule } from '@/modules/accounts/routes'
 import { assistantChatModule } from '@/modules/assistant-chat/routes'
 import { briefsModule } from '@/modules/briefs/routes'
+import { sendCommandsModule } from '@/modules/send-commands/routes'
 import { companiesModule } from '@/modules/companies/routes'
 import { contactsModule } from '@/modules/contacts/routes'
 import { conversationsModule } from '@/modules/conversations/routes'
@@ -35,6 +36,7 @@ const MODULE_ROUTES = [
   ticketsModule,
   tasksModule,
   briefsModule,
+  sendCommandsModule,
   importsModule,
   companiesModule,
   recipientsModule,
