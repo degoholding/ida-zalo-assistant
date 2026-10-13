@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
+> Bản 1.6 · 12/10/2026 (phase 10: gợi ý trả lời N2 + khung số liệu N3 + danh mục + ghim từ tin riêng) · bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -25,8 +25,8 @@
 | **6** | N4 — Tìm kiếm tin nhắn | **Xong** 09/10 (phần GĐ1) | 5 / 6 |
 | **7** | N5 — Checklist công việc | **Xong** 09/10 | 5 / 5 |
 | **8** | N6 — Bản tin và báo cáo | **Xong** 09/10 | 6 / 7 |
-| **9** | N7 — Gửi tin theo lệnh | **Xong** 12/10 (phần GĐ1: lệnh gửi + tắt khẩn) | 5 / 6 |
-| **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 1 / 9 |
+| **9** | N7 — Gửi tin theo lệnh | **Xong** 12/10 (phần GĐ1: lệnh gửi + tắt khẩn + nhắc hẹn + ghim từ tin riêng) | 6 / 6 |
+| **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 4 / 9 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
@@ -373,17 +373,30 @@ Plan: `plans/261012-0854-phase-09-send-on-command/` · kịch bản test khi dep
 
 ### Phase 10 — N3 Số liệu + N2 Gợi ý trả lời (Một phần)
 
+Plan: `plans/261012-1420-phase-10-reply-suggestions-and-metrics/` · kịch bản test khi deploy: [`10-kich-ban-test-phase-10.md`](10-kich-ban-test-phase-10.md). **Đã chốt (anh, 12/10):** N2 — nhắn riêng bot «gợi ý trả lời tin giá Flowertop của anh Sáu» → bot tìm tin trong phạm vi, chọn mẫu ĐÃ DUYỆT, trả 2–3 bản nháp khác tông (mỗi bản một tin, chỗ chưa có số ghi «[cần bổ sung]»), **không gửi bản nháp** đi đâu; N3 — khung đọc bảng Google Sheets (service account) mỗi 30 phút giờ làm + lượt chốt 18:00, lưu số dạng dài, gắn cờ âm/lệch ±30%/chưa báo, màn web «Số liệu» + công cụ `query_metrics`, mục số liệu trong bản tin / báo cáo; thêm «Mẫu tin», «Danh mục NV / ĐL» vào Danh bạ (khu vực / vùng sales / SĐT); ghim từ tin riêng (nội dung cuộc họp / chữ mô hình, bản xem trước, «đồng ý» → ghim).
+
+**Đã làm (12/10):**
+- **Bảng mẫu tin** (migration 030: `reply_template` + tên / tình huống / nội dung / tông / trạng thái / người soạn / người duyệt / ghi chú), trạng thái Nháp / Chờ duyệt / Đã duyệt. NV soạn / sửa → Chờ duyệt; quản trị + Quản lý duyệt / trả lại kèm ghi chú; sửa mẫu đã duyệt → lại Chờ duyệt. API `reply-templates-api.ts`, web `ReplyTemplateCrudPage`. Mỗi thao tác `recordAudit`.
+- **Lõi N2 gợi ý trả lời** (src/reply-suggestions/*): loader tìm tin gốc trong phạm vi người hỏi (Direct chỉ tin riêng của người hỏi, không người khác), picker chọn mẫu ĐÃ DUYỆT khớp câu / tình huống / nhóm, workflow gọi mô hình soạn 2–3 bản nháp khác tông với luật che SĐT / kiểm sau sinh (lọt ngày / giá / thời hạn / mã / thứ tự từ) + «[cần bổ sung]» cho giá / ngày, `fixedReply` ghi nháp vào CSDL, **không bao giờ gửi bản nháp đi nhóm**.
+- **Bảng số liệu + cấu hình nguồn** (migration 031: `metric_source` + link / tab / ánh xạ cột + trạng thái, `metric_value` + ngày × NV × khu vực × chỉ tiêu × số), API `metric-sources-api.ts` / `metrics-api.ts`, web `MetricSourceCrudPage` / `MetricListPage`. Cấu hình: khai link Sheets, tab, dòng tiêu đề, tên × cột; nút «Kiểm tra đọc thử» lấy 5 dòng; «Đọc ngay» điều chỉnh `last_row_count` nếu bảng co > 50%; status: Lỗi / Chưa đọc / OK; mỗi thao tác `recordAudit`.
+- **Công cụ `query_metrics`** (src/metrics/metric-query-tool.ts): hỏi «doanh số tuần này khu vực Miền Tây» → trả tổng kỳ này + kỳ trước + % đổi, dòng theo nhân viên / khu vực / ngày (tùy chọn), số dòng cờ, nguồn + giờ đọc; không lấy số từ chat, không bịa; «Chưa có số liệu…» nếu rỗng.
+- **Mục số liệu trong bản tin sáng / cuối ngày** (nếu có dữ liệu): gồm 1 chỉ tiêu tô sáng + 1 dòng so kỳ (% hoặc mũi tên) + dòng cảnh báo cờ («Cần xác nhận» nếu lệch / âm); bản cuối ngày không có % / mũi tên (chỉ số tuyệt đối + cờ).
+- **Danh mục NV / ĐL** (migration 032: bảng `catalog_entry` + cột `contact.phone`): web «Danh mục NV / ĐL» tải mẫu Excel (sheet `NhanVien`, `DaiLy`, `Hướng dẫn`; dòng ví dụ mã `VD-…` bị bỏ qua khi nạp), nạp tệp, khớp liên hệ Zalo theo SĐT / tên — Đã khớp / Gợi ý, chờ xác nhận / Chưa khớp / Đã xác nhận / Đã bỏ gắn (mục đã bỏ gắn không tự gắn lại; tệp nạp có SĐT khác thì mở lại để khớp). Danh bạ hiện khu vực / vùng sales / người phụ trách bằng JOIN danh mục (không chép sang `contact`); SĐT chỉ quản trị + quản lý thấy.
+- **Ghim từ tin riêng** (công cụ `propose_group_pin`, send-pin-*): nội dung ghim từ cuộc họp bot đã tạo (máy chủ dựng nội dung từ Calendar, chỉ ID + giờ) hoặc nội dung do mô hình soạn (tối đa 1000 ký tự, hiện nguyên); bản xem trước «XEM TRƯỚC GHIM G-n», «đồng ý» → ghim thật (chỉ nhóm nội bộ, chống trùng khi thử lại); không ghim kèm job gửi như nhắc hẹn.
+- Review (agent, 12/10): 3 High (lộ tin riêng, kiểm sau sinh lọt, ô số khổng lồ), 3 Medium, đủ 7 việc biết. Gốc 1112/1112, web 163 pass.
+
 | Việc | Câu IDA | Trạng thái |
 |---|---|---|
 | Đọc link Google Sheets khi được hỏi (`read_link`) | 14 | Xong 07/10 |
-| Đọc định kỳ các bảng Drive nhân viên nhập (NKCV, BC-Tồn kho, BCSale, BC-T2), lưu số vào database | 14, 15 | Chờ IDA (link bảng thật) |
-| Bảng tổng hợp theo ngày × nhân viên × khu vực, dòng tổng, so kỳ trước; cờ số âm, lệch ±30%, chưa báo sau 18:00 | 15 | Chưa |
+| Đọc định kỳ các bảng Drive nhân viên nhập, lưu số vào database | 14, 15 | Xong 12/10 (lõi; chờ link bảng thật của IDA) |
+| Bảng tổng hợp theo ngày × nhân viên × khu vực, dòng tổng, so kỳ trước; cờ số âm, lệch ±30%, chưa báo | 15 | Xong 12/10 (khung; chờ số thật) |
+| Công cụ hỏi số (`query_metrics`) + mục số liệu trong bản tin / báo cáo | 14, 15 | Xong 12/10 |
 | Nạp file KPI tháng, so thực hiện với kế hoạch | 17 | Chờ IDA (file KPI) |
-| Nạp danh mục nhân viên và đại lý từ Excel; thêm vùng sales, người phụ trách vào Danh bạ | 16 | Chờ IDA (2 file Excel) |
-| Thư viện mẫu C10 (15 mẫu): nhân viên soạn, quản lý duyệt | 10 | Chưa |
-| 2–3 bản nháp trả lời khác tông theo mẫu, đúng văn phong; thiếu số thì để «[cần bổ sung]» | 11, 12 | Chưa |
-| Kho tài liệu kỹ thuật đã duyệt; câu kỹ thuật chỉ trích tài liệu + «cần kỹ thuật xác nhận» | 13 | Chờ IDA (bộ tài liệu) |
-| Nối Misa / app Thu mua / ERP | 27 | Giai đoạn sau |
+| Nạp danh mục nhân viên và đại lý từ Excel; thêm khu vực / vùng sales vào Danh bạ | 16 | Xong 12/10 (khung Excel; chờ file thật) |
+| Thư viện mẫu C10: nhân viên soạn, quản lý duyệt (5 mẫu ví dụ trong Nháp) | 10 | Xong 12/10 (khung; chờ NV soạn) |
+| 2–3 bản nháp trả lời khác tông theo mẫu, đúng văn phong; thiếu số → «[cần bổ sung]» | 11, 12 | Xong 12/10 |
+| Kho tài liệu kỹ thuật đã duyệt; câu kỹ thuật → «[cần kỹ thuật xác nhận]» | 13 | Chờ IDA (bộ tài liệu) |
+| Ghim lên nhóm từ tin riêng (cuộc họp / nội dung) | — | Xong 12/10 |
 
 ## 9. Đối chiếu 27 câu IDA
 
@@ -398,24 +411,24 @@ Plan: `plans/261012-0854-phase-09-send-on-command/` · kịch bản test khi dep
 | 7 | Đồng hồ chờ, giờ làm, giờ yên lặng | 3, 5 | Đạt (08/10) |
 | 8 | Thế nào là «đã xử lý» | 3, 5 | Đạt (08/10) |
 | 9 | Đẩy báo, trần 3 lần/ngày, báo phiên văng | 5 | Đạt (08/10) |
-| 10 | Thư viện mẫu C10 có duyệt | 4, 10 | Chưa |
-| 11 | Văn phong | 10 | Một phần |
-| 12 | Không tự điền số | 10 | Một phần |
-| 13 | Kỹ thuật BVTV | 3, 10 | Một phần (chặn tìm web + luật trích tài liệu 08/10; còn kho tài liệu duyệt) |
-| 14 | Bảng Drive mỗi tuần | 10 | Một phần |
-| 15 | Chỉ tiêu bảng sales | 10 | Một phần |
-| 16 | Danh mục nhân viên / đại lý | 10 | Một phần |
+| 10 | Thư viện mẫu C10 có duyệt | 10 | Một phần (12/10: khung mẫu + 5 mẫu ví dụ; chờ NV soạn) |
+| 11 | Văn phong | 10 | Đạt (12/10: 2–3 bản nháp khác tông, giữ ý người hỏi) |
+| 12 | Không tự điền số | 10 | Đạt (12/10: chỗ chưa chắc thành «[cần bổ sung]») |
+| 13 | Kỹ thuật BVTV | 3, 10 | Một phần (08/10: chặn tìm web + đánh dấu; 12/10: câu trả lời có «[cần kỹ thuật xác nhận]»; chờ kho tài liệu) |
+| 14 | Bảng Drive mỗi tuần | 10 | Đạt (12/10: lõi đọc + công cụ query; chờ link bảng thật) |
+| 15 | Chỉ tiêu bảng sales | 10 | Đạt (12/10: khung N3 + mục số liệu; chờ số thật) |
+| 16 | Danh mục nhân viên / đại lý | 10 | Một phần (12/10: khung Excel nạp + Danh bạ thêm khu vực; chờ file thật) |
 | 17 | File KPI | 10 | Chưa |
-| 18 | Số mơ hồ: gắn cờ, báo người nhận | 5, 10 | Một phần |
-| 19 | Excel qua Zalo + lưu web | 8 | Đạt |
+| 18 | Số mơ hồ: gắn cờ, báo người nhận | 5, 10 | Một phần (08/10: cơ chế cờ; 12/10: cờ + mục báo cáo; chờ số thật) |
+| 19 | Excel qua Zalo + lưu web | 8 | Đạt (09/10) |
 | 20 | Lưu 24 tháng / tệp 6 tháng | 1, 3 | Đạt (08/10) |
 | 21 | Tìm tin + xem trước / sau | 6 | Đạt (09/10) |
 | 22 | Checklist | 7 | Đạt (09/10) |
 | 23 | Nhắc hạn | 7 | Đạt (09/10) |
 | 24 | Bản tin sáng | 8 | Đạt (09/10) |
 | 25 | Báo cáo tuần / tháng | 8 | Một phần (09/10; khuôn tạm, chờ form IDA) |
-| 26 | Gửi theo lệnh | 9 | Chưa |
-| 27 | Misa, Drive, sau nối Thu mua / ERP | 10 | Một phần (đọc được Drive; chưa nối Misa / Thu mua / ERP) |
+| 26 | Gửi theo lệnh | 9 | Đạt (12/10) |
+| 27 | Misa, Drive, sau nối Thu mua / ERP | 10 | Một phần (07/10: đọc Drive; 12/10: khung query + bảng; chưa nối Misa / Thu mua / ERP) |
 
 ## 10. Máy chủ
 
@@ -427,8 +440,10 @@ Plan: `plans/261012-0854-phase-09-send-on-command/` · kịch bản test khi dep
 | Chuyển bot sang VPS riêng (database + tệp + phiên Zalo) | Chưa |
 | Mỗi bot thêm một tài khoản Zalo dự phòng trong cùng các nhóm | Chưa |
 | Bật Cloudflare Access chắn trang quản trị | Chưa |
+| Migration 030–032 (phase 10): mẫu tin, nguồn số liệu, danh mục NV/ĐL | Xong 12/10 |
 | Khởi động lại MySQL trên VPS theo `command` mới trong docker-compose.yml (cấu hình tìm toàn văn, phase 6) — làm TRƯỚC khi deploy bản có migration 023 | Chưa — chưa làm thì tìm tin vẫn chạy nhưng chỉ quét LIKE 90 ngày; làm sau thì tin đã chép thiếu từ 1–2 chữ, phải chép lại (lệnh ở mục Phase 6, không khóa bảng) |
 | Sau deploy phase 6: xem log worker «đã chép xong tin cũ vào bảng tìm»; kiểm chỗ trống ổ đĩa (bảng tìm chép lại chữ của mọi tin — chữ tin chiếm thêm ~gấp đôi) | Chưa |
+| Worker: việc nền `metrics-sync` (mỗi 30 phút trong giờ làm) + `metrics-close` (lượt chốt 18:00 ngày làm việc); chia sẻ quyền xem bảng Drive cho email service account (hiện ở màn «Nguồn số liệu») | Xong 12/10 (chờ link bảng thật) |
 | Lên VPS riêng 8 GB: nâng `mem_limit` + `innodb-buffer-pool-size` của MySQL (đang 768 MB / 256 MB, lúc nghỉ đã ~600–670 MB với 1 triệu tin); khi đó có thể nâng trần tìm toàn văn 32 MB → 64 MB và số câu tìm cùng lúc (`MAX_CONCURRENT_SEARCHES`) | Chưa |
 
 Ước lượng cho một bot 100 nhóm ở mức «vừa» (20–100 tin / nhóm / ngày): 2.000–10.000 tin / ngày; 24 tháng

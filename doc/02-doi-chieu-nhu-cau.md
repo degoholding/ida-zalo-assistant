@@ -32,8 +32,8 @@
 | Mã | Nhu cầu | Trạng thái | Đã có | Còn thiếu so với tiêu chí nghiệm thu |
 |---|---|---|---|---|
 | N1 | Check tin nhắn | **Chưa** | Lưu đủ tin, kể cả `mentions`; whitelist nhóm (bật đọc từng nhóm); Danh bạ có thẻ (dùng làm VIP được) | Lệnh /check; nhận diện @mention / hỏi thẳng chủ (≥ 90 %); phân loại Khẩn / Quan trọng / Thường; VIP báo ≤ 1 phút; nhắc tin chưa trả lời quá X giờ; trạng thái đã / chưa trả lời |
-| N2 | Gợi ý trả lời | **Chưa** | Bot soạn được văn bản; đường gửi dưới tên bot đã có | 2–3 bản nháp khác tông; nút Chọn – Sửa – Bỏ qua; thư viện mẫu; số liệu có nguồn; **không gửi khi chưa xác nhận** |
-| N3 | Thống kê số liệu | **Chưa** | Đọc được ảnh / xlsx / pdf thành chữ (`read_file`) | Trích số từ tin báo cáo thành bảng; gắn «cần xác nhận» khi mơ hồ; dòng tổng, đánh dấu bất thường; xuất Excel |
+| N2 | Gợi ý trả lời | **Đạt** (12/10/2026) | Thư viện mẫu C10 trên web (nhân viên soạn, quản lý / quản trị duyệt, bot chỉ dùng mẫu Đã duyệt); nhắn riêng bot «gợi ý trả lời tin …» → 3 bản nháp lịch sự / thân thiện / ngắn gọn, mỗi bản một tin; số không có nguồn → «[cần bổ sung]», liều dùng BVTV → «[cần kỹ thuật xác nhận]»; bot KHÔNG gửi — người dùng tự chép gửi | Văn phong theo IDA câu 11 (IDA chấm lại); 15 mẫu C10 thật (IDA tự soạn trên web) |
+| N3 | Thống kê số liệu | **Một phần** (khung 12/10/2026) | Số đọc từ BẢNG GOOGLE SHEETS nhân viên nhập (chốt 08/10, không trích từ chat): nguồn cấu hình trên web (link, tab, ánh xạ cột, đọc thử), đọc mỗi 30 phút + chốt 18:00, cờ số âm / lệch ±30% / chưa báo, màn «Số liệu», hỏi bot, mục số liệu trong bản tin / báo cáo; danh mục NV / ĐL nạp Excel | Chờ IDA: link bảng thật, file KPI, danh mục thật |
 | N4 | Tìm kiếm tin nhắn | **Một phần** | Tìm tệp theo tên + **nội dung** đã bóc (pdf / Excel); AI tìm theo người, nhóm, khoảng ngày; chữ bóc có FULLTEXT | Tìm **tin nhắn** theo từ khóa trên web (hiện chỉ có tìm cuộc); lệnh tìm đa điều kiện (từ khóa + người + nhóm + ngày + loại tin); kết quả kèm đường dẫn về tin gốc; voice → chữ; mốc ≤ 5 giây / 6 tháng chưa đo |
 | N5 | Checklist công việc | **Chưa** | — | Bảng việc; bot đề xuất việc từ tin, chủ xác nhận; /xong /doihan /giao; nhắc trước hạn – đến hạn – quá hạn; gắn cờ thiếu owner / deadline |
 | N6 | Tổng hợp báo cáo | **Một phần** | Tóm tắt nhóm theo khoảng thời gian, theo người, theo yêu cầu (câu tự nhiên); đã chuyển bản flash cho tóm tắt dài | Morning / End-of-day Brief gửi đúng giờ; báo cáo theo mẫu, theo khách hàng / nhân viên; mọi ý truy ngược về tin gốc; xuất Excel / Word / PDF; tên tệp theo quy ước |
@@ -90,13 +90,13 @@
 | TN017 | Morning Brief | Báo cáo + lập lịch | M |
 | TN018 | End-of-day Brief | Báo cáo + lập lịch | S (sau Morning) |
 | B24 | Báo cáo theo mẫu định sẵn | Báo cáo | M |
-| B20 | Xuất Excel / Google Sheets | Báo cáo / Thống kê (SheetJS đã có sẵn trong kho) | S |
-| B18 | Trích số liệu từ tin báo cáo sales | Thống kê | M |
+| B20 | Xuất Excel / Google Sheets | Báo cáo / Thống kê (SheetJS đã có sẵn trong kho) | S · sheet «Số liệu» trong báo cáo tuần / tháng (12/10) |
+| B18 | Trích số liệu từ tin báo cáo sales | Thống kê | M · đổi hướng 08/10: đọc bảng Sheets (khung xong 12/10) |
 | B19 | Hỏi rõ đơn vị khi số liệu mơ hồ | Thống kê | S |
 | B28 | Hẹn giờ gửi | Gửi theo lệnh + lập lịch; cảnh báo nếu rơi giờ yên lặng | S |
 | B32 | Xem trước, xác nhận & hủy | Gửi theo lệnh; lệnh gõ xác nhận («đồng ý G-12») hoặc hủy («hủy G-12») | M |
-| B08 | Gợi ý 2–3 phương án trả lời | Gợi ý trả lời | M |
-| B09 | Thư viện mẫu trả lời nhanh | Gợi ý trả lời | S |
+| B08 | Gợi ý 2–3 phương án trả lời | Gợi ý trả lời | M · **Xong 12/10** |
+| B09 | Thư viện mẫu trả lời nhanh | Gợi ý trả lời | S · **Xong 12/10** (có duyệt) |
 | B36 | Che dữ liệu nhạy cảm trước khi gửi AI | Nền tảng | S |
 | B37 | Tuân thủ bảo vệ dữ liệu cá nhân | Nền tảng (quyết định + tài liệu, không phải mã) | S |
 
