@@ -38,8 +38,24 @@ export interface ContactAssistantTurn {
   output_tokens: number
 }
 
-/** `GET /api/contacts/:id` — dòng Danh bạ cộng các mục của trang chi tiết. */
+/** Loại dòng danh mục NV / ĐL — khớp `CatalogKind` ở `src/constants.ts`; dùng cho bộ lọc «Loại danh mục». */
+export const CONTACT_CATALOG_KIND_OPTIONS = [
+  { value: 1, label: 'Nhân viên' },
+  { value: 2, label: 'Đại lý' },
+]
+
+/**
+ * `GET /api/contacts/:id` — dòng Danh bạ cộng các mục của trang chi tiết. Các trường `catalog_*`, khu vực, vùng, người phụ
+ * trách lấy qua JOIN danh mục (null khi liên hệ chưa gắn mục nào); `phone` chỉ có khi người xem đọc được danh mục.
+ */
 export interface ContactDetail extends Contact {
+  phone?: string | null
+  catalog_entry_id: number | null
+  catalog_code: string | null
+  catalog_kind: number | null
+  region: string | null
+  sales_zone: string | null
+  owner_name: string | null
   groups: ContactGroup[]
   recent: ContactActivity[]
   files: ContactFile[]

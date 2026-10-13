@@ -52,6 +52,11 @@ export const ENTITIES = [
   // Màn Gửi tin (phase 9, phase 5 — 12/10/2026): mọi vai trò xem + hủy lệnh CỦA MÌNH (phạm vi dòng lọc ở máy chủ: quản trị
   // thấy hết); gửi lại nơi lỗi + Tắt / Bật bot chỉ quản trị.
   'send_command',
+  // Phase 10 (12/10/2026): Mẫu tin (mọi vai trò soạn; Quản trị + Quản lý duyệt = hành động `approve`), Số liệu (Quản trị + Quản lý
+  // xem), Danh mục NV / ĐL (Quản trị + Quản lý xem; ghi chỉ quản trị). Nhân viên không thấy Số liệu / Danh mục.
+  'reply_template',
+  'metric',
+  'catalog',
 ] as const
 
 export type PermissionEntity = (typeof ENTITIES)[number]

@@ -54,9 +54,11 @@ export function CrudDetailPage<T extends CrudRecord>({
 
   //  Route tĩnh (`/hr/leave-types/new`) không có tham số `:id`.
   const isCreate = !id
-  const canSave = can(config.entity, isCreate ? 'create' : 'write')
 
   const { data: item, isLoading, isError } = useCrudDetail<T>(config.apiPath, id)
+  //  Quyền theo VAI TRÒ rồi tới quyền theo DÒNG (`canEditRow`) — dòng không sửa được thì khóa ô + ẩn «Lưu».
+  const rowEditable = isCreate || !item || !config.canEditRow || config.canEditRow(item)
+  const canSave = can(config.entity, isCreate ? 'create' : 'write') && rowEditable
 
   //  Tín hiệu «trang đã cuộn» cho các dải ghim nằm SÂU bên trong (thanh công cụ
   //  của bảng trong tab — do `DataTable` vẽ, tầng này không với tới bằng prop).
@@ -237,7 +239,7 @@ export function CrudDetailPage<T extends CrudRecord>({
 
       {Boolean(item?.[idKey]) && item && (
         <div>
-          <AuditTimeline entity={config.entity} entityId={Number(item[idKey])} showMessage />
+          <AuditTimeline entity={config.auditEntity ?? config.entity} entityId={Number(item[idKey])} showMessage />
         </div>
       )}
     </div>
@@ -279,7 +281,7 @@ export function CrudDetailPage<T extends CrudRecord>({
 
         <div className="flex shrink-0 items-center gap-2">
           {item && config.detailActions?.(item)}
-          {!config.readOnlyDetail && (
+          {!config.readOnlyDetail && rowEditable && (
             <PermissionGate entity={config.entity} action={isCreate ? 'create' : 'write'}>
               <Button
                 type="submit"

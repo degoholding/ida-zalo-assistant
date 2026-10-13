@@ -39,6 +39,19 @@ export const appRoutes = {
     list: '/send-commands',
     detail: (id: number | string) => `/send-commands/${id}`,
   },
+  replyTemplates: {
+    list: '/reply-templates',
+    detail: (id: number | string) => `/reply-templates/${id}`,
+  },
+  metrics: { list: '/metrics' },
+  metricSources: {
+    list: '/metric-sources',
+    detail: (id: number | string) => `/metric-sources/${id}`,
+  },
+  catalog: {
+    list: '/catalog',
+    detail: (id: number | string) => `/catalog/${id}`,
+  },
   imports: { zaloWeb: '/imports/zalo-web' },
   companies: {
     list: '/companies',

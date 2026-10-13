@@ -30,7 +30,7 @@ vi.mock('@/core/authorization/use-permission', () => ({
 
 //  Dấu vết là màn con tự gọi API riêng — không phải thứ bài này chịu trách nhiệm.
 vi.mock('@/shared/audit', () => ({
-  AuditTimeline: () => <div>dấu vết</div>,
+  AuditTimeline: ({ entity }: { entity: string }) => <div title={`nhật ký ${entity}`}>dấu vết</div>,
 }))
 
 interface LeaveType extends CrudRecord {
@@ -231,5 +231,45 @@ describe('CrudDetailPage — read-only detail', () => {
   it('still shows the Save button when the flag is absent', async () => {
     build('/hr/leave-types/5')
     expect(await screen.findByRole('button', { name: 'Lưu' })).toBeInTheDocument()
+  })
+})
+
+/**
+ * Quyền sửa THEO DÒNG (`canEditRow`) — màn Mẫu tin: vai trò có `write` nhưng mẫu của người khác thì không sửa được (máy chủ trả 403).
+ * Trang phải khóa ô và ẩn «Lưu» thay vì để người dùng bấm rồi nhận lỗi.
+ */
+describe('CrudDetailPage — row-level edit (canEditRow)', () => {
+  const ROW_GUARD: CrudConfig<LeaveType> = { ...CONFIG, canEditRow: (row) => row.code !== 'annual' }
+
+  it('hides Save and locks the inputs when the row says it cannot be edited', async () => {
+    build('/hr/leave-types/5', ROW_GUARD)
+    await screen.findByRole('heading', { name: /Phép năm/ })
+    expect(screen.queryByRole('button', { name: 'Lưu' })).toBeNull()
+    expect(screen.queryByLabelText(/Tên loại nghỉ/)).toBeNull()
+  })
+
+  it('keeps Save when the row is editable', async () => {
+    apiGet.mockResolvedValue({ id: 6, code: 'sick', name: 'Nghỉ ốm' })
+    build('/hr/leave-types/6', ROW_GUARD)
+    expect(await screen.findByRole('button', { name: 'Lưu' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Tên loại nghỉ/)).toBeInTheDocument()
+  })
+
+  it('does not block the create page', async () => {
+    build('/hr/leave-types/new', { ...CONFIG, canEditRow: () => false })
+    expect(await screen.findByRole('button', { name: 'Tạo loại nghỉ' })).toBeInTheDocument()
+  })
+})
+
+/** «Lịch sử thao tác» tra theo `auditEntity` khi nhật ký máy chủ ghi tên khác khóa phân quyền (màn Nguồn số liệu). */
+describe('CrudDetailPage — audit entity', () => {
+  it('uses auditEntity for the history timeline, falling back to entity', async () => {
+    build('/hr/leave-types/5', { ...CONFIG, auditEntity: 'metric_source' })
+    expect(await screen.findByTitle('nhật ký metric_source')).toBeInTheDocument()
+  })
+
+  it('falls back to the permission entity when auditEntity is absent', async () => {
+    build('/hr/leave-types/5')
+    expect(await screen.findByTitle('nhật ký company')).toBeInTheDocument()
   })
 })

@@ -262,6 +262,21 @@ export interface CrudConfig<T> {
    * đường máy chủ không có. Bỏ trống = giữ nguyên hành vi cũ (có biểu mẫu + nút Lưu).
    */
   readOnlyDetail?: boolean
+  /**
+   * Quyền sửa THEO DÒNG: trả `false` thì trang chi tiết khóa mọi ô và ẩn nút «Lưu» dù vai trò có `write`.
+   *
+   * Sinh ra cho màn Mẫu tin (review phase 10, 12/10/2026): mọi vai trò có `reply_template.write` nhưng nhân viên chỉ sửa được mẫu CỦA
+   * MÌNH (máy chủ trả cờ `can_edit`) — không có cờ này thì mở mẫu người khác vẫn thấy «Lưu», bấm vào là 403. Bỏ trống = theo vai trò.
+   * Chỉ là hiển thị: máy chủ vẫn phải tự chặn.
+   */
+  canEditRow?: (row: T) => boolean
+  /**
+   * Tên thực thể ghi trong NHẬT KÝ (`audit_log.entity`) khi khác `entity` phân quyền — mục «Lịch sử thao tác» tra theo tên này.
+   *
+   * Sinh ra cho màn Nguồn số liệu: quyền gác bằng `metric` nhưng máy chủ ghi nhật ký `metric_source`; tra bằng `metric` thì lịch sử
+   * trống trơn. Bỏ trống = dùng `entity`.
+   */
+  auditEntity?: string
   /** Cảnh báo khi xóa bản ghi (vd 'Dữ liệu tồn kho liên quan có thể bị ảnh hưởng'). */
   deleteWarning?: string
   /** Tab mở rộng ở trang chi tiết (vd Lịch sử mua hàng, Đơn hàng về kho). */

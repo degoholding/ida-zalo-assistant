@@ -1,4 +1,4 @@
-import { Bot, Building2, Hash, MessageSquare, Users } from 'lucide-react'
+import { Bot, Building2, Hash, MapPin, MessageSquare, UserRound, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { FilterFieldDefinition } from '@/shared/conditional-filter'
@@ -16,7 +16,7 @@ import { Button } from '@/shared/ui/button'
 import { formatDateTime } from '@/shared/utils/format-date'
 import { ContactFilesTab, ContactGroupsTab, ContactRecentTab, ContactTurnsTab } from '../components/contact-detail-tabs'
 import { ContactTagsField } from '../components/contact-tags-field'
-import type { ContactDetail } from '../types/contact'
+import { CONTACT_CATALOG_KIND_OPTIONS, type ContactDetail } from '../types/contact'
 
 /**
  * Cột Danh bạ. `key` của cột sắp xếp được PHẢI trùng khóa `sorts` của `CONTACT_LIST_SPEC` ở máy chủ
@@ -77,6 +77,11 @@ export const CONTACT_COLUMNS: DataTableColumn<ContactDetail>[] = [
   },
   { key: 'group_count', header: 'Số nhóm', width: 100, align: 'center', sortable: true, sortDescFirst: true, cell: (contact) => contact.group_count },
   { key: 'note', header: 'Ghi chú', width: 220, cell: (contact) => contact.note || '—' },
+  { key: 'phone', header: 'SĐT', width: 130, defaultHidden: true, cell: (contact) => contact.phone || '—' },
+  // Khu vực / vùng / người phụ trách lấy từ Danh mục NV / ĐL (JOIN) — ẩn mặc định, bật ở nút chọn cột
+  { key: 'region', header: 'Khu vực', width: 140, sortable: true, defaultHidden: true, cell: (contact) => contact.region || '—' },
+  { key: 'sales_zone', header: 'Vùng sales', width: 160, sortable: true, defaultHidden: true, cell: (contact) => contact.sales_zone || '—' },
+  { key: 'owner_name', header: 'Người phụ trách', width: 160, sortable: true, defaultHidden: true, cell: (contact) => contact.owner_name || '—' },
   {
     key: 'first_seen_at',
     header: 'Thấy lần đầu',
@@ -104,6 +109,10 @@ const CONTACT_FILTER_FIELDS: FilterFieldDefinition[] = [
       (await lookupApi.contactTags()).filter((tag) => tag.toLowerCase().includes(search.toLowerCase())).map((tag) => ({ value: tag, label: tag })),
   },
   { name: 'note', label: 'Ghi chú', type: 'text' },
+  { name: 'phone', label: 'SĐT', type: 'text' },
+  { name: 'region', label: 'Khu vực (danh mục)', type: 'text' },
+  { name: 'sales_zone', label: 'Vùng sales (danh mục)', type: 'text' },
+  { name: 'catalog_kind', label: 'Loại danh mục', type: 'select', options: toFilterOptions(CONTACT_CATALOG_KIND_OPTIONS) },
   { name: 'dm_count', label: 'Số tin nhắn riêng', type: 'number' },
   { name: 'last_dm_at', label: 'Nhắn riêng gần nhất', type: 'date' },
   { name: 'first_seen_at', label: 'Thấy lần đầu', type: 'date' },
@@ -118,7 +127,7 @@ export const contactCrudConfig: CrudConfig<ContactDetail> = {
   emptyMessage: 'Chưa có ai — bot vào nhóm hoặc nhận tin riêng là Danh bạ tự có người.',
   storageKey: 'contacts.list',
   searchParam: 'q',
-  searchPlaceholder: 'Tìm tên, mã Zalo, ghi chú',
+  searchPlaceholder: 'Tìm tên, mã Zalo, SĐT, ghi chú',
   defaultSort: { by: 'last_dm_at', dir: 'desc' },
   quickFilters: [
     { key: 'kind', label: 'Loại', type: 'select', options: CONTACT_KIND_OPTIONS },
@@ -141,6 +150,7 @@ export const contactCrudConfig: CrudConfig<ContactDetail> = {
     },
     { name: 'role', label: 'Vai trò với bot', type: 'select', options: CONTACT_ROLE_OPTIONS, hint: 'Có vai trò thì bot trả lời khi người này nhắn riêng. Trong nhóm: nhân sự gọi được bot (cài đặt «Trong nhóm: nhân sự gọi được bot»), khách hàng thì không.' },
     { name: 'company_id', label: 'Công ty', type: 'select', source: { url: LOOKUP_URLS.companiesWithNone } },
+    { name: 'phone', label: 'SĐT', type: 'text', placeholder: '0912 345 678', hint: 'Số di động Việt Nam — để khớp với Danh mục NV / ĐL. Để trống nếu chưa biết.' },
     { name: 'tags', label: 'Thẻ', type: 'custom', render: (ctx) => <ContactTagsField control={ctx.control} name={ctx.name} disabled={ctx.disabled} /> },
     { name: 'note', label: 'Ghi chú', type: 'textarea', fullWidth: true, placeholder: 'Số điện thoại, nhu cầu, lưu ý khi chăm sóc…' },
   ],
@@ -151,6 +161,8 @@ export const contactCrudConfig: CrudConfig<ContactDetail> = {
     { icon: contact.is_bot ? Bot : Users, text: contact.is_bot ? 'Tài khoản bot' : getKindLabel(contact.kind), tone: 'ok' },
     ...(contact.role ? [{ icon: Bot, text: `Hỏi được bot · ${getRoleLabel(contact.role)}`, tone: 'ok' as const }] : []),
     ...(contact.company_name ? [{ icon: Building2, text: contact.company_name, tone: 'muted' as const }] : []),
+    ...(contact.catalog_code ? [{ icon: MapPin, text: `${contact.catalog_code} · ${[contact.region, contact.sales_zone].filter(Boolean).join(' · ')}`, tone: 'muted' as const }] : []),
+    ...(contact.owner_name ? [{ icon: UserRound, text: `Phụ trách: ${contact.owner_name}`, tone: 'muted' as const }] : []),
     { icon: MessageSquare, text: `${contact.message_total} tin · ${contact.dm_count} nhắn riêng`, tone: 'muted' },
   ],
   detailActions: (contact) =>

@@ -2,7 +2,7 @@
 export const SEND_COMMAND_SOURCE = { zalo: 1, web: 2 } as const
 
 /** Việc lệnh làm ở mỗi nơi nhận — khớp `SendActionKind` ở `src/constants.ts`. */
-export const SEND_ACTION_KIND = { message: 1, reminder: 2 } as const
+export const SEND_ACTION_KIND = { message: 1, reminder: 2, pin: 3 } as const
 
 /** Vòng đời một lệnh gửi — khớp `SendCommandStatus` ở `src/constants.ts`. */
 export const SEND_COMMAND_STATUS = { draft: 1, scheduled: 2, sending: 3, done: 4, cancelled: 5, expired: 6 } as const
@@ -16,6 +16,7 @@ export const SEND_TARGET_STATUS = { pending: 1, queued: 2, sent: 3, failed: 4, c
 export const SEND_ACTION_KIND_OPTIONS = [
   { value: SEND_ACTION_KIND.message, label: 'Gửi tin' },
   { value: SEND_ACTION_KIND.reminder, label: 'Nhắc hẹn' },
+  { value: SEND_ACTION_KIND.pin, label: 'Ghim' },
 ]
 
 /** Kiểu lặp của nhắc hẹn Zalo (mã của Zalo; khớp `REPEAT_LABEL` ở `src/assistant/group-action-tools.ts`). */

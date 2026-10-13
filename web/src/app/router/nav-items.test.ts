@@ -14,7 +14,11 @@ const ADMIN_ONLY: PermissionEntity[] = ['bot_account', 'setting', 'user', 'recip
 function buildPermissions(role: 'admin' | 'manager' | 'staff') {
   return Object.fromEntries(
     ENTITIES.map((entity) => {
-      if (role === 'admin') return [entity, { read: true, write: true, export: true, create: true }]
+      if (role === 'admin') return [entity, { read: true, write: true, export: true, create: true, approve: true }]
+      // Phase 10: mẫu tin mọi vai trò soạn, Quản lý duyệt; số liệu + danh mục chỉ Quản lý xem (nhân viên không)
+      if (entity === 'reply_template') return [entity, { read: true, write: true, export: false, create: true, approve: role === 'manager' }]
+      if (entity === 'metric') return [entity, { read: role === 'manager', write: false, export: role === 'manager', create: false, approve: false }]
+      if (entity === 'catalog') return [entity, { read: role === 'manager', write: false, export: false, create: false, approve: false }]
       if (ADMIN_ONLY.includes(entity)) return [entity, { read: false, write: false, export: false, create: false }]
       const canWrite = (role === 'manager' && ['conversation', 'contact', 'group', 'file', 'ticket', 'task'].includes(entity)) || entity === 'send_command'
       return [entity, { read: true, write: canWrite, export: role === 'manager', create: false }]
@@ -37,12 +41,21 @@ describe('sidebar gating by role', () => {
   it('hides every admin-only screen from a staff member', () => {
     // «Tìm tin» (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
     // «Bản tin» (phase 8) cũng đọc được — phạm vi DÒNG (không phải vai trò) lọc ở máy chủ
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Gửi tin', 'Công ty'])
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Gửi tin', 'Mẫu tin', 'Công ty'])
   })
 
-  it('gives a manager the same menu as staff — write rights do not unlock admin screens', () => {
+  it('gives a manager the staff menu plus Số liệu and Danh mục — write rights do not unlock admin screens', () => {
     //  Quản lý có quyền SỬA nhóm / Danh bạ; nếu một mục admin gác nhầm bằng `group.write` thì nó sẽ lộ ra ở đây.
-    expect(visibleLabels('manager')).toEqual(visibleLabels('staff'))
+    const staff = visibleLabels('staff')
+    const manager = visibleLabels('manager')
+    expect(manager).toEqual(NAV_ITEMS.map((item) => item.label).filter((label) => staff.includes(label) || ['Số liệu', 'Danh mục NV / ĐL'].includes(label)))
+    expect(manager).not.toContain('Nguồn số liệu')
+  })
+
+  it('shows Mẫu tin to staff but hides Số liệu, Danh mục and Nguồn số liệu from them', () => {
+    expect(visibleLabels('staff')).toContain('Mẫu tin')
+    expect(visibleLabels('staff')).not.toEqual(expect.arrayContaining(['Số liệu']))
+    expect(visibleLabels('admin')).toEqual(expect.arrayContaining(['Mẫu tin', 'Số liệu', 'Danh mục NV / ĐL', 'Nguồn số liệu']))
   })
 
   it('shows nothing before the permission map arrives', () => {

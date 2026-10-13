@@ -6,6 +6,9 @@ import { accountsModule } from '@/modules/accounts/routes'
 import { assistantChatModule } from '@/modules/assistant-chat/routes'
 import { briefsModule } from '@/modules/briefs/routes'
 import { sendCommandsModule } from '@/modules/send-commands/routes'
+import { catalogModule } from '@/modules/catalog/routes'
+import { metricsModule } from '@/modules/metrics/routes'
+import { replyTemplatesModule } from '@/modules/reply-templates/routes'
 import { companiesModule } from '@/modules/companies/routes'
 import { contactsModule } from '@/modules/contacts/routes'
 import { conversationsModule } from '@/modules/conversations/routes'
@@ -37,6 +40,9 @@ const MODULE_ROUTES = [
   tasksModule,
   briefsModule,
   sendCommandsModule,
+  replyTemplatesModule,
+  metricsModule,
+  catalogModule,
   importsModule,
   companiesModule,
   recipientsModule,

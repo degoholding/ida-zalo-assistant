@@ -19,6 +19,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 /** Thân trang chi tiết lệnh gửi (khe `renderExtra` của `CrudDetailPage`): thông tin, nội dung nguyên văn, tệp kèm, từng nơi nhận. */
 export function SendCommandBodyPanel({ command }: { command: SendCommandDetail }) {
   const isReminder = command.action_kind === SEND_ACTION_KIND.reminder
+  const isPin = command.action_kind === SEND_ACTION_KIND.pin
   return (
     <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -45,7 +46,7 @@ export function SendCommandBodyPanel({ command }: { command: SendCommandDetail }
                 <InfoRow label="Nhắc lúc">{formatDateTime(command.reminder_at) || '—'}</InfoRow>
                 <InfoRow label="Lặp">{getReminderRepeatLabel(command.reminder_repeat) || '—'}</InfoRow>
               </>
-            ) : (
+            ) : isPin ? null : (
               <InfoRow label="Hẹn gửi lúc">{formatDateTime(command.scheduled_at) || 'Gửi ngay'}</InfoRow>
             )}
             <InfoRow label="Báo kết quả">{formatDateTime(command.reported_at) || '—'}</InfoRow>
@@ -54,7 +55,7 @@ export function SendCommandBodyPanel({ command }: { command: SendCommandDetail }
       </div>
 
       <Card className="gap-3 p-4 sm:p-5">
-        <SectionHeading>{isReminder ? 'Nội dung nhắc' : 'Nội dung'}</SectionHeading>
+        <SectionHeading>{isReminder ? 'Nội dung nhắc' : isPin ? 'Nội dung ghim' : 'Nội dung'}</SectionHeading>
         {/* Giữ nguyên xuống dòng / khoảng cách như tin Zalo thật (whitespace-pre-wrap, không phải pre-line) */}
         <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{command.body || '—'}</p>
         {command.files.length > 0 && (

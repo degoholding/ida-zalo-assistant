@@ -118,7 +118,7 @@ export const sendCommandCrudConfig: CrudConfig<SendCommandDetail> = {
     { icon: UserRound, text: command.requester_name || 'Không rõ người ra lệnh', tone: 'muted' },
     command.action_kind === SEND_ACTION_KIND.reminder
       ? { icon: Calendar, text: `Nhắc lúc ${formatDateTime(command.reminder_at) || '—'}`, tone: 'muted' }
-      : { icon: Calendar, text: formatDateTime(command.scheduled_at) || 'Gửi ngay', tone: 'muted' },
+      : { icon: Calendar, text: formatDateTime(command.scheduled_at) || (command.action_kind === SEND_ACTION_KIND.pin ? 'Ghim ngay' : 'Gửi ngay'), tone: 'muted' },
   ],
   detailActions: (command) => <SendCommandActionButtons command={command} />,
   renderExtra: (command) => <SendCommandBodyPanel command={command} />,

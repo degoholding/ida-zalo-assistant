@@ -27,7 +27,7 @@ describe('sendCommandCrudConfig — contract with the server list spec', () => {
     const source = sendCommandCrudConfig.quickFilters?.find((quick) => quick.key === 'source')
     expect(source?.options?.map((option) => String(option.value))).toEqual(['1', '2'])
     const kind = sendCommandCrudConfig.quickFilters?.find((quick) => quick.key === 'action_kind')
-    expect(kind?.options?.map((option) => String(option.value))).toEqual(['1', '2'])
+    expect(kind?.options?.map((option) => String(option.value))).toEqual(['1', '2', '3'])
   })
 
   it('searches with the q param and sorts newest first by default', () => {

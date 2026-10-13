@@ -86,6 +86,17 @@ export const queryKeys = {
     askers: () => ['assistant-chat', 'askers'] as const,
     messages: (contactId: number) => ['assistant-chat', 'messages', contactId] as const,
   },
+  replyTemplates: {
+    all: ['reply-templates'] as const,
+  },
+  metrics: {
+    all: ['metrics'] as const,
+    /** Tổng hợp số liệu theo bộ lọc (ngày / nhân viên / khu vực). Nguồn số liệu đi qua khóa của khung CRUD. */
+    summary: (params: Record<string, unknown>) => ['metrics', 'summary', params] as const,
+  },
+  catalog: {
+    all: ['catalog'] as const,
+  },
   lookups: {
     all: ['lookups'] as const,
     companies: (withNone: boolean) => ['lookups', 'companies', withNone] as const,
