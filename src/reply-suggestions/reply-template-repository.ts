@@ -52,9 +52,11 @@ export async function insertTemplate(
 export async function updateTemplate(
   db: Db, tenantId: number, id: number, input: ReplyTemplateInput, expected: ReplyTemplateStatus, next: ReplyTemplateStatus,
 ): Promise<number> {
+  // Giữ «Đã duyệt» (người duyệt tự sửa) thì không xóa dấu vết duyệt; ngược lại về chờ duyệt: xóa kết quả duyệt cũ
+  const keepApproval = expected === ReplyTemplateStatus.Approved && next === ReplyTemplateStatus.Approved;
   const [result] = await db.query<ResultSetHeader>(
-    `UPDATE reply_template SET name = ?, situation = ?, keywords = ?, body = ?, tone = ?, status = ?, review_note = '',
-       reviewer_user_id = NULL, reviewer_name = '', reviewed_at = NULL, submitted_at = NOW(3)
+    `UPDATE reply_template SET name = ?, situation = ?, keywords = ?, body = ?, tone = ?, status = ?
+       ${keepApproval ? "" : ", review_note = '', reviewer_user_id = NULL, reviewer_name = '', reviewed_at = NULL, submitted_at = NOW(3)"}
      WHERE tenant_id = ? AND id = ? AND status = ?`,
     [input.name, input.situation, input.keywords.join(", "), input.body, input.tone, next, tenantId, id, expected]);
   return result.affectedRows;

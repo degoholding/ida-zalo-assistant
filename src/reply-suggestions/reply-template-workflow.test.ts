@@ -16,8 +16,9 @@ test("sửa: nhân viên không phải người soạn bị chặn", () => {
   assert.equal(!result.ok && result.code, "forbidden");
 });
 
-test("sửa mẫu Đã duyệt → về Chờ duyệt (bot ngừng dùng)", () => {
-  assert.deepEqual(decide({ action: "edit", canApprove: true, status: S.Approved }), { ok: true, next: S.PendingReview });
+test("sửa mẫu Đã duyệt: người duyệt giữ Đã duyệt, người soạn thường → về Chờ duyệt (bot ngừng dùng)", () => {
+  assert.deepEqual(decide({ action: "edit", canApprove: true, status: S.Approved }), { ok: true, next: S.Approved });
+  assert.deepEqual(decide({ action: "edit", isAuthor: true, status: S.Approved }), { ok: true, next: S.PendingReview });
 });
 
 test("sửa mẫu Ngừng dùng → vào lại Chờ duyệt", () => {

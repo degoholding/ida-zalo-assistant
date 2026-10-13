@@ -6,7 +6,7 @@ import { findTemplate, insertTemplate, setTemplateStatus, updateTemplate } from 
 import type { ReplyTemplate, ReplyTemplateInput } from "./reply-suggestion-types.js";
 
 // Luồng soạn → duyệt mẫu tin (phase 10 — N2, chốt 12/10/2026). Người soạn = tài khoản web; sửa mẫu ở BẤT KỲ trạng thái nào đều
-// đưa về «Chờ duyệt»; chỉ người có quyền `approve` (Quản trị + Quản lý) duyệt / trả lại / ngừng dùng, kể cả mẫu mình soạn.
+// đưa về «Chờ duyệt» (trừ người có quyền duyệt sửa mẫu đã duyệt: giữ «Đã duyệt»); chỉ người có quyền `approve` (Quản trị + Quản lý) duyệt / trả lại / ngừng dùng, kể cả mẫu mình soạn.
 // Quyền kiểm Ở ĐÂY (không chỉ ở API) để mọi đường vào đều qua một luật. Lỗi ném `ReplyTemplateError` — API phase 7 đổi sang mã HTTP.
 
 export type TemplateErrorCode = "validation" | "forbidden" | "not_found" | "conflict";
@@ -41,6 +41,8 @@ export function decideTemplateTransition(request: TransitionRequest): Transition
   switch (action) {
     case "edit":
       if (!isAuthor && !canApprove) return deny("forbidden", "Chỉ người soạn hoặc người duyệt mới sửa được mẫu này.");
+      // Người có quyền duyệt sửa mẫu ĐÃ DUYỆT thì giữ «Đã duyệt» (chốt 13/10/2026: duyệt xong bấm Lưu không quay về chờ duyệt)
+      if (canApprove && status === ReplyTemplateStatus.Approved) return { ok: true, next: ReplyTemplateStatus.Approved };
       return { ok: true, next: ReplyTemplateStatus.PendingReview };
     case "submit":
       if (!isAuthor && !canApprove) return deny("forbidden", "Chỉ người soạn hoặc người duyệt mới gửi duyệt được mẫu này.");
@@ -137,7 +139,7 @@ export async function editTemplate(db: Db, principal: Principal, id: number, raw
   const wasApproved = template.status === ReplyTemplateStatus.Approved;
   await recordAudit(db, {
     entity: "reply_template", entityId: id, action: "update", changedFields: changed,
-    message: wasApproved ? "Sửa mẫu đã duyệt — về Chờ duyệt, bot tạm ngừng dùng cho tới khi duyệt lại" : "Sửa mẫu, chờ duyệt",
+    message: next === ReplyTemplateStatus.Approved ? "Sửa mẫu đã duyệt (người duyệt sửa — giữ Đã duyệt)" : wasApproved ? "Sửa mẫu đã duyệt — về Chờ duyệt, bot tạm ngừng dùng cho tới khi duyệt lại" : "Sửa mẫu, chờ duyệt",
   });
 }
 
