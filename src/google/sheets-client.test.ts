@@ -144,3 +144,33 @@ test("a corrupted private key is reported without calling Google", async () => {
   await assert.rejects(client.getAccessToken(), (error) => error instanceof GoogleSheetsError && /private_key/.test(error.message));
   assert.equal(calls.length, 0);
 });
+
+test("getValues asks for unformatted values and serial dates, returns rows", async () => {
+  const { fetcher, calls } = fakeFetch((url) => {
+    if (url.startsWith(ACCOUNT.token_uri)) return tokenOk;
+    return { status: 200, body: { values: [["Ngày", "Doanh số"], [46307, 1234567]] } };
+  });
+  const client = new GoogleSheetsClient(ACCOUNT, { fetcher });
+  const rows = await client.getValues(SHEET_ID, sheetRange("NKCV", "A1:ZZ100"));
+  assert.deepEqual(rows, [["Ngày", "Doanh số"], [46307, 1234567]]);
+  const url = calls[1].url;
+  assert.ok(url.includes(encodeURIComponent("'NKCV'!A1:ZZ100")));
+  assert.ok(url.includes("valueRenderOption=UNFORMATTED_VALUE"));
+  assert.ok(url.includes("dateTimeRenderOption=SERIAL_NUMBER"));
+  assert.equal(calls[1].init.method, "GET");
+});
+
+test("getValues returns [] for an empty range", async () => {
+  const { fetcher } = fakeFetch((url) => (url.startsWith(ACCOUNT.token_uri) ? tokenOk : { status: 200, body: { range: "x" } }));
+  assert.deepEqual(await new GoogleSheetsClient(ACCOUNT, { fetcher }).getValues(SHEET_ID, "A1:B2"), []);
+});
+
+test("getValues translates 403 / 404 / 429 into Vietnamese messages", async () => {
+  for (const [status, expected] of [[403, permissionDeniedText(ACCOUNT.client_email)], [404, NOT_FOUND_TEXT], [429, RATE_LIMIT_TEXT]] as const) {
+    const { fetcher } = fakeFetch((url) => (url.startsWith(ACCOUNT.token_uri) ? tokenOk : { status, body: { error: { message: "x" } } }));
+    await assert.rejects(
+      new GoogleSheetsClient(ACCOUNT, { fetcher }).getValues(SHEET_ID, "A1:B2"),
+      (error: unknown) => error instanceof GoogleSheetsError && error.message === expected,
+    );
+  }
+});

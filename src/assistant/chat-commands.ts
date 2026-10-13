@@ -14,6 +14,7 @@ import { runTaskCommand, type TaskCommandContext } from "../tasks/task-commands.
 import { cancelLatestDraft, confirmDraft } from "../send-commands/send-command-actions.js";
 import { GROUP_NOT_ALLOWED_REPLY, NOT_ALLOWED_REPLY, runSendChatCommand, type SendChatContext } from "../send-commands/send-command-chat.js";
 import { SEND_HELP } from "../send-commands/send-command-help.js";
+import { REPLY_METRIC_HELP } from "./reply-metric-help.js";
 import { findLatestLiveDraft } from "../send-commands/send-command-lifecycle-queries.js";
 import { CONFIRM_TTL_MS } from "../send-commands/send-command-limits.js";
 import type { SendCommandRow } from "../send-commands/send-command-types.js";
@@ -227,6 +228,7 @@ export function buildHelpText(asker: AlertAsker | null, inGroup: boolean, option
     }
     lines.push("", "Lệnh đổi cấu hình: em đọc lại thay đổi, anh/chị nhắn «đồng ý» mới lưu, «hủy» để bỏ.");
   }
+  if (asker) lines.push("", ...REPLY_METRIC_HELP);
   if (options.canSend) lines.push("", ...SEND_HELP);
   lines.push(...ticketLines);
   return lines.join("\n");

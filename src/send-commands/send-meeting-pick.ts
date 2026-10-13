@@ -68,6 +68,12 @@ export function buildAnnouncementBody(meeting: BotMeeting): string {
   return [`Mời họp: ${title}`, `Lúc: ${formatSendTime(new Date(meeting.startTime))}`, `Link Google Meet: ${meeting.meetLink}`].join("\n");
 }
 
+/** Nội dung ghi chú GHIM cuộc họp lên nhóm — máy chủ dựng từ Calendar (cùng hình lời mời họp, tiêu đề «Cuộc họp:»). */
+export function buildPinMeetingBody(meeting: BotMeeting): string {
+  const title = meeting.title.replace(/\s+/g, " ").trim().slice(0, MAX_TITLE_CHARS) || "Cuộc họp";
+  return [`Cuộc họp: ${title}`, `Lúc: ${formatSendTime(new Date(meeting.startTime))}`, `Link Google Meet: ${meeting.meetLink}`].join("\n");
+}
+
 /** Danh sách cuộc họp để hỏi lại khi nhiều cuộc cùng khớp. */
 export function formatMeetingChoices(meetings: BotMeeting[]): string {
   return meetings.slice(0, 5).map((item, index) => `${index + 1}. ${item.title || "Cuộc họp"} — ${formatSendTime(new Date(item.startTime))}`).join("\n");

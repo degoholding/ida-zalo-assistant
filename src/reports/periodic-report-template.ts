@@ -5,6 +5,7 @@ import { COLOR, LOGO, MAIN_FONT, getEngine } from "./pdf-engine.js";
 import type { GlyphCoverage } from "./pdf-text-runs.js";
 import { toTextRuns } from "./pdf-text-runs.js";
 import { detectAnomalies } from "./periodic-report-anomalies.js";
+import { metricPdfLines } from "./periodic-report-metric-format.js";
 import type { MetricPair, PeriodicReportData, ReportMeta } from "./periodic-report-types.js";
 
 // KHUÔN TẠM báo cáo tuần / tháng (phase 3, chốt 09/10/2026) — A4 dọc, ĐÚNG 1 TRANG: logo + tiêu đề + kỳ/người nhận/
@@ -93,6 +94,8 @@ export function buildPeriodicReportDocument(
     groupsTable,
     sectionHeading("Bất thường"),
     anomalies.length ? bulletList(anomalies) : { text: "Không có bất thường đáng chú ý", fontSize: 8, color: COLOR.muted, margin: [0, 0, 0, 8] },
+    // Khối «Số liệu» ≤ 5 dòng ngắn, chỉ khi có dữ liệu — chi tiết để sheet Excel «Số liệu»
+    ...(data.metrics ? [sectionHeading("Số liệu"), bulletList(metricPdfLines(data.metrics))] : []),
     sectionHeading("Điểm nổi bật (AI)"),
     highlightLines.length ? bulletList(highlightLines) : { text: "Không có điểm tin AI kỳ này", fontSize: 8, color: COLOR.muted, margin: [0, 0, 0, 8] },
   ];

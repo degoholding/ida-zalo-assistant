@@ -1,4 +1,5 @@
 import { briefLine, clock, dayLabel, overdueDays, section, taskLine, ticketLine } from "./brief-format.js";
+import { formatMetricSection, metricDayLabel, type BriefMetricDigest } from "./brief-metric-section.js";
 import type { TaskBuckets, TicketBuckets } from "./brief-work-collectors.js";
 import type { Bucket, BriefHighlight, BriefLine } from "./brief-types.js";
 
@@ -20,6 +21,8 @@ export interface BriefComposeData {
   highlights: BriefHighlight[];
   /** Vì sao không có điểm tin AI (tắt cài đặt / chưa khóa / chạm trần / lỗi / không có tin) — rỗng = có điểm tin. */
   aiNote: string;
+  /** Mục 6 «Số liệu» (phase 5 của Phase 10) — null / vắng = ẩn hẳn, chữ bản tin y hệt trước. */
+  metrics?: BriefMetricDigest | null;
 }
 
 export interface BriefComposeContext {
@@ -40,6 +43,14 @@ function highlightLines(data: BriefComposeData, title: string): string[] {
   return data.aiNote || !data.highlights.length ? [] : highlightSection(data.highlights, title);
 }
 
+const MAX_BRIEF_CHARS = 1500;
+
+/** Ghép bài; nếu thêm mục 6 làm vượt trần ký tự thì bỏ mục 6 trước (các mục 1–5 là việc gấp hơn). */
+function joinWithMetrics(head: string[], metricLines: string[]): string {
+  const withMetrics = [...head, ...metricLines, FOOTER].join("\n");
+  return metricLines.length && withMetrics.length > MAX_BRIEF_CHARS ? [...head, FOOTER].join("\n") : withMetrics;
+}
+
 /** «BẢN TIN SÁNG T6 09/10 — anh Duoc» (1) KHẨN/quan trọng CHƯA xử lý — carry-over tối đa 7 ngày, không chỉ từ chiều qua,
  * xem `urgentOpen` (brief-message-collectors.ts, review phase 8 H2) (2) chờ quá giờ (3) việc (4) ticket (5) điểm tin hôm qua. */
 export function composeMorningBrief(data: BriefComposeData, ctx: BriefComposeContext): string {
@@ -56,9 +67,10 @@ export function composeMorningBrief(data: BriefComposeData, ctx: BriefComposeCon
     ...section(`4. Ticket mở: ${data.tickets.open.total} (${data.tickets.newInPeriod.total} mới)`,
       data.tickets.open.items.map(ticketLine), data.tickets.open.total),
     ...highlightLines(data, "5. Điểm tin hôm qua"),
-    FOOTER,
   ];
-  return lines.join("\n");
+  // Số của ngày LÀM VIỆC trước — sáng T2 là số T7 (hoặc T6), ghi đúng ngày thay vì «hôm qua»
+  const metricLines = data.metrics ? formatMetricSection(data.metrics, { title: `6. Số liệu ${metricDayLabel(data.metrics.date)}`, untilOnly: false }) : [];
+  return joinWithMetrics(lines, metricLines);
 }
 
 /** Cuối ngày: cùng khung cho HÔM NAY — khẩn đã/chưa xử lý, tin còn chờ (quá giờ lên trước), việc xong/quá hạn/hạn mai, ticket. */
@@ -79,7 +91,7 @@ export function composeEveningBrief(data: BriefComposeData, ctx: BriefComposeCon
     ...section(`4. Ticket: ${data.tickets.newInPeriod.total} mới · ${data.tickets.closedInPeriod.total} đóng · ${data.tickets.open.total} còn mở`,
       data.tickets.newInPeriod.items.map(ticketLine), data.tickets.newInPeriod.total),
     ...highlightLines(data, "5. Điểm tin hôm nay"),
-    FOOTER,
   ];
-  return lines.join("\n");
+  const metricLines = data.metrics ? formatMetricSection(data.metrics, { title: "6. Số liệu hôm nay", untilOnly: true }) : [];
+  return joinWithMetrics(lines, metricLines);
 }

@@ -1,4 +1,5 @@
-import { SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
+import { can, SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
+import { toLocalPhone } from "../../catalog/catalog-text.js";
 import { assertContactVisible, contactScopeSql } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
 import { ContactKind, ContactKindSource, ContactRole, ConversationType } from "../../constants.js";
@@ -27,6 +28,11 @@ export const CONTACT_LIST_SPEC: ListSpec = {
     display_name: { sql: "c.display_name", type: "text" },
     zalo_uid: { sql: "c.zalo_uid", type: "text" },
     note: { sql: "c.note", type: "text" },
+    phone: { sql: "c.phone", type: "text" },
+    // Khu vực / vùng / loại danh mục lấy qua JOIN catalog_entry (nguồn duy nhất — không chép sang contact)
+    region: { sql: "ce.region", type: "text" },
+    sales_zone: { sql: "ce.sales_zone", type: "text" },
+    catalog_kind: { sql: "ce.kind", type: "number" },
     dm_count: { sql: "c.dm_count", type: "number" },
     last_dm_at: { sql: "c.last_dm_at", type: "date" },
     first_seen_at: { sql: "c.first_seen_at", type: "date" },
@@ -62,21 +68,26 @@ export const CONTACT_LIST_SPEC: ListSpec = {
     dm_count: "c.dm_count",
     group_count: "group_count",
     first_seen_at: "c.first_seen_at",
+    region: "ce.region",
+    sales_zone: "ce.sales_zone",
+    owner_name: "ow.name",
   },
   defaultSort: { by: "last_dm_at", dir: "desc" },
   tieBreaker: "c.id",
-  search: { param: "q", columns: ["c.display_name", "c.zalo_name", "c.zalo_uid", "c.note"] },
+  search: { param: "q", columns: ["c.display_name", "c.zalo_name", "c.zalo_uid", "c.note", "c.phone"] },
 };
 
-const CONTACT_FROM = "FROM contact c LEFT JOIN company co ON co.id = c.company_id";
+const CONTACT_FROM = `FROM contact c LEFT JOIN company co ON co.id = c.company_id
+  LEFT JOIN catalog_entry ce ON ce.contact_id = c.id LEFT JOIN catalog_entry ow ON ow.id = ce.owner_entry_id`;
 const CONTACT_COLUMNS = `
   c.id, c.zalo_uid, c.global_id, c.display_name, c.zalo_name, c.avatar_key, c.kind, c.kind_source, c.role,
-  c.company_id, co.name AS company_name, c.note, c.first_seen_at, c.last_dm_at, c.dm_count,
+  c.company_id, co.name AS company_name, c.note, c.phone, ce.id AS catalog_entry_id, ce.code AS catalog_code, ce.kind AS catalog_kind,
+  ce.region, ce.sales_zone, ow.name AS owner_name, c.first_seen_at, c.last_dm_at, c.dm_count,
   (SELECT COUNT(*) FROM group_member gm WHERE gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL) AS group_count,
   (SELECT g.id FROM zalo_group g WHERE g.thread_type = ${DIRECT} AND g.zalo_group_id = c.zalo_uid ORDER BY g.id LIMIT 1) AS direct_thread_id`;
 
 /** Nhãn ô cho nhật ký thay đổi. */
-const FIELD_LABELS = { kind_mode: "Loại", role: "Vai trò với bot", company_id: "Công ty", note: "Ghi chú", tags: "Thẻ" };
+const FIELD_LABELS = { kind_mode: "Loại", role: "Vai trò với bot", company_id: "Công ty", note: "Ghi chú", phone: "SĐT", tags: "Thẻ" };
 
 export function contactAvatarUrl(uid: unknown, key: unknown): string | null {
   return key ? `/avatars/c/${encodeURIComponent(String(uid))}` : null;
@@ -88,13 +99,15 @@ export async function loadBotUids(db: Db): Promise<Set<string>> {
 }
 
 /** Gắn thẻ, ảnh, cờ bot, `kind_mode` cho các dòng — một truy vấn cho cả trang, không N+1. */
-async function decorate(db: Db, rows: RowDataPacket[]): Promise<Record<string, unknown>[]> {
+async function decorate(db: Db, rows: RowDataPacket[], includePhone: boolean): Promise<Record<string, unknown>[]> {
   const tags = await getContactTags(db, rows.map((row) => row.id as number));
   const bots = await loadBotUids(db);
   return rows.map((row) => {
-    const { avatar_key: avatarKey, ...rest } = row;
+    const { avatar_key: avatarKey, phone, ...rest } = row;
     return {
       ...rest,
+      // SĐT chỉ cho người đọc được danh mục (Quản trị, Quản lý) — Nhân viên web không thấy
+      ...(includePhone ? { phone: phone ?? "" } : {}),
       avatar_url: contactAvatarUrl(row.zalo_uid, avatarKey),
       tags: tags.get(row.id as number) ?? [],
       is_bot: bots.has(String(row.zalo_uid)),
@@ -106,21 +119,29 @@ async function decorate(db: Db, rows: RowDataPacket[]): Promise<Record<string, u
   });
 }
 
+/** Bản ListSpec cho người KHÔNG xem được SĐT: bỏ lọc / tìm theo SĐT — không thì dò «phone=09…» là biết SĐT dù cột bị ẩn. */
+const { phone: _phoneFilter, ...FIELDS_WITHOUT_PHONE } = CONTACT_LIST_SPEC.fields;
+const CONTACT_LIST_SPEC_NO_PHONE: ListSpec = {
+  ...CONTACT_LIST_SPEC, fields: FIELDS_WITHOUT_PHONE,
+  search: { param: "q", columns: CONTACT_LIST_SPEC.search!.columns.filter((column) => column !== "c.phone") },
+};
+
 export function listContacts(db: Db, params: URLSearchParams, principal: Principal = SYSTEM_PRINCIPAL) {
-  return runList(db, params, CONTACT_LIST_SPEC, {
-    select: CONTACT_COLUMNS, from: CONTACT_FROM, baseWhere: contactScopeSql(principal) ?? undefined, decorate: (rows) => decorate(db, rows),
+  const includePhone = can(principal, "catalog", "read");
+  return runList(db, params, includePhone ? CONTACT_LIST_SPEC : CONTACT_LIST_SPEC_NO_PHONE, {
+    select: CONTACT_COLUMNS, from: CONTACT_FROM, baseWhere: contactScopeSql(principal) ?? undefined, decorate: (rows) => decorate(db, rows, includePhone),
   });
 }
 
-async function loadContact(db: Db, whereSql: string, value: unknown): Promise<Record<string, unknown>> {
+async function loadContact(db: Db, whereSql: string, value: unknown, includePhone = true): Promise<Record<string, unknown>> {
   const [rows] = await db.query<RowDataPacket[]>(`SELECT ${CONTACT_COLUMNS} ${CONTACT_FROM} WHERE ${whereSql}`, [value]);
   if (!rows[0]) throw new ApiError(404, "not_found", "Không có người này trong Danh bạ");
-  const [contact] = await decorate(db, rows);
+  const [contact] = await decorate(db, rows, includePhone);
   return contact;
 }
 
-export async function getContactDetail(db: Db, id: number): Promise<Record<string, unknown>> {
-  const contact = await loadContact(db, "c.id = ?", id);
+export async function getContactDetail(db: Db, id: number, includePhone = true): Promise<Record<string, unknown>> {
+  const contact = await loadContact(db, "c.id = ?", id, includePhone);
   const uid = String(contact.zalo_uid);
   const [groups] = await db.query<RowDataPacket[]>(
     `SELECT g.id, COALESCE(NULLIF(g.label, ''), g.name) AS name, g.group_kind, gm.is_admin, g.member_count, gm.left_at,
@@ -147,7 +168,7 @@ export async function getContactDetail(db: Db, id: number): Promise<Record<strin
 /** Thẻ hồ sơ nổi (bấm ảnh) — tra theo mã Zalo vì bong bóng chat chỉ biết mã người gửi. */
 export async function getContactCardByUid(db: Db, uid: string): Promise<Record<string, unknown>> {
   if (!/^[A-Za-z0-9_-]{1,40}$/.test(uid)) throw new ApiError(404, "not_found", "Không có người này trong Danh bạ");
-  return loadContact(db, "c.zalo_uid = ?", uid);
+  return loadContact(db, "c.zalo_uid = ?", uid, false);
 }
 
 /** `company_id`: 0 / "" / null đều là «chưa gán»; số khác phải là công ty có thật. */
@@ -185,13 +206,19 @@ export async function patchContact(db: Db, id: number, body: Record<string, unkn
     if (body.note.length > 5000) throw new ApiError(422, "validation_error", "Ghi chú tối đa 5000 ký tự");
     note = body.note;
   }
-  await updateContact(db, id, { kind, role, companyId, note });
+  let phone = String(before.phone ?? "");
+  if (body.phone !== undefined) {
+    const normalized = typeof body.phone === "string" || typeof body.phone === "number" ? toLocalPhone(body.phone) : null;
+    if (normalized === null) throw new ApiError(422, "validation_error", "SĐT phải là số di động Việt Nam, vd 0912 345 678");
+    phone = normalized;
+  }
+  await updateContact(db, id, { kind, role, companyId, note, phone: body.phone === undefined ? undefined : phone || null });
   let tags = before.tags as string[];
   if (body.tags !== undefined) {
     tags = parseTags(Array.isArray(body.tags) ? body.tags.map(String).join(",") : String(body.tags));
     await setContactTags(db, id, tags);
   }
-  const after = { kind_mode: kind === "auto" ? KIND_MODE_AUTO : String(kind), role, company_id: companyId ?? 0, note, tags };
+  const after = { kind_mode: kind === "auto" ? KIND_MODE_AUTO : String(kind), role, company_id: companyId ?? 0, note, phone, tags };
   await recordAudit(db, { entity: "contact", entityId: id, action: "update", changedFields: diffFields(before, after, FIELD_LABELS) });
 }
 
@@ -200,13 +227,13 @@ export const contactRoutes: ApiRoute[] = [
   ["GET", /^\/api\/contacts\/(\d+)$/, async ({ response, match, service, principal }) => {
     const id = parseId(match[1]);
     await assertContactVisible(service.db, principal, { id });
-    sendOk(response, await getContactDetail(service.db, id));
+    sendOk(response, await getContactDetail(service.db, id, can(principal, "catalog", "read")));
   }],
   ["PATCH", /^\/api\/contacts\/(\d+)$/, async ({ request, response, match, service, principal }) => {
     const id = parseId(match[1]);
     await assertContactVisible(service.db, principal, { id });
     await patchContact(service.db, id, await readJson(request));
-    sendOk(response, await getContactDetail(service.db, id), "Đã lưu hồ sơ");
+    sendOk(response, await getContactDetail(service.db, id, can(principal, "catalog", "read")), "Đã lưu hồ sơ");
   }],
   ["GET", /^\/api\/contact-cards\/([A-Za-z0-9_-]{1,40})$/, async ({ response, match, service, principal }) => {
     await assertContactVisible(service.db, principal, { uid: match[1] });

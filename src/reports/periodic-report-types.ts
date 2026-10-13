@@ -57,6 +57,32 @@ export interface WorkReportRow {
   at: Date;
 }
 
+/** Một chỉ tiêu số liệu (phase 5 của Phase 10): tổng kỳ này + kỳ trước. `previous` / `changePct` null = kỳ trước không có số. */
+export interface MetricFigure {
+  code: string;
+  label: string;
+  unit: string;
+  current: number;
+  previous: number | null;
+  changePct: number | null;
+}
+
+/** Một dòng bảng NV (hoặc khu vực) × chỉ tiêu — `figures` theo `code`, thiếu = không có số. */
+export interface MetricBreakdownRow {
+  name: string;
+  flagged: boolean;
+  figures: Record<string, { current: number; previous: number | null; changePct: number | null }>;
+}
+
+/** Số liệu từ bảng Drive trong kỳ báo cáo — vắng (`undefined`) khi chưa có nguồn / kỳ không có số → ẩn hẳn khỏi tóm tắt, PDF, Excel. */
+export interface PeriodicMetricSummary {
+  metrics: MetricFigure[];
+  staff: MetricBreakdownRow[];
+  areas: MetricBreakdownRow[];
+  /** Số NV có dòng bị gắn cờ */
+  flaggedCount: number;
+}
+
 export interface PeriodicReportData {
   kind: BriefKind.Weekly | BriefKind.Monthly;
   period: BriefPeriod;
@@ -65,6 +91,7 @@ export interface PeriodicReportData {
   staff: StaffReportRow[];
   tasks: WorkReportRow[];
   tickets: WorkReportRow[];
+  metrics?: PeriodicMetricSummary;
 }
 
 /** Thông tin ngoài số liệu — người nhận, phạm vi, giờ lập — để khuôn PDF / Excel ghi đầu trang. */

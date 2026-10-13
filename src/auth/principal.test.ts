@@ -49,3 +49,39 @@ test("scope SQL: everything for admins, nothing for an empty scope, an IN list o
   assert.deepEqual(groupScopeSql(user(UserRole.Staff, []), "g.id"), { sql: "1 = 0", params: [] });
   assert.deepEqual(groupScopeSql(user(UserRole.Staff, [3, 4]), "g.id"), { sql: "g.id IN (?)", params: [[3, 4]] });
 });
+
+test("phase 10 matrix: reply templates for everyone (managers approve), metrics and catalog for managers only", () => {
+  const staff = user(UserRole.Staff);
+  const manager = user(UserRole.Manager);
+  for (const actor of [staff, manager, SYSTEM_PRINCIPAL]) {
+    for (const action of ["read", "write", "create"] as const) assert.equal(can(actor, "reply_template", action), true, `${actor.role}.${action}`);
+  }
+  assert.equal(can(staff, "reply_template", "approve"), false);
+  assert.equal(can(manager, "reply_template", "approve"), true);
+  assert.equal(can(SYSTEM_PRINCIPAL, "catalog", "approve"), true);
+  for (const entity of ["metric", "catalog"] as const) {
+    assert.equal(can(staff, entity, "read"), false, `staff ${entity}`);
+    assert.equal(can(manager, entity, "read"), true, `manager ${entity}`);
+    assert.equal(can(manager, entity, "write"), false, `manager write ${entity}`);
+    assert.equal(can(manager, entity, "approve"), false, `manager approve ${entity}`);
+  }
+  assert.equal(can(manager, "metric", "export"), true);
+  assert.equal(can(manager, "catalog", "export"), false);
+  // Nút «Thêm nguồn số liệu» (khung CRUD gác bằng create): chỉ quản trị; Quản lý / Nhân viên không
+  assert.equal(can(SYSTEM_PRINCIPAL, "metric", "create"), true);
+  assert.equal(can(manager, "metric", "create"), false);
+  assert.equal(can(staff, "metric", "create"), false);
+  assert.equal(can(SYSTEM_PRINCIPAL, "catalog", "create"), false);
+});
+
+test("phase 10 routes: reply templates by write, metrics / catalog reads by read, sources and catalog writes admin-only", () => {
+  assert.deepEqual(requiredPermission("GET", "/api/reply-templates"), { entity: "reply_template", action: "read" });
+  assert.deepEqual(requiredPermission("POST", "/api/reply-templates"), { entity: "reply_template", action: "write" });
+  assert.deepEqual(requiredPermission("PATCH", "/api/reply-templates/4"), { entity: "reply_template", action: "write" });
+  assert.deepEqual(requiredPermission("POST", "/api/reply-templates/4/actions"), { entity: "reply_template", action: "write" });
+  assert.deepEqual(requiredPermission("GET", "/api/metrics/summary"), { entity: "metric", action: "read" });
+  assert.deepEqual(requiredPermission("GET", "/api/catalog"), { entity: "catalog", action: "read" });
+  assert.deepEqual(requiredPermission("POST", "/api/catalog/import"), { entity: "setting", action: "write" });
+  assert.deepEqual(requiredPermission("GET", "/api/metric-sources"), { entity: "setting", action: "write" });
+  assert.deepEqual(requiredPermission("POST", "/api/metric-sources/2/sync"), { entity: "setting", action: "write" });
+});

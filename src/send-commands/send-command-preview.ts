@@ -107,7 +107,8 @@ export interface RequesterListItem {
 function listLine({ command, targetCount }: RequesterListItem): string {
   const reminder = command.actionKind === SendActionKind.Reminder;
   const at = reminder ? command.reminderAt : command.scheduledAt;
-  const when = `${reminder ? " · nhắc hẹn" : ""}${at ? ` · ${formatSendTime(at)}` : ""}`;
+  const kind = reminder ? " · nhắc hẹn" : command.actionKind === SendActionKind.Pin ? " · ghim" : "";
+  const when = `${kind}${at ? ` · ${formatSendTime(at)}` : ""}`;
   const snippet = command.body.replace(/\s+/g, " ").slice(0, 40);
   return `- ${formatCommandCode(command.id)} · ${describeCommandStatus(command.status)}${when} · ${targetCount} nơi · «${snippet}${command.body.length > 40 ? "…" : ""}»`;
 }

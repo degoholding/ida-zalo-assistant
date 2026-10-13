@@ -2,7 +2,7 @@ import type { ModelClient } from "../assistant/gemini-client.js";
 import type { AppConfig } from "../config.js";
 import { BriefKind, type BriefTrigger } from "../constants.js";
 import type { Db } from "../db/pool.js";
-import { describeError } from "../logger.js";
+import { createLogger, describeError } from "../logger.js";
 import { enqueueRecipientMessage, type RecipientRow } from "../recipients/recipient-repository.js";
 import { buildPeriodicReport } from "../reports/periodic-report-builder.js";
 import type { PeriodicStatsCache } from "../reports/periodic-report-stats-cache.js";
@@ -11,10 +11,12 @@ import type { FileStorage } from "../storage/file-storage.js";
 import { HighlightCache, pickHighlights } from "./brief-ai-highlights.js";
 import { claimBriefLog, markBriefFailed, saveComposed } from "./brief-log-repository.js";
 import { aiCandidates, urgentHandledCount, urgentOpen, waitingOpen, waitingOverdue } from "./brief-message-collectors.js";
+import { collectBriefMetrics, type BriefMetricDigest } from "./brief-metric-section.js";
 import { briefPeriod, type BriefPeriodVariant } from "./brief-period.js";
 import { loadBriefScope } from "./brief-scope.js";
 import { composeEveningBrief, composeMorningBrief, type BriefComposeData } from "./brief-compose.js";
 import type { BriefLogFile, BriefPeriod, BriefScope } from "./brief-types.js";
+import { vnLocalTime } from "../schedule/work-calendar.js";
 import { taskBuckets, ticketBuckets } from "./brief-work-collectors.js";
 
 // Soạn + gửi MỘT bản tin / báo cáo cho MỘT người nhận — điểm vào dùng chung cho lịch (brief-runner.ts), câu chat và
@@ -56,11 +58,30 @@ export interface ProducedBrief {
   files: BriefLogFile[];
 }
 
+const log = createLogger("brief-delivery");
+
+/**
+ * Mục 6 «Số liệu»: lỗi truy vấn chỉ bỏ mục (cảnh báo log), không làm hỏng bản tin. Sáng = số ngày làm việc trước + «chưa báo», so với
+ * ngày làm việc liền trước nữa (`period.previous`); cuối ngày = số hôm nay tới giờ soạn, KHÔNG so (cả ngày hôm trước thì lệch).
+ */
+async function loadMetricDigest(deps: BriefDeps, period: BriefPeriod, kind: BriefKind.Morning | BriefKind.Evening, now: Date): Promise<BriefMetricDigest | null> {
+  try {
+    const isMorning = kind === BriefKind.Morning;
+    const date = vnLocalTime(isMorning ? period.from : now).date;
+    const previous = vnLocalTime(period.previous.from).date;
+    const compareDate = isMorning && previous < date ? previous : null;
+    return await collectBriefMetrics(deps.db, { date, withMissing: isMorning, compareDate }, now);
+  } catch (error) {
+    log.warn(`bỏ mục số liệu của bản tin: ${describeError(error)}`);
+    return null;
+  }
+}
+
 async function gatherDailyBriefData(
   deps: BriefDeps, scope: BriefScope, period: BriefPeriod, kind: BriefKind.Morning | BriefKind.Evening, now: Date,
 ): Promise<BriefComposeData> {
   const isEvening = kind === BriefKind.Evening;
-  const [urgentOpenBucket, waitingOverdueBucket, waitingOpenBucket, urgentHandled, tasks, tickets, candidates] = await Promise.all([
+  const [urgentOpenBucket, waitingOverdueBucket, waitingOpenBucket, urgentHandled, tasks, tickets, candidates, metrics] = await Promise.all([
     urgentOpen(deps.db, scope, now),
     waitingOverdue(deps.db, scope, now),
     isEvening ? waitingOpen(deps.db, scope, now) : Promise.resolve({ total: 0, items: [] }),
@@ -68,6 +89,7 @@ async function gatherDailyBriefData(
     taskBuckets(deps.db, scope, period, deps.calendar, now),
     ticketBuckets(deps.db, scope, period),
     aiCandidates(deps.db, scope, period),
+    loadMetricDigest(deps, period, kind, now),
   ]);
   const highlightResult = await pickHighlights(
     { db: deps.db, config: deps.config, client: await deps.client(), cache: deps.highlightCache, scope, period, now },
@@ -76,7 +98,7 @@ async function gatherDailyBriefData(
   );
   return {
     urgentOpen: urgentOpenBucket, urgentHandledCount: urgentHandled, waitingOverdue: waitingOverdueBucket, waitingOpen: waitingOpenBucket,
-    tasks, tickets, highlights: highlightResult.highlights, aiNote: highlightResult.note,
+    tasks, tickets, highlights: highlightResult.highlights, aiNote: highlightResult.note, metrics,
   };
 }
 

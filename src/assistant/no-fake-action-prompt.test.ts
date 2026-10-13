@@ -45,3 +45,23 @@ describe("buildNoFakeActionPrompt — lời mời họp", () => {
     assert.doesNotMatch(buildNoFakeActionPrompt({ inGroup: true, canProposeReminder: false, canAnnounceMeeting: true }), /propose_meeting_announcement/);
   });
 });
+
+describe("buildNoFakeActionPrompt — ghim lên nhóm", () => {
+  test("tin riêng có công cụ: ghim → propose_group_pin; bình chọn / bỏ ghim / hủy nhắc hẹn vẫn «gọi em trong nhóm đó»", () => {
+    const text = buildNoFakeActionPrompt({ inGroup: false, canProposeReminder: true, canProposePin: true });
+    assert.match(text, /propose_group_pin/);
+    assert.match(text, /Tạo bình chọn, bỏ ghim, xem \/ hủy nhắc hẹn của nhóm: KHÔNG làm được từ tin riêng — bảo người hỏi «gọi em trong nhóm đó»/);
+    assert.doesNotMatch(text, /Ghim ghi chú, tạo bình chọn/);
+  });
+
+  test("không có công cụ / trong nhóm: không nhắc propose_group_pin, ghim vẫn bảo gọi em trong nhóm", () => {
+    assert.match(buildNoFakeActionPrompt({ inGroup: false, canProposeReminder: true }), /Ghim ghi chú, tạo bình chọn[^\n]*gọi em trong nhóm đó/);
+    assert.doesNotMatch(buildNoFakeActionPrompt({ inGroup: false, canProposeReminder: true }), /propose_group_pin/);
+    assert.doesNotMatch(buildNoFakeActionPrompt({ inGroup: true, canProposeReminder: false, canProposePin: true }), /propose_group_pin/);
+  });
+});
+
+test("tin riêng: bản nháp trả lời bot không gửi cho khách; trong nhóm không có dòng này", () => {
+  assert.match(buildNoFakeActionPrompt({ inGroup: false, canProposeReminder: false }), /Bản nháp trả lời: bot KHÔNG gửi cho khách|Bản nháp trả lời \(suggest_replies\): bot KHÔNG gửi cho khách/);
+  assert.doesNotMatch(buildNoFakeActionPrompt({ inGroup: true, canProposeReminder: false }), /Bản nháp trả lời/);
+});

@@ -11,7 +11,7 @@ import { findCommand, findTarget, markTarget } from "./send-command-repository.j
 import type { SendCommandRow, SendTargetRow } from "./send-command-types.js";
 import { checkTargetStillAllowed, loadGroupScope, loadSendRequester } from "./send-target-resolver.js";
 
-// Handler job `SendCommandTarget` (phase 9): giao tin tới MỘT nơi nhận — hoặc (action_kind = 2) tạo nhắc hẹn Zalo cho MỘT nhóm. Phase 4 đăng ký `runSendTargetJob` vào JobRunner
+// Handler job `SendCommandTarget` (phase 9): giao tin tới MỘT nơi nhận — hoặc (action_kind = 2) tạo nhắc hẹn Zalo / (= 3) ghim ghi chú cho MỘT nhóm. Phase 4 đăng ký `runSendTargetJob` vào JobRunner
 // với `deps.port` nối vào SyncService. Kiểm quyền LẦN BA ở đây (vai trò / loại nhóm có thể đổi trong lúc chờ hẹn).
 
 const HALTED_TEXT = "bot đang tắt khẩn lúc tới giờ gửi";
@@ -40,7 +40,7 @@ async function checkStillPermitted(deps: SendDeliveryDeps, command: SendCommandR
   if (command.source !== SendCommandSource.Zalo) return null;
   const requester = await loadSendRequester(deps.db, command.requesterUid);
   if (!requester || !canIssueSendCommand(requester)) return "người ra lệnh không còn quyền ra lệnh";
-  return checkTargetStillAllowed(deps.db, target, await loadGroupScope(deps.db, requester.recipientId), command.actionKind === SendActionKind.Reminder);
+  return checkTargetStillAllowed(deps.db, target, await loadGroupScope(deps.db, requester.recipientId), command.actionKind);
 }
 
 async function failTarget(deps: SendDeliveryDeps, target: SendTargetRow, reason: string): Promise<void> {
@@ -58,10 +58,18 @@ async function createReminderOnce(deps: SendDeliveryDeps, command: SendCommandRo
   }, job);
 }
 
-const deliverOnce = (deps: SendDeliveryDeps, command: SendCommandRow, target: SendTargetRow, job: JobRow, now: Date): Promise<void> =>
-  command.actionKind === SendActionKind.Reminder
-    ? createReminderOnce(deps, command, target, job, now)
-    : deps.port.deliver(buildDeliveryPayload(command, target, job.payload), job);
+/** Ghim: chỉ nhóm, nội dung không rỗng. Nơi gọi đánh dấu Sent ngay khi cổng trả về (đã có id ghi chú). */
+async function createPinOnce(deps: SendDeliveryDeps, command: SendCommandRow, target: SendTargetRow, job: JobRow): Promise<void> {
+  if (target.kind !== SendTargetKind.Group || !target.threadId) throw new JobSkippedError("ghim chỉ làm cho nhóm");
+  if (!command.body.trim()) throw new JobSkippedError("nội dung ghim trống");
+  await deps.port.createPin({ threadId: target.threadId, content: command.body, checkExisting: job.attempts > 1 || target.attemptNo > 1 }, job);
+}
+
+function deliverOnce(deps: SendDeliveryDeps, command: SendCommandRow, target: SendTargetRow, job: JobRow, now: Date): Promise<void> {
+  if (command.actionKind === SendActionKind.Reminder) return createReminderOnce(deps, command, target, job, now);
+  if (command.actionKind === SendActionKind.Pin) return createPinOnce(deps, command, target, job);
+  return deps.port.deliver(buildDeliveryPayload(command, target, job.payload), job);
+}
 
 export async function runSendTargetJob(deps: SendDeliveryDeps, job: JobRow, now: Date = new Date()): Promise<void> {
   const targetId = Number((job.payload as { targetId?: unknown } | null)?.targetId);

@@ -38,7 +38,11 @@ import { canIssueSendCommand } from "../send-commands/send-command-permissions.j
 import { PROPOSE_SEND_DECLARATION, SEND_TOOL_PROMPT } from "../send-commands/send-command-tool.js";
 import { buildNoFakeActionPrompt } from "./no-fake-action-prompt.js";
 import { MEETING_ANNOUNCE_TOOL_PROMPT, PROPOSE_MEETING_ANNOUNCEMENT_DECLARATION } from "../send-commands/send-meeting-announcement-tool.js";
+import { PIN_TOOL_PROMPT, PROPOSE_PIN_DECLARATION } from "../send-commands/send-pin-tool.js";
 import { PROPOSE_REMINDER_DECLARATION, REMINDER_TOOL_PROMPT } from "../send-commands/send-reminder-tool.js";
+import { SUGGEST_REPLIES_DECLARATION, SUGGEST_REPLIES_PROMPT } from "../reply-suggestions/reply-suggestion-tool.js";
+import { QUERY_METRICS_DECLARATION, QUERY_METRICS_PROMPT } from "../metrics/metric-query-tool.js";
+import { SUGGEST_REPLIES_MANDATORY_PROMPT } from "./reply-metric-wiring.js";
 
 // Một lượt hỏi đáp: kiểm vai trò → giới hạn số câu/giờ → trần token/ngày → gọi AI kèm công cụ
 // (tối đa MAX_TOOL_ROUNDS vòng) → ghi nhật ký assistant_turn. Không tự gửi Zalo — trả về câu trả
@@ -133,6 +137,8 @@ export interface AssistantReply {
   attachmentIds: number[];
   /** Tệp báo cáo (Excel) trợ lý vừa tạo, đã cất kho — nơi gọi gửi cho người hỏi sau câu trả lời. */
   reportFiles?: GeneratedReportFile[];
+  /** Các tin gửi riêng SAU `text` (mỗi bản nháp gợi ý trả lời một tin); nơi gọi gửi lần lượt qua đường gửi chung. */
+  followUps?: string[];
   status: AssistantTurnStatus;
 }
 
@@ -404,6 +410,12 @@ export class AssistantService {
     if (scope) {
       context.scopeGroupId = scope.groupId;
       context.groupActions = scope.actions;
+    } else {
+      // Gợi ý trả lời + hỏi số liệu: chỉ tin riêng (cổng tin riêng đã chặn người lạ); bản nháp / số doanh số không ra nhóm
+      context.replySuggestion = {
+        db: this.db, model: this.client, usage, maskPersonal: Boolean(privacy?.maskPersonalData), now,
+        tenantId: 1, askerContactId: request.contact.id, askerUid: request.contact.zalo_uid,
+      };
     }
     const tools = [
       ...TOOL_DECLARATIONS,
@@ -420,16 +432,18 @@ export class AssistantService {
       ...(ticket ? TICKET_TOOL_DECLARATIONS : []),
       ...(task ? TASK_TOOL_DECLARATIONS : []),
       ...(briefAsker ? [SEND_BRIEF_DECLARATION] : []),
-      ...(sendAsker ? [PROPOSE_SEND_DECLARATION, PROPOSE_REMINDER_DECLARATION] : []),
+      ...(sendAsker ? [PROPOSE_SEND_DECLARATION, PROPOSE_REMINDER_DECLARATION, PROPOSE_PIN_DECLARATION] : []),
       ...(announceAsker ? [PROPOSE_MEETING_ANNOUNCEMENT_DECLARATION] : []),
+      ...(scope ? [] : [SUGGEST_REPLIES_DECLARATION, QUERY_METRICS_DECLARATION]),
     ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
     const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
       + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "")
-      + (task ? TASK_TOOLS_PROMPT : "") + (briefAsker ? BRIEF_TOOL_PROMPT : "") + (sendAsker ? SEND_TOOL_PROMPT + REMINDER_TOOL_PROMPT : "")
+      + (task ? TASK_TOOLS_PROMPT : "") + (briefAsker ? BRIEF_TOOL_PROMPT : "") + (sendAsker ? SEND_TOOL_PROMPT + REMINDER_TOOL_PROMPT + PIN_TOOL_PROMPT : "")
       + (announceAsker ? MEETING_ANNOUNCE_TOOL_PROMPT : "")
-      + buildNoFakeActionPrompt({ inGroup: Boolean(scope), canProposeReminder: Boolean(sendAsker), canAnnounceMeeting: announceAsker });
+      + (scope ? "" : `\n\n${SUGGEST_REPLIES_PROMPT}${SUGGEST_REPLIES_MANDATORY_PROMPT}\n\n${QUERY_METRICS_PROMPT}`)
+      + buildNoFakeActionPrompt({ inGroup: Boolean(scope), canProposeReminder: Boolean(sendAsker), canAnnounceMeeting: announceAsker, canProposePin: Boolean(sendAsker) });
     const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
     const contents = scope ? [] : mask(await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid));
     // Câu hỏi của chính người hỏi giữ nguyên (họ có thể đang hỏi đúng một số điện thoại); ngữ cảnh nhóm kèm theo thì che
@@ -472,8 +486,9 @@ export class AssistantService {
           const cleaned = fixed !== undefined ? fixed : isAckText(text) ? UNCLEAR_REPLY : stripMarkdown(text);
           const totalIn = inputTokens + usage.inputTokens;
           const totalOut = outputTokens + usage.outputTokens;
+          const followUps = context.followUps?.length ? context.followUps : undefined;
           await this.logTurn(request, AssistantTurnStatus.Answered, {
-            started, answer: cleaned, toolCalls, inputTokens: totalIn, outputTokens: totalOut,
+            started, answer: followUps ? [cleaned, ...followUps].join("\n\n---\n\n") : cleaned, toolCalls, inputTokens: totalIn, outputTokens: totalOut,
           });
           const shown = this.options.showTokenUsage
             ? appendTokenFooter(cleaned, {
@@ -481,7 +496,7 @@ export class AssistantService {
               model: (this.client as { lastModel?: string }).lastModel ?? this.model,
             })
             : cleaned;
-          return { text: shown, attachmentIds: context.filesToSend, reportFiles, status: AssistantTurnStatus.Answered };
+          return { text: shown, attachmentIds: context.filesToSend, reportFiles, followUps, status: AssistantTurnStatus.Answered };
         }
         const responses = [];
         for (const part of calls) {

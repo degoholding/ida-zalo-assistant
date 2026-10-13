@@ -81,3 +81,15 @@ test("renderPeriodicReportPdf: báo cáo tháng ra tiêu đề đúng loại", a
   const buffer = await renderPeriodicReportPdf(monthly, [], META);
   assert.equal(countPdfPages(buffer), 1);
 });
+
+test("renderPeriodicReportPdf: dữ liệu lớn nhất + khối «Số liệu» (4 chỉ tiêu + dòng cờ) vẫn ĐÚNG 1 trang; không số liệu thì không có khối", async () => {
+  const metrics = {
+    metrics: Array.from({ length: 6 }, (_, i) => ({ code: `c${i}`, label: `Chỉ tiêu dài số ${i + 1}`, unit: "triệu đồng", current: 1234567.8, previous: 1000, changePct: 12.3 })),
+    staff: [], areas: [], flaggedCount: 3,
+  };
+  const withMetrics = { ...MAX_DATA, metrics };
+  const doc = buildPeriodicReportDocument(withMetrics, MAX_HIGHLIGHTS, META, { fontFor: () => "BeVietnam" }) as { content: object[] };
+  const base = buildPeriodicReportDocument(MAX_DATA, MAX_HIGHLIGHTS, META, { fontFor: () => "BeVietnam" }) as { content: object[] };
+  assert.equal(doc.content.length, base.content.length + 2);
+  assert.equal(countPdfPages(await renderPeriodicReportPdf(withMetrics, MAX_HIGHLIGHTS, META)), 1);
+});

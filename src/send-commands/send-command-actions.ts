@@ -11,6 +11,7 @@ import {
   cancelCommand as cancelCommandRow, claimConfirm, countRecent, findCommand, listRecentByRequester, listScheduledByRequester, listTargets,
 } from "./send-command-repository.js";
 import type { SendCommandRow, SendRequester } from "./send-command-types.js";
+import { groupActionWords } from "./send-group-action-words.js";
 import { checkTargetStillAllowed, loadGroupScope } from "./send-target-resolver.js";
 
 // Thao tác trên lệnh gửi đã có (phase 9): xác nhận → xếp job, hủy, danh sách. Một service cho lệnh gõ, công cụ AI và web.
@@ -47,6 +48,7 @@ export async function confirmDraft(deps: SendCommandDeps, requester: SendRequest
     return reply(`Giờ hẹn của lệnh ${formatCommandCode(command.id)} đã qua — anh/chị nhắn lại lệnh gửi giúp em.`);
   }
   const isReminder = command.actionKind === SendActionKind.Reminder;
+  const words = groupActionWords(command.actionKind);
   // Nhắc hẹn: giờ nhắc phải còn ở tương lai lúc tạo (Zalo không nhận nhắc hẹn đã qua)
   if (isReminder && (!command.reminderAt || command.reminderAt.getTime() < now.getTime() + MIN_REMINDER_LEAD_MS)) {
     await setCommandStatusIf(deps.db, command.id, [SendCommandStatus.Draft], SendCommandStatus.Expired);
@@ -57,10 +59,10 @@ export async function confirmDraft(deps: SendCommandDeps, requester: SendRequest
   const targets = await listTargets(deps.db, command.id);
   const problems: string[] = [];
   for (const target of targets) {
-    const refusal = await checkTargetStillAllowed(deps.db, target, scope, isReminder);
+    const refusal = await checkTargetStillAllowed(deps.db, target, scope, command.actionKind);
     if (refusal) problems.push(`${target.displayName}: ${refusal}`);
   }
-  if (problems.length) return reply(`Em không ${isReminder ? "tạo" : "gửi"} lệnh ${formatCommandCode(command.id)} vì:\n${problems.map((line) => `- ${line}`).join("\n")}\nAnh/chị nhắn lại lệnh giúp em.`);
+  if (problems.length) return reply(`Em không ${words ? words.verb : "gửi"} lệnh ${formatCommandCode(command.id)} vì:\n${problems.map((line) => `- ${line}`).join("\n")}\nAnh/chị nhắn lại lệnh giúp em.`);
 
   const scheduled = Boolean(command.scheduledAt);
   if (!(await claimConfirm(deps.db, command.id, now, scheduled ? SendCommandStatus.Scheduled : SendCommandStatus.Sending))) {
@@ -72,8 +74,9 @@ export async function confirmDraft(deps: SendCommandDeps, requester: SendRequest
   }
   deps.wakeJobs?.();
   const code = formatCommandCode(command.id);
-  if (!queued) return reply(`Lệnh ${code} không xếp được việc ${isReminder ? "tạo nhắc hẹn" : "gửi"} nào — xem lỗi ở màn Gửi tin.`);
+  if (!queued) return reply(`Lệnh ${code} không xếp được việc ${words ? words.doing : "gửi"} nào — xem lỗi ở màn Gửi tin.`);
   if (isReminder) return { ...reply(`Đã nhận lệnh ${code}: tạo nhắc hẹn cho ${queued} nhóm. Tạo xong em báo kết quả.`), ok: true };
+  if (command.actionKind === SendActionKind.Pin) return { ...reply(`Đã nhận lệnh ${code}: ghim lên ${queued} nhóm. Ghim xong em báo kết quả.`), ok: true };
   const when = command.scheduledAt ? `sẽ gửi lúc ${formatSendTime(command.scheduledAt)}` : "đang gửi";
   return { ...reply(`Đã nhận lệnh ${code}: ${queued} nơi, ${when}. Gửi xong em báo kết quả.${scheduled ? ` Muốn hủy nhắn «hủy ${code}».` : ""}`), ok: true };
 }

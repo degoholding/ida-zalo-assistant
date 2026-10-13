@@ -91,6 +91,8 @@ export interface ContactPatch {
   role: number;
   companyId: number | null;
   note: string;
+  /** Dạng 0xxxxxxxxx; undefined = giữ nguyên, null = xóa. */
+  phone?: string | null;
 }
 
 export async function updateContact(db: Db, contactId: number, patch: ContactPatch): Promise<void> {
@@ -100,6 +102,8 @@ export async function updateContact(db: Db, contactId: number, patch: ContactPat
     patch.note.slice(0, 5000),
     contactId,
   ]);
+  // undefined = giữ nguyên; null = xóa SĐT
+  if (patch.phone !== undefined) await db.query("UPDATE contact SET phone = ? WHERE id = ?", [patch.phone, contactId]);
   if (patch.kind === "auto") {
     await db.query("UPDATE contact SET kind_source = ? WHERE id = ?", [ContactKindSource.Auto, contactId]);
     const [rows] = await db.query<RowDataPacket[]>("SELECT zalo_uid FROM contact WHERE id = ?", [contactId]);

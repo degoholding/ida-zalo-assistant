@@ -39,6 +39,12 @@ const RULES: Rule[] = [
   ["GET", /^\/api\/send-commands(\/|$)/, "send_command", "read"],
   ["WRITE", /^\/api\/send-commands\/\d+\/actions$/, "send_command", "write"],
   ["GET", /^\/api\/bot-halt$/, "conversation", "read"],
+  // Mẫu tin trả lời (phase 10): soạn / sửa / gửi duyệt = quyền write; duyệt / trả lại kiểm thêm can(…, "approve") trong API.
+  ["GET", /^\/api\/reply-templates(\/|$)/, "reply_template", "read"],
+  ["WRITE", /^\/api\/reply-templates(\/\d+(\/actions)?)?$/, "reply_template", "write"],
+  // Số liệu + danh mục (phase 10): chỉ đọc cho Quản lý. `/api/metric-sources*` và ghi `/api/catalog*` KHÔNG khai → chỉ quản trị
+  ["GET", /^\/api\/metrics(\/|$)/, "metric", "read"],
+  ["GET", /^\/api\/catalog(\/|$)/, "catalog", "read"],
   ["WRITE", /^\/api\/accounts(\/|$)/, "bot_account", "write"],
 ];
 

@@ -10,6 +10,7 @@ import { buildAlertModelClient, runAiReview } from "./alerts/ai-review.js";
 import { runReminders } from "./alerts/reminders.js";
 import { telegramSenderFor, watchSessions } from "./alerts/session-watch.js";
 import { runBriefs } from "./briefs/brief-runner.js";
+import { runMetricsSync } from "./metrics/metric-sync-runner.js";
 import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { runMeetingRecapProcessing, runMeetingRecordings } from "./meetings/meeting-recording-watcher.js";
 import { backfillMessageSearch } from "./search/message-search-index.js";
@@ -86,6 +87,9 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     "meeting-recap-process": () => runMeetingRecapProcessing(db, config, { storage, calendar: safeCalendar(), buildModel: () => buildAlertModelClient(db, config) }),
     // Lưới đỡ lệnh gửi (phase 9): nháp hết hạn, nơi mắc kẹt, báo kết quả bù. Lịch chỉ lệnh của app dùng (đọc lúc dùng — việc này không dùng tới)
     "send-command-watch": () => runSendCommandWatch({ db, get calendar() { return getCalendar(); } }),
+    // Số liệu N3 (phase 10): chỉ đọc bảng Drive. Lỗi từng nguồn thành trạng thái nguồn, không làm sập việc nền
+    "metrics-sync": () => runMetricsSync(db, config, safeCalendar(), "sync"),
+    "metrics-close": () => runMetricsSync(db, config, safeCalendar(), "close"),
     "search-index": async () => {
       const copied = await backfillMessageSearch(db);
       if (copied) log.info(`chép ${copied} tin cũ vào bảng tìm`);

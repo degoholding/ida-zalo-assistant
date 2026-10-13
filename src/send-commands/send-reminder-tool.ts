@@ -17,7 +17,7 @@ NHẮC HẸN CHO NHÓM TỪ TIN RIÊNG (người hỏi được phép ra lệnh)
   dùng đúng tiêu đề + giờ của cuộc họp đó cho nhắc hẹn, KHÔNG tạo thêm cuộc họp.
 - Công cụ chỉ tạo bản xem trước, KHÔNG tạo nhắc hẹn. Bạn không bao giờ tự xác nhận — người dùng phải nhắn «đồng ý». Sau khi gọi, câu
   trả lời của bạn sẽ được thay bằng bản xem trước của hệ thống; KHÔNG nói «đã tạo nhắc hẹn».`;
-// Ghim / bình chọn / hủy nhắc hẹn từ tin riêng → «gọi em trong nhóm đó»: nằm ở no-fake-action-prompt.ts (luôn ghép ở tin riêng).
+// Bình chọn / bỏ ghim / hủy nhắc hẹn từ tin riêng → «gọi em trong nhóm đó»: nằm ở no-fake-action-prompt.ts (luôn ghép ở tin riêng).
 
 export const PROPOSE_REMINDER_DECLARATION: FunctionDeclaration = {
   name: "propose_group_reminder",

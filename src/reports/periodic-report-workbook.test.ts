@@ -69,3 +69,34 @@ test("toPeriodicReportTable: không nhóm / việc / ticket nào vẫn ra bảng
   const workbook = XLSX.read(buffer, { type: "buffer" });
   assert.equal(workbook.SheetNames.length, 5);
 });
+
+const METRICS: NonNullable<PeriodicReportData["metrics"]> = {
+  metrics: [
+    { code: "doanh_so", label: "Doanh số", unit: "tr", current: 2100, previous: 1944, changePct: 8 },
+    { code: "ton_kho", label: "Tồn kho", unit: "bao", current: 3420, previous: null, changePct: null },
+  ],
+  staff: [
+    { name: "Lan", flagged: true, figures: { doanh_so: { current: 1200, previous: 1000, changePct: 20 } } },
+    { name: "Minh", flagged: false, figures: { doanh_so: { current: 900, previous: 944, changePct: -4.7 }, ton_kho: { current: 3420, previous: null, changePct: null } } },
+  ],
+  areas: [{ name: "Miền Tây", flagged: false, figures: { doanh_so: { current: 2100, previous: 1944, changePct: 8 } } }],
+  flaggedCount: 1,
+};
+
+test("toPeriodicReportTable: có số liệu → thêm sheet «Số liệu» (NV, TỔNG, khu vực); workbook 6 tab", () => {
+  const table = toPeriodicReportTable({ ...DATA, metrics: METRICS }, META);
+  const sheet = table.extraSheets.at(-1)!;
+  assert.equal(sheet.title, "Số liệu");
+  assert.equal(sheet.columns.length, 1 + 3 * 2);
+  assert.deepEqual(sheet.rows[0], ["Lan (cần xác nhận)", 1200, 1000, 20, "", "", ""]);
+  assert.deepEqual(sheet.rows[2], ["TỔNG", 2100, 1944, 8, 3420, "", ""]);
+  assert.equal(sheet.rows[3][0], "Khu vực: Miền Tây");
+  const workbook = XLSX.read(buildReportWorkbook(table, "09/10/2026 08:00"), { type: "buffer" });
+  assert.equal(workbook.SheetNames.length, 6);
+  assert.equal(workbook.SheetNames.at(-1), "Số liệu");
+});
+
+test("toPeriodicReportTable: không có số liệu → KHÔNG có sheet «Số liệu» (y hệt trước)", () => {
+  const table = toPeriodicReportTable(DATA, META);
+  assert.ok(!table.extraSheets.some((sheet) => sheet.title === "Số liệu"));
+});

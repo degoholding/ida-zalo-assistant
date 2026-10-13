@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { ConversationType, SendActionKind, SendCommandSource, SendCommandStatus, SendTargetKind, SendTargetStatus } from "../constants.js";
+import { ConversationType, SendCommandSource, SendCommandStatus, SendTargetKind, SendTargetStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
 import type { SendActionResult, SendCommandActor, SendCommandDeps } from "./send-command-deps.js";
@@ -87,7 +87,7 @@ export async function resendFailedTargets(deps: SendCommandDeps, _actor: SendCom
   const skipped: string[] = [];
   for (const target of failed) {
     const refusal = command.source === SendCommandSource.Zalo
-      ? await checkTargetStillAllowed(deps.db, target, scope, command.actionKind === SendActionKind.Reminder) : null;
+      ? await checkTargetStillAllowed(deps.db, target, scope, command.actionKind) : null;
     if (refusal) {
       skipped.push(`${target.displayName}: ${refusal}`);
       continue;

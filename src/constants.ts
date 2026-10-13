@@ -328,6 +328,8 @@ export enum SendActionKind {
   Message = 1,
   // Tạo nhắc hẹn Zalo cho nhóm (chỉ nhóm) — từ tin riêng, có xem trước
   Reminder = 2,
+  // Ghim ghi chú lên nhóm (chỉ nhóm) — từ tin riêng, có xem trước; body = nội dung ghim
+  Pin = 3,
 }
 
 /** Vòng đời một lệnh gửi: Draft →(đồng ý)→ Scheduled | Sending → Done; Draft quá hạn → Expired; Draft / Scheduled → Cancelled. */
@@ -356,4 +358,61 @@ export enum SendTargetStatus {
   Sent = 3,
   Failed = 4,
   Cancelled = 5,
+}
+
+/** Vòng đời mẫu tin trả lời (cột reply_template.status): Draft →(gửi duyệt)→ PendingReview → Approved | Returned; sửa mẫu Approved → PendingReview. Bot chỉ dùng Approved. Giao diện chép sang web/src/modules/reply-templates/types. */
+export enum ReplyTemplateStatus {
+  Draft = 1,
+  PendingReview = 2,
+  Approved = 3,
+  // Bị trả lại kèm ghi chú (review_note)
+  Returned = 4,
+  // Ngừng dùng
+  Archived = 5,
+}
+
+/** Tông của mẫu / bản nháp trả lời (cột reply_template.tone). */
+export enum ReplyTone {
+  Formal = 1,
+  Friendly = 2,
+  Brief = 3,
+}
+
+/** Tình trạng lượt đọc gần nhất của một nguồn số liệu (cột metric_source.status). Giao diện chép sang web/src/modules/metrics/types. */
+export enum MetricSourceStatus {
+  NeverRun = 0,
+  Ok = 1,
+  // Không đọc được bảng (quyền, mạng, tab không tồn tại)
+  Failed = 2,
+  // Đọc được nhưng ánh xạ cột không khớp tiêu đề
+  MappingError = 3,
+}
+
+/** Cờ của một dòng số liệu (cột metric_value.flags) — BIT, cộng được: Negative | Deviation = 3. */
+export enum MetricFlag {
+  Negative = 1,
+  // Lệch quá ±30% so với kỳ trước
+  Deviation = 2,
+  // Ô không đọc được thành số
+  Unparsed = 4,
+  // Tên nhân viên không có trong danh mục
+  UnknownStaff = 8,
+}
+
+/** Loại dòng danh mục (cột catalog_entry.kind). Giao diện chép sang web/src/modules/catalog/types. */
+export enum CatalogKind {
+  Staff = 1,
+  Dealer = 2,
+}
+
+/** Tình trạng khớp dòng danh mục với liên hệ Zalo (cột catalog_entry.match_status). */
+export enum CatalogMatchStatus {
+  Unmatched = 0,
+  // Khớp chắc theo SĐT
+  Matched = 1,
+  // Khớp theo tên, không chắc — chờ quản trị xác nhận
+  Suggested = 2,
+  Confirmed = 3,
+  // Quản trị đã «Bỏ gắn»: lượt khớp tự động sau KHÔNG gắn lại; chỉ gắn khi quản trị chọn tay, hoặc nạp tệp đổi SĐT của mục (về Unmatched)
+  Unlinked = 4,
 }

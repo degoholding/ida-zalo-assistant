@@ -23,3 +23,6 @@ export const MAX_REMINDER_TITLE_CHARS = 200;
 export const MIN_REMINDER_LEAD_MS = 60_000;
 /** Nhắc hẹn xa nhất — cùng trần `create_reminder` trong nhóm. */
 export const MAX_REMINDER_AHEAD_DAYS = 366;
+
+/** Nội dung ghim lên nhóm (cột `body` của lệnh ghim) dài nhất — hiện NGUYÊN trong bản xem trước. */
+export const MAX_PIN_CHARS = 1000;

@@ -159,6 +159,11 @@ export class SyncService {
         if (!thread) throw new JobSkippedError("nhóm không còn trong hệ thống");
         await (await this.runnerForThread(thread)).createGroupReminder(thread, request, request.checkExisting);
       },
+      createPin: async (request) => {
+        const thread = await findThreadById(this.db, request.threadId);
+        if (!thread) throw new JobSkippedError("nhóm không còn trong hệ thống");
+        await (await this.runnerForThread(thread)).createGroupPin(thread, request.content, request.checkExisting);
+      },
     };
     return deps;
   }

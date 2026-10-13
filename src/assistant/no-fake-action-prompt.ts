@@ -8,9 +8,11 @@ export interface NoFakeActionOptions {
   canProposeReminder: boolean;
   /** Tin riêng và người hỏi có công cụ gửi lời mời họp vào nhóm (propose_meeting_announcement) */
   canAnnounceMeeting?: boolean;
+  /** Tin riêng và người hỏi có công cụ ghim ghi chú lên nhóm có xem trước (propose_group_pin) */
+  canProposePin?: boolean;
 }
 
-export function buildNoFakeActionPrompt({ inGroup, canProposeReminder, canAnnounceMeeting = false }: NoFakeActionOptions): string {
+export function buildNoFakeActionPrompt({ inGroup, canProposeReminder, canAnnounceMeeting = false, canProposePin = false }: NoFakeActionOptions): string {
   const lines = [
     "",
     "",
@@ -26,13 +28,19 @@ export function buildNoFakeActionPrompt({ inGroup, canProposeReminder, canAnnoun
     lines.push("- Trong nhóm này chỉ làm được việc có công cụ ở trên và chỉ cho CHÍNH nhóm này; việc ở nhóm khác hay trong tin riêng thì nói không làm được.");
   } else {
     lines.push(
+      "- Bản nháp trả lời (suggest_replies): bot KHÔNG gửi cho khách / đại lý — không bao giờ nói đã gửi; người hỏi tự chép và gửi bằng Zalo của mình.",
       canProposeReminder
         ? "- Nhắc hẹn Zalo cho nhóm: dùng propose_group_reminder (hệ thống dựng bản xem trước, người hỏi nhắn «đồng ý» mới tạo) — KHÔNG tự nói đã tạo."
         : "- Nhắc hẹn Zalo cho nhóm từ tin riêng: bạn không làm được ở đây — bảo người hỏi gọi em ngay trong nhóm đó (em tạo nhắc hẹn tại nhóm).",
       canAnnounceMeeting
         ? "- Gửi link họp / mời họp / «gửi lên nhóm» sau khi tạo họp: dùng propose_meeting_announcement (hệ thống dựng lời mời + bản xem trước) — KHÔNG bảo người hỏi tự dán link, KHÔNG tạo cuộc họp mới."
         : "- Gửi link họp vào nhóm: bạn không làm được ở đây — đưa link cho người hỏi để họ tự gửi.",
-      "- Ghim ghi chú, tạo bình chọn, xem / hủy nhắc hẹn của nhóm: KHÔNG làm được từ tin riêng — bảo người hỏi «gọi em trong nhóm đó» (kèm tên nhóm nếu biết).",
+      ...(canProposePin
+        ? [
+          "- Ghim cuộc họp / ghim nội dung lên NHÓM: dùng propose_group_pin (hệ thống dựng bản xem trước, người hỏi nhắn «đồng ý» mới ghim) — KHÔNG tự nói đã ghim.",
+          "- Tạo bình chọn, bỏ ghim, xem / hủy nhắc hẹn của nhóm: KHÔNG làm được từ tin riêng — bảo người hỏi «gọi em trong nhóm đó» (kèm tên nhóm nếu biết).",
+        ]
+        : ["- Ghim ghi chú, tạo bình chọn, xem / hủy nhắc hẹn của nhóm: KHÔNG làm được từ tin riêng — bảo người hỏi «gọi em trong nhóm đó» (kèm tên nhóm nếu biết)."]),
     );
   }
   return lines.join("\n");

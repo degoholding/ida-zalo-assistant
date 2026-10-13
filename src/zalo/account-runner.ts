@@ -51,6 +51,7 @@ import { registerGroupHistoryApi, type HistoryPage } from "./group-history.js";
 import { isBotHalted, type BotHaltControl } from "../messaging/bot-halt.js";
 import { applyDirectHaltGate } from "./direct-halt-gate.js";
 import { ZaloSender } from "./zalo-sender.js";
+import { createGroupPin } from "./group-pin-creator.js";
 import { createGroupReminder, type GroupReminderRequest } from "./group-reminder-creator.js";
 import { FriendRequestManager } from "./friend-requests.js";
 import { GroupAssistantReplier } from "./group-assistant-replier.js";
@@ -635,6 +636,14 @@ export class AccountRunner {
         if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), styled.msg);
       }
     }
+    // Bản nháp gợi ý trả lời: mỗi bản MỘT tin chữ thuần (chép là gửi được), qua cùng đường gửi — tắt bot khẩn chặn được
+    for (const draft of reply.followUps ?? []) {
+      for (const chunk of splitForZalo(draft)) {
+        const response = await this.sender.send(() => api.sendMessage(chunk, contact.zalo_uid, ThreadType.User));
+        const msgId = response.message?.msgId;
+        if (msgId) await recordOutgoingMessage(this.db, thread, bot, String(msgId), chunk);
+      }
+    }
     for (const attachmentId of reply.attachmentIds) {
       await this.sendStoredFile(contact.zalo_uid, attachmentId).catch(async (error) => {
         this.log.warn(`gửi tệp #${attachmentId} lỗi`, error);
@@ -792,6 +801,15 @@ export class AccountRunner {
     if (thread.thread_type !== ConversationType.Group) throw new Error("nhắc hẹn chỉ tạo cho nhóm");
     await createGroupReminder(api, this.sender, thread.zalo_group_id, request, checkExisting);
     this.log.info(`tạo nhắc hẹn trong nhóm «${thread.name || thread.zalo_group_id}»`);
+  }
+
+  /** Ghim ghi chú lên một nhóm (lệnh ghim từ tin riêng) — qua hàng gửi nên tắt bot khẩn chặn được. */
+  async createGroupPin(thread: GroupRow, content: string, checkExisting: boolean): Promise<void> {
+    const api = this.api;
+    if (!api) throw new Error("bot chưa kết nối");
+    if (thread.thread_type !== ConversationType.Group) throw new Error("ghim chỉ làm cho nhóm");
+    await createGroupPin(api, this.sender, thread.zalo_group_id, content, checkExisting);
+    this.log.info(`ghim ghi chú trong nhóm «${thread.name || thread.zalo_group_id}»`);
   }
 
   /** Gửi một tệp đã cất trong kho vào một cuộc có sẵn (riêng / nhóm). */

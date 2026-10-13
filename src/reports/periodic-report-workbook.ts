@@ -1,5 +1,6 @@
 import { BriefKind } from "../constants.js";
 import { detectAnomalies } from "./periodic-report-anomalies.js";
+import { metricSheet } from "./periodic-report-metric-format.js";
 import type { MetricPair, PeriodicReportData, ReportMeta } from "./periodic-report-types.js";
 import { vnTimestamp } from "./report-exporter.js";
 import type { ReportSheet, ReportTable } from "./report-table.js";
@@ -44,6 +45,8 @@ export function toPeriodicReportTable(data: PeriodicReportData, meta: ReportMeta
     { title: "Việc", columns: WORK_COLUMNS, rows: workRows(data.tasks) },
     { title: "Ticket", columns: WORK_COLUMNS, rows: workRows(data.tickets) },
     { title: "Bất thường", columns: ["Bất thường"], rows: detectAnomalies(data).map((text) => [text]) },
+    // Sheet «Số liệu» chỉ có khi kỳ này có số từ bảng Drive (phase 5 của Phase 10)
+    ...(data.metrics ? [metricSheet(data.metrics)] : []),
   ];
   return {
     title: TITLE[data.kind],

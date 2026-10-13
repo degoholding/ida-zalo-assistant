@@ -1,5 +1,5 @@
 // Dòng «việc đã làm thật» do MÁY CHỦ dựng, ghi vào ToolContext.actionNotes khi công cụ HÀNH ĐỘNG thành công.
-// Lý do: lượt có bản xem trước (propose_send_message / propose_group_reminder) thay toàn bộ chữ của mô hình bằng
+// Lý do: lượt có bản xem trước (propose_send_message / propose_group_reminder / propose_group_pin) thay toàn bộ chữ của mô hình bằng
 // `fixedReply`, nên kết quả của hành động thật làm TRƯỚC đó (tạo việc, ticket, xuất báo cáo, họp…) bị che — người
 // hỏi tưởng chưa làm, bảo làm lại, đẻ trùng. assistant-service ghép các dòng này lên trước bản xem trước.
 // Không có bản xem trước thì actionNotes không được dùng — câu trả lời của mô hình giữ nguyên.

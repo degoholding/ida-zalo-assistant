@@ -26,6 +26,9 @@ export const BACKGROUND_TASKS = [
   // KHÔNG đánh dấu sendsMessages: vẫn phải đối soát khi bot tắt khẩn (nơi bị app bỏ → đánh lỗi; nháp hết hạn). Tin báo kết
   // quả nó xếp sẽ bị app bỏ ở handler job nếu bot còn đang tắt (phase 9).
   { name: "send-command-watch", label: "Đối soát lệnh gửi tin (hết hạn, kẹt, báo kết quả)", spec: { every: "minutes", minutes: 1 } },
+  // Chỉ ĐỌC bảng Drive nên KHÔNG sendsMessages — vẫn chạy khi bot tắt khẩn. «metrics-sync» tự bỏ lượt ngoài giờ làm (src/metrics).
+  { name: "metrics-sync", label: "Đọc bảng số liệu (Drive)", spec: { every: "minutes", minutes: 30 } },
+  { name: "metrics-close", label: "Chốt số liệu 18:00", spec: { every: "day", at: "18:00", workingDaysOnly: true } },
 ] as const satisfies readonly { name: string; label: string; spec: ScheduleSpec; sendsMessages?: boolean }[];
 
 export type BackgroundTaskName = (typeof BACKGROUND_TASKS)[number]["name"];

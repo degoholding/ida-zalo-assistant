@@ -20,6 +20,10 @@ import { messageSearchRoutes } from "./message-search-api.js";
 import { groupRoutes } from "./groups-api.js";
 import { importRoutes } from "./imports-api.js";
 import { lookupRoutes } from "./lookups-api.js";
+import { catalogRoutes } from "./catalog-api.js";
+import { metricRoutes } from "./metrics-api.js";
+import { metricSourceRoutes } from "./metric-sources-api.js";
+import { replyTemplateRoutes } from "./reply-templates-api.js";
 import { recipientRoutes } from "./recipients-api.js";
 import { sendCommandRoutes } from "./send-commands-api.js";
 import { taskRoutes } from "./tasks-api.js";
@@ -38,6 +42,7 @@ const log = createLogger("api");
 const routes: ApiRoute[] = [
   ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...accountFriendRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
   ...userRoutes, ...recipientRoutes, ...ticketRoutes, ...taskRoutes, ...messageSearchRoutes, ...briefRoutes, ...sendCommandRoutes,
+  ...replyTemplateRoutes, ...metricRoutes, ...metricSourceRoutes, ...catalogRoutes,
 ];
 
 export interface ApiDeps {

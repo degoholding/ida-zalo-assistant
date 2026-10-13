@@ -7,6 +7,8 @@ import { BriefKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import type { RecipientRow } from "../recipients/recipient-repository.js";
 import type { FileStorage } from "../storage/file-storage.js";
+import { collectPeriodicMetrics } from "./periodic-report-metric-stats.js";
+import { metricSummaryLine } from "./periodic-report-metric-format.js";
 import { collectMessageStats } from "./periodic-report-message-stats.js";
 import type { PeriodicStatsCache } from "./periodic-report-stats-cache.js";
 import type { PeriodicReportData, ReportMeta } from "./periodic-report-types.js";
@@ -51,6 +53,7 @@ function buildSummaryText(data: PeriodicReportData, meta: ReportMeta): string {
     `Tin: ${t.messages.current} (kỳ trước ${t.messages.previous}) · Khẩn: ${t.urgent.current} · Chờ quá giờ còn mở: ${t.waitingOverdueOpen.current}`,
     `Việc: ${t.tasksDone.current} xong · ${t.tasksOverdueOpen.current} quá hạn còn mở`,
     `Ticket: ${t.ticketsCreated.current} mới · ${t.ticketsClosed.current} đóng · ${t.ticketsOpen.current} còn mở`,
+    ...(data.metrics ? [metricSummaryLine(data.metrics)] : []),
     "PDF + Excel gửi kèm",
   ].join("\n");
 }
@@ -60,11 +63,12 @@ export async function buildPeriodicReport(
   deps: PeriodicReportDeps, kind: BriefKind.Weekly | BriefKind.Monthly, scope: BriefScope, period: BriefPeriod,
   recipient: Pick<RecipientRow, "name">, now: Date,
 ): Promise<PeriodicReportResult> {
-  const [messageStats, workStats, staff, candidates] = await Promise.all([
+  const [messageStats, workStats, staff, candidates, metrics] = await Promise.all([
     deps.messageStatsCache.get(scope, period, now, () => collectMessageStats(deps.db, scope, period, now)),
     collectWorkStats(deps.db, scope, period, now),
     collectStaffStats(deps.db, scope, period, now),
     aiCandidates(deps.db, scope, period),
+    collectPeriodicMetrics(deps.db, period, kind === BriefKind.Weekly ? "week" : "month"),
   ]);
   const highlightResult = await pickHighlights(
     { db: deps.db, config: deps.config, client: await deps.client(), cache: deps.highlightCache, scope, period, now },
@@ -74,7 +78,7 @@ export async function buildPeriodicReport(
   const data: PeriodicReportData = {
     kind, period,
     totals: { ...messageStats.totals, ...workStats.totals },
-    groups: messageStats.groups, staff, tasks: workStats.tasks, tickets: workStats.tickets,
+    groups: messageStats.groups, staff, tasks: workStats.tasks, tickets: workStats.tickets, metrics,
   };
   const meta: ReportMeta = { recipientName: recipient.name, scopeLabel: messageStats.scopeLabel, now };
 

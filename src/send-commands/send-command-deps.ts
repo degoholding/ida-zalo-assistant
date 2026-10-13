@@ -33,6 +33,20 @@ export interface SendDeliveryPort {
    * đã có nhắc hẹn cùng tiêu đề + giờ chưa rồi mới tạo — không tạo trùng khi lượt trước tạo xong mà mất kết quả. Ném lỗi nếu không tạo được.
    */
   createReminder(request: SendReminderRequest, job: JobRow): Promise<void>;
+  /**
+   * Ghim ghi chú lên nhóm, qua hàng gửi của bot (tắt khẩn → `BotHaltedError`). `request.checkExisting` = true thì phải liệt kê ghi chú
+   * của nhóm và bỏ nếu đã có cùng nội dung — không ghim trùng khi lượt trước ghim xong mà mất kết quả. Ném lỗi nếu không ghim được.
+   */
+  createPin(request: SendPinRequest, job: JobRow): Promise<void>;
+}
+
+/** Một ghi chú ghim cần tạo cho một nhóm (lệnh `action_kind = 3`). */
+export interface SendPinRequest {
+  /** zalo_group.id của nhóm đích */
+  threadId: number;
+  content: string;
+  /** Cùng ý nghĩa `SendReminderRequest.checkExisting`: job thử lại hoặc quản trị «gửi lại nơi lỗi» */
+  checkExisting: boolean;
 }
 
 /** Một nhắc hẹn Zalo cần tạo cho một nhóm (lệnh `action_kind = 2`). `startTime` = mili-giây epoch. */

@@ -21,28 +21,34 @@ export interface Principal {
 export const SYSTEM_PRINCIPAL: Principal = { userId: null, tenantId: 1, fullName: "Hệ thống", email: "", role: UserRole.Admin, groupIds: null };
 
 /** Thực thể của giao diện — phải khớp `ENTITIES` ở web/src/core/authorization/permission-types.ts. */
-export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task", "brief", "send_command"] as const;
+export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task", "brief", "send_command", "reply_template", "metric", "catalog"] as const;
 export type Entity = (typeof ENTITIES)[number];
-export type Action = "read" | "write" | "create" | "export";
+export type Action = "read" | "write" | "create" | "export" | "approve";
 export type PermissionMap = Record<string, Record<Action, boolean>>;
 
 /** Thực thể cho THÊM MỚI từ giao diện. Còn lại do Zalo sinh ra. */
-const CREATABLE = new Set<string>(["company", "bot_account", "user", "recipient"]);
+const CREATABLE = new Set<string>(["company", "bot_account", "user", "recipient", "reply_template", "metric"]);
 
-const NONE = { read: false, write: false, create: false, export: false };
+const NONE = { read: false, write: false, create: false, export: false, approve: false };
 
 /** Ma trận quyền theo vai trò. Quản trị: mọi thứ. Quản lý: xem + sửa nhóm / Danh bạ / tệp trong phạm vi, gửi tin dưới
  *  tên bot. Nhân viên: chỉ xem trong phạm vi. Cài đặt, tài khoản bot, người dùng, người nhận, nhật ký: chỉ quản trị. */
 export function permissionsFor(role: UserRole): PermissionMap {
   return Object.fromEntries(ENTITIES.map((entity) => {
-    if (role === UserRole.Admin) return [entity, { read: true, write: true, export: true, create: CREATABLE.has(entity) }];
+    if (role === UserRole.Admin) return [entity, { read: true, write: true, export: true, create: CREATABLE.has(entity), approve: true }];
+    // Phase 10: mẫu tin — mọi vai trò web soạn; chỉ Quản lý duyệt. Số liệu: Quản lý xem + xuất. Danh mục: Quản lý xem. Nhân viên không thấy
+    // số liệu / danh mục (có SĐT). Ghi danh mục + cấu hình nguồn số liệu: chỉ quản trị (đường API không khai luật); `metric.create`
+    // (CREATABLE) chỉ để nút «Thêm nguồn số liệu» của khung CRUD hiện cho quản trị.
+    if (entity === "reply_template") return [entity, { read: true, write: true, create: true, export: false, approve: role === UserRole.Manager }];
+    if (entity === "metric") return [entity, role === UserRole.Manager ? { ...NONE, read: true, export: true } : NONE];
+    if (entity === "catalog") return [entity, role === UserRole.Manager ? { ...NONE, read: true } : NONE];
     const adminOnly = ["bot_account", "setting", "user", "recipient", "audit"].includes(entity);
     if (adminOnly) return [entity, NONE];
     // Việc (phase 7): quản lý tạo / thao tác như ticket; nhân viên chỉ xem.
     const canWrite = role === UserRole.Manager && ["conversation", "contact", "group", "file", "ticket", "task"].includes(entity)
       // Gửi tin (phase 9): mọi vai trò được hủy lệnh CỦA MÌNH — phạm vi dòng + «gửi lại» chỉ quản trị kiểm trong API
       || entity === "send_command";
-    return [entity, { read: true, write: canWrite, export: role === UserRole.Manager, create: false }];
+    return [entity, { read: true, write: canWrite, export: role === UserRole.Manager, create: false, approve: false }];
   })) as PermissionMap;
 }
 

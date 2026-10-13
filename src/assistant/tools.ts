@@ -22,7 +22,10 @@ import { runSendBriefTool } from "../briefs/brief-tool.js";
 import type { SendChatContext } from "../send-commands/send-command-chat.js";
 import { runProposeSendTool } from "../send-commands/send-command-tool.js";
 import { runProposeMeetingAnnouncementTool } from "../send-commands/send-meeting-announcement-tool.js";
+import { runProposePinTool } from "../send-commands/send-pin-tool.js";
 import { runProposeReminderTool } from "../send-commands/send-reminder-tool.js";
+import type { SuggestToolContext } from "../reply-suggestions/reply-suggestion-tool.js";
+import { runQueryMetricsInTurn, runSuggestRepliesInTurn } from "./reply-metric-wiring.js";
 
 // Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file và export_report — send_file chỉ gửi cho
 // chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
@@ -94,6 +97,10 @@ export interface ToolContext {
    * nơi gọi ghép các dòng này lên trước bản xem trước — không thì người hỏi không thấy link họp và dễ bảo tạo lại (trùng cuộc họp).
    */
   actionNotes?: string[];
+  /** Gợi ý trả lời (phase 10, công cụ suggest_replies) — chỉ gắn ở tin riêng. Không có = công cụ báo không dùng được. */
+  replySuggestion?: SuggestToolContext;
+  /** Các tin gửi riêng SAU `fixedReply` (mỗi bản nháp trả lời một tin, chép là gửi được) — nơi gọi gửi lần lượt. */
+  followUps?: string[];
 }
 
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
@@ -526,6 +533,8 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
     (context: ToolContext, args: Record<string, unknown>) => runTicketTool(context.ticket, name, args, context.now)])),
   ...Object.fromEntries([...TASK_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) => runTaskTool(context.task, name, args, context.now)])),
+  suggest_replies: (context, args) => runSuggestRepliesInTurn(context, args),
+  query_metrics: (context, args) => runQueryMetricsInTurn(context, args),
   send_brief: (context, args) => runSendBriefTool(context.brief, context.briefAsker, args, context.now),
   propose_send_message: async (context, args) => {
     if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước lệnh gửi rồi — không tạo thêm." };
@@ -536,6 +545,12 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   propose_group_reminder: async (context, args) => {
     if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước rồi — không tạo thêm." };
     const outcome = await runProposeReminderTool(context.sendCommand, args, context.now);
+    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
+    return outcome.response;
+  },
+  propose_group_pin: async (context, args) => {
+    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước rồi — không tạo thêm." };
+    const outcome = await runProposePinTool(context.sendCommand, context.meetings, args, context.now);
     if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
     return outcome.response;
   },

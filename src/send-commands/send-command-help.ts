@@ -6,6 +6,7 @@ export const SEND_HELP: string[] = [
   "- gửi cái này vào nhóm A: <nội dung> — gửi kèm tệp / ảnh anh/chị vừa gửi em (trong 10 phút)",
   "- nhắn tự nhiên: «tạo nhắc hẹn họp 9h sáng mai trong nhóm Kho HN» — em tạo nhắc hẹn Zalo cho NHÓM (chỉ nhóm), cho xem trước rồi anh/chị nhắn «đồng ý»",
   "- nhắn tự nhiên: «gửi link họp vừa tạo vào nhóm Kho HN» — em gửi lời mời họp (tên, giờ, link Meet của cuộc họp em đã tạo), cho xem trước rồi anh/chị nhắn «đồng ý»",
+  "- nhắn tự nhiên: «ghim cuộc họp 15h của nhóm Kho HN» (hoặc «ghim lên nhóm Kho HN: <nội dung>») — em ghim ghi chú lên NHÓM, cho xem trước rồi anh/chị nhắn «đồng ý»",
   "- đồng ý · hủy · lệnh gửi (xem các lệnh đang hẹn) · hủy G-12",
   "- tắt bot — dừng MỌI tin bot gửi ra ngay (vẫn đọc + lưu tin) · bật bot (người nhận cảnh báo) · tình trạng bot",
 ];

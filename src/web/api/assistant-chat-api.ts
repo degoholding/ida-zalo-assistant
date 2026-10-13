@@ -103,6 +103,7 @@ export const assistantChatRoutes: ApiRoute[] = [
     const questionMessageId = await recordOutgoingMessage(db, thread, asker, messageId("q"), question, { source: "web" });
     const reply = await assistant.answer({ botAccountId, contact, threadId: thread.id, questionMessageId, question });
     if (reply.text) await recordOutgoingMessage(db, thread, bot, messageId("a"), reply.text, { source: "web" });
+    for (const draft of reply.followUps ?? []) await recordOutgoingMessage(db, thread, bot, messageId("a"), draft, { source: "web" });
     for (const file of reply.reportFiles ?? []) {
       await recordOutgoingMessage(db, thread, bot, messageId("f"), file.fileName, {
         source: "web", kind: MessageKind.File, file: { name: file.fileName, ext: reportFileExtension(file.fileName), storageKey: file.storageKey, bytes: file.bytes },

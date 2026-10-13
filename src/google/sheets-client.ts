@@ -120,6 +120,17 @@ export class GoogleSheetsClient {
     return data.updates?.updatedRange ?? "";
   }
 
+  /**
+   * Đọc một vùng ô (vd "'NKCV'!A1:ZZ20002"). Số trả về là số thật (UNFORMATTED_VALUE — không vướng «1.234.567»), ngày là số
+   * serial (SERIAL_NUMBER). Vùng trống → mảng rỗng; dòng ngắn hơn cột cuối thì Google cắt bớt ô trống ở cuối dòng.
+   */
+  async getValues(spreadsheetId: string, range: string): Promise<unknown[][]> {
+    const url = `${SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`
+      + "?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER&majorDimension=ROWS";
+    const data = await this.sheetsCall(url, { method: "GET" }) as { values?: unknown[][] } | null;
+    return Array.isArray(data?.values) ? data.values : [];
+  }
+
   private async sheetsCall(url: string, init: RequestInit): Promise<unknown> {
     const token = await this.getAccessToken();
     const { status, ok, json } = await this.call(url, {

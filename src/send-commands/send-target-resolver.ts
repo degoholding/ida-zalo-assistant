@@ -1,11 +1,12 @@
 import type { RowDataPacket } from "mysql2";
 import { resolveAlertAsker } from "../assistant/alert-tools.js";
-import { ContactKind, ConversationType, GroupKind, SendTargetKind, type FriendRequestStatus } from "../constants.js";
+import { ContactKind, ConversationType, GroupKind, SendActionKind, SendTargetKind, type FriendRequestStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { cleanPersonName, searchContactsByName } from "../sync/contact-search.js";
 import {
   isAllowedGroupTarget, isAllowedPersonTarget, isFakeZaloId, type SendGroupCandidate, type SendGroupScope, type SendPersonCandidate,
 } from "./send-command-permissions.js";
+import { groupActionWords } from "./send-group-action-words.js";
 import type { SendRequester, SendTargetRow } from "./send-command-types.js";
 import { describeChoices, pickTarget, type PickResult, type TargetCandidate } from "./send-target-matcher.js";
 
@@ -29,15 +30,16 @@ export async function loadGroupScope(db: Db, recipientId: number | null): Promis
   return { selectedGroupIds: rows.map((row) => Number(row.group_id)) };
 }
 
-/** `forReminder`: lệnh nhắc hẹn — màn Hội thoại trên web không tạo được nhắc hẹn, nên chỉ cách khác (gọi bot ngay trong nhóm). */
-function explainGroupRefusal(group: SendGroupCandidate, forReminder: boolean): string {
+/** `action` khác gửi tin (nhắc hẹn / ghim): màn Hội thoại trên web không làm được việc đó, nên không chỉ sang đó. */
+function explainGroupRefusal(group: SendGroupCandidate, action: SendActionKind): string {
+  const words = groupActionWords(action);
   if (group.threadType !== ConversationType.Group) return "không phải nhóm";
   if (group.groupKind !== GroupKind.Internal) {
-    return forReminder ? "là nhóm khách — nhắc hẹn từ tin riêng chỉ tạo cho nhóm nội bộ" : "là nhóm khách — gửi từ màn Hội thoại trên web";
+    return words ? words.guestRefusal : "là nhóm khách — gửi từ màn Hội thoại trên web";
   }
   if (isFakeZaloId(group.zaloGroupId)) return "là nhóm mẫu, không có thật bên Zalo";
   if (!group.botStillInGroup) return "bot không còn ở trong nhóm";
-  return `là nhóm Mật — chỉ người nhận đã chọn đúng nhóm này mới ${forReminder ? "tạo nhắc hẹn" : "gửi"} được`;
+  return `là nhóm Mật — chỉ người nhận đã chọn đúng nhóm này mới ${words ? words.secretDo : "gửi"} được`;
 }
 
 function explainPersonRefusal(person: SendPersonCandidate): string {
@@ -51,7 +53,7 @@ const GROUP_SELECT = `SELECT g.id, g.zalo_group_id, g.name, g.label, g.thread_ty
   EXISTS (SELECT 1 FROM bot_group bg WHERE bg.group_id = g.id AND bg.left_at IS NULL) AS bot_in_group
   FROM zalo_group g`;
 
-function toGroupCandidate(row: RowDataPacket, scope: SendGroupScope, forReminder = false): TargetCandidate {
+function toGroupCandidate(row: RowDataPacket, scope: SendGroupScope, action: SendActionKind = SendActionKind.Message): TargetCandidate {
   const group: SendGroupCandidate = {
     id: Number(row.id), threadType: Number(row.thread_type), groupKind: Number(row.group_kind), isConfidential: Number(row.is_confidential) === 1,
     botStillInGroup: Number(row.bot_in_group) === 1, zaloGroupId: String(row.zalo_group_id),
@@ -60,18 +62,18 @@ function toGroupCandidate(row: RowDataPacket, scope: SendGroupScope, forReminder
   const displayName = String(row.label || row.name || "");
   return {
     target: { kind: SendTargetKind.Group, key: `g:${group.id}`, threadId: group.id, zaloUid: null, displayName },
-    names: [String(row.label ?? ""), String(row.name ?? "")], allowed, reason: allowed ? "" : explainGroupRefusal(group, forReminder), secret: group.isConfidential,
+    names: [String(row.label ?? ""), String(row.name ?? "")], allowed, reason: allowed ? "" : explainGroupRefusal(group, action), secret: group.isConfidential,
   };
 }
 
-async function loadGroupCandidates(db: Db, query: string, scope: SendGroupScope, forReminder = false): Promise<TargetCandidate[]> {
+async function loadGroupCandidates(db: Db, query: string, scope: SendGroupScope, action: SendActionKind = SendActionKind.Message): Promise<TargetCandidate[]> {
   if (!query) return [];
   const like = `%${query.replace(/[%_\\]/g, (char) => `\\${char}`)}%`;
   const [rows] = await db.query<RowDataPacket[]>(
     `${GROUP_SELECT} WHERE g.thread_type = ? AND (g.name LIKE ? OR g.label LIKE ?)
      ORDER BY (g.name = ? OR g.label = ?) DESC, g.name LIMIT ?`,
     [ConversationType.Group, like, like, query, query, CANDIDATE_LIMIT]);
-  return rows.map((row) => toGroupCandidate(row, scope, forReminder));
+  return rows.map((row) => toGroupCandidate(row, scope, action));
 }
 
 interface PersonFacts {
@@ -142,28 +144,31 @@ export async function resolveTargetName(db: Db, rawName: string, scope: SendGrou
 }
 
 /**
- * Một tên → đúng một NHÓM hợp lệ (nhắc hẹn Zalo chỉ tạo cho nhóm). Không có nhóm nào khớp mà tên lại trỏ tới một người thì
- * từ chối rõ «nhắc hẹn chỉ tạo cho nhóm», không đoán sang nhóm khác.
+ * Một tên → đúng một NHÓM hợp lệ (nhắc hẹn / ghim Zalo chỉ làm cho nhóm). Không có nhóm nào khớp mà tên lại trỏ tới một người thì
+ * từ chối rõ «… chỉ làm cho nhóm», không đoán sang nhóm khác.
  */
-export async function resolveGroupName(db: Db, rawName: string, scope: SendGroupScope): Promise<ResolveOutcome> {
+export async function resolveGroupName(
+  db: Db, rawName: string, scope: SendGroupScope, action: SendActionKind = SendActionKind.Reminder,
+): Promise<ResolveOutcome> {
+  const words = groupActionWords(action)!;
   const name = rawName.normalize("NFC").trim();
-  const groups = await loadGroupCandidates(db, name.replace(GROUP_PREFIX, "").trim(), scope, true);
+  const groups = await loadGroupCandidates(db, name.replace(GROUP_PREFIX, "").trim(), scope, action);
   const picked = pickTarget(name, groups);
-  if (picked.kind !== "notFound") return toOutcome(name, picked, "Không tạo được nhắc hẹn cho");
+  if (picked.kind !== "notFound") return toOutcome(name, picked, words.refusePrefix);
   if (!GROUP_PREFIX.test(name) && (await loadPersonCandidates(db, name)).length) {
-    return { ok: false, problem: `«${name}» là một người, không phải nhóm — nhắc hẹn chỉ tạo cho nhóm.` };
+    return { ok: false, problem: `«${name}» là một người, không phải nhóm — ${words.notGroup}.` };
   }
   return { ok: false, problem: `Em không thấy nhóm nội bộ nào tên «${name}».` };
 }
 
 /** Kiểm lại một nơi nhận đã lưu còn hợp lệ không (lúc xác nhận / giao). null = còn hợp lệ, ngược lại là lý do. */
 export async function checkTargetStillAllowed(
-  db: Db, target: Pick<SendTargetRow, "kind" | "key" | "threadId">, scope: SendGroupScope, forReminder = false,
+  db: Db, target: Pick<SendTargetRow, "kind" | "key" | "threadId">, scope: SendGroupScope, action: SendActionKind = SendActionKind.Message,
 ): Promise<string | null> {
   if (target.kind === SendTargetKind.Group) {
     const [rows] = await db.query<RowDataPacket[]>(`${GROUP_SELECT} WHERE g.id = ? LIMIT 1`, [target.threadId]);
     if (!rows[0]) return "nhóm không còn trong hệ thống";
-    const candidate = toGroupCandidate(rows[0], scope, forReminder);
+    const candidate = toGroupCandidate(rows[0], scope, action);
     return candidate.allowed ? null : candidate.reason;
   }
   const uid = target.key.slice(2);

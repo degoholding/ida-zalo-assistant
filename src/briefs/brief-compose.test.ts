@@ -101,3 +101,35 @@ test("composeMorningBrief: cả bài vừa một màn điện thoại (≤ 25 d�
   assert.ok(text.split("\n").length <= 28, `${text.split("\n").length} dòng`);
   assert.ok(text.length <= 1500, `${text.length} ký tự`);
 });
+
+const metricDigest = {
+  date: "2026-10-08", compareDate: "2026-10-07" as string | null,
+  metrics: [{ label: "Doanh số", unit: "tr", total: 125.4, changePct: 12 }], sourceNames: ["BCSale"], readAt: vn("2026-10-08T18:02:00"),
+  flaggedCount: 0, missingCount: 1,
+};
+
+test("compose: metrics null / vắng → chữ y hệt bản không có mục số liệu (sáng và cuối ngày)", () => {
+  assert.equal(composeMorningBrief({ ...baseData, metrics: null }, ctx), composeMorningBrief(baseData, ctx));
+  assert.equal(composeEveningBrief({ ...baseData, metrics: null }, ctx), composeEveningBrief(baseData, ctx));
+  assert.ok(!composeMorningBrief(baseData, ctx).includes("Số liệu"));
+});
+
+test("compose: có số liệu → mục 6 ngay trước dòng cuối; sáng ghi ĐÚNG ngày số liệu + ngày so, cuối ngày «hôm nay» không %", () => {
+  const morning = composeMorningBrief({ ...baseData, metrics: metricDigest }, ctx).split("\n");
+  assert.equal(morning.at(-1), "Xem đủ: màn Bản tin trên web");
+  assert.deepEqual(morning.slice(-4, -1), ["6. Số liệu T5 08/10 (BCSale, đọc 18:02)", "   - Doanh số: 125,4 tr (▲12% so T4 07/10)", "   - 1 NV chưa báo"]);
+  // Sáng T2: số là của T7 (ngày làm việc trước) — tiêu đề không được ghi «hôm qua»
+  const monday = composeMorningBrief({ ...baseData, metrics: { ...metricDigest, date: "2026-10-10", compareDate: "2026-10-09" } }, ctx).split("\n");
+  assert.equal(monday.at(-4), "6. Số liệu T7 10/10 (BCSale, đọc 18:02)");
+  const evening = composeEveningBrief({ ...baseData, metrics: { ...metricDigest, compareDate: null, readAt: vn("2026-10-09T17:30:00"), missingCount: null } }, ctx).split("\n");
+  assert.equal(evening.at(-3), "6. Số liệu hôm nay (tới 17:30)");
+  assert.equal(evening.at(-2), "   - Doanh số: 125,4 tr");
+});
+
+test("compose: vượt trần 1.500 ký tự thì bỏ mục 6 trước", () => {
+  const long = "x".repeat(60);
+  const crowded: BriefComposeData = { ...baseData, urgentOpen: bucket(40, Array.from({ length: 3 }, (_, i) => line({ ref: i, text: long }))), tasks: emptyTasks };
+  const huge = Array.from({ length: 3 }, (_, i) => ({ label: "Chỉ tiêu rất dài ".repeat(30), unit: "", total: i, changePct: null }));
+  const text = composeMorningBrief({ ...crowded, metrics: { ...metricDigest, metrics: huge } }, ctx);
+  assert.ok(!text.includes("6. Số liệu"));
+});
