@@ -60,6 +60,7 @@ import { AckTracker, enqueueDirectReply, type AckState, type DirectReplyPayload,
 import type { JobRow } from "../jobs/job-queue.js";
 import { recordReaction } from "../flags/message-flags.js";
 import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
+import { questionWithAttachedImage } from "../assistant/attached-image-question.js";
 import { isTaskCommand, isTicketCommand, parseChatCommand } from "../assistant/chat-commands.js";
 import { toStyledContent } from "./rich-text.js";
 import { syncGroupMembers, type GroupInfoSource } from "../sync/member-sync.js";
@@ -504,13 +505,15 @@ export class AccountRunner {
     // Người lạ (chưa có vai trò): chỉ lưu, không trả lời — đại ca chốt 01/10/2026. Người nhận (phase 4) luôn được trả
     // lời: chat riêng với bot là kênh báo + ra lệnh của họ.
     const parsed = parseZaloContent(incoming.msgType, incoming.content);
+    // Chữ người gửi gõ: tin chữ, hoặc chú thích của ẢNH (dán ảnh rồi gõ chữ lên ảnh — gặp thật 15/10/2026: bot im)
+    const typed = parsed.kind === MessageKind.Text || parsed.kind === MessageKind.Image ? parsed.text.trim() : "";
     // Tắt bot khẩn (phase 9): lệnh tắt / bật / tình trạng xử lý NGAY ở đây, trước hàng đợi; đang tắt thì không xếp việc nào
-    if (parsed.kind === MessageKind.Text && parsed.text.trim()) {
+    if (typed) {
       const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
       const gate = { db: this.db, control: this.botHalt, sender: this.sender, log: this.log, getApi: () => this.api, getBot: () => bot };
-      if (await applyDirectHaltGate(gate, result.thread, result.contact, parsed.text)) return;
+      if (await applyDirectHaltGate(gate, result.thread, result.contact, typed)) return;
     }
-    const command = parsed.kind === MessageKind.Text ? parseChatCommand(parsed.text) : null;
+    const command = typed ? parseChatCommand(typed) : null;
     // Ticket (đại ca 08/10/2026): AI nhắn được cho bot đều báo / theo dõi ticket được, kể cả khách — chỉ lệnh ticket +
     // «hướng dẫn»; câu hỏi khác của người chưa có vai trò vẫn không trả lời.
     // Lệnh việc: người phụ trách (nhân viên chưa có vai trò) báo «xong V-12» trong tin riêng — quyền kiểm theo từng việc
@@ -524,11 +527,13 @@ export class AccountRunner {
       return;
     }
     this.log.info(`tin riêng từ ${who}: đang trả lời`);
-    if (parsed.kind !== MessageKind.Text || !parsed.text.trim()) return;
+    if (!typed) return;
 
+    // Ảnh kèm chú thích: câu hỏi chỉ đúng mã ảnh để trợ lý đọc ngay ảnh vừa gửi
+    const question = parsed.kind === MessageKind.Image ? await questionWithAttachedImage(this.db, result.messageId, typed) : parsed.text;
     // Ghi việc vào hàng đợi rồi đi tiếp — trả lời do bộ chạy việc làm (runDirectReplyJob), mỗi cuộc lần lượt từng câu
     const payload: DirectReplyPayload = {
-      accountId: this.account.id, threadId: result.thread.id, senderUid: incoming.senderUid, messageId: result.messageId, question: parsed.text,
+      accountId: this.account.id, threadId: result.thread.id, senderUid: incoming.senderUid, messageId: result.messageId, question,
     };
     const jobId = await enqueueDirectReply(this.db, payload, incoming.msgId);
     if (!jobId) return;

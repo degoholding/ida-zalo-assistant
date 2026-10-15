@@ -1,5 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { BoardType, ThreadType, type API, type GroupMessage, type NoteDetail, type TMessage } from "zca-js";
+import { questionWithAttachedImage } from "../assistant/attached-image-question.js";
 import { splitForZalo, type AssistantService } from "../assistant/assistant-service.js";
 import type { GroupActions } from "../assistant/group-action-tools.js";
 import type { AppConfig } from "../config.js";
@@ -87,8 +88,10 @@ export class GroupAssistantReplier {
     const { config, log } = this.deps;
     if (!config.assistant.groupReplyEnabled || !this.deps.getAssistant()) return;
     const parsed = parseZaloContent(incoming.msgType, incoming.content);
-    // Tin chữ, và tin LINK (dán link kèm câu «… bot https://…» — Zalo xếp vào loại link; gặp thật 07/10/2026: bot bỏ qua)
-    if (parsed.kind !== MessageKind.Text && parsed.kind !== MessageKind.Link) return;
+    // Tin chữ, tin LINK (dán link kèm câu «… bot https://…» — Zalo xếp vào loại link; gặp thật 07/10/2026: bot bỏ qua),
+    // và ẢNH kèm chú thích gọi bot («@bot đọc giúp hình này» gõ lên ảnh — gặp thật 15/10/2026 ở tin riêng)
+    if (parsed.kind !== MessageKind.Text && parsed.kind !== MessageKind.Link && parsed.kind !== MessageKind.Image) return;
+    if (!parsed.text.trim()) return;
     // Tin link: chỉ xét chữ người gửi tự gõ (dòng đầu) — mô tả xem trước của trang (vd «… IDA-Bot») không tính là gọi bot
     const typedText = parsed.kind === MessageKind.Link ? parsed.text.split("\n")[0] : parsed.text;
     const trigger = detectGroupTrigger({
@@ -222,6 +225,8 @@ export class GroupAssistantReplier {
     if (!contact) return;
     const groupName = group.label || group.name;
     const [rows] = await db.query<RowDataPacket[]>("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [group.id, incoming.msgId]);
+    // Ảnh kèm chú thích: câu hỏi chỉ đúng mã ảnh để trợ lý đọc ngay ảnh vừa gửi
+    const questionText = await questionWithAttachedImage(db, rows[0]?.id ? Number(rows[0].id) : null, question);
     const bot = this.deps.getBot();
     // Chưa trả lời xong sau ACK_DELAY_MS thì nhắn «chờ em xíu» (trích dẫn câu hỏi) — người hỏi biết bot đã nhận việc
     let ackTimer: NodeJS.Timeout | null = null;
@@ -233,7 +238,7 @@ export class GroupAssistantReplier {
       if (ackId) await recordOutgoingMessage(db, group, bot, String(ackId), ackText);
     };
     const reply = await assistant.answer({
-      botAccountId: this.deps.accountId, contact, threadId: group.id, questionMessageId: rows[0]?.id ?? null, question,
+      botAccountId: this.deps.accountId, contact, threadId: group.id, questionMessageId: rows[0]?.id ?? null, question: questionText,
       groupScope: { groupId: group.id, groupName, actions: this.buildActions(api, incoming.zaloGroupId, groupName) },
     }, {
       onAccepted: () => {
