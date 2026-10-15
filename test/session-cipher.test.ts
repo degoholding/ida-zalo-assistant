@@ -31,12 +31,12 @@ test("tên tệp bỏ ký tự cấm, khóa lưu chia theo nhóm + tháng", () =
   assert.equal(sanitizeFileName('a/b:c*?"<>|.pdf'), "a_b_c_.pdf");
   const key = buildStorageKey(
     { id: 7, zalo_group_id: "g1", sent_at: new Date("2026-10-01T03:00:00Z"), file_name: "", file_ext: "" },
-    "image/jpeg",
+    "jpg",
   );
   assert.equal(key, "g1/2026-10/7-tep.jpg");
   const named = buildStorageKey(
     { id: 8, zalo_group_id: "g1", sent_at: new Date("2026-10-01T03:00:00Z"), file_name: "Bao gia", file_ext: "xlsx" },
-    "application/octet-stream",
+    "xlsx",
   );
   assert.equal(named, "g1/2026-10/8-Bao gia.xlsx");
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
-import { requestAndAwaitDownload, sanitizeFileName, type DownloadEnqueuer } from "./attachment-downloader.js";
+import { requestAndAwaitDownload, resolveExtension, sanitizeFileName, type DownloadEnqueuer } from "./attachment-downloader.js";
 
 // requestAndAwaitDownload (phase 6, 10/10/2026): trợ lý chủ động đọc một tệp Skip/Failed/Pending còn link Zalo — đưa
 // về Pending + xếp hàng tải + CHỜ tới khi Stored / Failed / hết thời gian. Giả `db.query` thay vì dựng MySQL thật (hàm
@@ -61,4 +61,17 @@ test("requestAndAwaitDownload: còn Pending mãi tới hết thời gian → tr�
 test("sanitizeFileName: đổi ký tự Windows cấm thành _, gộp khoảng trắng, cắt ở 120 ký tự", () => {
   assert.equal(sanitizeFileName('bao gia: "A" <B>|C?.pdf'), "bao gia_ _A_ _B_C_.pdf");
   assert.equal(sanitizeFileName("a".repeat(200)).length, 120);
+});
+
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+
+test("resolveExtension: ảnh Zalo không đuôi, CDN trả octet-stream → nhận ra jpg qua chữ ký đầu tệp", () => {
+  assert.equal(resolveExtension("", "application/octet-stream", JPEG_BYTES), "jpg");
+  assert.equal(resolveExtension("", "image/jpg", Buffer.from("x")), "jpg");
+});
+
+test("resolveExtension: đuôi Zalo báo / content-type đi trước chữ ký; không nhận ra gì → bin", () => {
+  assert.equal(resolveExtension("xlsx", "application/octet-stream", JPEG_BYTES), "xlsx");
+  assert.equal(resolveExtension("", "image/png; charset=binary", JPEG_BYTES), "png");
+  assert.equal(resolveExtension("", "application/octet-stream", Buffer.from("plain text")), "bin");
 });

@@ -3,6 +3,7 @@ import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
 import type { FileStorage } from "../storage/file-storage.js";
+import { sniffImageType } from "../storage/image-type-sniff.js";
 
 // Link file của Zalo có hạn — tải NGAY lúc tin tới. Hàng đợi nằm trong tiến trình; tiến trình
 // chết giữa chừng thì lúc khởi động lại quét các dòng Pending trong DB rồi tải tiếp.
@@ -12,6 +13,7 @@ const RETRY_DELAY_MS = 30_000;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 const EXTENSION_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
+  "image/jpg": "jpg",
   "image/png": "png",
   "image/gif": "gif",
   "image/webp": "webp",
@@ -39,10 +41,17 @@ export function sanitizeFileName(name: string): string {
   return name.replace(/[\\/:*?"<>|\r\n\t]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 120);
 }
 
+/**
+ * Đuôi tệp để cất kho: đuôi Zalo báo → content-type → chữ ký đầu tệp (ảnh Zalo không tên, CDN có lúc trả
+ * application/octet-stream) → «bin».
+ */
+export function resolveExtension(fileExt: string, contentType: string, body: Buffer): string {
+  return fileExt || EXTENSION_BY_MIME[contentType.split(";")[0].trim().toLowerCase()] || sniffImageType(body)?.ext || "bin";
+}
+
 export function buildStorageKey(job: Pick<AttachmentJob, "id" | "zalo_group_id" | "sent_at" | "file_name" | "file_ext">,
-  contentType: string): string {
+  extension: string): string {
   const month = job.sent_at.toISOString().slice(0, 7);
-  const extension = job.file_ext || EXTENSION_BY_MIME[contentType.split(";")[0].trim()] || "bin";
   const baseName = job.file_name ? sanitizeFileName(job.file_name) : `tep.${extension}`;
   const name = /\.[a-z0-9]{1,10}$/i.test(baseName) ? baseName : `${baseName}.${extension}`;
   return `${job.zalo_group_id}/${month}/${job.id}-${name}`;
@@ -120,13 +129,16 @@ export class AttachmentDownloader {
 
     try {
       const { body, contentType } = await this.download(job.source_url);
-      const storageKey = await this.storage.put(buildStorageKey(job, contentType), body, contentType);
-      // Ảnh nhập từ Zalo Web nằm nguyên trong source_url (data URL, tới vài MB) — cất xong thì bỏ, khỏi phình bảng
+      const extension = resolveExtension(job.file_ext, contentType, body);
+      const storageKey = await this.storage.put(buildStorageKey(job, extension), body, contentType);
+      // Ảnh nhập từ Zalo Web nằm nguyên trong source_url (data URL, tới vài MB) — cất xong thì bỏ, khỏi phình bảng.
+      // Tin không báo đuôi (ảnh Zalo) thì ghi đuôi vừa nhận ra — bộ đọc tệp của trợ lý phân loại theo đuôi
       await this.db.query(
         `UPDATE attachment SET status = ?, storage_key = ?, stored_bytes = ?, attempts = attempts + 1,
            last_error = '', stored_at = CURRENT_TIMESTAMP(3),
+           file_ext = IF(file_ext = '' AND ? <> 'bin', ?, file_ext),
            source_url = IF(source_url LIKE 'data:%', '', source_url) WHERE id = ?`,
-        [AttachmentStatus.Stored, storageKey, body.length, job.id],
+        [AttachmentStatus.Stored, storageKey, body.length, extension, extension, job.id],
       );
     } catch (error) {
       const attempts = job.attempts + 1;

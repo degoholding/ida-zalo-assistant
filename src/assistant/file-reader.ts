@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import type { FileStorage } from "../storage/file-storage.js";
+import { sniffImageType } from "../storage/image-type-sniff.js";
 import { readZipEntry } from "./zip-reader.js";
 
 // Bóc chữ từ tệp trong kho cho bot đọc: txt / csv / xlsx / docx tự bóc; pdf / ảnh nhờ mô hình đọc; ghi âm (mp3, m4a…)
@@ -172,7 +173,9 @@ async function extract(deps: FileReaderDeps, file: { file_name: string; file_ext
     return { method: "docx", text, summary: "docx", ...zero };
   }
   if (VIDEO_EXTENSIONS.has(ext)) return { method: "unsupported", text: "", summary: `không đọc video (.${ext})`, ...zero };
-  const mime = ext === "pdf" ? "application/pdf" : IMAGE_MIME[ext] ?? AUDIO_MIME[ext];
+  // Ảnh: báo mô hình đúng loại theo chữ ký đầu tệp (đuôi có thể là «jpg» điền bù cho ảnh Zalo không tên)
+  const imageMime = IMAGE_MIME[ext] ? sniffImageType(file.data)?.mime ?? IMAGE_MIME[ext] : undefined;
+  const mime = ext === "pdf" ? "application/pdf" : imageMime ?? AUDIO_MIME[ext];
   if (mime && deps.readDocument) {
     const audio = Boolean(AUDIO_MIME[ext]);
     const instruction = ext === "pdf" ? DOCUMENT_INSTRUCTION : audio ? AUDIO_INSTRUCTION : IMAGE_INSTRUCTION;

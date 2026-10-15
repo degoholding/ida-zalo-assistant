@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deflateRawSync } from "node:zlib";
 import * as XLSX from "xlsx";
-import { audioMimeFor, classifyForReading, extensionOf, extractDocx, extractSheet, isRetryableFileSourceUrl, MAX_SHEET_ROWS } from "./file-reader.js";
+import { Readable } from "node:stream";
+import { AttachmentStatus } from "../constants.js";
+import type { Db } from "../db/pool.js";
+import type { FileStorage } from "../storage/file-storage.js";
+import { audioMimeFor, classifyForReading, extensionOf, extractDocx, extractSheet, isRetryableFileSourceUrl, MAX_SHEET_ROWS, readAttachmentText } from "./file-reader.js";
 
 function docxOf(xml: string): Buffer {
   const name = Buffer.from("word/document.xml");
@@ -86,4 +90,33 @@ test("isRetryableFileSourceUrl: chỉ nhận link http(s), không nhận data: U
   assert.equal(isRetryableFileSourceUrl(""), false);
   assert.equal(isRetryableFileSourceUrl(null), false);
   assert.equal(isRetryableFileSourceUrl(undefined), false);
+});
+
+test("ảnh Zalo không tên (đuôi điền bù «jpg») nhưng ruột là PNG: báo mô hình image/png, cất chữ đã đọc", async () => {
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
+  const inserts: unknown[][] = [];
+  const db = {
+    query: async (sql: string, params?: unknown[]) => {
+      if (sql.startsWith("INSERT")) {
+        inserts.push(params ?? []);
+        return [{ affectedRows: 1 }];
+      }
+      return [[{ id: 20, file_name: "", file_ext: "jpg", status: AttachmentStatus.Stored, storage_key: "k/20-tep.bin", stored_bytes: png.length,
+        method: null, summary: null, text: null, char_count: null }]];
+    },
+  } as unknown as Db;
+  const storage = { read: async () => Readable.from([png]) } as unknown as FileStorage;
+  const seenMimes: string[] = [];
+  const result = await readAttachmentText({
+    db, storage, maxFileBytes: 5 * 1024 * 1024, allowedExtensions: ["jpg", "png"],
+    readDocument: async (mime) => {
+      seenMimes.push(mime);
+      return { text: "HÓA ĐƠN 123\nMô tả: hóa đơn bán hàng", inputTokens: 10, outputTokens: 5 };
+    },
+  }, 20);
+  assert.deepEqual(seenMimes, ["image/png"]);
+  assert.ok(!("error" in result));
+  assert.equal(result.fileName, "tep.jpg");
+  assert.equal(result.summary, "ảnh (mô hình đọc)");
+  assert.equal(inserts.length, 1);
 });
