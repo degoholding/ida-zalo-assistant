@@ -200,6 +200,12 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     applyTo: (config, value) => { config.assistant.readableFileTypes = asList(value); },
   },
   {
+    key: "assistant_auto_read_images", group: "assistant", label: "Tự đọc ảnh gửi trong nhóm", type: "bool", secret: false,
+    help: "Ảnh gửi vào nhóm bật «Đọc tin» (trừ nhóm Mật) được AI chép chữ + mô tả trong ~2 phút, rồi xét khẩn như tin chữ; tóm tắt nhóm, bản tin, tìm tệp thấy nội dung ảnh. Ảnh gửi NGUYÊN cho hãng AI (SĐT / STK nằm trong ảnh không che được). ~1.250 token / ảnh, đọc ảnh dùng tối đa nửa trần token ngày.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.assistant.autoReadImages = value === true; },
+  },
+  {
     key: "assistant_show_token_usage", group: "assistant", label: "Hiện số token dưới câu trả lời", type: "bool", secret: false,
     help: "Bật thì mỗi câu trả lời kèm tổng token làm tròn nghìn, vd «[3k token]» — để thử mô hình, ước chi phí. Chi tiết từng lượt xem ở bảng assistant_turn. Chạy thật thì nên tắt.",
     envName: null, defaultValue: false,

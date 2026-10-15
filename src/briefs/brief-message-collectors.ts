@@ -88,9 +88,12 @@ export function waitingOpen(db: Db, scope: BriefScope, now: Date, limit = 20): P
 
 const AI_CANDIDATE_LIMIT = 200;
 const AI_SNIPPET_MAX = 300;
+/** Chữ của tin cho điểm tin: tin chữ giữ nguyên; ảnh = chú thích + «[Ảnh] chữ đọc được» (ảnh chưa đọc thì chỉ chú thích). */
+const AI_TEXT_SQL = "CONCAT_WS(' ', NULLIF(m.text, ''), CONCAT('[Ảnh] ', LEFT(t.text, 2000)))";
 
 /**
- * Tin ứng viên cho điểm tin AI: nhóm `aiGroupIds` (đã bỏ Mật), kiểu Text / Link, ≥ 15 ký tự, không phải bot, trong
+ * Tin ứng viên cho điểm tin AI: nhóm `aiGroupIds` (đã bỏ Mật), kiểu Text / Link, hoặc ảnh đã tự đọc (chú thích + «[Ảnh] chữ
+ * đọc được», src/alerts/image-auto-read.ts), ≥ 15 ký tự, không phải bot, trong
  * kỳ — ưu tiên tin đã có cờ (khẩn / quan trọng / AI), rồi tới nhóm đang sôi động (nhiều tin trong kỳ). Trần 200 tin;
  * che dữ liệu cá nhân TRƯỚC khi cắt còn tối đa 300 ký tự (review phase 8, Low) — che sau khi cắt có thể cắt đứt giữa
  * một số SĐT / STK / CCCD, khiến nửa còn lại không khớp mẫu che được nữa và lọt nguyên văn sang mô hình AI.
@@ -101,18 +104,20 @@ export async function aiCandidates(db: Db, scope: BriefScope, period: BriefPerio
   const botUids = botRows.map((row) => String(row.zalo_uid));
   const notBotSql = botUids.length ? "AND m.sender_uid NOT IN (?)" : "";
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT ${LINE_COLUMNS}, (f.message_id IS NOT NULL) AS flagged, COALESCE(gc.cnt, 0) AS group_activity
+    `SELECT ${LINE_COLUMNS.replace("m.text", `${AI_TEXT_SQL} AS text`)}, (f.message_id IS NOT NULL) AS flagged, COALESCE(gc.cnt, 0) AS group_activity
      FROM message m
      JOIN zalo_group g ON g.id = m.group_id
+     LEFT JOIN attachment a ON a.message_id = m.id AND m.kind = ${MessageKind.Image}
+     LEFT JOIN attachment_text t ON t.attachment_id = a.id
      LEFT JOIN message_flag f ON f.message_id = m.id
      LEFT JOIN (
        SELECT group_id, COUNT(*) AS cnt FROM message WHERE group_id IN (?) AND sent_at >= ? AND sent_at < ? GROUP BY group_id
      ) gc ON gc.group_id = m.group_id
-     WHERE m.group_id IN (?) AND m.kind IN (?, ?) AND CHAR_LENGTH(COALESCE(m.text, '')) >= 15 AND m.recalled_at IS NULL
+     WHERE m.group_id IN (?) AND m.kind IN (?, ?, ?) AND CHAR_LENGTH(${AI_TEXT_SQL}) >= 15 AND m.recalled_at IS NULL
        AND m.sent_at >= ? AND m.sent_at < ? ${notBotSql}
      ORDER BY flagged DESC, group_activity DESC, m.sent_at DESC
      LIMIT ?`,
-    [scope.aiGroupIds, period.from, period.to, scope.aiGroupIds, MessageKind.Text, MessageKind.Link, period.from, period.to,
+    [scope.aiGroupIds, period.from, period.to, scope.aiGroupIds, MessageKind.Text, MessageKind.Link, MessageKind.Image, period.from, period.to,
       ...(botUids.length ? [botUids] : []), limit]);
   return rows.map((row) => ({ ...toBriefLine(row), text: clampText(maskPersonalData(String(row.text ?? "")), AI_SNIPPET_MAX) }));
 }

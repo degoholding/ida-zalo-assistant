@@ -70,6 +70,8 @@ export interface AppConfig {
     groupReplyAnyone: boolean;
     /** Đuôi tệp bot được đọc (cài đặt «Loại tệp bot được đọc»). Rỗng = mọi loại đọc được. */
     readableFileTypes: string[];
+    /** Tự đọc ảnh gửi trong nhóm (chép chữ + mô tả, xét khẩn) — src/alerts/image-auto-read.ts. */
+    autoReadImages: boolean;
     /** Gắn dòng đo token dưới mỗi câu trả lời (thử mô hình / ước chi phí). */
     showTokenUsage: boolean;
   };
@@ -219,6 +221,7 @@ export function loadConfig(): AppConfig {
       groupReplyAnyone: true,
       showTokenUsage: false,
       readableFileTypes: ["pdf", "docx", "xlsx", "xls", "csv", "txt", "md", "jpg", "jpeg", "png", "webp", "mp3", "m4a", "wav", "aac"],
+      autoReadImages: true,
     },
     calendar: { workHours: DEFAULT_WORK_HOURS, workDays: DEFAULT_WORK_DAYS, quietHours: DEFAULT_QUIET_HOURS, holidays: DEFAULT_HOLIDAYS },
     privacy: { maskPersonalData: true, blockWebForAgroTechnical: true, allowedAiProviders: ALL_AI_PROVIDER_CODES },

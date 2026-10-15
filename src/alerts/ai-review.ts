@@ -13,13 +13,17 @@ import { loadAlertSetup, scheduleUrgentDispatch, watchesGroup } from "./alert-st
 // AI đọc lại theo LÔ (phase 5, worker 5 phút / lần): (1) xác nhận ứng viên khẩn — tin có từ «nghiêm» («la», «liền»,
 // «ngay») hay từ khẩn một chữ trong tin không dấu; (2) bắt tin khẩn KHÔNG có từ khóa (IDA câu 6: báo trong 5–10 phút).
 // Một lần gọi AI cho cả lô (rẻ). Nhóm Mật không bao giờ đưa cho AI. Chữ đưa đi đã che SĐT / STK / CCCD. Token tính vào
-// trần ngày của hệ thống (ghi bảng system_ai_usage).
+// trần ngày của hệ thống (ghi bảng system_ai_usage). Ảnh gửi trong nhóm: việc nền tự đọc ảnh (image-auto-read.ts) chép
+// chữ + mô tả rồi gắn cờ chờ AI — lô này xét «chú thích [Ảnh: chữ đọc được]» như một tin chữ.
 
 const log = createLogger("alert-ai");
 const CURSOR = "ai_review";
 const MAX_ITEMS = 60;
 const LOOKBACK_MS = 2 * 60 * 60_000;
 const MIN_TEXT = 8;
+/** Mỗi tin đưa AI tối đa ngần này ký tự; tin ảnh dài hơn (chú thích + chữ đọc từ ảnh). */
+const MAX_LINE_TEXT = 300;
+const MAX_IMAGE_LINE_TEXT = 600;
 
 const SYSTEM_PROMPT = `Bạn phân loại tin nhắn công việc trong các nhóm Zalo của một công ty phân bón / thuốc bảo vệ thực vật.
 Với MỖI tin, chọn đúng một mức:
@@ -39,6 +43,18 @@ interface ReviewItem {
   text: string;
   sentAt: Date;
   hadFlag: boolean;
+  isImage: boolean;
+}
+
+/**
+ * Chữ tin ảnh đưa AI xét: chú thích + «[Ảnh: …]». Che dữ liệu cá nhân TRƯỚC khi cắt (cắt trước có thể đứt đôi một SĐT /
+ * STK, nửa còn lại lọt qua mẫu che); dài quá thì giữ phần đầu + dòng «Mô tả:» ở cuối.
+ */
+export function imageReviewText(caption: string, imageText: string): string {
+  const room = MAX_IMAGE_LINE_TEXT - 100;
+  const flat = maskPersonalData(imageText).replace(/\s+/g, " ").trim();
+  const clipped = flat.length <= room ? flat : `${flat.slice(0, room - 160)} … ${flat.slice(-150)}`;
+  return `${maskPersonalData(caption).replace(/\s+/g, " ").trim().slice(0, 80)} [Ảnh: ${clipped}]`.trim();
 }
 
 /** Dựng chuỗi khóa AI như trợ lý (bảng Khóa AI, chỉ hãng được phép). null = chưa có khóa. */
@@ -79,10 +95,16 @@ export async function systemTokensToday(db: Db, now: Date): Promise<number> {
 
 async function loadCandidates(db: Db, now: Date): Promise<{ items: ReviewItem[]; newCursor: number }> {
   const since = new Date(now.getTime() - LOOKBACK_MS);
-  const base = `SELECT m.id, m.group_id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_name, m.sender_uid, m.text, m.sent_at
+  // Tin chữ / link đủ dài, hoặc ảnh đã đọc được chữ (attachment_text)
+  const base = `SELECT m.id, m.group_id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_name, m.sender_uid, m.text, m.sent_at,
+      m.kind, LEFT(t.text, 4000) AS image_text
     FROM message m JOIN zalo_group g ON g.id = m.group_id
+    LEFT JOIN attachment a ON a.message_id = m.id AND m.kind = ${MessageKind.Image}
+    LEFT JOIN attachment_text t ON t.attachment_id = a.id
     WHERE g.thread_type = ${ConversationType.Group} AND g.read_messages = 1 AND g.is_confidential = 0 AND m.recalled_at IS NULL
-      AND m.kind IN (${MessageKind.Text}, ${MessageKind.Link}) AND m.sent_at > ? AND CHAR_LENGTH(m.text) >= ${MIN_TEXT}
+      AND ((m.kind IN (${MessageKind.Text}, ${MessageKind.Link}) AND CHAR_LENGTH(m.text) >= ${MIN_TEXT})
+        OR (m.kind = ${MessageKind.Image} AND t.text IS NOT NULL AND t.text <> ''))
+      AND m.sent_at > ?
       AND m.sender_uid NOT IN (SELECT zalo_uid FROM bot_account WHERE zalo_uid IS NOT NULL)`;
   const [pending] = await db.query<RowDataPacket[]>(
     `${base} AND EXISTS (SELECT 1 FROM message_flag f WHERE f.message_id = m.id AND f.pending_ai = 1) ORDER BY m.id LIMIT ?`, [since, MAX_ITEMS]);
@@ -93,7 +115,8 @@ async function loadCandidates(db: Db, now: Date): Promise<{ items: ReviewItem[];
     `${base} AND m.id > ? AND NOT EXISTS (SELECT 1 FROM message_flag f WHERE f.message_id = m.id) ORDER BY m.id LIMIT ?`, [since, cursor, room]) : [[]];
   const toItem = (row: RowDataPacket, hadFlag: boolean): ReviewItem => ({
     id: Number(row.id), groupId: Number(row.group_id), groupName: String(row.group_name ?? ""), senderName: String(row.sender_name ?? ""),
-    senderUid: String(row.sender_uid), text: String(row.text ?? ""), sentAt: new Date(row.sent_at), hadFlag,
+    senderUid: String(row.sender_uid), sentAt: new Date(row.sent_at), hadFlag, isImage: Number(row.kind) === MessageKind.Image,
+    text: Number(row.kind) === MessageKind.Image ? imageReviewText(String(row.text ?? ""), String(row.image_text ?? "")) : String(row.text ?? ""),
   });
   const items = [...pending.map((row) => toItem(row, true)), ...(fresh as RowDataPacket[]).map((row) => toItem(row, false))];
   const newCursor = (fresh as RowDataPacket[]).reduce((max, row) => Math.max(max, Number(row.id)), cursor);
@@ -120,7 +143,7 @@ export async function runAiReview(db: Db, config: AppConfig, now = new Date(), c
   const model = client === undefined ? await buildAlertModelClient(db, config) : client;
   if (!model) return { reviewed: 0, urgent: 0, skipped: "chưa có khóa AI" };
 
-  const lines = items.map((item) => `#${item.id} [${item.groupName}] ${item.senderName}: ${maskPersonalData(item.text).replace(/\s+/g, " ").slice(0, 300)}`);
+  const lines = items.map((item) => `#${item.id} [${item.groupName}] ${item.senderName}: ${maskPersonalData(item.text).replace(/\s+/g, " ").slice(0, item.isImage ? MAX_IMAGE_LINE_TEXT : MAX_LINE_TEXT)}`);
   const started = Date.now();
   const result = await model.generate({ system: SYSTEM_PROMPT, contents: [{ role: "user", parts: [{ text: lines.join("\n") }] }], tools: [], forceText: true });
   const answer = result.content.parts.map((part) => part.text ?? "").join("");

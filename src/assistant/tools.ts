@@ -1,5 +1,6 @@
 import type { RowDataPacket } from "mysql2";
-import { AttachmentStatus, ConversationType } from "../constants.js";
+import { AttachmentStatus, ConversationType, MessageKind } from "../constants.js";
+import { maskPersonalData } from "../privacy/personal-data.js";
 import type { Db } from "../db/pool.js";
 import { runListContacts } from "./contact-directory-tool.js";
 import { runExportReport, type ExportReport } from "./export-report-tool.js";
@@ -233,12 +234,28 @@ interface MessageLineRow extends RowDataPacket {
   sent_at: Date;
   sender_name: string;
   sender_uid: string;
+  kind: number;
   text: string | null;
   quote_text: string | null;
   file_name: string | null;
   attachment_id: number | null;
+  /** Chữ đã đọc từ tệp (attachment_text) — ảnh tự đọc / tệp trợ lý từng đọc */
+  file_text: string | null;
   group_name: string;
   thread_type: number;
+}
+
+/** Chữ đọc từ ảnh đưa vào dòng tin tối đa ngần này ký tự — đủ để tóm tắt biết ảnh nói gì, muốn đủ thì read_file. */
+const IMAGE_TEXT_IN_LINE = 300;
+
+/** «[tệp #12: Bao gia.xlsx]» / «[ảnh #20: <chữ + mô tả đã đọc>]» (ảnh Zalo không có tên tệp). */
+export function attachmentLabel(row: Pick<MessageLineRow, "kind" | "file_name" | "attachment_id" | "file_text">): string {
+  if (row.file_name) return `[tệp #${row.attachment_id}: ${row.file_name}]`;
+  if (row.kind !== MessageKind.Image) return `[tệp #${row.attachment_id}]`;
+  // Che dữ liệu cá nhân TRƯỚC khi cắt — cắt trước có thể đứt đôi một SĐT / STK, nửa còn lại lọt qua mẫu che
+  const seen = maskPersonalData(row.file_text ?? "").replace(/\s+/g, " ").trim();
+  if (!seen) return `[ảnh #${row.attachment_id}]`;
+  return `[ảnh #${row.attachment_id}: ${seen.length > IMAGE_TEXT_IN_LINE ? `${seen.slice(0, IMAGE_TEXT_IN_LINE - 1)}…` : seen}]`;
 }
 
 function formatLines(rows: MessageLineRow[], withGroup: boolean): { text: string; truncated: boolean } {
@@ -246,7 +263,7 @@ function formatLines(rows: MessageLineRow[], withGroup: boolean): { text: string
   for (const row of rows) {
     const where = withGroup ? ` (${row.thread_type === ConversationType.Direct ? "nhắn riêng bot" : row.group_name})` : "";
     const quote = row.quote_text ? ` [trả lời: "${row.quote_text.slice(0, 80)}"]` : "";
-    const file = row.file_name ? ` [tệp #${row.attachment_id}: ${row.file_name}]` : "";
+    const file = row.attachment_id ? ` ${attachmentLabel(row)}` : "";
     const body = (row.text ?? "").replace(/\s+/g, " ").trim();
     lines.push(`[${formatVn(row.sent_at)}]${where} ${row.sender_name || row.sender_uid}:${quote} ${body}${file}`.trim());
   }
@@ -264,11 +281,13 @@ function formatLines(rows: MessageLineRow[], withGroup: boolean): { text: string
 const CONFIDENTIAL_ERROR = "Nhóm này để chế độ Mật — bot không đưa nội dung nhóm cho AI. Báo người hỏi xem trực tiếp trong nhóm.";
 
 const MESSAGE_SELECT = `
-  SELECT m.sent_at, m.sender_name, m.sender_uid, m.text, m.quote_text, a.file_name, a.id AS attachment_id,
+  SELECT m.sent_at, m.sender_name, m.sender_uid, m.kind, m.text, m.quote_text, a.file_name, a.id AS attachment_id,
+         IF(m.kind = ${MessageKind.Image}, LEFT(t.text, 2000), NULL) AS file_text,
          COALESCE(NULLIF(g.label, ''), g.name) AS group_name, g.thread_type
   FROM message m
   JOIN zalo_group g ON g.id = m.group_id
-  LEFT JOIN attachment a ON a.message_id = m.id`;
+  LEFT JOIN attachment a ON a.message_id = m.id
+  LEFT JOIN attachment_text t ON t.attachment_id = a.id`;
 
 async function listGroups(context: ToolContext, args: Record<string, unknown>) {
   const query = typeof args.query === "string" ? args.query.trim() : "";
@@ -420,7 +439,8 @@ async function searchFiles(context: ToolContext, args: Record<string, unknown>) 
       size_kb: Math.round(((row.stored_bytes ?? row.declared_size) || 0) / 1024),
       can_send: row.status === AttachmentStatus.Stored,
       can_read: row.status === AttachmentStatus.Stored,
-      already_read: row.text_chars !== null && row.text_chars !== undefined,
+      // Dòng tự đọc ảnh hỏng có char_count = 0 nhưng chưa có chữ — chưa tính là đã đọc
+      already_read: Number(row.text_chars ?? 0) > 0,
     })),
   };
 }

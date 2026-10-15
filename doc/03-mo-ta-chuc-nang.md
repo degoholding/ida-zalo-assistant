@@ -86,7 +86,7 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
 | `find_people` | tìm người theo tên |
 | `get_conversation_with_person` | trao đổi với một người (riêng + trong nhóm) |
 | `search_files` | tìm tệp theo tên **và nội dung đã bóc**; hỏi rỗng = tệp gần đây của người hỏi |
-| `read_file` | đọc tệp: xlsx / docx / pdf / txt / csv / ảnh, **nghe ghi âm** (mp3, m4a, wav, aac — gỡ băng + tóm tắt), tối đa 5 MB (sửa được tới 20 MB); video (mp4) không đọc. Loại nào được đọc do Cài đặt → «Loại tệp bot được đọc»; chữ bóc ra được cất lại |
+| `read_file` | đọc tệp: xlsx / docx / pdf / txt / csv / ảnh, **nghe ghi âm** (mp3, m4a, wav, aac — gỡ băng + tóm tắt), tối đa 5 MB (sửa được tới 20 MB); video (mp4) không đọc. Loại nào được đọc do Cài đặt → «Loại tệp bot được đọc»; chữ bóc ra được cất lại. Ảnh gửi trong nhóm (trừ nhóm Mật) bot **tự đọc** trong ~2 phút (Cài đặt → «Tự đọc ảnh gửi trong nhóm»): chữ + mô tả ảnh được xét khẩn như tin chữ, và hiện trong tóm tắt nhóm / điểm tin bản tin |
 | `send_file` | gửi lại một tệp trong kho cho người hỏi |
 | `web_search` | tìm trên mạng |
 | `create_reminder` · `create_pinned_note` · `create_poll` · `unpin_note` · `cancel_reminder` | **chỉ khi được gọi trong nhóm, chỉ tác động nhóm đó**: tạo nhắc hẹn Zalo (tới giờ Zalo tự báo cả nhóm, lặp ngày / tuần / tháng), ghim nội dung lên nhóm (ghi chú có ghim — Zalo không ghim được tin có sẵn), tạo bình chọn; bỏ ghim ghi chú, hủy nhắc hẹn (chỉ id có thật trong nhóm). Ai làm được = ai gọi được bot trong nhóm; tối đa 3 việc mỗi lần hỏi |

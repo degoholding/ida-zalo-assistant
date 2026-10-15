@@ -1,7 +1,8 @@
 import type { RowDataPacket } from "mysql2";
+import { MessageKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { stripTokenFooter } from "./token-usage-footer.js";
-import { formatVn } from "./tools.js";
+import { attachmentLabel, formatVn } from "./tools.js";
 
 // Ngữ cảnh khi bot được gọi TRONG NHÓM: vài tin gần nhất của chính nhóm đó (gồm cả câu bot vừa trả lời), để hỏi
 // nối tiếp kiểu «chi tiết báo cáo đó» hiểu được «đó» là gì. Chỉ lấy tin của nhóm đang hỏi — đúng phạm vi groupScope.
@@ -12,22 +13,28 @@ const MAX_LINE_CHARS = 600;
 
 interface ContextRow extends RowDataPacket {
   sender_name: string;
+  kind: number;
   text: string | null;
   sent_at: Date;
   file_name: string | null;
+  attachment_id: number | null;
+  file_text: string | null;
 }
 
 export async function loadGroupContext(db: Db, groupId: number, beforeMessageId: number | null): Promise<string> {
   const [rows] = await db.query<ContextRow[]>(
-    `SELECT m.sender_name, m.text, m.sent_at, a.file_name
-     FROM message m LEFT JOIN attachment a ON a.message_id = m.id
+    `SELECT m.sender_name, m.kind, m.text, m.sent_at, a.file_name, a.id AS attachment_id,
+            IF(m.kind = ${MessageKind.Image}, LEFT(t.text, 2000), NULL) AS file_text
+     FROM message m LEFT JOIN attachment a ON a.message_id = m.id LEFT JOIN attachment_text t ON t.attachment_id = a.id
      WHERE m.group_id = ? AND m.recalled_at IS NULL AND (? IS NULL OR m.id < ?)
-       AND ((m.text IS NOT NULL AND m.text <> '') OR a.file_name IS NOT NULL)
+       AND ((m.text IS NOT NULL AND m.text <> '') OR a.id IS NOT NULL)
      ORDER BY m.id DESC LIMIT ?`,
     [groupId, beforeMessageId, beforeMessageId, CONTEXT_MESSAGES],
   );
   return rows.reverse().map((row) => {
-    const body = row.file_name ? `[tệp] ${row.file_name}` : stripTokenFooter(String(row.text)).replace(/\s+/g, " ").slice(0, MAX_LINE_CHARS);
+    // Tệp / ảnh: nhãn kèm mã (ảnh đã tự đọc thì kèm chữ + mô tả) rồi chú thích nếu có
+    const caption = stripTokenFooter(String(row.text ?? "")).replace(/\s+/g, " ").slice(0, MAX_LINE_CHARS);
+    const body = row.attachment_id ? `${attachmentLabel(row)}${caption ? ` ${caption}` : ""}` : caption;
     return `[${formatVn(row.sent_at)}] ${row.sender_name}: ${body}`;
   }).join("\n");
 }

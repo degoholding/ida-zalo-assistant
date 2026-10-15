@@ -7,6 +7,7 @@ import { BACKGROUND_TASKS, type BackgroundTaskName } from "./schedule/background
 import { Scheduler } from "./schedule/scheduler.js";
 import { buildWorkCalendar, type WorkCalendar } from "./schedule/work-calendar.js";
 import { buildAlertModelClient, runAiReview } from "./alerts/ai-review.js";
+import { runImageAutoRead } from "./alerts/image-auto-read.js";
 import { runReminders } from "./alerts/reminders.js";
 import { telegramSenderFor, watchSessions } from "./alerts/session-watch.js";
 import { runBriefs } from "./briefs/brief-runner.js";
@@ -75,6 +76,7 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     "backup-upload": () => uploadBackups(storage, BACKUP_DIR, config.backup.keepDays),
     "alert-reminders": () => runReminders(db, config, safeCalendar()),
     "alert-ai-review": () => runAiReview(db, config),
+    "image-auto-read": () => runImageAutoRead(db, storage, config),
     "session-watch": () => watchSessions(db, telegramSenderFor(config)),
     "task-reminders": () => runTaskReminders(db, config, safeCalendar()),
     "task-extract": () => runTaskExtraction(db, config, safeCalendar()),

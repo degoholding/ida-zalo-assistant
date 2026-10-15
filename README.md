@@ -359,5 +359,15 @@ Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng b�
   công cụ > 24.000 ký tự đi mô hình `GEMINI_MODEL_HEAVY` (flash) thay vì lite. Tệp chưa có trong kho vì nhóm tắt «Lấy
   file» / tải lỗi lần trước nhưng link Zalo còn hiệu lực (10/10/2026): `read_file` tự đưa lại hàng tải và chờ tới ~25
   giây để đọc luôn trong lượt hỏi này, không bắt người dùng gửi lại tệp; link đã hết hạn hoặc còn đang tải thì báo rõ.
+- **Ảnh Zalo** (`chat.photo`) tới không tên / không đuôi: bộ tải nhận ra loại ảnh qua chữ ký đầu tệp và ghi `file_ext`
+  (`src/storage/image-type-sniff.ts`), migration 033 điền `jpg` cho ảnh cũ; bộ đọc báo mô hình đúng mime theo chữ ký.
+- **Tự đọc ảnh gửi trong nhóm** (15/10/2026, `src/alerts/image-auto-read.ts`, việc nền «AI tự đọc ảnh gửi trong nhóm»
+  2 phút / lần, ≤ 10 ảnh / lượt): ảnh cất kho trong 24 giờ, nhóm bật «Đọc tin», **không phải nhóm Mật** → mô hình thường
+  chép chữ + mô tả (cất `attachment_text`, token `system_ai_usage` purpose `image-read`; đo thật flash-lite ~4,6 giây,
+  ~1.250 token / ảnh) → gắn cờ «chờ AI» (chỉ tin chưa có mức) → lô xét khẩn 5 phút (`ai-review.ts`, chỉ nhìn 2 giờ gần
+  nhất) xét «chú thích [Ảnh: …]» như tin chữ → cờ KHẨN / quan trọng + báo người nhận. Tóm tắt nhóm, ngữ cảnh gọi bot trong
+  nhóm, điểm tin bản tin thấy `[ảnh #id: …]` (che SĐT / STK trước khi cắt). Đọc ảnh dừng khi token hệ thống hôm nay chạm
+  nửa trần ngày. Đọc hỏng (hãng 503, tệp mất khỏi kho…) thì dừng lượt, thử lại sau 30 phút, tối đa 3 lần. Ảnh gửi NGUYÊN
+  cho hãng AI (không che được chữ trong ảnh). Tắt: Cài đặt → Đọc tệp → «Tự đọc ảnh gửi trong nhóm».
 - Giao diện theo khuôn ERP DEGO (bảng màu trong `web/src/index.css`); mọi màn mới phải đi qua `CrudListPage` / `CrudDetailPage`, không vẽ tay.
 - `zca-js` 2.2.0 đóng gói lỗi kiểu (`index.d.ts` gốc trỏ thư mục) — `tsconfig.json` có `paths` vá chỗ đó.

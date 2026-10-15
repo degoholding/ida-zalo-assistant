@@ -76,9 +76,9 @@ export const ASSISTANT_SECTIONS: SettingsSection[] = [
   {
     id: 'files',
     title: 'Đọc tệp',
-    description: 'Loại tệp và cỡ tệp bot được đọc / nghe (ghi âm cuộc họp → recap PDF).',
+    description: 'Loại tệp và cỡ tệp bot được đọc / nghe (ghi âm cuộc họp → recap PDF); tự đọc ảnh gửi trong nhóm để bắt tin khẩn.',
     icon: FileText,
-    keys: ['assistant_readable_file_types', 'assistant_max_read_file_mb'],
+    keys: ['assistant_readable_file_types', 'assistant_max_read_file_mb', 'assistant_auto_read_images'],
   },
   {
     id: 'limits',

@@ -12,6 +12,7 @@ export const BACKGROUND_TASKS = [
   { name: "backup-upload", label: "Đưa bản sao lưu CSDL lên R2", spec: { every: "minutes", minutes: 30 } },
   { name: "alert-reminders", label: "Nhắc tin chờ trả lời quá giờ", spec: { every: "minutes", minutes: 1 }, sendsMessages: true },
   { name: "alert-ai-review", label: "AI đọc lại tin để bắt tin khẩn", spec: { every: "minutes", minutes: 5 } },
+  { name: "image-auto-read", label: "AI tự đọc ảnh gửi trong nhóm", spec: { every: "minutes", minutes: 2 } },
   { name: "session-watch", label: "Theo dõi phiên Zalo, báo khi văng", spec: { every: "minutes", minutes: 2 } },
   // Chép xong thì mỗi lượt chỉ còn một câu đọc mốc — để chạy mãi không tốn gì
   { name: "search-index", label: "Chép tin cũ vào bảng tìm tin", spec: { every: "minutes", minutes: 1 } },

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { RowDataPacket } from "mysql2";
 import type { AppConfig } from "../config.js";
-import { AlertKind, ConversationType, JobKind, JobStatus, MessagePriority, ReplyState } from "../constants.js";
+import { AlertKind, ConversationType, JobKind, JobStatus, MessageKind, MessagePriority, ReplyState } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { markFlagHandled, openFlagSql, upsertMessageFlag } from "../flags/message-flags.js";
 import { enqueueJob } from "../jobs/job-queue.js";
@@ -134,10 +134,12 @@ function scopeSql(recipient: AlertRecipient): { sql: string; params: unknown[] }
   return { sql: "AND m.group_id IN (?)", params: [[...recipient.groupIds]] };
 }
 
-const ITEM_COLUMNS = `m.id, m.group_id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_name, m.sent_at, m.text, f.reason`;
+const ITEM_COLUMNS = `m.id, m.group_id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_name, m.sent_at, m.text, m.kind, f.reason`;
 const toItem = (row: RowDataPacket): PendingAlertItem => ({
   messageId: Number(row.id), groupId: Number(row.group_id), groupName: String(row.group_name ?? ""), senderName: String(row.sender_name ?? ""),
-  sentAt: new Date(row.sent_at), text: String(row.text ?? ""), reason: String(row.reason ?? ""),
+  sentAt: new Date(row.sent_at), reason: String(row.reason ?? ""),
+  // Ảnh không chú thích (AI bắt khẩn qua chữ đọc từ ảnh) — có nhãn để người nhận biết là ảnh, không phải tin rỗng
+  text: String(row.text ?? "") || (Number(row.kind) === MessageKind.Image ? "[Ảnh]" : ""),
 });
 
 /** Tin KHẨN (đã xác nhận) hoặc của VIP của người này, trong phạm vi, 24 giờ gần nhất, chưa báo cho người này. */

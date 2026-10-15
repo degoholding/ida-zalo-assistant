@@ -74,7 +74,7 @@ export function classifyKeyError(error: unknown): KeyProblem {
 }
 
 /** Che khóa trong câu lỗi trước khi ghi log (khóa OpenAI «sk-…», khóa Google «AIza…»). */
-function maskSecrets(text: string): string {
+export function maskSecrets(text: string): string {
   return maskApiKeys(text).replace(/AIza[0-9A-Za-z_-]{10,}/g, "AIza***");
 }
 
