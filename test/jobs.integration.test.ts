@@ -124,12 +124,18 @@ describe("hàng đợi việc", { skip: !databaseUrl && "chưa đặt TEST_DATAB
     assert.equal(await recoverStaleJobs(db, 30 * 60_000), 0);
   });
 
-  test("two processes claiming at the same moment never get the same job", async () => {
+  test("two processes claiming at the same moment never get the same job, and nothing is lost", async () => {
     for (let n = 0; n < 20; n += 1) await enqueueJob(db, { kind: DIRECT, payload: { n } });
     const [left, right] = await Promise.all([claimJobs(db, "a", [DIRECT], 15), claimJobs(db, "b", [DIRECT], 15)]);
     const ids = [...left, ...right].map((job) => job.id);
-    assert.equal(new Set(ids).size, ids.length);
-    assert.equal(ids.length, 20);
+    assert.equal(new Set(ids).size, ids.length, "không việc nào bị lấy hai lần");
+    // `claimJobs` khóa cả cửa sổ xét (limit × 5 dòng) bằng FOR UPDATE SKIP LOCKED, nên lượt đến sau có thể bỏ qua các dòng lượt trước
+    // mới khóa mà chưa lấy — tổng hai lượt đồng thời có thể < 20 (đúng thiết kế: lượt poll kế tiếp sẽ lấy phần còn lại). Phần còn lại
+    // phải lấy được, không việc nào mất.
+    const rest = await claimJobs(db, "c", [DIRECT], 20);
+    const all = [...ids, ...rest.map((job) => job.id)];
+    assert.equal(new Set(all).size, all.length);
+    assert.equal(all.length, 20);
   });
 
   test("old finished jobs are purged, pending ones are kept, and the summary counts what is left", async () => {

@@ -59,8 +59,16 @@ Giao diện: `http://127.0.0.1:8090` (chỉ mở trong máy; vào từ xa qua đ
 ## Trợ lý AI (Gemini)
 
 Đặt `GEMINI_API_KEY` trong `.env` (hoặc dán trên màn **Cài đặt**) là bật. Người có vai trò nhắn riêng cho bot, hỏi được:
-tóm tắt nhóm theo thời gian · đã bàn gì với một người · tìm tệp và nhận tệp. Quyền hiện **mở hết**
-(mọi vai trò hỏi được mọi nhóm). Mô hình chính `gemini-3.5-flash-lite` (đo 01/10/2026: 2–4 giây/câu);
+tóm tắt nhóm theo thời gian · đã bàn gì với một người · tìm tệp và nhận tệp. **Phạm vi dữ liệu theo tài khoản của người
+hỏi** (17/10/2026): người hỏi có tài khoản web (`app_user.contact_id` trỏ tới liên hệ Zalo của họ) thì trợ lý chỉ thấy đúng
+những gì tài khoản đó thấy trên web — nhóm được gán (hoặc «mọi nhóm»), nhóm **Mật** chỉ khi tài khoản có cờ «Xem nhóm Mật»
+(mặc định tắt, kể cả Quản trị), cuộc nhắn riêng chỉ của CHÍNH người hỏi. Tài khoản web đang bật là đủ để nhắn riêng hỏi bot
+(không cần thêm vai trò Danh bạ). Người có vai trò Danh bạ nhưng chưa có tài khoản: giữ như cũ nhưng hạ phạm vi — mọi nhóm đang
+đọc trừ nhóm Mật, cuộc riêng của mình. Tài khoản đã tắt: không nhóm, không Mật, chỉ còn lệnh ticket / việc / «hướng dẫn».
+**Nhân viên chỉ đọc**: trợ lý không mở công cụ ghi cho Nhân viên. Trợ lý còn dùng chung lõi truy vấn với MCP (công cụ
+`query_records`, `describe_entities`) nên số liệu đếm / lọc khớp màn web. Ghi dữ liệu qua trợ lý (sửa hồ sơ, tạo việc…): bot gửi
+bản xem trước + mã, chỉ chạy khi tin kế tiếp của chính người hỏi là «đồng ý» (một nháp mở) / «đồng ý <mã>», «hủy» bỏ.
+Mô hình chính `gemini-3.5-flash-lite` (đo 01/10/2026: 2–4 giây/câu);
 quá tải hoặc hết hạn mức thì tự chuyển sang `GEMINI_FALLBACK_MODELS`. Mỗi lượt hỏi ghi ở bảng
 `assistant_turn` (token, công cụ đã gọi, lỗi). Giới hạn: `ASSISTANT_MAX_PER_HOUR` câu/người/giờ,
 `ASSISTANT_DAILY_TOKEN_CAP` token/ngày, bot gửi tin cách nhau `ASSISTANT_SEND_INTERVAL_MS`.
@@ -100,7 +108,9 @@ việc gắn cứng vào nhóm đang hỏi, tối đa 3 việc / lần hỏi). B
 như nhắn Zalo cho bot — đi đúng đường thật (cùng cài đặt, công cụ, giới hạn, nhật ký `assistant_turn`), không cần
 Zalo. Mỗi người hỏi một cuộc «Hỏi trợ lý · <tên>» (mã `web-<uid>`) để trợ lý hiểu câu nối tiếp; cuộc này hiện ở
 màn Hội thoại nhưng không gửi ra Zalo được (cuộc DEMO `demo-…` cũng vậy — chặn ở `SyncService.pickRunnerForThread`).
-Báo cáo Excel hiện thành nút tải trong khung chat. API: `src/web/api/assistant-chat-api.ts`.
+Báo cáo Excel hiện thành nút tải trong khung chat. API: `src/web/api/assistant-chat-api.ts`. Quy tắc mô phỏng (17/10/2026): phạm vi
+nhóm lấy theo người được chọn; nhóm Mật chỉ khi CẢ người được chọn LẪN quản trị đang đăng nhập có cờ Mật; KHÔNG đọc cuộc nhắn
+riêng của người được chọn; mỗi lượt ghi `audit_log` («Hỏi trợ lý thay <tên>», người ghi = quản trị đang đăng nhập).
 
 **Cuộc họp Google Meet + recap** (06/10/2026): «bot tạo cuộc họp google meet 9h mai» → sự kiện Google Calendar kèm link
 Meet trên tài khoản đã **Kết nối Google** (Cài đặt → Google: tạo OAuth client loại «Web application», chép Client ID + Client
@@ -188,6 +198,112 @@ kho (`reports/<yyyymm>/…`), bot gửi tệp qua Zalo, màn Tệp tải lại �
 thì tự lùi về Excel. Một lượt hỏi một báo cáo, tối đa 20 cột × 1.000 dòng. Mã: `src/reports/`,
 `src/assistant/export-report-tool.ts`. Thử trên máy dev: `npm run ask -- "xuất file Excel báo cáo các nhóm 3 ngày qua"`.
 Báo cáo có số liệu tiền thì đối chiếu tin gốc — mô hình có lúc ghi nhầm giá trước / sau giảm.
+
+## Máy chủ MCP (AI ngoài đọc / ghi dữ liệu theo tài khoản)
+
+**Là gì** (17/10/2026): cổng `https://<tên miền>/mcp` (giao thức MCP, Streamable HTTP, không trạng thái) để Claude Code, Codex,
+Claude Desktop hay client SDK hỏi dữ liệu bot **bằng quyền của chính người dùng web** — không SQL thô, không vượt quyền người đó.
+Cùng một lõi `src/data-access/` phục vụ cả cổng này lẫn trợ lý trong app; phạm vi nhóm, nhóm Mật, che số điện thoại đều do lõi
+quyết, không do mô hình. Mã: `src/mcp/` (cổng, khóa, nhịp, nhật ký), `src/data-access/` (lõi, DSL, công cụ), `src/auth/mcp-api-key-store.ts`.
+
+**Bật** (mặc định TẮT, `/mcp` trả 404) — trong `.env` rồi `docker compose up -d`:
+
+| Biến | Ý nghĩa |
+|---|---|
+| `MCP_ENABLED=true` | Bật cổng |
+| `MCP_ALLOWED_HOSTS` | Tên máy (không cổng) được phép ở tiêu đề Host / Origin. Prod: `botida.degoholding.vn`; máy dev: `127.0.0.1,localhost` |
+| `TRUST_CLOUDFLARE_IP=true` | Sau Cloudflare Tunnel: lấy IP thật từ `CF-Connecting-IP` để chặn IP dò khóa (không bật khi KHÔNG đứng sau Cloudflare) |
+| `MCP_RATE_LIMIT_PER_MINUTE` (60), `MCP_MAX_CONCURRENT_PER_KEY` (4) | Nhịp lời gọi một khóa; vượt thì công cụ trả `rate_limited` + số giây chờ |
+| `MCP_MAX_CONCURRENT` (3), `MCP_QUEUE_WAIT_MS` (5000) | Trần lời gọi chạy cùng lúc của cả hệ thống (pool MySQL dùng chung với đồng bộ Zalo); đầy quá hạn chờ thì `server_busy` |
+| `MCP_BAD_KEY_LIMIT_PER_MINUTE` (20) | Một IP sai khóa quá ngần này lần / phút bị chặn tạm (429) |
+
+**Khóa**: mỗi người tự tạo ở màn web **Khóa MCP** (`/app/mcp-keys`): đặt tên, mức «Chỉ đọc» / «Đọc + ghi» (không vượt vai
+trò: Nhân viên chỉ đọc), số ngày hiệu lực, cờ «đọc nhóm Mật». **Khóa thô (`idamcp_…`) chỉ hiện MỘT lần** lúc tạo — mất thì
+tạo khóa mới; máy chủ chỉ lưu băm SHA-256. Tối đa 10 khóa đang dùng / người; thu hồi ở cùng màn (Quản trị thấy và thu hồi khóa
+của mọi người; xem 50 lời gọi gần nhất của khóa). Không có giao diện (máy chủ mới dựng): `npm run cli -- mcp-key create <tên đăng nhập|email> "<tên khóa>" [read|write] [--days N] [--confidential]`,
+`mcp-key list [<người dùng>]`, `mcp-key revoke <id>`. Khóa hết hạn / thu hồi / chủ khóa bị tắt → 401.
+
+**Cấu hình client** (thay `<khóa>` bằng khóa vừa tạo; KHÔNG dán khóa vào tệp nằm trong git):
+
+```
+# Claude Code
+claude mcp add --transport http botida https://botida.degoholding.vn/mcp --header "Authorization: Bearer <khóa>"
+
+# Codex — ~/.codex/config.toml (khóa đọc từ biến môi trường BOTIDA_MCP_KEY, không ghi thẳng vào tệp)
+[mcp_servers.botida]
+url = "https://botida.degoholding.vn/mcp"
+bearer_token_env_var = "BOTIDA_MCP_KEY"
+
+# Claude Desktop — claude_desktop_config.json (cầu nối mcp-remote, cần Node)
+{ "mcpServers": { "botida": { "command": "npx",
+    "args": ["-y", "mcp-remote", "https://botida.degoholding.vn/mcp", "--header", "Authorization: Bearer ${BOTIDA_MCP_KEY}"],
+    "env": { "BOTIDA_MCP_KEY": "<khóa>" } } } }
+```
+
+Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`). Chưa dùng được với claude.ai web / connector (cần OAuth, chưa làm).
+
+**Công cụ** (khóa chỉ đọc thấy 7 công cụ đầu; chỉ hiện công cụ mà vai trò của chủ khóa dùng được):
+
+| Công cụ | Làm gì |
+|---|---|
+| `whoami` | Mình là ai, thấy được nhóm nào, có cờ Mật không |
+| `describe_entities` | Các thực thể truy vấn được, cột / phép lọc / cột sắp xếp của từng thực thể |
+| `query_records` | Truy vấn có kiểu mọi thực thể: `groups`, `conversations`, `messages`, `contacts`, `files`, `tasks`, `tickets`, `send_commands`, `reply_templates`, `catalog`, `metrics`, `audit_log` |
+| `search_messages` | Tìm tin theo từ khóa (gõ không dấu được, cụm trong ngoặc kép) |
+| `get_thread_messages` | Đọc một cuộc theo trang (`next.before_message_id` / `after_message_id`) |
+| `get_file_text` | Đọc chữ đã bóc của tệp theo đoạn (`offset_chars`) |
+| `metrics_summary` | Tổng hợp số liệu bán hàng theo kỳ |
+| `propose_*` ×6 + `confirm_write` | Ghi — chỉ khóa «Đọc + ghi» của Quản trị / Quản lý (xem dưới) |
+
+`query_records` nhận DSL JSON, **không phải SQL**; trường / phép so / sắp xếp lấy từ `describe_entities`:
+
+```json
+{ "entity": "messages",
+  "filters": [{ "field": "thread_id", "op": "eq", "value": 12 },
+              { "field": "sent_at", "op": "between", "value": ["2026-10-16", "2026-10-17"] }],
+  "fields": ["sent_at", "sender_name", "text"], "sort": { "field": "sent_at", "dir": "desc" }, "page": { "size": 20 } }
+{ "entity": "messages", "filters": [{ "field": "sent_at", "op": "between", "value": ["2026-10-10", "2026-10-17"] }],
+  "aggregate": { "fn": "count", "group_by": [{ "field": "thread_id" }] } }
+```
+
+Bảng lớn (`messages`) bắt buộc lọc theo `thread_id` hoặc khoảng `sent_at` ≤ 92 ngày. Nội dung tin / tệp trả về được bọc là DỮ LIỆU
+(`untrusted_fields`) — mô hình không được coi là lệnh.
+
+**Ghi qua AI = nháp → xác nhận**: `propose_contact_update`, `propose_group_update`, `propose_task_create`, `propose_task_update`,
+`propose_ticket_action`, `propose_reply_template_save` chỉ tạo NHÁP + xem trước + mã 6 ký tự (băm, gắn đúng người + khóa + nội dung, 10 phút,
+dùng một lần). Việc ghi thật chạy khi gọi `confirm_write(code)` — client AI (Claude / Codex) hỏi người dùng duyệt công cụ này. Ghi
+xong có dòng «Lịch sử thao tác» với người ghi «<tên> · MCP». Trên **Zalo** không có `confirm_write`: máy chủ gửi bản xem trước, người hỏi
+trả «đồng ý» (hoặc «đồng ý <mã>» khi nhiều nháp) hoặc «hủy». Tối đa 10 đề xuất / phút / khóa, 20 nháp mở mỗi nguồn. Chưa làm: gửi tin Zalo qua MCP.
+
+**Quy tắc quyền**:
+- Vai trò chủ khóa là trần: Quản trị / Quản lý đọc + ghi; **Nhân viên chỉ đọc** (hạ vai trò thì khóa cũ tự thành chỉ đọc).
+- Phạm vi nhóm theo tài khoản (nhóm được gán hoặc «mọi nhóm»); thực thể ngoài quyền vai trò không có trong `describe_entities`. Ngoài phạm vi = `not_found` (không phân biệt «không có» với «không được thấy»).
+- **Nhóm Mật** chỉ khi CẢ cờ «Xem nhóm Mật» của người dùng (màn Người dùng) LẪN cờ «đọc nhóm Mật» của khóa đều bật. Cờ này chỉ chi phối AI / MCP, web người thật không đổi.
+- «Lịch sử thao tác» (`audit_log`) cần quản trị hoặc cờ «Xem lịch sử thao tác»; người không phải quản trị chỉ thấy dòng của bản ghi trong phạm vi nhóm của mình.
+- Cuộc nhắn riêng: chỉ cuộc của CHÍNH chủ khóa, và chỉ khi khóa có cờ Mật (câu trả lời của bot trong đó có thể chứa nội dung nhóm Mật); không đọc cuộc riêng người khác kể cả Quản trị.
+- Bật «Che dữ liệu cá nhân trước khi gửi AI» (Cài đặt) → MCP vẫn che SĐT / STK / CCCD. Nhân viên không có cột SĐT.
+- Không bao giờ ghi qua AI: vai trò Danh bạ, loại danh bạ (`kind`), SĐT, cờ Mật / đọc tin của nhóm, tài khoản, khóa, cài đặt.
+- Mỗi lời gọi ghi một dòng `mcp_call_log` (công cụ, thực thể, số dòng, trạng thái, người, khóa, IP) — chỉ xem được qua chi tiết khóa; không ghi nội dung trả về.
+
+**An toàn khi đưa ra Internet**:
+- Tên miền prod `botida.degoholding.vn` hiện **KHÔNG có Cloudflare Access** (kiểm 17/10/2026: `/app/` trả 200 thẳng) nên `/mcp` công khai, chỉ có Bearer + giới hạn nhịp + chặn IP sai khóa. **Khuyến nghị**: thêm Cloudflare Access cho đường dẫn `/mcp` bằng *service token* (Zero Trust → Access → Applications → Service Auth), client gửi thêm hai tiêu đề `CF-Access-Client-Id` / `CF-Access-Client-Secret`. Chưa làm thì giữ `MCP_ENABLED=false` trên prod hoặc chỉ cấp khóa chỉ đọc, hạn ngắn, không cờ Mật.
+- Hoặc không mở công khai: SSH tunnel (`ssh -L 8090:127.0.0.1:8090 <máy chủ>`) rồi trỏ client vào `http://localhost:8090/mcp`.
+- Khóa lộ → thu hồi ngay ở màn Khóa MCP. Đặt hạn ngắn (30–90 ngày); mỗi client / máy một khóa riêng để thu hồi từng cái.
+- Prompt injection: nội dung tin / tệp là dữ liệu không đáng tin; vì vậy mọi ghi đều qua nháp → xác nhận, và khóa chỉ đọc không có công cụ ghi.
+
+**Gỡ lỗi**:
+
+| Triệu chứng | Nguyên nhân hay gặp |
+|---|---|
+| 404 ở `/mcp` | `MCP_ENABLED` chưa `true` hoặc quên `docker compose up -d` sau khi sửa `.env` |
+| 403 | Tên miền / Origin không có trong `MCP_ALLOWED_HOSTS` |
+| 401 | Khóa sai / hết hạn / đã thu hồi / chủ khóa bị tắt; hoặc dán thiếu `Bearer ` |
+| 429 | IP sai khóa quá `MCP_BAD_KEY_LIMIT_PER_MINUTE` — chờ vài phút (sau Cloudflare nhớ `TRUST_CLOUDFLARE_IP=true`, nếu không mọi người chung một IP) |
+| Công cụ trả `rate_limited` / `server_busy` | Vượt nhịp khóa / hệ thống đang bận — làm theo `retry_after_seconds` |
+| Không thấy nhóm / tệp mong đợi | Ngoài phạm vi nhóm của tài khoản, hoặc nhóm Mật thiếu một trong hai cờ — hỏi `whoami` |
+| Không thấy công cụ `propose_*` | Khóa «Chỉ đọc», hoặc chủ khóa là Nhân viên |
+
+Kiểm tra tay nhanh: `curl -s -H "Authorization: Bearer <khóa>" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://localhost:8090/mcp`.
 
 ## Cài đặt trên web + Google Sheets
 
@@ -293,7 +409,7 @@ của procurement-tool). Muốn `npm run dev` ngoài Docker:
 npm install
 npm run dev                 # máy chủ bot + API, cần MySQL + .env
 npm run typecheck
-npm test                    # bài kiểm tích hợp cần TEST_DATABASE_URL
+npm test                    # bài kiểm tích hợp (DB) tự BỎ QUA nếu thiếu TEST_DATABASE_URL — xem ngay dưới
 
 cd web && npm install
 npm run dev                 # Vite ở cổng 5175, proxy /api và /avatars về localhost:8090
@@ -314,6 +430,20 @@ cuộc demo sẽ báo «bot đang tắt», đúng như thật. `ask` dùng đún
 câu hỏi + trả lời lưu vào cuộc riêng của «Nguyễn Văn Duy» (màn Hội thoại, tải lại trang để thấy). Tệp demo
 chỉ có tên, không có nội dung — `read_file` báo lỗi là đúng. Dữ liệu: `src/dev/demo-conversations.ts`.
 
+**Chạy bài kiểm tích hợp với MySQL thật** (bắt buộc trước khi báo xong việc đụng quyền / phạm vi / khóa / ghi; 31 tệp
+`test/*.integration.test.ts` + `src/**/*.integration.test.ts`). Dùng một DB thử RIÊNG trên MySQL của Docker — các bài kiểm
+`TRUNCATE` bảng, KHÔNG BAO GIỜ trỏ vào DB dev hay prod. Cần mở cổng MySQL như mục trên (override `127.0.0.1:3308`):
+
+```
+PW=$(docker exec bot-tro-ly-mysql-1 printenv MYSQL_ROOT_PASSWORD)
+docker exec bot-tro-ly-mysql-1 mysql -uroot -p"$PW" -e "CREATE DATABASE IF NOT EXISTS bot_tro_ly_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+TEST_DATABASE_URL="mysql://root:$PW@127.0.0.1:3308/bot_tro_ly_test" npm test     # 0 bỏ qua; các bài tự chạy migration
+docker exec bot-tro-ly-mysql-1 mysql -uroot -p"$PW" -e "DROP DATABASE bot_tro_ly_test"   # dọn khi xong
+```
+
+Chạy một tệp: `TEST_DATABASE_URL=… node --import tsx --test test/mcp-http-gateway.integration.test.ts`. Chạy song song nhiều
+tệp trên CÙNG một DB sẽ đá nhau (`npm test` đã ép `--test-concurrency=1`) — muốn song song thì mỗi lần một DB thử riêng.
+
 Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng bộ lệnh như trên, thêm `login <nhãn>` quét QR bằng tệp ảnh).
 
 ## Những điều phải nhớ
@@ -331,6 +461,10 @@ Dòng lệnh khi chạy Node trực tiếp: `npm run cli -- <lệnh>` (cùng b�
 - **Google Sheets** (`src/google/`): tự ký JWT RS256 bằng `node:crypto`, không dùng gói `googleapis`. Câu báo lỗi
   cho quản trị ở `sheets-error-messages.ts` — số bước trong câu khớp «Hướng dẫn 5 bước» trên màn Cài đặt.
 
+- **Không mở `/mcp` công khai chỉ với Bearer** khi chưa có Cloudflare Access service token (xem mục «Máy chủ MCP»). Thêm thực thể /
+  cột cho AI đọc = khai ở `ListSpec` + `EntityDefinition` (cột không khai thì AI không thấy); không thêm đường SQL tay vào công cụ AI —
+  mọi điều kiện «được thấy nhóm / tin / tệp» đi qua `src/data-access/visibility-guards.ts`.
+- **Migration mới phải idempotent**: `CREATE TABLE IF NOT EXISTS`, mỗi tệp một DDL, `ALTER` có kiểm `information_schema` (mẫu: các tệp 034–040), để chạy lại / nửa chừng không hỏng.
 - **Không mở Zalo Web bằng tài khoản bot** — mỗi tài khoản một phiên web, mở là bot bị đá (mã 3000).
 - Mất `SESSION_ENCRYPTION_KEY` = mọi tài khoản bot phải quét QR lại.
 - Người gửi **thu hồi** tin thì bot xóa chữ của tin đó, chỉ giữ dấu vết đã thu hồi.

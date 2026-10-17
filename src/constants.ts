@@ -58,7 +58,7 @@ export enum ContactKind {
   Staff = 2,
 }
 
-/** Vai trò > 0 thì bot trả lời người đó. Quyền hiện MỞ HẾT: mọi vai trò hỏi được mọi nhóm. */
+/** Vai trò > 0 thì bot trả lời người đó. Phạm vi dữ liệu KHÔNG theo vai trò Danh bạ mà theo tài khoản web gắn với người hỏi (xem asker-access.ts). */
 export enum ContactRole {
   None = 0,
   DepartmentHead = 1,

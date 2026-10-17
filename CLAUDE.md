@@ -29,3 +29,6 @@ npm run typecheck && npm test
 cd web && npm run typecheck && npm run lint && npx vitest run src/modules/<phân hệ vừa sửa>
 docker compose up -d --build app      # rồi mở http://localhost:8090/app/
 ```
+
+Đụng quyền / phạm vi / khóa MCP / ghi thì chạy thêm `npm test` với `TEST_DATABASE_URL` trỏ DB thử riêng (không dev, không prod) —
+cách tạo DB thử ở README mục «Chạy khi phát triển»; thiếu biến này các bài `*.integration.test.ts` tự bỏ qua.
