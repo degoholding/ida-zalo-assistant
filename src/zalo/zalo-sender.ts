@@ -7,6 +7,7 @@
 // nên vô ích. Tin phụ gửi bằng sendIfQuiet: hàng đang đông thì bỏ hẳn, nhường chỗ cho câu trả lời thật.
 
 import { BotHaltedError } from "../messaging/bot-halted-error.js";
+import { CollectOnlyAccountError } from "./collect-only-account-error.js";
 
 // Tắt bot khẩn (phase 9): cờ `isHalted` được kiểm TỪNG TIN lúc tới lượt (kể cả tin đã xếp sẵn) — đang tắt thì tin bị từ chối
 // BotHaltedError ngay, không tốn giãn cách. Ngoại lệ duy nhất là mức "control" (câu trả lời lệnh tắt / bật / tình trạng):
@@ -14,12 +15,21 @@ import { BotHaltedError } from "../messaging/bot-halted-error.js";
 
 export type SendPriority = "normal" | "low" | "control";
 
+// Tài khoản bot loại Normal (chỉ gom dữ liệu): `isCollectOnly` được kiểm TỪNG LỆNH, kể cả mức "control" — mọi lệnh bị từ
+// chối CollectOnlyAccountError (không thử lại). Ngoại lệ duy nhất là lệnh đánh dấu `allowCollectOnly` (tab «Bạn bè» trên web:
+// quản trị tự bấm tìm / gửi / nhận / hủy lời mời). Đổi loại tài khoản có hiệu lực ngay vì cờ đọc lại mỗi lần.
+export interface SendOptions {
+  allowCollectOnly?: boolean;
+}
+
 /** Tin phụ chỉ gửi khi hàng gửi còn không quá ngần này tin (kể cả tin đang gửi) — ngày thường vẫn nhắn «chờ em xíu». */
 export const QUIET_MAX_PENDING = 2;
 
 interface QueuedSend {
   priority: SendPriority;
-  /** Từ chối tin này (bot đang tắt khẩn) — không gọi Zalo. */
+  /** true = lệnh do quản trị tự bấm ở tab «Bạn bè» — được đi qua dù tài khoản chỉ gom dữ liệu. */
+  allowCollectOnly: boolean;
+  /** Từ chối tin này (bot đang tắt khẩn / tài khoản chỉ gom dữ liệu) — không gọi Zalo. */
   reject: (error: Error) => void;
   /** true = đã thật sự gọi Zalo (kể cả lỗi) → tính giãn cách; false = việc tự bỏ (trả null), không tốn lượt. */
   run: () => Promise<boolean>;
@@ -34,7 +44,12 @@ export class ZaloSender {
   private lastSentAt = 0;
 
   /** `isHalted`: true = bot đang tắt khẩn, chặn mọi tin trừ mức "control". Mặc định không bao giờ tắt (bài kiểm). */
-  constructor(private intervalMs: number, private readonly isHalted: () => boolean = () => false) {}
+  constructor(
+    private intervalMs: number,
+    private readonly isHalted: () => boolean = () => false,
+    /** true = tài khoản loại Normal, chặn mọi lệnh trừ lệnh `allowCollectOnly`. Mặc định không bao giờ (bài kiểm). */
+    private readonly isCollectOnly: () => boolean = () => false,
+  ) {}
 
   /** Đổi giãn cách (màn Cài đặt) — áp dụng từ tin kế tiếp. */
   setInterval(intervalMs: number): void {
@@ -46,11 +61,15 @@ export class ZaloSender {
     return this.queue.length + (this.busy ? 1 : 0);
   }
 
-  send<T>(task: () => Promise<T>, priority: SendPriority = "normal"): Promise<T> {
+  send<T>(task: () => Promise<T>, priority: SendPriority = "normal", options: SendOptions = {}): Promise<T> {
+    const allowCollectOnly = options.allowCollectOnly === true;
+    // Chặn ngay lúc xếp hàng — lệnh bị chặn không chờ giãn cách, không chiếm chỗ của lệnh khác
+    if (!allowCollectOnly && this.isCollectOnly()) return Promise.reject(new CollectOnlyAccountError());
     return new Promise<T>((resolve, reject) => {
       // Lỗi của tin này trả về đúng nơi gọi, không chặn các tin sau
       const item: QueuedSend = {
         priority,
+        allowCollectOnly,
         reject,
         // async + try: task ném lỗi NGAY khi gọi (không phải lỗi bất đồng bộ) cũng chỉ về nơi gọi, vòng gửi chạy tiếp
         run: async () => {
@@ -85,6 +104,14 @@ export class ZaloSender {
     this.busy = true;
     try {
       while (this.queue.length) {
+        // Tài khoản vừa được đổi sang «chỉ gom dữ liệu» khi lệnh còn đang xếp hàng: dọn hết lệnh không có ngoại lệ
+        if (this.isCollectOnly()) {
+          const blocked = this.queue.findIndex((queued) => !queued.allowCollectOnly);
+          if (blocked >= 0) {
+            this.queue.splice(blocked, 1)[0].reject(new CollectOnlyAccountError());
+            continue;
+          }
+        }
         // Kiểm cờ trước khi chờ giãn cách: tin bị chặn không tốn lượt, hàng đã xếp sẵn được dọn ngay
         if (this.isHalted()) {
           const next = this.queue.findIndex((queued) => queued.priority !== "control");
@@ -98,6 +125,10 @@ export class ZaloSender {
         const item = this.queue.shift();
         if (!item) break;
         // Cờ có thể bật trong lúc chờ giãn cách
+        if (!item.allowCollectOnly && this.isCollectOnly()) {
+          item.reject(new CollectOnlyAccountError());
+          continue;
+        }
         if (item.priority !== "control" && this.isHalted()) {
           item.reject(new BotHaltedError());
           continue;

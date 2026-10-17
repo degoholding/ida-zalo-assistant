@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { COLLECT_ONLY_COMPOSER_MESSAGE } from '../utils/collect-only-message'
 import { MessageComposer } from './message-composer'
 
 const apiPost = vi.fn()
@@ -39,6 +40,18 @@ beforeEach(() => {
 })
 
 describe('MessageComposer', () => {
+  it('shows a notice instead of the input for a collect-only thread', () => {
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <MessageComposer threadId={5} botName="Bot" collectOnly />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText(COLLECT_ONLY_COMPOSER_MESSAGE)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Nội dung tin')).toBeNull()
+    expect(apiPost).not.toHaveBeenCalled()
+  })
+
   it('sends once when Enter is pressed twice before the first send settles', async () => {
     // Lỗi cũ: Enter đúp gửi cùng một tin hai lần vào nhóm Zalo thật
     let resolve: (value: unknown) => void = () => {}

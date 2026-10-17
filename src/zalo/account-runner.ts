@@ -15,7 +15,7 @@ import type { AssistantService } from "../assistant/assistant-service.js";
 import { reportFileExtension, type GeneratedReportFile } from "../reports/report-exporter.js";
 import { splitForZalo } from "../assistant/assistant-service.js";
 import type { AppConfig } from "../config.js";
-import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ConversationType, MessageKind, SessionEvent } from "../constants.js";
+import { AssistantTurnStatus, AttachmentStatus, BotAccountKind, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ConversationType, MessageKind, SessionEvent } from "../constants.js";
 import { decryptJson } from "../crypto/session-cipher.js";
 import type { RowDataPacket } from "mysql2";
 import type { Db } from "../db/pool.js";
@@ -51,6 +51,8 @@ import { registerGroupHistoryApi, type HistoryPage } from "./group-history.js";
 import { isBotHalted, type BotHaltControl } from "../messaging/bot-halt.js";
 import { applyDirectHaltGate } from "./direct-halt-gate.js";
 import { ZaloSender } from "./zalo-sender.js";
+import { JobSkippedError } from "../jobs/job-skipped-error.js";
+import { COLLECT_ONLY_MESSAGE } from "./collect-only-account-error.js";
 import { createGroupPin } from "./group-pin-creator.js";
 import { createGroupReminder, type GroupReminderRequest } from "./group-reminder-creator.js";
 import { FriendRequestManager } from "./friend-requests.js";
@@ -144,6 +146,8 @@ export class AccountRunner {
   private readonly log;
 
   private readonly sender: ZaloSender;
+  /** Loại tài khoản HIỆN HÀNH — đổi trên web có hiệu lực ngay (`setKind`), ZaloSender và các cổng chặn sớm đều đọc cờ này. */
+  private kind: BotAccountKind;
   private readonly groupReplier: GroupAssistantReplier;
   // Đang chờ một trang tin cũ của nhóm (lấy tin cũ kiểu từng trang qua kết nối trực tiếp)
   private oldGroupPageWaiter: ((messages: GroupMessage[]) => void) | null = null;
@@ -166,7 +170,8 @@ export class AccountRunner {
     private readonly botHalt: BotHaltControl,
   ) {
     this.log = createLogger(`zalo:${account.label}`);
-    this.sender = new ZaloSender(config.assistant.sendIntervalMs, () => isBotHalted(config));
+    this.kind = account.kind === BotAccountKind.Normal ? BotAccountKind.Normal : BotAccountKind.Assistant;
+    this.sender = new ZaloSender(config.assistant.sendIntervalMs, () => isBotHalted(config), () => this.isCollectOnly);
     this.groupReplier = new GroupAssistantReplier({
       db, config, sender: this.sender, log: this.log, accountId: account.id,
       getApi: () => this.api,
@@ -179,7 +184,8 @@ export class AccountRunner {
       db, botAccountId: account.id,
       ownUid: () => this.ownUid,
       api: () => this.api,
-      send: (task) => this.sender.send(task),
+      // Ngoại lệ duy nhất cho tài khoản chỉ gom dữ liệu: quản trị tự bấm ở tab «Bạn bè» (bot không tự kết bạn)
+      send: (task) => this.sender.send(task, "normal", { allowCollectOnly: true }),
       warn: (message, error) => this.log.warn(message, error),
     });
   }
@@ -218,6 +224,16 @@ export class AccountRunner {
   /** Trợ lý dựng lại sau khi đổi cài đặt — lượt hỏi đang chạy dở vẫn chạy nốt bằng bản cũ. */
   setAssistant(assistant: AssistantService | null): void {
     this.assistant = assistant;
+  }
+
+  /** Tài khoản chỉ gom dữ liệu (loại Normal): không trả lời, không gửi, không tác động gì lên Zalo. */
+  get isCollectOnly(): boolean {
+    return this.kind === BotAccountKind.Normal;
+  }
+
+  /** Đổi loại tài khoản lúc đang chạy (PATCH trên web) — lệnh đang xếp hàng cũng bị dọn nếu thành Normal. */
+  setKind(kind: BotAccountKind): void {
+    this.kind = kind;
   }
 
   setSendInterval(intervalMs: number): void {
@@ -298,7 +314,10 @@ export class AccountRunner {
       )
         // Tin nhóm đang đọc (bot này lưu, hoặc bot khác cùng nhóm lưu trước = "duplicate") mới xét gọi bot.
         // Tin cũ bù lại đi đường old_messages, không qua đây — không làm bot trả lời chuyện cũ.
-        .then((outcome) => { if (outcome !== "group_not_read") this.groupReplier.handle(message as GroupMessage, incoming); })
+        .then((outcome) => {
+          // Tài khoản chỉ gom dữ liệu: lưu rồi thôi, không xét gọi bot (đỡ tốn AI / việc nền)
+          if (outcome !== "group_not_read" && !this.isCollectOnly) this.groupReplier.handle(message as GroupMessage, incoming);
+        })
         .catch((error) => this.log.error(`lưu tin nhóm ${message.threadId} lỗi`, error));
     });
 
@@ -507,6 +526,11 @@ export class AccountRunner {
     );
     const who = `«${result.contact.display_name || incoming.senderUid}»`;
     void this.ensureContactAvatar(incoming.senderUid);
+    // Tài khoản chỉ gom dữ liệu: tin riêng chỉ lưu + ảnh đại diện — im lặng (không «đã nhận», không lệnh tắt / bật bot, không việc trả lời)
+    if (this.isCollectOnly) {
+      this.log.info(`tin riêng từ ${who}: đã lưu (tài khoản chỉ thu thập dữ liệu, không trả lời)`);
+      return;
+    }
     // Người lạ (chưa có vai trò): chỉ lưu, không trả lời — đại ca chốt 01/10/2026. Người nhận (phase 4) luôn được trả
     // lời: chat riêng với bot là kênh báo + ra lệnh của họ.
     const parsed = parseZaloContent(incoming.msgType, incoming.content);
@@ -549,6 +573,7 @@ export class AccountRunner {
 
   /** Bộ chạy việc gọi: trả lời một câu hỏi riêng đã ghi trong hàng đợi. Ném lỗi = việc lỗi (thử lại nếu còn lượt). */
   async runDirectReplyJob(job: JobRow): Promise<void> {
+    if (this.isCollectOnly) throw new JobSkippedError(COLLECT_ONLY_MESSAGE);
     const payload = job.payload as DirectReplyPayload;
     const ack = this.acks.begin(job.id);
     try {
@@ -564,6 +589,7 @@ export class AccountRunner {
 
   /** Bộ chạy việc gọi: trả lời khi bot được gọi trong nhóm. */
   runGroupReplyJob(job: JobRow): Promise<void> {
+    if (this.isCollectOnly) return Promise.reject(new JobSkippedError(COLLECT_ONLY_MESSAGE));
     return this.groupReplier.runJob(job.id, job.payload as GroupReplyPayload);
   }
 

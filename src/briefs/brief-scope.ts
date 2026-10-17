@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import { processableThreadSql } from "../sync/collect-only.js";
 import type { RecipientRow } from "../recipients/recipient-repository.js";
 import type { BriefScope } from "./brief-types.js";
 
@@ -76,7 +77,9 @@ export async function loadBriefScope(
   db: Db, recipient: Pick<RecipientRow, "id" | "all_groups" | "zalo_uid">,
 ): Promise<BriefScope> {
   const [groupRows] = await db.query<RowDataPacket[]>(
-    "SELECT id, is_confidential, read_messages FROM zalo_group WHERE thread_type = ?", [ConversationType.Group]);
+    // Nhóm «chỉ lưu» (không có bot Trợ lý) bị bỏ khỏi mọi phạm vi — bản tin / báo cáo định kỳ không đụng tới
+    `SELECT g.id, g.is_confidential, g.read_messages FROM zalo_group g WHERE g.thread_type = ? AND ${processableThreadSql("g")}`,
+    [ConversationType.Group]);
   const groups: BriefScopeGroup[] = groupRows.map((row) => ({
     id: Number(row.id), isConfidential: Boolean(row.is_confidential), readMessages: Boolean(row.read_messages),
   }));

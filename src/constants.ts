@@ -7,6 +7,14 @@ export enum BotAccountStatus {
   NeedsLogin = 2,
 }
 
+/** Loại tài khoản bot (cột bot_account.kind). Giao diện chép sang web/src/modules/accounts/types/account.ts. */
+export enum BotAccountKind {
+  /** Trợ lý: trả lời, báo, gửi tin như thường (mặc định). */
+  Assistant = 0,
+  /** Chỉ thu thập dữ liệu: lưu tin / thành viên / tệp, KHÔNG gửi hay tác động gì lên Zalo (trừ tab «Bạn bè» do quản trị bấm). */
+  Normal = 1,
+}
+
 export enum MessageKind {
   Text = 0,
   Image = 1,

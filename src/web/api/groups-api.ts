@@ -6,6 +6,7 @@ import type { Db } from "../../db/pool.js";
 import { describeError } from "../../logger.js";
 import type { BackfillJob, SyncService } from "../../sync-service.js";
 import { BackfillBusyError } from "../../sync/backfill-busy-error.js";
+import { collectOnlyThreadSql } from "../../sync/collect-only.js";
 import { applyInternalGroupDefaults, updateGroupSettings, type GroupSettingsPatch } from "../../sync/group-repository.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
@@ -65,7 +66,8 @@ const GROUP_COLUMNS = `
   IF(g.avatar_key IS NULL, NULL, CONCAT('/avatars/g/', g.id)) AS avatar_url,
   (SELECT COUNT(*) FROM bot_group bg WHERE bg.group_id = g.id AND bg.left_at IS NULL) AS bot_count,
   g.message_count, g.last_message_at,
-  (SELECT COUNT(*) FROM attachment a WHERE a.group_id = g.id) AS file_count`;
+  (SELECT COUNT(*) FROM attachment a WHERE a.group_id = g.id) AS file_count,
+  ${collectOnlyThreadSql("g")} AS collect_only`;
 
 const FIELD_LABELS = {
   label: "Tên gọi", group_kind: "Loại nhóm", company_id: "Công ty", read_messages: "Đọc tin",
@@ -82,6 +84,8 @@ function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
     read_messages: Boolean(row.read_messages),
     capture_files: Boolean(row.capture_files),
     is_confidential: Boolean(row.is_confidential),
+    // «Chỉ lưu»: không có bot Trợ lý trong nhóm → không xử lý tự động (cảnh báo, bắt việc, bản tin…)
+    collect_only: Boolean(row.collect_only),
     file_retention_days: Number(row.file_retention_days),
   }));
 }

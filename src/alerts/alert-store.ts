@@ -6,6 +6,7 @@ import type { Db } from "../db/pool.js";
 import { markFlagHandled, openFlagSql, upsertMessageFlag } from "../flags/message-flags.js";
 import { enqueueJob } from "../jobs/job-queue.js";
 import type { WorkCalendar } from "../schedule/work-calendar.js";
+import { processableThreadSql } from "../sync/collect-only.js";
 import { parseKeywordList } from "./keyword-matcher.js";
 import type { ClassifyContext, ClassifyDecision } from "./classifier.js";
 
@@ -148,7 +149,7 @@ export async function pendingUrgentItems(db: Db, recipient: AlertRecipient, now 
   const vips = [...recipient.vipUids];
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${ITEM_COLUMNS} FROM message_flag f JOIN message m ON m.id = f.message_id JOIN zalo_group g ON g.id = m.group_id
-     WHERE g.thread_type = ? AND g.read_messages = 1 AND m.recalled_at IS NULL AND m.sent_at > ? ${scope.sql}
+     WHERE g.thread_type = ? AND g.read_messages = 1 AND ${processableThreadSql("g")} AND m.recalled_at IS NULL AND m.sent_at > ? ${scope.sql}
        AND ((f.priority = ? AND f.pending_ai = 0) ${vips.length ? "OR m.sender_uid IN (?)" : ""})
        AND (f.for_uid IS NULL OR f.for_uid = ? OR f.priority = ?)
        AND NOT EXISTS (SELECT 1 FROM alert_log a WHERE a.recipient_id = ? AND a.message_id = m.id AND a.kind = ?)
@@ -163,7 +164,7 @@ export async function overdueItems(db: Db, recipient: AlertRecipient, now = new 
   const scope = scopeSql(recipient);
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${ITEM_COLUMNS} FROM message_flag f JOIN message m ON m.id = f.message_id JOIN zalo_group g ON g.id = m.group_id
-     WHERE f.reply_state IN (?, ?) AND f.due_at IS NOT NULL AND f.due_at <= ? AND g.read_messages = 1 AND m.recalled_at IS NULL ${scope.sql}
+     WHERE f.reply_state IN (?, ?) AND f.due_at IS NOT NULL AND f.due_at <= ? AND g.read_messages = 1 AND ${processableThreadSql("g")} AND m.recalled_at IS NULL ${scope.sql}
        AND (f.for_uid IS NULL OR f.for_uid = ?)
        AND NOT EXISTS (SELECT 1 FROM alert_log a WHERE a.recipient_id = ? AND a.message_id = m.id AND a.kind = ?)
      ORDER BY f.priority DESC, f.due_at LIMIT ?`,

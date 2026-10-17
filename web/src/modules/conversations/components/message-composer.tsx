@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { formatFileSize } from '@/shared/utils/format-file-size'
 import { useSendFile, useSendText } from '../hooks/use-conversations'
+import { COLLECT_ONLY_COMPOSER_MESSAGE } from '../utils/collect-only-message'
 
 const MAX_TEXT_LENGTH = 10_000
 const MAX_FILE_BYTES = 25 * 1024 * 1024
@@ -15,13 +16,15 @@ interface MessageComposerProps {
   threadId: number
   /** Tên tài khoản bot sẽ đứng tên tin — nhắc người gõ biết bên kia thấy ai nhắn. */
   botName: string
+  /** Cuộc «chỉ lưu» (không có bot Trợ lý): ô soạn tắt, hiện lời báo thay vì cho gõ. */
+  collectOnly?: boolean
 }
 
 /**
  * Ô soạn tin dưới khung chat: Enter gửi, Shift+Enter xuống dòng; kẹp tệp / ảnh gửi từng cái.
  * Chỉ hiện với người có quyền ghi hội thoại. Tin đi ra Zalo dưới tên tài khoản bot (web chỉ có phiên của bot).
  */
-export function MessageComposer({ threadId, botName }: MessageComposerProps) {
+export function MessageComposer({ threadId, botName, collectOnly = false }: MessageComposerProps) {
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const fileInput = useRef<HTMLInputElement>(null)
@@ -75,6 +78,13 @@ export function MessageComposer({ threadId, botName }: MessageComposerProps) {
 
   // Nhân viên chỉ xem: máy chủ trả 403 cho mọi lệnh gửi, nên ẩn ô soạn thay vì để gõ xong mất chữ
   if (!canSend) return null
+  if (collectOnly) {
+    return (
+      <div className="shrink-0 border-t bg-muted/40 p-3 text-center text-sm text-muted-foreground" role="status">
+        {COLLECT_ONLY_COMPOSER_MESSAGE}
+      </div>
+    )
+  }
 
   return (
     <div className="shrink-0 border-t bg-background p-3">

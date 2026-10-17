@@ -1,7 +1,8 @@
 import type { RowDataPacket } from "mysql2";
 import { resolveAlertAsker } from "../assistant/alert-tools.js";
-import { ContactKind, ConversationType, GroupKind, SendActionKind, SendTargetKind, type FriendRequestStatus } from "../constants.js";
+import { BotAccountKind, ContactKind, ConversationType, GroupKind, SendActionKind, SendTargetKind, type FriendRequestStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import { collectOnlyThreadSql } from "../sync/collect-only.js";
 import { cleanPersonName, searchContactsByName } from "../sync/contact-search.js";
 import {
   isAllowedGroupTarget, isAllowedPersonTarget, isFakeZaloId, type SendGroupCandidate, type SendGroupScope, type SendPersonCandidate,
@@ -31,13 +32,14 @@ export async function loadGroupScope(db: Db, recipientId: number | null): Promis
 }
 
 /** `action` khác gửi tin (nhắc hẹn / ghim): màn Hội thoại trên web không làm được việc đó, nên không chỉ sang đó. */
-function explainGroupRefusal(group: SendGroupCandidate, action: SendActionKind): string {
+function explainGroupRefusal(group: SendGroupCandidate, action: SendActionKind, collectOnly = false): string {
   const words = groupActionWords(action);
   if (group.threadType !== ConversationType.Group) return "không phải nhóm";
   if (group.groupKind !== GroupKind.Internal) {
     return words ? words.guestRefusal : "là nhóm khách — gửi từ màn Hội thoại trên web";
   }
   if (isFakeZaloId(group.zaloGroupId)) return "là nhóm mẫu, không có thật bên Zalo";
+  if (collectOnly) return "là nhóm chỉ lưu — không có bot Trợ lý để gửi";
   if (!group.botStillInGroup) return "bot không còn ở trong nhóm";
   return `là nhóm Mật — chỉ người nhận đã chọn đúng nhóm này mới ${words ? words.secretDo : "gửi"} được`;
 }
@@ -50,7 +52,9 @@ function explainPersonRefusal(person: SendPersonCandidate): string {
 }
 
 const GROUP_SELECT = `SELECT g.id, g.zalo_group_id, g.name, g.label, g.thread_type, g.group_kind, g.is_confidential,
-  EXISTS (SELECT 1 FROM bot_group bg WHERE bg.group_id = g.id AND bg.left_at IS NULL) AS bot_in_group
+  EXISTS (SELECT 1 FROM bot_group bg JOIN bot_account ba ON ba.id = bg.bot_account_id AND ba.kind = ${BotAccountKind.Assistant}
+            WHERE bg.group_id = g.id AND bg.left_at IS NULL) AS bot_in_group,
+  ${collectOnlyThreadSql("g")} AS collect_only
   FROM zalo_group g`;
 
 function toGroupCandidate(row: RowDataPacket, scope: SendGroupScope, action: SendActionKind = SendActionKind.Message): TargetCandidate {
@@ -62,7 +66,7 @@ function toGroupCandidate(row: RowDataPacket, scope: SendGroupScope, action: Sen
   const displayName = String(row.label || row.name || "");
   return {
     target: { kind: SendTargetKind.Group, key: `g:${group.id}`, threadId: group.id, zaloUid: null, displayName },
-    names: [String(row.label ?? ""), String(row.name ?? "")], allowed, reason: allowed ? "" : explainGroupRefusal(group, action), secret: group.isConfidential,
+    names: [String(row.label ?? ""), String(row.name ?? "")], allowed, reason: allowed ? "" : explainGroupRefusal(group, action, Number(row.collect_only) === 1), secret: group.isConfidential,
   };
 }
 
@@ -87,11 +91,13 @@ async function loadPersonFacts(db: Db, uids: string[]): Promise<PersonFacts> {
   const facts: PersonFacts = { threadByUid: new Map(), friendByUid: new Map(), botUids: new Set() };
   if (!uids.length) return facts;
   const [threads] = await db.query<RowDataPacket[]>(
-    "SELECT id, zalo_group_id FROM zalo_group WHERE thread_type = ? AND zalo_group_id IN (?) ORDER BY last_message_at DESC LIMIT 200",
+    `SELECT id, zalo_group_id FROM zalo_group WHERE thread_type = ? AND zalo_group_id IN (?)
+       AND owner_bot_id IN (SELECT id FROM bot_account WHERE kind = ${BotAccountKind.Assistant}) ORDER BY last_message_at DESC LIMIT 200`,
     [ConversationType.Direct, uids]);
   for (const row of threads) if (!facts.threadByUid.has(String(row.zalo_group_id))) facts.threadByUid.set(String(row.zalo_group_id), Number(row.id));
   const [friends] = await db.query<RowDataPacket[]>(
-    "SELECT zalo_uid, status FROM friend_request WHERE zalo_uid IN (?) ORDER BY requested_at DESC LIMIT 200", [uids]);
+    `SELECT zalo_uid, status FROM friend_request WHERE zalo_uid IN (?)
+       AND bot_account_id IN (SELECT id FROM bot_account WHERE kind = ${BotAccountKind.Assistant}) ORDER BY requested_at DESC LIMIT 200`, [uids]);
   for (const row of friends) if (!facts.friendByUid.has(String(row.zalo_uid))) facts.friendByUid.set(String(row.zalo_uid), Number(row.status));
   const [bots] = await db.query<RowDataPacket[]>("SELECT zalo_uid FROM bot_account WHERE zalo_uid IN (?) LIMIT 200", [uids]);
   for (const row of bots) facts.botUids.add(String(row.zalo_uid));

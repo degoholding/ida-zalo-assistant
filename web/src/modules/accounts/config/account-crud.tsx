@@ -1,4 +1,4 @@
-import { Activity, Hash, MessageSquare, Users } from 'lucide-react'
+import { Activity, Database, Hash, MessageSquare, Users } from 'lucide-react'
 
 import { EntityAvatar } from '@/shared/contact-card/entity-avatar'
 import { appRoutes } from '@/shared/constants/app-routes'
@@ -9,9 +9,10 @@ import { ACCOUNTS_API_PATH } from '../api/account-api'
 import { AccountCreateDialog } from '../components/account-create-dialog'
 import { AccountEventsTab, AccountGroupsTab } from '../components/account-detail-tabs'
 import { AccountFriendsTab } from '../components/account-friends-tab'
+import { AccountKindBadge } from '../components/account-kind-badge'
 import { AccountRescanButton } from '../components/account-rescan-button'
 import { AccountStateBadge } from '../components/account-state-badge'
-import type { BotAccountDetail } from '../types/account'
+import { BOT_ACCOUNT_KIND, BOT_ACCOUNT_KIND_OPTIONS, type BotAccountDetail } from '../types/account'
 
 /** Cột Tài khoản bot — `key` cột sắp xếp PHẢI trùng `sorts` của `ACCOUNT_LIST_SPEC` (`src/web/api/accounts-api.ts`). */
 export const ACCOUNT_COLUMNS: DataTableColumn<BotAccountDetail>[] = [
@@ -32,6 +33,7 @@ export const ACCOUNT_COLUMNS: DataTableColumn<BotAccountDetail>[] = [
       </div>
     ),
   },
+  { key: 'kind', header: 'Loại', width: 190, cell: (account) => <AccountKindBadge account={account} /> },
   { key: 'state', header: 'Trạng thái', width: 220, cell: (account) => <AccountStateBadge account={account} /> },
   { key: 'group_count', header: 'Nhóm đang ở', width: 120, align: 'center', sortable: true, sortDescFirst: true, cell: (account) => account.group_count },
   { key: 'direct_count', header: 'Cuộc riêng', width: 110, align: 'center', cell: (account) => account.direct_count },
@@ -56,7 +58,10 @@ export const accountCrudConfig: CrudConfig<BotAccountDetail> = {
   searchParam: 'q',
   searchPlaceholder: 'Tìm nhãn, tên Zalo',
   defaultSort: { by: 'label', dir: 'asc' },
-  quickFilters: [{ key: 'is_active', label: 'Đang dùng', type: 'select', options: [{ value: '1', label: 'Đang bật' }, { value: '0', label: 'Đã tắt' }] }],
+  quickFilters: [
+    { key: 'is_active', label: 'Đang dùng', type: 'select', options: [{ value: '1', label: 'Đang bật' }, { value: '0', label: 'Đã tắt' }] },
+    { key: 'kind', label: 'Loại', type: 'select', options: BOT_ACCOUNT_KIND_OPTIONS },
+  ],
   columns: ACCOUNT_COLUMNS,
   listRoute: appRoutes.accounts.list,
   detailRoute: (id) => appRoutes.accounts.detail(id),
@@ -64,12 +69,20 @@ export const accountCrudConfig: CrudConfig<BotAccountDetail> = {
   FormDialog: AccountCreateDialog,
   formFields: [
     { name: 'label', label: 'Nhãn', type: 'text', readonlyOnEdit: true, hint: 'Tên gọi nội bộ của tài khoản, đặt lúc quét QR.' },
+    {
+      name: 'kind',
+      label: 'Loại',
+      type: 'select',
+      options: BOT_ACCOUNT_KIND_OPTIONS,
+      hint: 'Trợ lý: trả lời, báo, gửi tin như thường. Chỉ thu thập dữ liệu: chỉ lưu tin / thành viên / tệp, không bao giờ gửi hay tác động gì lên Zalo (trừ tab Kết bạn do quản trị tự bấm); nhóm chỉ có loại này thì không cảnh báo, bắt việc hay vào bản tin tự động. Đổi có hiệu lực ngay.',
+    },
     { name: 'is_active', label: 'Đang dùng', type: 'switch', hint: 'Tắt thì bot ngừng nghe ngay; bật lại thì nối lại bằng phiên đã lưu.' },
   ],
   detailMedia: (account) => <EntityAvatar name={account.display_name || account.label} avatarUrl={account.avatar_url} className="size-14 text-base" />,
   chips: (account) => [
     ...(account.zalo_uid ? [{ icon: Hash, text: account.zalo_uid, tone: 'code' as const }] : []),
     { icon: Activity, text: account.state_label, tone: account.state === 'listening' ? 'ok' : 'muted' },
+    ...(account.kind === BOT_ACCOUNT_KIND.normal ? [{ icon: Database, text: 'Chỉ thu thập dữ liệu', tone: 'muted' as const }] : []),
     { icon: Users, text: `${account.group_count} nhóm`, tone: 'muted' },
     { icon: MessageSquare, text: `${account.direct_count} cuộc riêng`, tone: 'muted' },
   ],

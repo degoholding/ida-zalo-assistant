@@ -1,4 +1,5 @@
 import type { ModelClient } from "../assistant/gemini-client.js";
+import { isCollectOnlyThread } from "../sync/collect-only.js";
 import type { AppConfig } from "../config.js";
 import { MeetingRecordingStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
@@ -134,6 +135,11 @@ async function scanNewRecordings(db: Db, config: AppConfig, calendar: MeetingSch
       const meetingFields = { eventId: meeting.id, meetingTitle: meeting.title, meetingStart: new Date(meeting.startTime), meetingEnd: new Date(meeting.endTime) };
       if (destination.kind === "unresolved") {
         if (await insertRow(db, file, MeetingRecordingStatus.Skipped, { ...meetingFields, note: "không rõ nơi gửi (cuộc họp riêng không có người đặt)" })) skipped += 1;
+        continue;
+      }
+      // Nhóm «chỉ lưu» (không có bot Trợ lý): không recap tự động
+      if (destination.kind === "group" && await isCollectOnlyThread(db, destination.targetThreadId)) {
+        if (await insertRow(db, file, MeetingRecordingStatus.Skipped, { ...meetingFields, note: "nhóm chỉ lưu (không có bot Trợ lý) — không recap tự động" })) skipped += 1;
         continue;
       }
       const inserted = await insertRow(db, file, MeetingRecordingStatus.Queued, {

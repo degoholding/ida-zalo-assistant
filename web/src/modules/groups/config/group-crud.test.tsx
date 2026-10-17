@@ -8,7 +8,7 @@ function makeGroup(overrides: Partial<GroupDetail> = {}): GroupDetail {
   return {
     id: 3, zalo_group_id: 'g-100', name: 'Ban giám đốc', label: '', group_kind: 1, company_id: 0, company_name: null,
     member_count: 5, read_messages: true, capture_files: true, retention_days: 365, is_confidential: false,
-    file_retention_days: 180, first_seen_at: '2026-10-01T00:00:00Z', members_synced_at: null, avatar_url: null, bot_count: 1,
+    file_retention_days: 180, first_seen_at: '2026-10-01T00:00:00Z', members_synced_at: null, avatar_url: null, bot_count: 1, collect_only: false,
     message_count: 10, file_count: 2, last_message_at: null, members: [], bots: [], ...overrides,
   }
 }
@@ -24,6 +24,16 @@ describe('group list and form config', () => {
     renderNameCell(makeGroup({ is_confidential: true }))
     expect(screen.getByText('Ban giám đốc')).toBeInTheDocument()
     expect(screen.getByText('Mật')).toBeInTheDocument()
+  })
+
+  it('marks a collect-only group with a «Chỉ lưu» pill and a normal group without one', () => {
+    renderNameCell(makeGroup({ collect_only: true }))
+    expect(screen.getByText('Chỉ lưu')).toBeInTheDocument()
+  })
+
+  it('shows no «Chỉ lưu» pill when an assistant bot is in the group', () => {
+    renderNameCell(makeGroup())
+    expect(screen.queryByText('Chỉ lưu')).toBeNull()
   })
 
   it('shows no «Mật» pill for a normal group', () => {

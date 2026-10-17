@@ -113,7 +113,7 @@ export function ConversationPage() {
                 onJumpToLatest={focusMessageId ? handleJumpToLatest : undefined}
               />
             )}
-            <MessageComposer threadId={detail.id} botName={botName} />
+            <MessageComposer threadId={detail.id} botName={botName} collectOnly={Boolean(detail.collect_only)} />
           </>
         )}
       </section>

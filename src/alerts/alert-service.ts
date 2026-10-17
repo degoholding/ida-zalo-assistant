@@ -1,4 +1,5 @@
 import type { RowDataPacket } from "mysql2";
+import { collectOnlyThreadSql } from "../sync/collect-only.js";
 import type { AppConfig } from "../config.js";
 import { AlertKind, ContactKind, ConversationType, GroupKind, MessageKind, MessagePriority } from "../constants.js";
 import type { Db } from "../db/pool.js";
@@ -76,12 +77,14 @@ export class AlertService {
     if (!this.config.alerts.enabled) return;
     const [rows] = await this.db.query<RowDataPacket[]>(
       `SELECT m.id, m.group_id, m.sender_uid, m.kind, m.text, m.sent_at, m.quote_msg_id, m.mentions, m.recalled_at,
-              g.thread_type, g.group_kind, g.read_messages, COALESCE(c.kind, 0) AS sender_kind,
+              g.thread_type, g.group_kind, g.read_messages, ${collectOnlyThreadSql("g")} AS collect_only, COALESCE(c.kind, 0) AS sender_kind,
               (SELECT q.sender_uid FROM message q WHERE q.group_id = m.group_id AND q.zalo_msg_id = m.quote_msg_id LIMIT 1) AS quote_owner
        FROM message m JOIN zalo_group g ON g.id = m.group_id LEFT JOIN contact c ON c.zalo_uid = m.sender_uid
        WHERE m.id = ?`, [event.messageId]);
     const row = rows[0];
     if (!row || Number(row.thread_type) !== ConversationType.Group || !row.read_messages || row.recalled_at) return;
+    // «Chỉ lưu» (không có bot Trợ lý trong nhóm): không phân loại, không cảnh báo tự động
+    if (Number(row.collect_only)) return;
     const sentAt = new Date(row.sent_at);
     if (now.getTime() - sentAt.getTime() > FRESH_MS) return;
     const mentionUids = parseMentionUids(row.mentions);

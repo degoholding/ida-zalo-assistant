@@ -36,7 +36,7 @@ import { hasDriveScope } from "./google/google-oauth.js";
 import { runOndemandRecap, type OndemandDestination } from "./meetings/meeting-recap-ondemand.js";
 import { AttachmentDownloader, requestAndAwaitDownload } from "./sync/attachment-downloader.js";
 import { BackfillBusyError, MAX_CONCURRENT_BACKFILLS_PER_ACCOUNT } from "./sync/backfill-busy-error.js";
-import { BriefKind, BriefTrigger, ConversationType, JobKind } from "./constants.js";
+import { BotAccountKind, BriefKind, BriefTrigger, ConversationType, JobKind } from "./constants.js";
 import { CpuPool } from "./cpu/cpu-pool.js";
 import type { JobRow } from "./jobs/job-queue.js";
 import { JobSkippedError } from "./jobs/job-skipped-error.js";
@@ -63,6 +63,9 @@ import { AccountRunner, type BackfillProgress } from "./zalo/account-runner.js";
 import { listActiveAccounts, type BotAccountRow } from "./zalo/bot-account-repository.js";
 import type { FriendRequestManager } from "./zalo/friend-requests.js";
 import { WEB_CHAT_ID_PREFIX } from "./web/api/assistant-chat-api.js";
+import { isCollectOnlyThread } from "./sync/collect-only.js";
+import { noSendableRunnerError, pickSendableRunner } from "./sync/sendable-runner-picker.js";
+import { CollectOnlyAccountError } from "./zalo/collect-only-account-error.js";
 
 const log = createLogger("service");
 /** Mã Zalo của dữ liệu mẫu (src/dev/demo-conversations.ts) — không gửi ra Zalo được. */
@@ -211,6 +214,8 @@ export class SyncService {
     const accountId = Number((job.payload as { accountId?: unknown }).accountId);
     const runner = this.runners.get(accountId);
     if (!runner) throw new Error(`tài khoản bot #${accountId} đang tắt`);
+    // Việc xếp hàng từ lúc tài khoản còn là Trợ lý, sau đó quản trị đổi sang Normal: bỏ việc, không thử lại
+    if (runner.isCollectOnly) throw new CollectOnlyAccountError();
     return runner;
   }
 
@@ -233,8 +238,19 @@ export class SyncService {
       "SELECT owner_bot_id FROM zalo_group WHERE thread_type = ? AND zalo_group_id = ? ORDER BY last_message_at DESC",
       [ConversationType.Direct, recipient.zalo_uid]);
     const ownerIds = threads.map((row) => Number(row.owner_bot_id));
-    const runner = ownerIds.map((id) => this.runners.get(id)).find(Boolean) ?? [...this.runners.values()][0];
-    if (!runner) throw new Error("không có tài khoản bot nào đang chạy để nhắn người nhận");
+    // Chỉ bot Trợ lý nhắn được; hết bot gửi được thì bỏ việc (không rơi về «runner đầu tiên» — có thể là tài khoản Normal)
+    const runner = pickSendableRunner(ownerIds.map((id) => this.runners.get(id)), this.runners.values());
+    if (!runner) {
+      const error = await noSendableRunnerError(this.db, "nhắn người nhận");
+      if (error instanceof JobSkippedError) {
+        log.warn(`bỏ việc nhắn «${recipient.name}»: hệ thống không có tài khoản bot Trợ lý nào dùng được`);
+        if (payload.briefLogId) {
+          await markBriefFailed(this.db, payload.briefLogId, error.message).catch((dbError) =>
+            log.error(`ghi brief_log #${payload.briefLogId} Failed lỗi`, describeError(dbError)));
+        }
+      }
+      throw error;
+    }
 
     const persistProgress = async (patch: Partial<RecipientMessagePayload>): Promise<void> => {
       Object.assign(payload, patch);
@@ -281,24 +297,47 @@ export class SyncService {
     const [threads] = await this.db.query<RowDataPacket[]>(
       "SELECT owner_bot_id FROM zalo_group WHERE thread_type = ? AND zalo_group_id = ? ORDER BY last_message_at DESC",
       [ConversationType.Direct, zaloUid]);
-    const runner = threads.map((row) => this.runners.get(Number(row.owner_bot_id))).find(Boolean) ?? [...this.runners.values()][0];
-    if (!runner) throw new Error("không có tài khoản bot nào đang chạy");
+    const runner = pickSendableRunner(threads.map((row) => this.runners.get(Number(row.owner_bot_id))), this.runners.values());
+    if (!runner) throw await noSendableRunnerError(this.db, "nhắn riêng");
     return runner;
   }
 
-  /** Tài khoản bot gửi được vào một cuộc: tin riêng → bot chủ cuộc; nhóm → bot đang ở nhóm. */
+  /**
+   * Tài khoản bot gửi được vào một cuộc: tin riêng → bot chủ cuộc; nhóm → bot đang ở nhóm. Cuộc CÓ bot Trợ lý mà runner
+   * của nó chưa chạy (tắt / đang khởi động / mất kết nối) → lỗi thường để hàng đợi thử lại, KHÔNG lùi sang bot khác
+   * (bot khác không ở trong nhóm) và KHÔNG bỏ việc.
+   */
   private async runnerForThread(thread: GroupRow): Promise<AccountRunner> {
+    let assistantIds: number[];
     if (thread.thread_type === ConversationType.Direct) {
-      const runner = this.runners.get(Number(thread.owner_bot_id));
+      const runner = pickSendableRunner([this.runners.get(Number(thread.owner_bot_id))]);
       if (runner) return runner;
+      assistantIds = await this.assistantIdsAmong([Number(thread.owner_bot_id)]);
     } else {
-      const [rows] = await this.db.query<RowDataPacket[]>("SELECT bot_account_id FROM bot_group WHERE group_id = ?", [thread.id]);
-      const runner = rows.map((row) => this.runners.get(Number(row.bot_account_id))).find(Boolean);
+      const [rows] = await this.db.query<RowDataPacket[]>("SELECT bot_account_id FROM bot_group WHERE group_id = ? AND left_at IS NULL", [thread.id]);
+      const runner = pickSendableRunner(rows.map((row) => this.runners.get(Number(row.bot_account_id))));
       if (runner) return runner;
+      assistantIds = await this.assistantIdsAmong(rows.map((row) => Number(row.bot_account_id)));
     }
-    const fallback = [...this.runners.values()][0];
-    if (!fallback) throw new Error("không có tài khoản bot nào đang chạy");
+    if (assistantIds.length) {
+      throw new Error(`bot Trợ lý của «${thread.name || thread.zalo_group_id}» đang tắt hoặc chưa kết nối — thử lại sau`);
+    }
+    // Cuộc «chỉ lưu» (không có bot Trợ lý): bỏ việc kèm lý do rõ, không đẩy sang bot khác không ở trong cuộc
+    if (await isCollectOnlyThread(this.db, thread.id)) {
+      log.warn(`bỏ việc gửi vào «${thread.name || thread.zalo_group_id}»: cuộc chỉ lưu, không có bot Trợ lý`);
+      throw new CollectOnlyAccountError();
+    }
+    // Dữ liệu cũ chưa gắn bot (không có bot_group): lùi về bot Trợ lý đang chạy đầu tiên như trước
+    const fallback = pickSendableRunner([], this.runners.values());
+    if (!fallback) throw await noSendableRunnerError(this.db, "gửi vào cuộc");
     return fallback;
+  }
+
+  /** Trong các mã tài khoản này, những tài khoản loại Trợ lý. */
+  private async assistantIdsAmong(ids: number[]): Promise<number[]> {
+    if (!ids.length) return [];
+    const [rows] = await this.db.query<RowDataPacket[]>("SELECT id FROM bot_account WHERE kind = ? AND id IN (?)", [BotAccountKind.Assistant, ids]);
+    return rows.map((row) => Number(row.id));
   }
 
   /** Trợ lý AI đang dùng (null = tắt). Đổi khóa / mô hình trên màn Cài đặt thì dựng lại — xem applySettings. */
@@ -426,6 +465,11 @@ export class SyncService {
     return this.runners.get(accountId)?.friends ?? null;
   }
 
+  /** Đổi loại tài khoản bot lúc đang chạy (PATCH trên web) — runner áp dụng ngay, không khởi động lại. */
+  setAccountKind(accountId: number, kind: BotAccountKind): void {
+    this.runners.get(accountId)?.setKind(kind);
+  }
+
   /** Chạy (hoặc chạy lại sau khi quét QR mới) một tài khoản theo id. */
   async restartAccount(accountId: number): Promise<boolean> {
     await this.stopAccount(accountId);
@@ -516,13 +560,21 @@ export class SyncService {
     if (thread.thread_type === ConversationType.Direct) {
       const runner = this.runners.get(thread.owner_bot_id);
       if (!runner) throw new Error("Tài khoản bot của cuộc này đang tắt hoặc chưa kết nối");
+      if (runner.isCollectOnly) throw new CollectOnlyAccountError();
       return { runner, thread };
     }
     const [bots] = await this.db.query<RowDataPacket[]>(
       "SELECT bot_account_id FROM bot_group WHERE group_id = ? AND left_at IS NULL ORDER BY bot_account_id", [threadId]);
-    const pick = bots.find((row) => this.runners.has(row.bot_account_id as number));
-    if (!pick) throw new Error("Không có tài khoản bot nào đang chạy trong nhóm này");
-    return { runner: this.runners.get(pick.bot_account_id as number)!, thread };
+    const runner = pickSendableRunner(bots.map((row) => this.runners.get(row.bot_account_id as number)));
+    if (!runner) {
+      const botIds = bots.map((row) => Number(row.bot_account_id));
+      // Nhóm CÓ bot Trợ lý nhưng nó đang tắt / chưa kết nối ≠ nhóm chỉ lưu: báo đúng nguyên nhân để admin biết bật lại bot
+      if ((await this.assistantIdsAmong(botIds)).length) throw new Error("Bot Trợ lý của nhóm này đang tắt hoặc chưa kết nối");
+      // Chỉ còn bot Normal trong nhóm: báo «chỉ thu thập dữ liệu» thay vì «không có bot nào đang chạy»
+      if (botIds.length) throw new CollectOnlyAccountError();
+      throw new Error("Không có tài khoản bot nào đang chạy trong nhóm này");
+    }
+    return { runner, thread };
   }
 
   // Kiểm tắt khẩn TRƯỚC khi chọn tài khoản: bot đang tắt thì luôn báo 409 «bot đang tắt» (màn Hội thoại), không lẫn với lỗi

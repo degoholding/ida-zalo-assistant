@@ -3,6 +3,7 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType, TicketEventKind, TicketStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { enqueueContactMessage } from "../messaging/contact-message.js";
+import { isCollectOnlyThread } from "../sync/collect-only.js";
 import type { SqlPart } from "../web/api/list-query.js";
 import { visibilityClause } from "./ticket-visibility.js";
 
@@ -152,9 +153,12 @@ async function notifyRequester(deps: TicketDeps, ticket: TicketRow, text: string
   if (ticket.source_thread_id) {
     const [rows] = await deps.db.query<RowDataPacket[]>("SELECT thread_type FROM zalo_group WHERE id = ?", [ticket.source_thread_id]);
     const inGroup = Number(rows[0]?.thread_type) === ConversationType.Group;
-    await enqueueMessage(deps, { threadId: ticket.source_thread_id, text: inGroup ? `${ticket.requester_name} ơi, ${text}` : text },
-      `ticket:${ticket.id}:${tag}:requester`);
-    return;
+    // Nơi báo ban đầu là cuộc «chỉ lưu» (không bot Trợ lý nào gửi được): nhắn riêng cho người gửi qua bot Trợ lý
+    if (!(await isCollectOnlyThread(deps.db, ticket.source_thread_id))) {
+      await enqueueMessage(deps, { threadId: ticket.source_thread_id, text: inGroup ? `${ticket.requester_name} ơi, ${text}` : text },
+        `ticket:${ticket.id}:${tag}:requester`);
+      return;
+    }
   }
   await enqueueMessage(deps, { zaloUid: ticket.requester_uid, name: ticket.requester_name, text }, `ticket:${ticket.id}:${tag}:requester`);
 }

@@ -27,7 +27,7 @@ class FakeEventSource {
 const THREAD: ThreadDetail = {
   id: 5, thread_type: 1, name: 'Ban giám đốc', label: '', display_name: 'Ban giám đốc', zalo_group_id: 'g5', company_id: null,
   message_count: 300, last_message_at: '2026-10-08T03:00:00Z', last_text: 'mới nhất', last_sender: 'Lan', last_from_bot: false, avatar_url: null,
-  bot_name: 'Bot', contact: null,
+  bot_name: 'Bot', collect_only: false, contact: null,
   group: { id: 5, name: 'Ban giám đốc', label: '', zalo_group_id: 'g5', group_kind: 2, member_count: 3, read_messages: 1, capture_files: 1,
     retention_days: 0, company_id: null, company_name: null, avatar_url: null, members: [] },
 }

@@ -1,5 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { ConversationType, GroupKind } from "../constants.js";
+import { processableThreadSql } from "../sync/collect-only.js";
 import { enqueueContactMessage, type MessageQueueDeps } from "../messaging/contact-message.js";
 import { formatDue } from "./task-format.js";
 import { shortTaskCode, type TaskParty, type TaskRow } from "./task-repository.js";
@@ -9,14 +10,15 @@ import { shortTaskCode, type TaskParty, type TaskRow } from "./task-repository.j
 // việc nội bộ (nhắc, quá hạn, ghi chú) — review 09/10/2026. Người chỉ có tên (giao trên web) thì không báo được.
 
 /**
- * Tên của người này trong nhóm (để «@Tên» khớp thẻ nhắc). null nếu cuộc không phải nhóm NỘI BỘ, bot đã rời nhóm, hoặc họ
+ * Tên của người này trong nhóm (để «@Tên» khớp thẻ nhắc). null nếu cuộc không phải nhóm NỘI BỘ, bot đã rời nhóm, nhóm «chỉ lưu» (không bot Trợ lý nào gửi được), hoặc họ
  * không còn ở nhóm — khi đó nhắn riêng.
  */
 async function memberNameInGroup(deps: MessageQueueDeps, threadId: number, uid: string): Promise<string | null> {
   const [rows] = await deps.db.query<RowDataPacket[]>(
     `SELECT COALESCE(NULLIF(gm.display_name, ''), gm.zalo_name) AS name FROM group_member gm JOIN zalo_group g ON g.id = gm.group_id
      WHERE gm.group_id = ? AND gm.zalo_uid = ? AND gm.left_at IS NULL AND g.thread_type = ? AND g.group_kind = ?
-       AND EXISTS (SELECT 1 FROM bot_group bg WHERE bg.group_id = g.id AND bg.left_at IS NULL)`,
+       AND EXISTS (SELECT 1 FROM bot_group bg WHERE bg.group_id = g.id AND bg.left_at IS NULL)
+       AND ${processableThreadSql("g")}`,
     [threadId, uid, ConversationType.Group, GroupKind.Internal]);
   const name = String(rows[0]?.name ?? "").trim();
   return name.length >= 2 ? name : null;

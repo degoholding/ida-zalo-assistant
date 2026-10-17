@@ -1,7 +1,7 @@
 import { SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
 import { assertThreadVisible, scopedWhere } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
-import { ConversationType } from "../../constants.js";
+import { BotAccountKind, ConversationType } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { describeError } from "../../logger.js";
 import { BotHaltedError } from "../../messaging/bot-halted-error.js";
@@ -10,6 +10,8 @@ import { OUTGOING_SOURCE } from "../../sync/message-ingest.js";
 import { ApiError, parseId, readJson, readRawBody, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { getContactCardByUid, loadBotUids } from "./contacts-api.js";
+import { assertThreadSendable, mapCollectOnlyError } from "./collect-only-send-guard.js";
+import { isCollectOnlyThread } from "../../sync/collect-only.js";
 import { decorateFile } from "./files-api.js";
 import { listGroupMembers } from "./groups-api.js";
 import type { ListSpec } from "./list-query.js";
@@ -73,11 +75,14 @@ export async function getConversation(db: Db, id: number): Promise<Record<string
   // Tài khoản bot sẽ đứng tên tin quản trị gõ: cuộc riêng → bot chủ cuộc; nhóm → bot còn trong nhóm
   const [botRows] = await db.query<RowDataPacket[]>(
     rows[0].thread_type === ConversationType.Direct
-      ? "SELECT COALESCE(NULLIF(display_name, ''), label) AS name FROM bot_account WHERE id = ?"
+      ? `SELECT COALESCE(NULLIF(display_name, ''), label) AS name FROM bot_account WHERE id = ? AND kind = ${BotAccountKind.Assistant}`
       : `SELECT COALESCE(NULLIF(b.display_name, ''), b.label) AS name FROM bot_group bg JOIN bot_account b ON b.id = bg.bot_account_id
-         WHERE bg.group_id = ? AND bg.left_at IS NULL AND b.is_active = 1 ORDER BY b.id LIMIT 1`,
+         WHERE bg.group_id = ? AND bg.left_at IS NULL AND b.is_active = 1 AND b.kind = ${BotAccountKind.Assistant} ORDER BY b.id LIMIT 1`,
     [rows[0].thread_type === ConversationType.Direct ? rows[0].owner_bot_id : id]);
   const botName = botRows[0] ? String(botRows[0].name) : null;
+  // «Chỉ lưu»: không có bot Trợ lý → ô soạn tắt, báo «Bot này chỉ thu thập dữ liệu, không gửi được» (xem collect-only-send-guard.ts)
+  const collectOnly = await isCollectOnlyThread(db, id);
+  Object.assign(thread, { collect_only: collectOnly });
   if (rows[0].thread_type === ConversationType.Direct) {
     const contact = await getContactCardByUid(db, String(rows[0].zalo_group_id)).catch(() => null);
     return { ...thread, bot_name: botName, contact, group: null };
@@ -225,6 +230,8 @@ async function translateSendError<T>(work: () => Promise<T>, log: WebSendLog): P
     return result;
   } catch (error) {
     if (error instanceof BotHaltedError) throw new ApiError(409, "bot_halted", "Bot đang tắt khẩn — bật lại ở màn Gửi tin.");
+    const collectOnly = mapCollectOnlyError(error);
+    if (collectOnly) throw collectOnly;
     const message = describeError(error);
     if (message.startsWith("Không có cuộc")) throw new ApiError(404, "not_found", message);
     await record(false, message);
@@ -241,6 +248,7 @@ export const conversationRoutes: ApiRoute[] = [
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) throw new ApiError(422, "validation_error", "Chưa có nội dung tin");
     if (text.length > MAX_TEXT_LENGTH) throw new ApiError(422, "validation_error", `Tin tối đa ${MAX_TEXT_LENGTH} ký tự`);
+    await assertThreadSendable(service.db, id);
     const messageId = await translateSendError(() => service.sendAdminText(id, text), { db: service.db, principal, threadId: id, body: text });
     sendOk(response, { message_id: messageId }, "Đã gửi");
   }],
@@ -254,6 +262,7 @@ export const conversationRoutes: ApiRoute[] = [
     const contentType = String(request.headers["content-type"] ?? "application/octet-stream").split(";")[0].trim();
     const data = await readRawBody(request);
     if (!data.length) throw new ApiError(422, "validation_error", "Tệp rỗng");
+    await assertThreadSendable(service.db, id);
     const messageId = await translateSendError(() => service.sendAdminFile(id, data, fileName, contentType), { db: service.db, principal, threadId: id, body: "", fileName });
     sendOk(response, { message_id: messageId }, `Đã gửi tệp ${fileName}`);
   }],

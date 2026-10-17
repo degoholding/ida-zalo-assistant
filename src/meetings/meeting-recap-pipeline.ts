@@ -13,6 +13,7 @@ import { quietDelayMs } from "../schedule/quiet-delay.js";
 import type { WorkCalendar } from "../schedule/work-calendar.js";
 import { vnLocalTime } from "../schedule/work-calendar.js";
 import type { FileStorage } from "../storage/file-storage.js";
+import { isCollectOnlyThread } from "../sync/collect-only.js";
 import { findThreadById } from "../sync/group-repository.js";
 import { formatDue } from "../tasks/task-format.js";
 import { findTask, shortTaskCode, type TaskParty, type TaskRow } from "../tasks/task-repository.js";
@@ -153,6 +154,12 @@ async function run(deps: MeetingRecapDeps, row: ClaimedRecording, now: Date): Pr
   if (!destination) {
     // Không nên xảy ra (phase 3 chỉ Queued khi đã rõ đích) — vẫn chặn ở đây để không mất ghi âm trong trạng thái lỡ dở.
     await markSkipped(deps.db, row.id, "không rõ nơi gửi", now);
+    return;
+  }
+
+  // Dòng đã Queued từ trước khi nhóm thành «chỉ lưu» (bot Trợ lý rời / đổi loại): không tốn AI, không báo ai
+  if (row.targetThreadId && await isCollectOnlyThread(deps.db, row.targetThreadId)) {
+    await markSkipped(deps.db, row.id, "nhóm chỉ lưu (không có bot Trợ lý) — không recap tự động", now);
     return;
   }
 

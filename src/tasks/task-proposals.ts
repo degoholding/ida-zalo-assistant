@@ -1,4 +1,5 @@
 import type { RowDataPacket } from "mysql2";
+import { processableThreadSql } from "../sync/collect-only.js";
 import { buildAlertModelClient, systemTokensToday } from "../alerts/ai-review.js";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import type { AppConfig } from "../config.js";
@@ -68,7 +69,7 @@ async function loadCandidates(db: Db, now: Date, triggerKeywords: string[]): Pro
     `SELECT m.id, m.group_id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_uid, m.sender_name, m.text, m.sent_at,
             m.mentions, c.id AS contact_id, c.kind, c.role
      FROM message m JOIN zalo_group g ON g.id = m.group_id LEFT JOIN contact c ON c.zalo_uid = m.sender_uid
-     WHERE g.thread_type = ? AND g.read_messages = 1 AND g.is_confidential = 0 AND m.recalled_at IS NULL AND m.kind IN (?, ?)
+     WHERE g.thread_type = ? AND g.read_messages = 1 AND g.is_confidential = 0 AND ${processableThreadSql("g")} AND m.recalled_at IS NULL AND m.kind IN (?, ?)
        AND m.id > ? AND m.sent_at > ? AND CHAR_LENGTH(m.text) >= ?
        AND NOT EXISTS (SELECT 1 FROM task t WHERE t.source_message_id = m.id)
      ORDER BY m.id LIMIT ?`,

@@ -1,5 +1,5 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import type { BotAccountStatus, SessionEvent } from "../constants.js";
+import type { BotAccountKind, BotAccountStatus, SessionEvent } from "../constants.js";
 import type { Db } from "../db/pool.js";
 
 export interface BotAccountRow {
@@ -10,6 +10,8 @@ export interface BotAccountRow {
   session_cipher: string | null;
   status: number;
   is_active: number;
+  /** Loại tài khoản (BotAccountKind); dòng cũ = 0 (Trợ lý). */
+  kind: BotAccountKind;
 }
 
 export async function listActiveAccounts(db: Db): Promise<BotAccountRow[]> {

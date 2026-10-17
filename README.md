@@ -50,6 +50,21 @@ Giao diện: `http://127.0.0.1:8090` (chỉ mở trong máy; vào từ xa qua đ
 
 1. **Công ty** → thêm các công ty con (mã + tên).
 2. **Tài khoản bot** → nhập nhãn → *Lấy mã QR* → quét bằng app Zalo của tài khoản bot. Xong là bot chạy.
+   **Loại tài khoản** (17/10/2026, chỉ quản trị đổi, có hiệu lực ngay, ghi «Lịch sử thao tác»): *Trợ lý* (mặc định) trả lời / báo /
+   gửi tin như thường; *Chỉ thu thập dữ liệu* (Normal) chỉ lưu tin, thành viên, sự kiện nhóm, tệp — KHÔNG BAO GIỜ gửi hay tác động
+   gì lên Zalo: chốt chặn cứng ở `ZaloSender` (từ chối cả lệnh ưu tiên «tắt / bật bot», lỗi không thử lại), không dựng bộ trả lời
+   nhóm, tin riêng gửi tới chỉ được lưu (không «đã nhận», không lệnh), ô soạn ở Hội thoại báo «Bot này chỉ thu thập dữ liệu, không gửi
+   được» (API 409). Ngoại lệ duy nhất: tab *Kết bạn* do quản trị tự bấm. Chọn bot gửi / người nhận / nơi gửi lệnh chỉ xét bot Trợ lý;
+   hết bot Trợ lý DÙNG ĐƯỢC (bật + có phiên + không cần quét lại) thì việc gửi mới bị bỏ (log rõ lý do); bot Trợ lý chỉ đang tắt / chưa
+   kết nối thì việc báo lỗi thường và hàng đợi thử lại, không rơi về «bot đầu tiên» hay bot không ở trong nhóm. Tài khoản mới quét QR
+   luôn là Trợ lý; đổi loại sau ở form sửa.
+   **Nhóm / cuộc «Chỉ lưu»** = không có bot Trợ lý nào đang ở trong VÀ nhóm từng có bot Normal (dính: bot Normal rời nhóm vẫn là chỉ
+   lưu, tới khi có bot Trợ lý vào; cuộc riêng của bot Normal cũng vậy; nhóm chưa từng có bot Normal giữ như cũ). Phân loại theo
+   thành viên nhóm của bot (`bot_group`), làm mới ở lượt quét lúc khởi động, sự kiện vào / rời nhóm và nút «Quét lại» của quản trị.
+   Việc / ticket cũ của nhóm chỉ lưu vẫn nhắc / báo, nhưng qua tin riêng (bot Trợ lý), không vào nhóm. Không cảnh báo (từ khóa + AI), không bắt việc, không đọc ảnh tự động, không recap họp tự động, không vào bản
+   tin / báo cáo định kỳ; vẫn xem / tìm tin / hỏi trợ lý / MCP theo phân quyền. Nhóm có cả hai loại bot xử lý như thường. Nhóm hiện nhãn
+   «Chỉ lưu» ở danh sách + chi tiết (lọc được). Mã: `src/sync/collect-only.ts` (hàm SQL dùng chung `collectOnlyThreadSql`),
+   `src/sync/sendable-runner-picker.ts`, `src/zalo/collect-only-account-error.ts`, migration `041_bot_account_kind.sql`.
 3. **Nhóm** → nhóm bot đang ở hiện ra, mặc định KHÔNG đọc → chọn công ty, tick *Đọc tin* / *Lấy file* → Lưu.
 4. **Tệp** → tệp đã tải, tải về máy; tệp lỗi hoặc chưa lấy có nút *Tải vào kho*.
 5. **Hội thoại** → xem tin từng nhóm và từng người nhắn riêng cho bot (cả câu bot trả lời).

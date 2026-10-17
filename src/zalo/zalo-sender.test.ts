@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { JobSkippedError } from "../jobs/job-skipped-error.js";
 import { BotHaltedError } from "../messaging/bot-halted-error.js";
+import { CollectOnlyAccountError } from "./collect-only-account-error.js";
 import { ZaloSender } from "./zalo-sender.js";
 
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -99,4 +101,53 @@ test("mức control chen trước tin thường và tin phụ đang chờ", asyn
   const rest = [sender.send(sent("thường"), "normal"), sender.send(sent("phụ"), "low"), sender.send(sent("control"), "control")];
   await Promise.all([first, ...rest]);
   assert.deepEqual(order, ["đang gửi", "control", "thường", "phụ"]);
+});
+
+// Tài khoản bot loại Normal (chỉ gom dữ liệu): chốt chặn cứng ở tầng gửi
+test("tài khoản chỉ gom dữ liệu: mọi lệnh bị từ chối CollectOnlyAccountError (không thử lại), không gọi Zalo", async () => {
+  const sender = new ZaloSender(0, () => false, () => true);
+  let called = 0;
+  const task = async () => { called += 1; return "đã gửi"; };
+  for (const priority of ["normal", "low"] as const) {
+    await assert.rejects(sender.send(task, priority), (error) => error instanceof CollectOnlyAccountError && error instanceof JobSkippedError);
+  }
+  assert.equal(await sender.sendIfQuiet(task).catch((error) => error instanceof CollectOnlyAccountError ? "chặn" : "lỗi khác"), "chặn");
+  assert.equal(called, 0);
+  assert.equal(sender.pending, 0);
+});
+
+test("tài khoản chỉ gom dữ liệu: cả mức control (lệnh tắt / bật bot) cũng bị chặn", async () => {
+  const sender = new ZaloSender(0, () => false, () => true);
+  let called = 0;
+  await assert.rejects(sender.send(async () => { called += 1; }, "control"), CollectOnlyAccountError);
+  assert.equal(called, 0);
+});
+
+test("tài khoản chỉ gom dữ liệu: lệnh allowCollectOnly (tab «Bạn bè» do quản trị bấm) vẫn đi qua", async () => {
+  const sender = new ZaloSender(0, () => false, () => true);
+  assert.equal(await sender.send(async () => "tìm người", "normal", { allowCollectOnly: true }), "tìm người");
+  // Lệnh thường đứng cạnh vẫn bị chặn
+  await assert.rejects(sender.send(async () => "tin nhắn"), CollectOnlyAccountError);
+});
+
+test("đổi loại tài khoản có hiệu lực ngay: lệnh đang xếp hàng bị dọn khi tài khoản thành Normal, rồi gửi lại được khi về Trợ lý", async () => {
+  let collectOnly = false;
+  const sender = new ZaloSender(0, () => false, () => collectOnly);
+  let release: () => void = () => {};
+  const blocker = sender.send(() => new Promise<string>((resolve) => { release = () => resolve("xong"); }));
+  const queued = sender.send(async () => "chờ trong hàng");
+  const queuedAllowed = sender.send(async () => "bạn bè", "normal", { allowCollectOnly: true });
+  await tick();
+  collectOnly = true;
+  release();
+  assert.equal(await blocker, "xong");
+  await assert.rejects(queued, CollectOnlyAccountError);
+  assert.equal(await queuedAllowed, "bạn bè");
+  collectOnly = false;
+  assert.equal(await sender.send(async () => "gửi lại được"), "gửi lại được");
+});
+
+test("tài khoản Trợ lý (mặc định): không bị ảnh hưởng bởi chốt chặn", async () => {
+  const sender = new ZaloSender(0);
+  assert.equal(await sender.send(async () => "ok"), "ok");
 });

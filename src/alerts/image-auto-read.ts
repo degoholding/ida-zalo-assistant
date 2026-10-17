@@ -7,6 +7,7 @@ import { AttachmentStatus, ConversationType, FlagSource, MessageKind, MessagePri
 import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
 import type { FileStorage } from "../storage/file-storage.js";
+import { processableThreadSql } from "../sync/collect-only.js";
 import { buildAlertModelClient, systemTokensToday } from "./ai-review.js";
 
 // Tự đọc ảnh gửi trong nhóm (15/10/2026): ảnh vừa cất kho → mô hình chép chữ + mô tả ngắn (cất attachment_text như khi
@@ -64,7 +65,7 @@ async function loadCandidates(db: Db, config: AppConfig, extensions: string[], n
      WHERE a.status = ? AND a.stored_at > ? AND a.file_ext IN (?) AND a.stored_bytes <= ?
        AND (t.attachment_id IS NULL
          OR (t.text IS NULL AND t.extracted_at < ? AND (${retryPatterns.map(() => "t.summary LIKE ?").join(" OR ")})))
-       AND g.thread_type = ? AND g.read_messages = 1 AND g.is_confidential = 0
+       AND g.thread_type = ? AND g.read_messages = 1 AND g.is_confidential = 0 AND ${processableThreadSql("g")}
        AND m.kind = ? AND m.recalled_at IS NULL
        AND m.sender_uid NOT IN (SELECT zalo_uid FROM bot_account WHERE zalo_uid IS NOT NULL)
      ORDER BY (t.attachment_id IS NULL) DESC, a.id

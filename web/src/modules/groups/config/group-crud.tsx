@@ -1,4 +1,4 @@
-import { Building2, Eye, EyeOff, FileText, Hash, Lock, MessageSquare, Users } from 'lucide-react'
+import { Building2, Database, Eye, EyeOff, FileText, Hash, Lock, MessageSquare, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { FilterFieldDefinition } from '@/shared/conditional-filter'
@@ -19,6 +19,9 @@ import { GroupBotsTab, GroupMembersTab } from '../components/group-detail-tabs'
 import { OnOffPill } from '../components/on-off-pill'
 import type { GroupDetail } from '../types/group'
 import { getGroupName } from '../utils/format-group'
+
+/** Giải thích nhãn «Chỉ lưu»: nhóm không có bot Trợ lý nào. */
+const COLLECT_ONLY_HINT = 'Chỉ có bot thu thập dữ liệu trong nhóm: tin được lưu, nhưng không cảnh báo, bắt việc, đọc ảnh hay đưa vào bản tin tự động'
 
 const RETENTION_MIN = 1
 const RETENTION_MAX = 3650
@@ -49,6 +52,7 @@ export const GROUP_COLUMNS: DataTableColumn<GroupDetail>[] = [
           </div>
           <div className="truncate text-xs text-muted-foreground">{group.label ? `Tên gọi: ${group.label}` : group.zalo_group_id}</div>
           {!group.bot_count && <Pill tone="danger">Không còn bot nào</Pill>}
+          {group.collect_only && <span title={COLLECT_ONLY_HINT}><Pill tone="neutral">Chỉ lưu</Pill></span>}
         </div>
       </div>
     ),
@@ -167,6 +171,7 @@ export const groupCrudConfig: CrudConfig<GroupDetail> = {
   detailMedia: (group) => <EntityAvatar name={getGroupName(group)} avatarUrl={group.avatar_url} shape="rounded" className="size-14 text-base" />,
   chips: (group) => [
     { icon: Hash, text: group.zalo_group_id, tone: 'code' },
+    ...(group.collect_only ? [{ icon: Database, text: 'Chỉ lưu', tone: 'muted' as const }] : []),
     { icon: Users, text: `${group.member_count} thành viên`, tone: 'muted' },
     ...(group.is_confidential ? [{ icon: Lock, text: 'Nhóm Mật', tone: 'ok' as const }] : []),
     { icon: group.read_messages ? Eye : EyeOff, text: group.read_messages ? 'Đang đọc tin' : 'Không đọc tin', tone: group.read_messages ? 'ok' : 'muted' },

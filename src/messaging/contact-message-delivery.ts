@@ -1,6 +1,8 @@
 import type { RowDataPacket } from "mysql2";
+import { ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import type { JobRow } from "../jobs/job-queue.js";
+import { isCollectOnlyThread } from "../sync/collect-only.js";
 import { findThreadById, type GroupRow } from "../sync/group-repository.js";
 import type { AccountRunner } from "../zalo/account-runner.js";
 import type { ContactMessagePayload } from "./contact-message.js";
@@ -60,6 +62,18 @@ export async function deliverContactMessage(deps: ContactDeliveryDeps, payload: 
   if (payload.threadId) {
     const thread = await findThreadById(deps.db, payload.threadId);
     if (!thread) return;
+    // Tin riêng thuộc bot Normal (job xếp từ trước khi đổi loại / do tin cũ): bot đó không gửi được — chuyển thành nhắn riêng
+    // người đó qua bot Trợ lý (cuộc riêng: zalo_group_id chính là mã Zalo của người)
+    if (thread.thread_type === ConversationType.Direct && await isCollectOnlyThread(deps.db, thread.id)) {
+      const peerUid = thread.zalo_group_id;
+      const direct = await deps.runnerForUid(peerUid);
+      await sendAll({
+        text: (text) => direct.sendDirectText(peerUid, thread.name, text),
+        stored: (id) => direct.sendDirectStoredFile(peerUid, id),
+        report: (file) => direct.sendDirectReportFile(peerUid, thread.name, file),
+      });
+      return;
+    }
     const runner = await deps.runnerForThread(thread);
     await sendAll({
       text: (text) => runner.sendThreadText(thread, text, payload.mentionUids),

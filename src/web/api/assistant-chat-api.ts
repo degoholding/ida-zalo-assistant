@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { AssistantTurnStatus, ContactRole, MessageKind } from "../../constants.js";
+import { AssistantTurnStatus, BotAccountKind, ContactRole, ConversationType, MessageKind } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { findContactByUid, type ContactRow } from "../../sync/contact-repository.js";
 import { directKey, ensureThread, type GroupRow } from "../../sync/group-repository.js";
@@ -53,8 +53,14 @@ async function loadAsker(db: Db, rawContactId: unknown): Promise<ContactRow> {
 
 /** Cuộc «Hỏi trợ lý» của một người (tạo nếu chưa có), gắn tài khoản bot đầu tiên — nhật ký assistant_turn cần bot. */
 async function ensureWebThread(db: Db, contact: ContactRow): Promise<{ thread: GroupRow; botAccountId: number }> {
-  const [bots] = await db.query<RowDataPacket[]>("SELECT id FROM bot_account ORDER BY is_active DESC, id LIMIT 1");
-  if (!bots[0]) throw new ApiError(409, "no_bot_account", "Chưa có tài khoản bot nào — quét QR một tài khoản (hoặc chạy npm run seed:demo) trước");
+  // Giữ cuộc ổn định: đã có cuộc web-<uid> thuộc một bot Trợ lý thì dùng lại bot đó (không nhảy sang bot khác khi bot #1 đổi sang Normal)
+  const [existing] = await db.query<RowDataPacket[]>(
+    `SELECT g.owner_bot_id AS id FROM zalo_group g JOIN bot_account ba ON ba.id = g.owner_bot_id AND ba.kind = ${BotAccountKind.Assistant}
+     WHERE g.thread_type = ? AND g.zalo_group_id = ? ORDER BY g.id LIMIT 1`,
+    [ConversationType.Direct, `${WEB_CHAT_ID_PREFIX}${contact.zalo_uid}`]);
+  const [bots] = existing[0] ? [existing] : await db.query<RowDataPacket[]>(
+    `SELECT id FROM bot_account WHERE kind = ${BotAccountKind.Assistant} ORDER BY is_active DESC, id LIMIT 1`);
+  if (!bots[0]) throw new ApiError(409, "no_bot_account", "Chưa có tài khoản bot Trợ lý nào — quét QR một tài khoản (hoặc chạy npm run seed:demo) trước");
   const botAccountId = Number(bots[0].id);
   const name = `Hỏi trợ lý · ${contact.display_name || contact.zalo_name}`;
   const { group: thread } = await ensureThread(db, directKey(botAccountId, `${WEB_CHAT_ID_PREFIX}${contact.zalo_uid}`),

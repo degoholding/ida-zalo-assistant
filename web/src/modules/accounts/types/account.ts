@@ -1,3 +1,11 @@
+/** Khớp `BotAccountKind` ở `src/constants.ts` của máy chủ; đổi bên đó thì sửa tay bên này. */
+export const BOT_ACCOUNT_KIND = { assistant: 0, normal: 1 } as const
+
+export const BOT_ACCOUNT_KIND_OPTIONS = [
+  { value: BOT_ACCOUNT_KIND.assistant, label: 'Trợ lý' },
+  { value: BOT_ACCOUNT_KIND.normal, label: 'Chỉ thu thập dữ liệu' },
+]
+
 /** Một tài khoản bot như `GET /api/accounts` trả về. */
 export interface BotAccount {
   [key: string]: unknown
@@ -7,6 +15,8 @@ export interface BotAccount {
   display_name: string
   status: number
   is_active: boolean
+  /** Loại tài khoản — `BOT_ACCOUNT_KIND`. */
+  kind: number
   running: boolean
   /** Trạng thái gộp do máy chủ tính: off | needs_login | stopped | listening | reconnecting. */
   state: string

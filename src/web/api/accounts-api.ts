@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { BotAccountStatus, ConversationType } from "../../constants.js";
+import { BotAccountKind, BotAccountStatus, ConversationType } from "../../constants.js";
 import type { SyncService } from "../../sync-service.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
@@ -10,6 +10,7 @@ import { runList } from "./list-runner.js";
 
 // API Tài khoản bot: danh sách (kèm cờ đang chạy), chi tiết, bật / tắt, đăng nhập QR.
 
+const ACCOUNT_KIND_LABEL: Record<number, string> = { [BotAccountKind.Assistant]: "Trợ lý", [BotAccountKind.Normal]: "Chỉ thu thập dữ liệu" };
 const LABEL_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 
 export const ACCOUNT_LIST_SPEC: ListSpec = {
@@ -18,6 +19,7 @@ export const ACCOUNT_LIST_SPEC: ListSpec = {
     display_name: { sql: "b.display_name", type: "text" },
     status: { sql: "b.status", type: "number" },
     is_active: { sql: "b.is_active", type: "boolean" },
+    kind: { sql: "b.kind", type: "number" },
     last_heartbeat_at: { sql: "b.last_heartbeat_at", type: "date" },
   },
   sorts: { label: "b.label", last_heartbeat_at: "b.last_heartbeat_at", created_at: "b.created_at", group_count: "group_count" },
@@ -28,7 +30,7 @@ export const ACCOUNT_LIST_SPEC: ListSpec = {
 
 const ACCOUNT_FROM = "FROM bot_account b LEFT JOIN contact c ON c.zalo_uid = b.zalo_uid";
 const ACCOUNT_COLUMNS = `
-  b.id, b.label, b.zalo_uid, b.display_name, b.status, b.is_active, b.last_connected_at, b.last_heartbeat_at, b.created_at,
+  b.id, b.label, b.zalo_uid, b.display_name, b.status, b.is_active, b.kind, b.last_connected_at, b.last_heartbeat_at, b.created_at,
   c.avatar_key,
   (SELECT COUNT(*) FROM bot_group bg WHERE bg.bot_account_id = b.id AND bg.left_at IS NULL) AS group_count,
   (SELECT COUNT(*) FROM zalo_group d WHERE d.thread_type = ${ConversationType.Direct} AND d.owner_bot_id = b.id) AS direct_count`;
@@ -81,15 +83,45 @@ export const accountRoutes: ApiRoute[] = [
     const id = parseId(match[1]);
     const before = await loadAccount(service, id);
     const body = await readJson(request);
-    if (body.is_active === undefined) throw new ApiError(422, "validation_error", "Chỉ sửa được ô Đang dùng của tài khoản bot");
-    const active = body.is_active === true || body.is_active === 1 || body.is_active === "1" || body.is_active === "true";
-    await service.db.query("UPDATE bot_account SET is_active = ? WHERE id = ?", [active ? 1 : 0, id]);
-    if (active) await service.restartAccount(id);
-    else await service.stopAccount(id);
-    if (active !== Boolean(before.is_active)) {
-      await recordAudit(service.db, { entity: "bot_account", entityId: id, action: active ? "activate" : "deactivate" });
+    if (body.is_active === undefined && body.kind === undefined) {
+      throw new ApiError(422, "validation_error", "Chỉ sửa được ô Đang dùng và Loại của tài khoản bot");
     }
-    sendOk(response, await getAccountDetail(service, id), active ? "Đã bật tài khoản bot" : "Đã tắt tài khoản bot");
+    // Kiểm hết đầu vào TRƯỚC khi ghi gì (loại chỉ nhận đúng 0 / 1 hoặc "0" / "1"; chuỗi rỗng, true, 1.5… đều 422)
+    let nextKind: BotAccountKind | null = null;
+    if (body.kind !== undefined) {
+      const raw = body.kind;
+      const kind = raw === 0 || raw === 1 || raw === "0" || raw === "1" ? Number(raw) : NaN;
+      if (kind !== BotAccountKind.Assistant && kind !== BotAccountKind.Normal) {
+        throw new ApiError(422, "validation_error", "Loại tài khoản không hợp lệ (0 = Trợ lý, 1 = Chỉ thu thập dữ liệu)");
+      }
+      nextKind = kind;
+    }
+    const nextActive = body.is_active === undefined
+      ? null
+      : body.is_active === true || body.is_active === 1 || body.is_active === "1" || body.is_active === "true";
+    const kindChanged = nextKind !== null && nextKind !== Number(before.kind);
+    const activeChanged = nextActive !== null && nextActive !== Boolean(before.is_active);
+
+    // Loại tài khoản: đổi có hiệu lực NGAY (runner đang chạy áp dụng liền, không khởi động lại)
+    if (kindChanged && nextKind !== null) {
+      await service.db.query("UPDATE bot_account SET kind = ? WHERE id = ?", [nextKind, id]);
+      service.setAccountKind(id, nextKind);
+      await recordAudit(service.db, {
+        entity: "bot_account", entityId: id, action: "update", changedFields: ["kind"],
+        message: `Đổi loại tài khoản: ${ACCOUNT_KIND_LABEL[Number(before.kind)] ?? before.kind} → ${ACCOUNT_KIND_LABEL[nextKind]}`,
+      });
+    }
+    // Chỉ dừng / chạy lại tài khoản khi Đang dùng THỰC SỰ đổi — lưu lại cùng giá trị không làm rớt phiên Zalo
+    if (activeChanged && nextActive !== null) {
+      await service.db.query("UPDATE bot_account SET is_active = ? WHERE id = ?", [nextActive ? 1 : 0, id]);
+      if (nextActive) await service.restartAccount(id);
+      else await service.stopAccount(id);
+      await recordAudit(service.db, { entity: "bot_account", entityId: id, action: nextActive ? "activate" : "deactivate" });
+    }
+    const message = activeChanged
+      ? (nextActive ? "Đã bật tài khoản bot" : "Đã tắt tài khoản bot") + (kindChanged ? " và đổi loại tài khoản" : "")
+      : kindChanged ? "Đã lưu loại tài khoản" : "Không có thay đổi";
+    sendOk(response, await getAccountDetail(service, id), message);
   }],
   // Đăng nhập QR: tạo lượt theo nhãn (mới hoặc quét lại), rồi giao diện hỏi trạng thái 2 giây một lần
   ["POST", /^\/api\/accounts\/qr-login$/, async ({ request, response, qrLogins }) => {

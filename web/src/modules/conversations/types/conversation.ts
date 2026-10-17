@@ -50,6 +50,8 @@ export interface ThreadGroup {
 export interface ThreadDetail extends Thread {
   /** Tên tài khoản bot sẽ đứng tên tin quản trị gõ (null = không có bot nào gửi được). */
   bot_name: string | null
+  /** «Chỉ lưu»: không có bot Trợ lý trong cuộc → quản trị cũng không gửi được (máy chủ trả 409). */
+  collect_only: boolean
   contact: Contact | null
   group: ThreadGroup | null
 }

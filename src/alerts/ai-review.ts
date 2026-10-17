@@ -1,4 +1,5 @@
 import type { RowDataPacket } from "mysql2";
+import { collectOnlyThreadSql, processableThreadSql } from "../sync/collect-only.js";
 import { AiKeyStore } from "../assistant/ai-key-store.js";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import { KeyChainClient } from "../assistant/key-chain-client.js";
@@ -101,7 +102,7 @@ async function loadCandidates(db: Db, now: Date): Promise<{ items: ReviewItem[];
     FROM message m JOIN zalo_group g ON g.id = m.group_id
     LEFT JOIN attachment a ON a.message_id = m.id AND m.kind = ${MessageKind.Image}
     LEFT JOIN attachment_text t ON t.attachment_id = a.id
-    WHERE g.thread_type = ${ConversationType.Group} AND g.read_messages = 1 AND g.is_confidential = 0 AND m.recalled_at IS NULL
+    WHERE g.thread_type = ${ConversationType.Group} AND g.read_messages = 1 AND g.is_confidential = 0 AND m.recalled_at IS NULL AND ${processableThreadSql("g")}
       AND ((m.kind IN (${MessageKind.Text}, ${MessageKind.Link}) AND CHAR_LENGTH(m.text) >= ${MIN_TEXT})
         OR (m.kind = ${MessageKind.Image} AND t.text IS NOT NULL AND t.text <> ''))
       AND m.sent_at > ?
@@ -133,7 +134,8 @@ export interface ReviewResult {
 export async function runAiReview(db: Db, config: AppConfig, now = new Date(), client?: ModelClient | null): Promise<ReviewResult> {
   if (!config.alerts.enabled || !config.alerts.aiEnabled) return { reviewed: 0, urgent: 0, skipped: "đã tắt" };
   // Ứng viên trong nhóm Mật không đưa cho AI được — bỏ cờ chờ, giữ mức hiện có
-  await db.query(`UPDATE message_flag f JOIN zalo_group g ON g.id = f.group_id SET f.pending_ai = 0 WHERE f.pending_ai = 1 AND g.is_confidential = 1`);
+  await db.query(`UPDATE message_flag f JOIN zalo_group g ON g.id = f.group_id SET f.pending_ai = 0
+     WHERE f.pending_ai = 1 AND (g.is_confidential = 1 OR ${collectOnlyThreadSql("g")})`);
   const { items, newCursor } = await loadCandidates(db, now);
   if (!items.length) {
     await db.query("INSERT INTO alert_cursor (name, last_message_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE last_message_id = GREATEST(last_message_id, VALUES(last_message_id))", [CURSOR, newCursor]);
