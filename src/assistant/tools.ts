@@ -1,32 +1,24 @@
 import type { Db } from "../db/pool.js";
-import { runListContacts } from "./contact-directory-tool.js";
-import { runExportReport, type ExportReport } from "./export-report-tool.js";
-import { GROUP_ACTION_TOOL_NAMES, runGroupAction, type GroupActions } from "./group-action-tools.js";
+import type { ExportReport } from "./export-report-tool.js";
+import { GROUP_ACTION_TOOL_NAMES, type GroupActions } from "./group-action-tools.js";
 import { recordActionNotes } from "./action-notes.js";
-import { runCreateRecapPdf, type CreateRecapPdf } from "./meeting-recap-tool.js";
-import { runRecapDriveRecording, type RecapDriveRecording } from "./drive-recap-tool.js";
-import { runReadLink, type ReadLink } from "./read-link-tool.js";
-import { runSearchMessages } from "./search-messages-tool.js";
-import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings, type MeetingCreator } from "./meeting-tool.js";
+import type { CreateRecapPdf } from "./meeting-recap-tool.js";
+import type { RecapDriveRecording } from "./drive-recap-tool.js";
+import type { ReadLink } from "./read-link-tool.js";
+import type { MeetingCreator } from "./meeting-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
-import { askerContactScope, type AskerAccess } from "./asker-access.js";
-import { MAX_FILES_PER_TURN, readFile, searchFiles, sendFile } from "./file-access-tools.js";
-import { findPeople, getConversationWithPerson, getGroupMessages, listGroups } from "./thread-read-tools.js";
-import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
-import { ALERT_TOOL_NAMES, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
-import { runTicketTool, TICKET_TOOL_NAMES } from "../tickets/ticket-tools.js";
+import type { AskerAccess } from "./asker-access.js";
+import { MAX_FILES_PER_TURN } from "./file-access-tools.js";
+import type { FunctionDeclaration, WebSearchResult } from "./gemini-client.js";
+import { findExecutor } from "./tool-registry.js";
+import type { AlertAsker, AlertToolsDeps } from "./alert-tools.js";
+import { TICKET_TOOL_NAMES } from "../tickets/ticket-tools.js";
 import type { TicketCommandContext } from "../tickets/ticket-commands.js";
 import type { TaskCommandContext } from "../tasks/task-commands.js";
-import { runTaskTool, TASK_TOOL_NAMES } from "../tasks/task-tools.js";
+import { TASK_TOOL_NAMES } from "../tasks/task-tools.js";
 import type { BriefChatDeps } from "../briefs/brief-commands.js";
-import { runSendBriefTool } from "../briefs/brief-tool.js";
 import type { SendChatContext } from "../send-commands/send-command-chat.js";
-import { runProposeSendTool } from "../send-commands/send-command-tool.js";
-import { runProposeMeetingAnnouncementTool } from "../send-commands/send-meeting-announcement-tool.js";
-import { runProposePinTool } from "../send-commands/send-pin-tool.js";
-import { runProposeReminderTool } from "../send-commands/send-reminder-tool.js";
 import type { SuggestToolContext } from "../reply-suggestions/reply-suggestion-tool.js";
-import { runQueryMetricsInTurn, runSuggestRepliesInTurn } from "./reply-metric-wiring.js";
 
 // Công cụ AI dùng để lấy dữ liệu. Tất cả CHỈ ĐỌC, trừ send_file và export_report — send_file chỉ gửi cho
 // chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
@@ -42,6 +34,8 @@ export interface ToolContext {
   askerUid: string;
   /** Ngữ cảnh truy cập của người hỏi (phạm vi nhóm + Mật + cuộc riêng của mình) — dựng bằng `resolveAskerAccess`. */
   access: AskerAccess;
+  /** Cài đặt «assistant_core_query_tools» bật: lượt này có query_records / describe_entities (công cụ lõi, phase 7). */
+  coreQueryTools?: boolean;
   /** Tệp mô hình yêu cầu gửi cho người hỏi — gửi SAU câu trả lời. */
   filesToSend: number[];
   now: Date;
@@ -106,7 +100,7 @@ export interface ToolContext {
 /** Công cụ dùng được khi hỏi trong nhóm — đều bị khóa vào nhóm đó (scopeGroupId). */
 // web_search: thông tin CÔNG KHAI (giá vàng, tỷ giá, báo cáo tài chính công ty niêm yết…) — mở cho nhóm 08/10/2026 (đại ca);
 // câu tìm vẫn không được chứa dữ liệu nội bộ (luật chung + mô tả công cụ)
-export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_messages", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "recap_drive_recording", "web_search", ...TICKET_TOOL_NAMES, ...TASK_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
+export const GROUP_SCOPE_TOOL_NAMES = new Set(["list_groups", "get_group_messages", "search_messages", "describe_entities", "query_records", "search_files", "read_file", "read_link", "export_report", "create_meeting_recap_pdf", "create_summary_pdf", "create_meeting", "list_meetings", "cancel_meeting", "recap_drive_recording", "web_search", ...TICKET_TOOL_NAMES, ...TASK_TOOL_NAMES, ...GROUP_ACTION_TOOL_NAMES]);
 
 export const WEB_SEARCH_DECLARATION: FunctionDeclaration = {
   name: "web_search",
@@ -204,98 +198,9 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
 ];
 
-async function webSearch(context: ToolContext, args: Record<string, unknown>) {
-  const query = typeof args.query === "string" ? args.query.trim().slice(0, 300) : "";
-  if (!query) return { error: "Thiếu câu tìm" };
-  if (!context.searchWeb) return { error: "Tìm web chưa bật cho trợ lý này." };
-  try {
-    const result = await context.searchWeb(query);
-    if (context.usage) {
-      context.usage.inputTokens += result.inputTokens;
-      context.usage.outputTokens += result.outputTokens;
-    }
-    return { answer: result.text || "(không có kết quả)", sources: result.sources };
-  } catch (error) {
-    if (error instanceof WebSearchUnavailableError) {
-      return { error: "Tìm web tạm không dùng được (khóa tìm web sai / hết hạn mức). Báo người hỏi ngắn gọn là quản trị cần kiểm khóa Tavily hoặc nạp khóa Gemini — không đưa số liệu cũ." };
-    }
-    throw error;
-  }
-}
-
-const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unknown>) => Promise<unknown>> = {
-  list_groups: listGroups,
-  get_group_messages: getGroupMessages,
-  find_people: findPeople,
-  get_conversation_with_person: getConversationWithPerson,
-  search_files: searchFiles,
-  search_messages: (context, args) => runSearchMessages(context, args),
-  send_file: sendFile,
-  read_file: readFile,
-  web_search: webSearch,
-  read_link: async (context, args) => {
-    const { response, content } = await runReadLink(context, args);
-    if (content) {
-      if (context.usage) {
-        context.usage.inputTokens += content.inputTokens;
-        context.usage.outputTokens += content.outputTokens;
-      }
-      context.markHeavy?.("đọc link");
-    }
-    return response;
-  },
-  export_report: (context, args) => runExportReport(context.exportReport, args),
-  list_contacts: (context, args) => runListContacts(context.db, args, askerContactScope(context.access)),
-  create_meeting_recap_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now),
-  create_summary_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now, "document"),
-  create_meeting: (context, args) =>
-    runCreateMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, context.now, meetingScopeTag(context.scopeGroupId), context.askerUid),
-  list_meetings: (context) => runListMeetings(context.meetings, meetingScopeTag(context.scopeGroupId)),
-  cancel_meeting: (context, args) =>
-    runCancelMeeting(context.meetings, (context.actionCounter ??= { done: 0 }), args, meetingScopeTag(context.scopeGroupId)),
-  recap_drive_recording: (context, args) => runRecapDriveRecording(context.onDemandRecap, args),
-  ...Object.fromEntries([...TICKET_TOOL_NAMES].map((name) => [name,
-    (context: ToolContext, args: Record<string, unknown>) => runTicketTool(context.ticket, name, args, context.now)])),
-  ...Object.fromEntries([...TASK_TOOL_NAMES].map((name) => [name,
-    (context: ToolContext, args: Record<string, unknown>) => runTaskTool(context.task, name, args, context.now)])),
-  suggest_replies: (context, args) => runSuggestRepliesInTurn(context, args),
-  query_metrics: (context, args) => runQueryMetricsInTurn(context, args),
-  send_brief: (context, args) => runSendBriefTool(context.brief, context.briefAsker, args, context.now),
-  propose_send_message: async (context, args) => {
-    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước lệnh gửi rồi — không tạo thêm." };
-    const outcome = await runProposeSendTool(context.sendCommand, args, context.now);
-    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
-    return outcome.response;
-  },
-  propose_group_reminder: async (context, args) => {
-    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước rồi — không tạo thêm." };
-    const outcome = await runProposeReminderTool(context.sendCommand, args, context.now);
-    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
-    return outcome.response;
-  },
-  propose_group_pin: async (context, args) => {
-    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước rồi — không tạo thêm." };
-    const outcome = await runProposePinTool(context.sendCommand, context.meetings, args, context.now);
-    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
-    return outcome.response;
-  },
-  propose_meeting_announcement: async (context, args) => {
-    if (context.fixedReply !== undefined) return { error: "Lượt này đã tạo bản xem trước rồi — không tạo thêm." };
-    const outcome = await runProposeMeetingAnnouncementTool(context.sendCommand, context.meetings, args, context.now);
-    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
-    return outcome.response;
-  },
-  ...Object.fromEntries([...ALERT_TOOL_NAMES].map((name) => [name,
-    (context: ToolContext, args: Record<string, unknown>) =>
-      runAlertTool(context.alertTools, context.alertAsker, name, args, context.now, context.turnStartedAt ?? Date.now(), context.access)])),
-  ...Object.fromEntries([...GROUP_ACTION_TOOL_NAMES].map((name) => [name,
-    (context: ToolContext, args: Record<string, unknown>) =>
-      runGroupAction(context.groupActions, (context.actionCounter ??= { done: 0 }), name, args, context.now)])),
-};
-
 export async function runTool(context: ToolContext, name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
-  // Object.hasOwn: tên như `constructor` / `__proto__` không được rơi vào prototype của object (M6 review)
-  const executor = Object.hasOwn(EXECUTORS, name) ? EXECUTORS[name] : undefined;
+  // Bảng `Map` (tool-registry.ts): tên như `constructor` / `__proto__` không rơi vào prototype (M6 review)
+  const executor = findExecutor(name);
   if (!executor) return { error: `Không có công cụ ${name}` };
   if (context.scopeGroupId && !GROUP_SCOPE_TOOL_NAMES.has(name)) return { error: "Hỏi trong nhóm chỉ dùng được dữ liệu của nhóm này." };
   try {

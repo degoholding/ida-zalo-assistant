@@ -20,6 +20,7 @@ import { CREATE_MEETING_DECLARATION, MEETING_MANAGE_DECLARATIONS, type MeetingCr
 import { RECAP_DRIVE_RECORDING_DECLARATION } from "./drive-recap-tool.js";
 import type { OndemandDestination, OndemandRecapOutcome } from "../meetings/meeting-recap-ondemand.js";
 import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
+import { buildCoreQueryTools } from "./core-tools-wiring.js";
 import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, formatVnDay, runTool, type ToolContext } from "./tools.js";
 import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
 import { maskPersonalDataDeep } from "../privacy/personal-data.js";
@@ -69,6 +70,8 @@ export interface AssistantOptions {
   maxReadFileBytes?: number;
   /** Tạo cuộc họp Google Meet (tài khoản «Kết nối Google»); bỏ trống / chưa kết nối = không có công cụ create_meeting. */
   meetingScheduler?: MeetingCreator;
+  /** Cài đặt «assistant_core_query_tools»: trợ lý có query_records / describe_entities (công cụ lõi, phase 7). */
+  coreQueryTools?: boolean;
   /** Gắn dòng đo token dưới mỗi câu trả lời (cài đặt «Hiện số token dưới câu trả lời»). */
   showTokenUsage?: boolean;
   /** Đuôi tệp được đọc (cài đặt «Loại tệp bot được đọc»); bỏ trống = mọi loại. */
@@ -349,6 +352,7 @@ export class AssistantService {
     const exporter = this.options.reportExporter;
     // Phase 6: người hỏi → phạm vi nhóm + Mật + cuộc riêng của mình, MỘT lần mỗi lượt (xem asker-access.ts)
     const access = await accessOnce();
+    const coreTools = buildCoreQueryTools(access, Boolean(this.options.coreQueryTools), request.groupScope?.groupId);
     const context: ToolContext = {
       db: this.db, askerUid: request.contact.zalo_uid, access, filesToSend: [], now, usage,
       exportReport: exporter
@@ -386,6 +390,7 @@ export class AssistantService {
           : undefined,
       }),
       question: request.question,
+      coreQueryTools: coreTools.declarations.length > 0,
     };
     context.meetings = this.options.meetingScheduler;
     context.ticket = ticket;
@@ -434,6 +439,7 @@ export class AssistantService {
     }
     const tools = [
       ...TOOL_DECLARATIONS,
+      ...coreTools.declarations,
       LIST_CONTACTS_DECLARATION,
       ...(storage ? [READ_FILE_DECLARATION] : []),
       READ_LINK_DECLARATION,
@@ -454,7 +460,7 @@ export class AssistantService {
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
     const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
-      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "")
+      + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + coreTools.prompt + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "")
       + (task ? TASK_TOOLS_PROMPT : "") + (briefAsker ? BRIEF_TOOL_PROMPT : "") + (sendAsker ? SEND_TOOL_PROMPT + REMINDER_TOOL_PROMPT + PIN_TOOL_PROMPT : "")
       + (announceAsker ? MEETING_ANNOUNCE_TOOL_PROMPT : "")
       + (scope ? "" : `\n\n${SUGGEST_REPLIES_PROMPT}${SUGGEST_REPLIES_MANDATORY_PROMPT}\n\n${QUERY_METRICS_PROMPT}`)

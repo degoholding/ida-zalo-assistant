@@ -212,6 +212,12 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     applyTo: (config, value) => { config.assistant.showTokenUsage = value === true; },
   },
   {
+    key: "assistant_core_query_tools", group: "assistant", label: "Trợ lý: công cụ truy vấn có cấu trúc", type: "bool", secret: false,
+    help: "Bật: trợ lý có thêm query_records / describe_entities — đếm, lọc, gộp nhóm theo thực thể (tin, tệp, việc, ticket…) cùng một lõi với cổng MCP, theo đúng quyền người hỏi. Tắt nhanh nếu mô hình dùng sai / tốn vòng gọi công cụ; công cụ cũ không đổi.",
+    envName: null, defaultValue: true,
+    applyTo: (config, value) => { config.assistant.coreQueryTools = value === true; },
+  },
+  {
     key: "assistant_concurrency", group: "assistant", label: "Số câu trả lời chạy cùng lúc", type: "int", secret: false,
     help: "Nhiều người cùng hỏi thì bot trả lời song song tối đa bấy nhiêu câu, câu dư xếp hàng (vẫn được trả lời, chỉ chờ lâu hơn). Cao quá dễ chạm giới hạn của hãng AI.",
     envName: "ASSISTANT_CONCURRENCY", defaultValue: 6, min: 1, max: 30,

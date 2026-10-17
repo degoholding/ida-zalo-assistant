@@ -88,6 +88,8 @@ export interface AppConfig {
     autoReadImages: boolean;
     /** Gắn dòng đo token dưới mỗi câu trả lời (thử mô hình / ước chi phí). */
     showTokenUsage: boolean;
+    /** Trợ lý có query_records / describe_entities (công cụ lõi truy cập dữ liệu, phase 7). */
+    coreQueryTools: boolean;
   };
   /** Lịch làm việc (giờ VN) — chuỗi như nhập trên màn Cài đặt; dựng lịch bằng buildWorkCalendar. */
   calendar: { workHours: string; workDays: string[]; quietHours: string; holidays: string };
@@ -243,6 +245,7 @@ export function loadConfig(): AppConfig {
       groupTriggerKeywords: ["bot", "bot ơi", "trợ lý ơi", "@bot"],
       groupReplyAnyone: true,
       showTokenUsage: false,
+      coreQueryTools: true,
       readableFileTypes: ["pdf", "docx", "xlsx", "xls", "csv", "txt", "md", "jpg", "jpeg", "png", "webp", "mp3", "m4a", "wav", "aac"],
       autoReadImages: true,
     },

@@ -308,13 +308,13 @@ export class SyncService {
 
   private buildAssistant(): AssistantService | null {
     const settings = this.config.assistant;
-    const { apiKey, openaiApiKey, maxPerHour, dailyTokenCap, dailyTokenCapPerBot, maxReadFileBytes, readableFileTypes, showTokenUsage } = settings;
+    const { apiKey, openaiApiKey, maxPerHour, dailyTokenCap, dailyTokenCapPerBot, maxReadFileBytes, readableFileTypes, showTokenUsage, coreQueryTools } = settings;
     const limits = { maxPerHour, dailyTokenCap, dailyTokenCapPerBot };
     // Dùng chung cho công cụ create_meeting/list_meetings (narrow MeetingCreator) VÀ recap theo yêu cầu chat (phase 6,
     // cần listMeetingsBetween — chỉ có ở kiểu đầy đủ MeetingScheduler) — một instance, đọc config.google lúc gọi.
     const meetingScheduler = new MeetingScheduler(() => this.config.google);
     const options = {
-      storage: this.storage, maxReadFileBytes, readableFileTypes, showTokenUsage,
+      storage: this.storage, maxReadFileBytes, readableFileTypes, showTokenUsage, coreQueryTools,
       requestFileDownload: (attachmentId: number) => requestAndAwaitDownload(this.db, this.downloader, attachmentId),
       meetingRecapOnDemand: {
         isAvailable: () => Boolean(this.config.meetingRecap.folderId) && hasDriveScope(this.config.google.calendarAccount),
