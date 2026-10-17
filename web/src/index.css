@@ -35,7 +35,7 @@
       ⚠️ Chỉ bộ màu DEGO mới có bậc màu riêng cho nền trang (#f6f8fb so với thẻ
       trắng). Bảng màu nhập từ tweakcn KHÔNG khai biến này và được suy ra bằng
       đúng `--background` — thẻ tách ra bằng viền + đổ bóng như bản gốc của họ.
-      Xem `DERIVED_TOKENS` trong `shared/theme/build-theme-css.ts`. */
+      Xem `DERIVED_TOKENS` trong bộ dựng bảng màu ERP (đã gỡ 17/10/2026). */
   --canvas: #f6f8fb;
 
   --muted: #f6f8fb;
@@ -63,7 +63,7 @@
      vẫn xanh slate/sky cố định. Lỗi thấy được 27/08/2026.
 
      Bảng màu nhập từ ngoài thì suy ra từ chính `--card` và `--primary` của nó
-     (xem `DERIVED_TOKENS` trong `shared/theme/build-theme-css.ts`); riêng bảng
+     (xem `DERIVED_TOKENS` trong bộ dựng bảng màu ERP (đã gỡ 17/10/2026)); riêng bảng
      màu DEGO ghim tay ngay dưới đây.
 
      10/09/2026: hàng tiêu đề trước là #e6ebf2 / #0f172a — xám gần đen chồng lên
@@ -150,7 +150,7 @@
      không đổi một pixel nào.
 
      ⚠️ Bảng màu nhập từ tweakcn thì NGƯỢC LẠI: chúng để trống hai biến này và
-     `shared/theme/build-theme-css.ts` suy ra viên TÔ ĐẶC từ `--sidebar-primary`
+     bộ dựng bảng màu ERP (đã gỡ 17/10/2026) suy ra viên TÔ ĐẶC từ `--sidebar-primary`
      (kèm ép chữ đạt 4.5:1). Lý do: `primary` của bảng màu ngoài phần lớn là màu
      trầm, phủ 10% alpha lên thì đo được cao nhất mới 1.31:1 so với nền menu —
      tức không bảng màu nào cho ra vệt nhìn thấy được. */
@@ -161,7 +161,7 @@
      xuống 1px, nhoè 3px), nên bộ màu DEGO không đổi một pixel nào.
 
      Bảng màu nhập từ tweakcn thì mỗi bảng một bộ bóng riêng, dựng ở
-     `shared/theme/build-theme-css.ts` theo đúng công thức của họ — khoảng cách
+     bộ dựng bảng màu ERP (đã gỡ 17/10/2026) theo đúng công thức của họ — khoảng cách
      rất xa nhau: Twitter và Mono đặt độ mờ 0 (cố ý KHÔNG có bóng), Doom 64 đặt
      0.4, Bubblegum đặt 1.0 kèm lệch 3px (bóng cứng). Trước 27/08/2026 ứng dụng
      đổ chung một kiểu cho tất cả nên bảng màu nào cũng thấy bóng nặng hơn bản
