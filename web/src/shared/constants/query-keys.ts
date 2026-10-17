@@ -14,6 +14,11 @@ export const queryKeys = {
     /** Cấu hình màn đăng nhập (có nút Google không) — đọc được khi chưa đăng nhập. */
     config: () => ['auth', 'config'] as const,
   },
+  mcpKeys: {
+    all: ['mcp-keys'] as const,
+    /** Giới hạn tạo khóa của người đang đăng nhập (mức tối đa theo vai trò, có được chọn nhóm Mật không). */
+    options: () => ['mcp-keys', 'options'] as const,
+  },
   recipients: {
     all: ['recipients'] as const,
     /** Ô chọn «Tài khoản web» của người nhận — danh sách người dùng rút gọn. */

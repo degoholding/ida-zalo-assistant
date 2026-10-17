@@ -8,6 +8,7 @@ import {
   Contact,
   FileText,
   History,
+  KeyRound,
   LifeBuoy,
   Database,
   ListChecks,
@@ -64,6 +65,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Người nhận', path: appRoutes.recipients.list, icon: BellRing, entity: 'recipient' },
   { label: 'Người dùng', path: appRoutes.users.list, icon: UserCog, entity: 'user' },
   { label: 'Tài khoản bot', path: appRoutes.accounts.list, icon: Bot, entity: 'bot_account' },
+  // Khóa MCP: mọi vai trò quản lý khóa CỦA MÌNH (`mcp_key.read`); quản trị xem thêm khóa người khác
+  { label: 'Khóa MCP', path: appRoutes.mcpKeys.list, icon: KeyRound, entity: 'mcp_key' },
   //  `GET /api/settings` cũng đòi setting.write ở máy chủ, nên gác bằng write chứ không bằng read.
   { label: 'Cài đặt', path: appRoutes.settings, icon: Settings, entity: 'setting', action: 'write' },
 ]

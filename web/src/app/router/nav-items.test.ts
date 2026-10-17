@@ -18,6 +18,8 @@ function buildPermissions(role: 'admin' | 'manager' | 'staff') {
       // Phase 10: mẫu tin mọi vai trò soạn, Quản lý duyệt; số liệu + danh mục chỉ Quản lý xem (nhân viên không)
       if (entity === 'reply_template') return [entity, { read: true, write: true, export: false, create: true, approve: role === 'manager' }]
       if (entity === 'metric') return [entity, { read: role === 'manager', write: false, export: role === 'manager', create: false, approve: false }]
+      // Khóa MCP: mọi vai trò quản lý khóa CỦA MÌNH
+      if (entity === 'mcp_key') return [entity, { read: true, write: true, export: false, create: true, approve: false }]
       if (entity === 'catalog') return [entity, { read: role === 'manager', write: false, export: false, create: false, approve: false }]
       if (ADMIN_ONLY.includes(entity)) return [entity, { read: false, write: false, export: false, create: false }]
       const canWrite = (role === 'manager' && ['conversation', 'contact', 'group', 'file', 'ticket', 'task'].includes(entity)) || entity === 'send_command'
@@ -41,7 +43,7 @@ describe('sidebar gating by role', () => {
   it('hides every admin-only screen from a staff member', () => {
     // «Tìm tin» (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
     // «Bản tin» (phase 8) cũng đọc được — phạm vi DÒNG (không phải vai trò) lọc ở máy chủ
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Gửi tin', 'Mẫu tin', 'Công ty'])
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Gửi tin', 'Mẫu tin', 'Công ty', 'Khóa MCP'])
   })
 
   it('gives a manager the staff menu plus Số liệu and Danh mục — write rights do not unlock admin screens', () => {
@@ -68,6 +70,10 @@ describe('menu items point at registered screens', () => {
     const paths = NAV_ITEMS.map((item) => item.path)
     expect(paths).toContain(appRoutes.users.list)
     expect(paths).toContain(appRoutes.recipients.list)
+  })
+
+  it('shows Khóa MCP to every role (each manages their own keys)', () => {
+    for (const role of ['admin', 'manager', 'staff'] as const) expect(visibleLabels(role)).toContain('Khóa MCP')
   })
 
   it('has a menu entry for the Ticket list that staff can see (read-only)', () => {
