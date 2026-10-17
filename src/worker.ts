@@ -7,9 +7,11 @@ import { loadConfig } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createLogger } from "./logger.js";
+import { installProcessCrashGuards } from "./process-crash-guards.js";
 import { SettingsStore } from "./settings/settings-store.js";
 import { createFileStorage } from "./storage/file-storage.js";
 
+installProcessCrashGuards(); // trước mọi await — migration / khởi động cũng được bảo vệ
 const log = createLogger("worker");
 
 const config = loadConfig();

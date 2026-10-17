@@ -10,6 +10,7 @@ import { recordAudit } from "./audit-log.js";
 import { buildContentDisposition, describeFileDownload } from "./file-download.js";
 import type { ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
+import { pipeStreamToResponse } from "../pipe-stream-to-response.js";
 
 // Màn Ticket (08/10/2026): danh sách + chi tiết ticket báo qua bot, thao tác nhận / xong / hủy / mở lại / nhắn người gửi
 // (gọi chung src/tickets/ticket-service.ts — bot báo người gửi y như làm trên Zalo), và danh sách người xử lý.
@@ -99,12 +100,11 @@ export const ticketRoutes: ApiRoute[] = [
       id: attachmentId, fileName: row.file_name as string | null, fileExt: row.file_ext as string | null, messageKind: row.message_kind as number | null, storageKey: key,
     });
     const inline = url.searchParams.get("inline") === "1" && Boolean(imageType);
-    response.writeHead(200, {
+    await pipeStreamToResponse(stream, response, {
       "Content-Type": imageType ?? "application/octet-stream",
       "Cache-Control": inline ? "private, max-age=3600" : "no-store",
       "Content-Disposition": buildContentDisposition(fileName, inline),
     });
-    stream.pipe(response);
   }],
   // Thao tác trên web: { action: accept | done | cancel | reopen | note, note? } — bot báo người gửi / người xử lý như trên Zalo
   ["POST", /^\/api\/tickets\/(\d+)\/actions$/, async ({ request, response, match, service, principal }) => {

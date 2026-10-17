@@ -10,6 +10,7 @@ import { recordAudit } from "./audit-log.js";
 import { contactAvatarUrl } from "./contacts-api.js";
 import type { ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
+import { pipeStreamToResponse } from "../pipe-stream-to-response.js";
 
 // API Tệp: danh sách tệp / ảnh / video đã thấy trong các cuộc trò chuyện, tải về, tải lại vào kho.
 
@@ -115,12 +116,11 @@ export const fileRoutes: ApiRoute[] = [
       id, fileName: row.file_name as string | null, fileExt: row.file_ext as string | null, messageKind: row.message_kind as number | null, storageKey: key,
     });
     const inline = url.searchParams.get("inline") === "1" && Boolean(imageType);
-    response.writeHead(200, {
+    await pipeStreamToResponse(stream, response, {
       "Content-Type": imageType ?? "application/octet-stream",
       "Cache-Control": inline ? "private, max-age=3600" : "no-store",
       "Content-Disposition": buildContentDisposition(fileName, inline),
     });
-    stream.pipe(response);
   }],
   // Đánh dấu «giữ tệp gốc»: không xóa khi hết hạn giữ tệp của nhóm (IDA câu 20) — vẫn theo hạn của tin
   ["PATCH", /^\/api\/files\/(\d+)$/, async ({ principal, request, response, match, service }) => {

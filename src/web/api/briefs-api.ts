@@ -9,6 +9,7 @@ import { buildContentDisposition } from "./file-download.js";
 import type { ListSpec, Operator, SqlPart } from "./list-query.js";
 import { runList } from "./list-runner.js";
 import { parseVnDayStart } from "./message-search-api.js";
+import { pipeStreamToResponse } from "../pipe-stream-to-response.js";
 
 // Màn web «Bản tin» (phase 8, phase 5 — N6): CHỈ ĐỌC. Bản tin có thể chứa dữ liệu nhóm Mật của người nhận đó nên
 // KHÔNG theo phạm vi nhóm như màn khác — quản trị thấy hết, người dùng khác chỉ thấy bản tin của người nhận gắn với
@@ -144,11 +145,10 @@ export const briefRoutes: ApiRoute[] = [
     const file = parseBriefFiles(row.files)[index];
     if (!file) throw new ApiError(404, "not_found", "Không có tệp này");
     const stream = await service.storage.read(file.storageKey);
-    response.writeHead(200, {
+    await pipeStreamToResponse(stream, response, {
       "Content-Type": briefFileContentType(file.fileName),
       "Cache-Control": "no-store",
       "Content-Disposition": buildContentDisposition(file.fileName, false),
     });
-    stream.pipe(response);
   }],
 ];

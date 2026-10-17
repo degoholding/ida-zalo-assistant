@@ -6,6 +6,7 @@ import { handleApiRequest } from "./api/api-router.js";
 import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, SessionStore } from "../auth/session-store.js";
 import { QrLoginManager } from "./qr-login.js";
 import { serveSpa, SPA_BASE } from "./spa-static.js";
+import { pipeStreamToResponse } from "./pipe-stream-to-response.js";
 
 // Máy chủ web: giao diện quản trị `web/` (React, khung ERP v2) dưới /app + lớp API JSON /api + ảnh đại diện.
 // Giao diện HTML cũ đã gỡ 01/10/2026 — mọi màn nằm trong /app.
@@ -22,7 +23,13 @@ function parseCookies(header: string | undefined): Record<string, string> {
   const cookies: Record<string, string> = {};
   for (const part of (header ?? "").split(";")) {
     const [name, ...rest] = part.trim().split("=");
-    if (name) cookies[name] = decodeURIComponent(rest.join("="));
+    if (!name) continue;
+    const raw = rest.join("=");
+    try {
+      cookies[name] = decodeURIComponent(raw);
+    } catch {
+      cookies[name] = raw; // cookie hỏng (%zz…) — giữ nguyên, không làm sập yêu cầu
+    }
   }
   return cookies;
 }
@@ -96,8 +103,7 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
       if (!key) throw new HttpError(404, "Chưa có ảnh");
       const stream = await storage.read(key);
       const type = key.endsWith(".png") ? "image/png" : key.endsWith(".webp") ? "image/webp" : "image/jpeg";
-      response.writeHead(200, { "Content-Type": type, "Cache-Control": "private, max-age=3600" });
-      stream.pipe(response);
+      await pipeStreamToResponse(stream, response, { "Content-Type": type, "Cache-Control": "private, max-age=3600" });
       return;
     }
 

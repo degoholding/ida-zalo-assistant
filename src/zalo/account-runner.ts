@@ -239,6 +239,11 @@ export class AccountRunner {
     };
   }
 
+  /** Ghi DB từ sự kiện listener: lỗi MySQL chỉ log, không thành unhandled rejection. */
+  private persist(write: () => Promise<unknown>): void {
+    write().catch((error) => this.log.warn("ghi trạng thái phiên lỗi", error));
+  }
+
   private attachListener(api: API): void {
     const { listener } = api;
     const accountId = this.account.id;
@@ -252,13 +257,13 @@ export class AccountRunner {
       } catch (error) {
         this.log.warn("xin tin cũ lỗi", error);
       }
-      void setAccountStatus(this.db, accountId, BotAccountStatus.Connected);
-      void recordSessionEvent(this.db, accountId, SessionEvent.Connected);
+      this.persist(() => setAccountStatus(this.db, accountId, BotAccountStatus.Connected));
+      this.persist(() => recordSessionEvent(this.db, accountId, SessionEvent.Connected));
     });
     listener.on("disconnected", (code, reason) => {
       this.log.warn(`mất kết nối (${code}) ${reason ?? ""}`);
-      void setAccountStatus(this.db, accountId, BotAccountStatus.Disconnected);
-      void recordSessionEvent(this.db, accountId, SessionEvent.Disconnected, code, reason ?? "");
+      this.persist(() => setAccountStatus(this.db, accountId, BotAccountStatus.Disconnected));
+      this.persist(() => recordSessionEvent(this.db, accountId, SessionEvent.Disconnected, code, reason ?? ""));
     });
     listener.on("closed", (code, reason) => {
       const hint =
@@ -266,12 +271,12 @@ export class AccountRunner {
         : code === CLOSE_CODE_KICKED ? " — Zalo đá phiên, có thể phải quét QR lại"
         : "";
       this.log.error(`kết nối đóng (${code})${hint}`);
-      void setAccountStatus(this.db, accountId, BotAccountStatus.Disconnected);
-      void recordSessionEvent(this.db, accountId, SessionEvent.Closed, code, `${reason ?? ""}${hint}`);
+      this.persist(() => setAccountStatus(this.db, accountId, BotAccountStatus.Disconnected));
+      this.persist(() => recordSessionEvent(this.db, accountId, SessionEvent.Closed, code, `${reason ?? ""}${hint}`));
     });
     listener.on("error", (error) => {
       this.log.error("lỗi listener", error);
-      void recordSessionEvent(this.db, accountId, SessionEvent.Error, null, describeError(error));
+      this.persist(() => recordSessionEvent(this.db, accountId, SessionEvent.Error, null, describeError(error)));
     });
 
     listener.on("message", (message) => {
