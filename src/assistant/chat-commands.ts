@@ -16,6 +16,7 @@ import { cancelLatestDraft, confirmDraft } from "../send-commands/send-command-a
 import { GROUP_NOT_ALLOWED_REPLY, NOT_ALLOWED_REPLY, runSendChatCommand, type SendChatContext } from "../send-commands/send-command-chat.js";
 import { SEND_HELP } from "../send-commands/send-command-help.js";
 import { REPLY_METRIC_HELP } from "./reply-metric-help.js";
+import { parseWriteCodeCommand, pendingWriteDrafts, runWriteConfirm } from "./write-confirm-chat.js";
 import { findLatestLiveDraft } from "../send-commands/send-command-lifecycle-queries.js";
 import { CONFIRM_TTL_MS } from "../send-commands/send-command-limits.js";
 import type { SendCommandRow } from "../send-commands/send-command-types.js";
@@ -34,8 +35,9 @@ export type ChatCommand =
   | { kind: "keyword"; add: boolean; level: "urgent" | "important"; keyword: string }
   | { kind: "wait_minutes"; vip: boolean; minutes: number }
   | { kind: "vip"; add: boolean; name: string }
-  | { kind: "confirm" }
-  | { kind: "cancel" }
+  // `code` có khi gõ «đồng ý K7Q2MX» / «hủy K7Q2MX» — chỉ dùng cho nháp ghi dữ liệu của trợ lý (write-confirm-chat.ts)
+  | { kind: "confirm"; code?: string }
+  | { kind: "cancel"; code?: string }
   | TicketCommand
   | TaskCommand
   | BriefCommand
@@ -89,6 +91,9 @@ export function parseChatCommand(input: string): ChatCommand | null {
   // Lệnh gửi: SAU việc / ticket / bản tin («giao Minh: …» vẫn là việc), TRƯỚC lệnh cấu hình — câu dài, không chịu trần 120 ký tự
   const sendCommand = parseSendCommand(input);
   if (sendCommand) return sendCommand;
+  // «đồng ý K7Q2MX» / «hủy K7Q2MX»: xác nhận một nháp ghi cụ thể khi có nhiều nháp đang mở
+  const writeCode = parseWriteCodeCommand(input);
+  if (writeCode) return writeCode;
   const original = input.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?…]+$/u, "").trim();
   if (!original || original.length > 120) return null;
   const folded = foldKeepLength(original);
@@ -145,6 +150,8 @@ export interface ChatCommandContext {
   ticketOnly?: boolean;
   /** Ngữ cảnh truy cập của người hỏi (phân giải lười) — «cần xử lý» / «xong tin số …» lọc theo phạm vi nhóm + Mật. */
   access?: () => Promise<AskerAccess>;
+  /** Đánh thức bộ chạy việc nền sau khi ghi (nháp ghi dữ liệu do trợ lý đề xuất báo Zalo qua hàng đợi). */
+  wakeJobs?: () => void;
 }
 
 const CONFIRM_HINT = "Anh/chị nhắn «đồng ý» để lưu (trong 15 phút), «hủy» để bỏ.";
@@ -317,17 +324,31 @@ export async function runChatCommand(ctx: ChatCommandContext, command: ChatComma
   if (ctx.inGroup) return null;
   const { asker, alertTools: deps } = ctx;
   if (command.kind === "confirm" || command.kind === "cancel") {
-    // «ok», «không»… chỉ là lệnh khi người này ĐANG có đề xuất chờ (đổi cấu hình cảnh báo HOẶC nháp lệnh gửi); ngược lại là câu
-    // nói thường — để AI trả lời. Có cả hai kho thì lấy cái tạo SAU CÙNG (thứ người đó vừa nhìn thấy).
+    // «ok», «không»… chỉ là lệnh khi người này ĐANG có đề xuất chờ (đổi cấu hình cảnh báo, nháp lệnh gửi HOẶC nháp ghi dữ liệu của trợ lý);
+    // ngược lại là câu nói thường — để AI trả lời. Có nhiều kho thì lấy cái tạo SAU CÙNG (thứ người đó vừa nhìn thấy).
+    // Nháp ghi dữ liệu CHỈ được xác nhận ở đây (D1) — mô hình không có công cụ xác nhận.
+    const access = ctx.access ? await ctx.access() : null;
+    const writes = access ? await pendingWriteDrafts(ctx.db, access, ctx.now) : [];
+    if (command.code !== undefined) {
+      // «đồng ý <mã>»: mã của nháp ghi; không có nháp nào đang mở thì coi là câu thường
+      if (!access || !writes.length) return null;
+      return runWriteConfirm({ kind: command.kind, code: command.code, access, drafts: writes, now: ctx.now, wakeJobs: ctx.wakeJobs });
+    }
     const send = ctx.send;
     const draft = send ? await findLatestLiveDraft(send.deps.db, send.uid, ctx.now) : null;
     const change = asker && deps ? latestPendingChange(asker.uid) : null;
     // So CÙNG nguồn giờ app: lúc dựng nháp = hạn xác nhận − 15 phút (cả hai do app ghi), không dùng created_at (giờ DB, múi phiên DB)
-    if (send && draft && (!change || draftIssuedAt(draft) >= change.createdAt)) {
+    const live = [
+      send && draft ? { store: "send" as const, at: draftIssuedAt(draft) } : null,
+      asker && deps && change ? { store: "alert" as const, at: change.createdAt } : null,
+      writes.length ? { store: "write" as const, at: writes[0].createdAt.getTime() } : null,
+    ].filter((item) => item !== null).sort((a, b) => b.at - a.at)[0]?.store;
+    if (live === "write" && access) return runWriteConfirm({ kind: command.kind, access, drafts: writes, now: ctx.now, wakeJobs: ctx.wakeJobs });
+    if (live === "send" && send && draft) {
       if (command.kind === "cancel") return (await cancelLatestDraft(send.deps, send.uid, send.name, ctx.now)).reply;
       return send.requester ? (await confirmDraft(send.deps, send.requester, draft.id, ctx.now)).reply : NOT_ALLOWED_REPLY;
     }
-    if (!asker || !deps || !change) return null;
+    if (live !== "alert" || !asker || !deps || !change) return null;
     if (command.kind === "cancel") {
       dropPendingChanges(asker.uid);
       return "Dạ, em đã bỏ thay đổi, cấu hình giữ nguyên.";

@@ -22,6 +22,7 @@ import { runTaskExtraction } from "./tasks/task-proposals.js";
 import { uploadBackups } from "./storage/backup-uploader.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
+import { purgeOldDrafts } from "./data-access/write/write-draft-store.js";
 import { purgeExpiredFiles, purgeExpiredMessages } from "./sync/retention.js";
 
 // Việc nền không cần phiên Zalo, chạy bằng bộ lập lịch (src/schedule/scheduler.ts): ảnh đại diện, dọn tin + tệp gốc quá
@@ -34,6 +35,8 @@ const log = createLogger("background");
 const JOB_STALE_MS = 30 * 60_000;
 /** Việc đã xong / bỏ giữ lại ngần này ngày để tra cứu rồi xóa. */
 const JOB_KEEP_DAYS = 14;
+/** Nháp ghi (mcp_write_draft) giữ ngần này ngày rồi xóa. */
+const MCP_WRITE_DRAFT_KEEP_DAYS = 7;
 /** Nhật ký gọi MCP (mcp_call_log) giữ ngần này ngày. */
 const MCP_CALL_LOG_KEEP_DAYS = 180;
 const BACKUP_DIR = process.env.BACKUP_DIR?.trim() || "/backups";
@@ -69,6 +72,9 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
       // Nhật ký gọi MCP giữ 180 ngày; xóa từng mẻ nhỏ để không khóa bảng lâu
       const [callLog] = await db.query<ResultSetHeader>(`DELETE FROM mcp_call_log WHERE created_at < NOW() - INTERVAL ${MCP_CALL_LOG_KEEP_DAYS} DAY LIMIT 10000`);
       if (callLog.affectedRows) log.info(`dọn nhật ký gọi MCP: ${callLog.affectedRows} dòng`);
+      // Nháp ghi qua MCP / trợ lý (phase 8): đã dùng hay hết hạn đều xóa sau vài ngày
+      const drafts = await purgeOldDrafts(db, MCP_WRITE_DRAFT_KEEP_DAYS);
+      if (drafts) log.info(`dọn nháp ghi MCP: ${drafts} dòng`);
     },
     "job-housekeeping": async () => {
       const recovered = await recoverStaleJobs(db, JOB_STALE_MS);

@@ -129,7 +129,7 @@ function parseFlag(raw: unknown, label: string): boolean {
 }
 
 /** Sửa cấu hình nhóm. Trả lời kèm câu nhắc khi vừa BẬT đọc (có lấy được tin cũ hay không). */
-export async function patchGroup(service: SyncService, id: number, body: Record<string, unknown>): Promise<string> {
+export async function patchGroup(service: Pick<SyncService, "db" | "startBackfill">, id: number, body: Record<string, unknown>): Promise<string> {
   const db = service.db;
   const before = await loadGroup(db, id);
   const patch: GroupSettingsPatch = {};

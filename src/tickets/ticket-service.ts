@@ -211,13 +211,22 @@ export async function createTicket(deps: TicketDeps, input: CreateTicketInput): 
 
 export class TicketActionError extends Error {}
 
+/**
+ * UPDATE ticket kèm điều kiện «trạng thái vẫn như lúc đọc» (M1 review phase 8): hai người thao tác cùng lúc thì chỉ người đến trước thắng,
+ * người sau nhận lỗi rõ thay vì ghi đè mù (và không gửi thông báo Zalo thừa).
+ */
+async function updateIfStatus(deps: TicketDeps, ticket: TicketRow, set: string, params: unknown[]): Promise<void> {
+  const [result] = await deps.db.query<ResultSetHeader>(`UPDATE ticket SET ${set} WHERE id = ? AND status = ?`, [...params, ticket.id, ticket.status]);
+  if (result.affectedRows === 0) throw new TicketActionError(`${ticket.code} vừa được người khác cập nhật — xem lại tình trạng rồi thao tác tiếp.`);
+}
+
 export async function acceptTicket(deps: TicketDeps, ticket: TicketRow, actor: TicketActor): Promise<TicketRow> {
   if (!isOpen(ticket.status)) throw new TicketActionError(`${ticket.code} ${TICKET_STATUS_LABELS[ticket.status]} — không nhận được nữa.`);
   if (ticket.status === TicketStatus.InProgress && ticket.handler_contact_id && ticket.handler_contact_id === actor.contactId) {
     throw new TicketActionError(`Anh/chị đã nhận ${ticket.code} rồi.`);
   }
-  await deps.db.query("UPDATE ticket SET status = ?, handler_contact_id = ?, handler_name = ?, accepted_at = COALESCE(accepted_at, NOW(3)) WHERE id = ?",
-    [TicketStatus.InProgress, actor.contactId, actor.name.slice(0, 255), ticket.id]);
+  await updateIfStatus(deps, ticket, "status = ?, handler_contact_id = ?, handler_name = ?, accepted_at = COALESCE(accepted_at, NOW(3))",
+    [TicketStatus.InProgress, actor.contactId, actor.name.slice(0, 255)]);
   await recordEvent(deps.db, ticket.id, TicketEventKind.Accepted, actor);
   await notifyRequester(deps, ticket, `ticket ${ticket.code} «${ticket.title}» đã được ${actor.name} nhận, đang xử lý.`, `accept:${Date.now()}`);
   await notifyHandlers(deps, ticket, `${ticket.code} «${ticket.title}» đã được ${actor.name} nhận.`, `accepted:${Date.now()}`, { exceptContactId: actor.contactId });
@@ -230,12 +239,12 @@ export async function acceptTicket(deps: TicketDeps, ticket: TicketRow, actor: T
  */
 export async function finishTicket(deps: TicketDeps, ticket: TicketRow, actor: TicketActor, note: string, byRequester = false): Promise<TicketRow> {
   if (!isOpen(ticket.status)) throw new TicketActionError(`${ticket.code} ${TICKET_STATUS_LABELS[ticket.status]} rồi.`);
-  await deps.db.query(
-    `UPDATE ticket SET status = ?, resolution = ?, closed_at = NOW(3),
+  await updateIfStatus(deps, ticket,
+    `status = ?, resolution = ?, closed_at = NOW(3),
        handler_contact_id = COALESCE(handler_contact_id, ?), handler_name = IF(handler_name = '', ?, handler_name),
-       accepted_at = COALESCE(accepted_at, NOW(3)) WHERE id = ?`,
+       accepted_at = COALESCE(accepted_at, NOW(3))`,
     [TicketStatus.Done, note || (byRequester ? "Người gửi báo đã xong" : null), byRequester ? null : actor.contactId,
-      byRequester ? "" : actor.name.slice(0, 255), ticket.id]);
+      byRequester ? "" : actor.name.slice(0, 255)]);
   await recordEvent(deps.db, ticket.id, TicketEventKind.Done, actor, note);
   if (byRequester) {
     await notifyHandlers(deps, ticket, `${ticket.code} «${ticket.title}» đã được người gửi (${actor.name}) báo xong${note ? `: ${note}` : "."}`,
@@ -252,8 +261,7 @@ export async function finishTicket(deps: TicketDeps, ticket: TicketRow, actor: T
 
 export async function cancelTicket(deps: TicketDeps, ticket: TicketRow, actor: TicketActor, note: string, byRequester: boolean): Promise<TicketRow> {
   if (!isOpen(ticket.status)) throw new TicketActionError(`${ticket.code} ${TICKET_STATUS_LABELS[ticket.status]} rồi.`);
-  await deps.db.query("UPDATE ticket SET status = ?, closed_at = NOW(3), resolution = COALESCE(?, resolution) WHERE id = ?",
-    [TicketStatus.Cancelled, note || null, ticket.id]);
+  await updateIfStatus(deps, ticket, "status = ?, closed_at = NOW(3), resolution = COALESCE(?, resolution)", [TicketStatus.Cancelled, note || null]);
   await recordEvent(deps.db, ticket.id, TicketEventKind.Cancelled, actor, note);
   const text = `${ticket.code} «${ticket.title}» đã bị hủy bởi ${actor.name}${note ? `: ${note}` : "."}`;
   if (byRequester) await notifyHandlers(deps, ticket, text, `cancel:${Date.now()}`, { onlyContactId: ticket.handler_contact_id });
@@ -264,7 +272,7 @@ export async function cancelTicket(deps: TicketDeps, ticket: TicketRow, actor: T
 export async function reopenTicket(deps: TicketDeps, ticket: TicketRow, actor: TicketActor, note: string): Promise<TicketRow> {
   if (isOpen(ticket.status)) throw new TicketActionError(`${ticket.code} đang mở.`);
   const status = ticket.handler_contact_id || ticket.handler_name ? TicketStatus.InProgress : TicketStatus.New;
-  await deps.db.query("UPDATE ticket SET status = ?, closed_at = NULL WHERE id = ?", [status, ticket.id]);
+  await updateIfStatus(deps, ticket, "status = ?, closed_at = NULL", [status]);
   await recordEvent(deps.db, ticket.id, TicketEventKind.Reopened, actor, note);
   return (await findTicket(deps.db, ticket.id))!;
 }

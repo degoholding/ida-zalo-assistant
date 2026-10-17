@@ -34,12 +34,12 @@ function rejectAuth(response: http.ServerResponse, outcome: Extract<AuthOutcome,
   sendJson(response, outcome.status, { error: outcome.message }, headers);
 }
 
-export function createMcpGateway(db: Db, config: AppConfig): McpGateway {
+export function createMcpGateway(db: Db, config: AppConfig, options: { wakeJobs?: () => void } = {}): McpGateway {
   const limiter = new McpRateLimiter({ perMinute: config.mcp.rateLimitPerMinute, maxConcurrent: config.mcp.maxConcurrentPerKey });
   const failures = new FailureWindow(config.mcp.badKeyLimitPerMinute);
   const factoryDeps: McpServerFactoryDeps = {
     db, maskPersonalData: config.privacy.maskPersonalData, limiter, gate: new ConcurrencyGate(config.mcp.maxConcurrent, config.mcp.queueWaitMs),
-    logCall: (entry) => logMcpCall(db, entry),
+    logCall: (entry) => logMcpCall(db, entry), wakeJobs: options.wakeJobs,
   };
   const sdkHandler = createMcpHandler(({ authInfo }) => buildMcpServer(authInfo, factoryDeps), {
     responseMode: "json", maxRequestBodySize: MAX_REQUEST_BODY_BYTES, onerror: (error) => log.warn(`SDK: ${describeError(error)}`),

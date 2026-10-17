@@ -67,7 +67,7 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
   const sessions = new SessionStore(db);
   const qrLogins = new QrLoginManager(service);
   // Cổng MCP chỉ dựng khi MCP_ENABLED=true; tắt thì /mcp trả 404 như không tồn tại
-  const mcpGateway = config.mcp.enabled ? createMcpGateway(db, config) : null;
+  const mcpGateway = config.mcp.enabled ? createMcpGateway(db, config, { wakeJobs: () => service.jobs.wake() }) : null;
   const cookieFlags = `HttpOnly; SameSite=Strict; Path=/${config.web.cookieSecure ? "; Secure" : ""}`;
 
   async function handle(request: http.IncomingMessage, response: http.ServerResponse): Promise<void> {

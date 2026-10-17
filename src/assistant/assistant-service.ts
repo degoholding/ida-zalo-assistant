@@ -295,9 +295,9 @@ export class AssistantService {
       const contact = request.contact;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
-      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce }, command);
+      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce, wakeJobs: tickets?.wakeJobs }, command);
       if (text !== null) {
-        await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: command }], model: "lệnh" });
+        await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: "code" in command && command.code ? { ...command, code: "[đã ẩn]" } : command }], model: "lệnh" });
         return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };
       }
     }

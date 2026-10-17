@@ -117,7 +117,9 @@ export async function verifyMcpKey(db: Db, token: string): Promise<VerifiedMcpKe
   // Quyết định chủ 17/10/2026: khóa KHÔNG có «đọc nhóm Mật» thì ẩn cả cuộc nhắn riêng của chủ khóa — câu bot trả lời trong đó có thể
   // chứa nội dung nhóm Mật; chỉ khóa có cờ Mật mới đọc được cuộc riêng này.
   const ownDirectUid = key.includeConfidential && contactRows[0]?.zalo_uid ? String(contactRows[0].zalo_uid) : null;
-  return { principal, key: { id: key.id, accessLevel: key.accessLevel, includeConfidential: key.includeConfidential }, ownDirectUid };
+  // D3 (17/10/2026): mức khóa bị CHẶN TRẦN bởi vai trò HIỆN TẠI của chủ khóa — người bị hạ xuống Nhân viên thì khóa cũ mức đọc+ghi tự thành chỉ đọc
+  const accessLevel = Math.min(key.accessLevel, maxAccessLevelForRole(owner.role)) as McpAccessLevel;
+  return { principal, key: { id: key.id, accessLevel, includeConfidential: key.includeConfidential }, ownDirectUid };
 }
 
 /** Danh sách khóa (không bao giờ trả băm). `userId` bỏ trống = mọi người (dành cho quản trị). Khóa còn hiệu lực lên trước. */

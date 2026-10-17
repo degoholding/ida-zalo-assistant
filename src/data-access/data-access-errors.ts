@@ -3,7 +3,10 @@
 
 export type DataAccessErrorCode =
   | "unknown_entity" | "forbidden" | "invalid_field" | "invalid_operator" | "invalid_value" | "missing_required_filter"
-  | "range_too_wide" | "page_too_deep" | "not_found" | "timeout";
+  | "range_too_wide" | "page_too_deep" | "not_found" | "timeout"
+  // Ghi (phase 8): mã xác nhận sai / hết hạn / đã dùng (một thông báo chung); bản ghi đã đổi từ lúc nháp; thao tác không hợp trạng thái;
+  // quá nhịp / quá số nháp
+  | "invalid_code" | "stale_target" | "invalid_state" | "rate_limited";
 
 export class DataAccessError extends Error {
   constructor(readonly code: DataAccessErrorCode, message: string, readonly allowed?: string[]) {

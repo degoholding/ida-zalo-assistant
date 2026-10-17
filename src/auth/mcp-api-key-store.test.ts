@@ -46,3 +46,21 @@ test("verifyMcpKey: khóa có include_confidential giữ cuộc nhắn riêng c�
   assert.equal(verified.ownDirectUid, "u-own");
   assert.equal(verified.principal.canViewConfidential, true);
 });
+
+// D3 (17/10/2026): mức khóa bị chặn trần bởi vai trò HIỆN TẠI của chủ khóa — người bị hạ quyền thì khóa đọc+ghi cũ tự thành chỉ đọc
+function verifyLevel(keyLevel: McpAccessLevel, role: UserRole) {
+  const { token } = generateMcpKey();
+  const { db } = fakeDb((sql) => {
+    if (/FROM mcp_api_key/.test(sql)) return [{ id: 1, user_id: 9, name: "k", prefix: "p", access_level: keyLevel, include_confidential: 0, created_at: "2026-10-17T00:00:00Z" }];
+    if (/FROM app_user WHERE id/.test(sql)) return [{ id: 9, tenant_id: 1, email: "a@b.vn", username: "a", full_name: "A", role, all_groups: 1, can_view_confidential: 0, can_view_audit: 0, is_active: 1 }];
+    return [];
+  });
+  return verifyMcpKey(db, token);
+}
+
+test("verifyMcpKey: khóa đọc+ghi của người đã bị hạ xuống Nhân viên → chỉ đọc; Quản lý / Quản trị giữ đọc+ghi; khóa chỉ đọc không được nâng", async () => {
+  assert.equal((await verifyLevel(McpAccessLevel.ReadWrite, UserRole.Staff))?.key.accessLevel, McpAccessLevel.Read);
+  assert.equal((await verifyLevel(McpAccessLevel.ReadWrite, UserRole.Manager))?.key.accessLevel, McpAccessLevel.ReadWrite);
+  assert.equal((await verifyLevel(McpAccessLevel.ReadWrite, UserRole.Admin))?.key.accessLevel, McpAccessLevel.ReadWrite);
+  assert.equal((await verifyLevel(McpAccessLevel.Read, UserRole.Admin))?.key.accessLevel, McpAccessLevel.Read);
+});

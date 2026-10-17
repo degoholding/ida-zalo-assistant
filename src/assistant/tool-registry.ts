@@ -10,6 +10,7 @@ import { runCreateRecapPdf } from "./meeting-recap-tool.js";
 import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings } from "./meeting-tool.js";
 import { runReadLink } from "./read-link-tool.js";
 import { runQueryMetricsInTurn, runSuggestRepliesInTurn } from "./reply-metric-wiring.js";
+import { ASSISTANT_WRITE_TOOL_NAMES, runWriteTool } from "./write-tool-adapter.js";
 import { runSearchMessages } from "./search-messages-tool.js";
 import { findPeople, getConversationWithPerson, getGroupMessages, listGroups } from "./thread-read-tools.js";
 import type { ToolContext } from "./tools.js";
@@ -125,8 +126,20 @@ function coreExecutor(name: string): Executor {
   };
 }
 
+/** Công cụ đề xuất ghi lõi (phase 8, D1): tạo nháp → máy chủ gửi bản xem trước + mã (`fixedReply`); xác nhận chỉ bằng tin «đồng ý» của người hỏi. */
+function writeExecutor(name: string): Executor {
+  return async (context, args) => {
+    if (!context.coreQueryTools) return { error: `Không có công cụ ${name}` };
+    if (context.fixedReply !== undefined) return { error: "Lượt này đã có câu trả lời dựng sẵn — không tạo thêm đề xuất." };
+    const outcome = await runWriteTool(name, context.access, context.scopeGroupId, args);
+    if (outcome.fixedReply !== undefined) context.fixedReply = outcome.fixedReply;
+    return outcome.response;
+  };
+}
+
 const TOOL_REGISTRY: ReadonlyMap<string, Executor> = new Map<string, Executor>([
   ...Object.entries(EXECUTOR_TABLE),
+  ...ASSISTANT_WRITE_TOOL_NAMES.map((name): [string, Executor] => [name, writeExecutor(name)]),
   ["describe_entities", coreExecutor("describe_entities")],
   ["query_records", coreExecutor("query_records")],
 ]);

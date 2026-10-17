@@ -1,9 +1,8 @@
 import type { RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType, TicketStatus } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
-import {
-  acceptTicket, addTicketNote, cancelTicket, findTicket, finishTicket, reopenTicket, TicketActionError, type TicketActor,
-} from "../../tickets/ticket-service.js";
+import { runTicketAction, TICKET_ACTION_LABELS } from "../../tickets/ticket-action-runner.js";
+import { findTicket, TicketActionError, type TicketActor } from "../../tickets/ticket-service.js";
 import { groupScopeSql, type Principal } from "../../auth/principal.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
@@ -139,19 +138,15 @@ export const ticketRoutes: ApiRoute[] = [
     await getTicketDetail(service.db, id, principal); // ngoài phạm vi nhóm nguồn → 404 trước khi thao tác
     const actor: TicketActor = { name: principal.fullName || principal.email || "Quản trị", contactId: null, via: "web" };
     const deps = service.tickets;
+    let message: string;
     try {
-      if (action === "accept") await acceptTicket(deps, ticket, actor);
-      else if (action === "done") await finishTicket(deps, ticket, actor, note);
-      else if (action === "cancel") await cancelTicket(deps, ticket, actor, note, false);
-      else if (action === "reopen") await reopenTicket(deps, ticket, actor, note);
-      else await addTicketNote(deps, ticket, actor, note, { fromRequester: false });
+      message = await runTicketAction(deps, ticket, actor, action, note);
     } catch (error) {
       if (error instanceof TicketActionError) throw new ApiError(409, "invalid_state", error.message);
       throw error;
     }
-    const labels: Record<string, string> = { accept: "Nhận xử lý", done: "Báo xong", cancel: "Hủy", reopen: "Mở lại", note: "Nhắn người gửi" };
-    await recordAudit(service.db, { entity: "ticket", entityId: id, action: "update", message: `${labels[action]} ${ticket.code}${note ? `: ${note.slice(0, 200)}` : ""}` });
-    sendOk(response, await getTicketDetail(service.db, id, principal), `${labels[action]} — đã báo qua Zalo`);
+    await recordAudit(service.db, { entity: "ticket", entityId: id, action: "update", message });
+    sendOk(response, await getTicketDetail(service.db, id, principal), `${TICKET_ACTION_LABELS[action]} — đã báo qua Zalo`);
   }],
 
   // Người xử lý ticket: nhận tin báo ticket mới qua Zalo, gõ «nhận / xong T-12» được

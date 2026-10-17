@@ -25,6 +25,7 @@ export function statusOf(result: ToolResult): McpCallStatus {
   if (!result.isError) return McpCallStatus.Ok;
   if (result.errorCode === "forbidden" || result.errorCode === "not_found") return McpCallStatus.Denied;
   if (result.errorCode === "timeout") return McpCallStatus.Error;
+  if (result.errorCode === "rate_limited") return McpCallStatus.RateLimited;
   return McpCallStatus.Invalid;
 }
 

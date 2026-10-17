@@ -63,7 +63,9 @@ test("a tool unavailable to the asker, or whose schema Gemini cannot take, is hi
 test("buildCoreQueryTools: switch off = nothing and no prompt; on = declarations + one prompt block explaining <du_lieu>", () => {
   assert.deepEqual(buildCoreQueryTools(access(manager()), false, undefined), { declarations: [], prompt: "" });
   const on = buildCoreQueryTools(access(manager()), true, undefined);
-  assert.equal(on.declarations.length, 2);
+  // Phase 8: người có tài khoản web ở tin riêng còn có công cụ ghi (3 propose, không có công cụ xác nhận) — kiểm riêng ở write-tool-adapter.test.ts
+  assert.equal(on.declarations.filter((d) => (ASSISTANT_CORE_TOOL_NAMES as readonly string[]).includes(d.name)).length, 2);
+  assert.equal(on.declarations.length, 2 + 3);
   assert.match(on.prompt, /<du_lieu>/);
   assert.match(on.prompt, /untrusted_fields/);
 });

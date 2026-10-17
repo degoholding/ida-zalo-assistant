@@ -2,13 +2,11 @@ import type { RowDataPacket } from "mysql2";
 import type { Principal } from "../../auth/principal.js";
 import { ConversationType, TaskPriority, TaskSource, TaskStatus } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
-import { formatDue, isTaskOverdue } from "../../tasks/task-format.js";
+import { isTaskOverdue } from "../../tasks/task-format.js";
 import { findTask, type TaskActor, type TaskParty, type TaskRow } from "../../tasks/task-repository.js";
 import { parseDueArgument } from "../../tasks/task-due-parser.js";
-import {
-  addTaskNote, cancelTask, confirmTask, createTask, finishTask, reassignTask, rejectTask, reopenTask, rescheduleTask,
-  TaskActionError, type TaskDeps, type TaskDue,
-} from "../../tasks/task-service.js";
+import { runTaskAction, TASK_ACTION_LABELS } from "../../tasks/task-action-runner.js";
+import { createTask, TaskActionError, type TaskDeps, type TaskDue } from "../../tasks/task-service.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
@@ -192,7 +190,7 @@ function parsePositiveInt(raw: unknown, message: string): number {
 }
 
 /** Người trong Danh bạ → `TaskParty` (giữ mã Zalo để bot nhắn mà không cần nối bảng lúc thao tác). */
-async function loadContactParty(db: Db, contactId: number): Promise<TaskParty> {
+export async function loadContactParty(db: Db, contactId: number): Promise<TaskParty> {
   const [rows] = await db.query<RowDataPacket[]>(
     "SELECT zalo_uid, COALESCE(NULLIF(display_name, ''), zalo_name) AS name FROM contact WHERE id = ?", [contactId]);
   const row = rows[0];
@@ -206,7 +204,7 @@ async function assertThreadExists(db: Db, threadId: number): Promise<void> {
 }
 
 /** Người giao trên web = người trong Danh bạ liên kết với tài khoản đang đăng nhập (nếu có) — để bot nhắn đúng người. */
-async function resolveAssignerContactId(db: Db, principal: Principal): Promise<number | null> {
+export async function resolveAssignerContactId(db: Db, principal: Principal): Promise<number | null> {
   if (!principal.userId) return null;
   const [rows] = await db.query<RowDataPacket[]>("SELECT contact_id FROM app_user WHERE id = ?", [principal.userId]);
   const value = rows[0]?.contact_id;
@@ -214,10 +212,6 @@ async function resolveAssignerContactId(db: Db, principal: Principal): Promise<n
 }
 
 const ACTIONS = new Set(["confirm", "reject", "done", "reopen", "cancel", "note", "reschedule", "reassign"]);
-const ACTION_LABELS: Record<string, string> = {
-  confirm: "Xác nhận", reject: "Bỏ đề xuất", done: "Báo xong", reopen: "Mở lại", cancel: "Hủy", note: "Ghi chú",
-  reschedule: "Dời hạn", reassign: "Giao lại",
-};
 
 export const taskRoutes: ApiRoute[] = [
   ["GET", /^\/api\/tasks$/, async ({ response, url, service, principal }) => sendOk(response, await runList(service.db, url.searchParams, TASK_LIST_SPEC, {
@@ -278,30 +272,17 @@ export const taskRoutes: ApiRoute[] = [
 
     const actor: TaskActor = { contactId: null, uid: null, name: principal.fullName || principal.email || "Quản trị", via: "web" };
     const deps = buildTaskDeps(service);
-    let message = `${ACTION_LABELS[action]} ${task.code}`;
+    let message: string;
     try {
-      if (action === "confirm") await confirmTask(deps, task, actor);
-      else if (action === "reject") await rejectTask(deps, task, actor, false);
-      else if (action === "done") await finishTask(deps, task, actor, note);
-      else if (action === "reopen") await reopenTask(deps, task, actor, note);
-      else if (action === "cancel") await cancelTask(deps, task, actor, note);
-      else if (action === "note") await addTaskNote(deps, task, actor, note);
-      else if (action === "reschedule") {
-        const due = parseTaskDueInput(body.due_date, body.due_time);
-        if (!due) throw new ApiError(422, "validation_error", "Chưa chọn hạn mới");
-        const updated = await rescheduleTask(deps, task, actor, due, note);
-        message = `Dời hạn ${task.code} → ${formatDue(updated.due_at, updated.due_has_time)}`;
-      } else if (action === "reassign") {
-        const party = await loadContactParty(service.db, parsePositiveInt(body.assignee_contact_id, "Chưa chọn người phụ trách mới"));
-        await reassignTask(deps, task, actor, party);
-        message = `Giao lại ${task.code} cho ${party.name}`;
-      }
+      const due = action === "reschedule" ? parseTaskDueInput(body.due_date, body.due_time) : null;
+      if (action === "reschedule" && !due) throw new ApiError(422, "validation_error", "Chưa chọn hạn mới");
+      const assignee = action === "reassign" ? await loadContactParty(service.db, parsePositiveInt(body.assignee_contact_id, "Chưa chọn người phụ trách mới")) : null;
+      message = await runTaskAction(deps, task, actor, action, { note, due, assignee });
     } catch (error) {
       if (error instanceof TaskActionError) throw new ApiError(409, "invalid_state", error.message);
       throw error;
     }
-    if (note && action !== "reschedule" && action !== "reassign") message += `: ${note}`;
     await recordAudit(service.db, { entity: "task", entityId: id, action: "update", message });
-    sendOk(response, await getTaskDetail(service.db, id, principal), `${ACTION_LABELS[action]} — đã báo qua Zalo`);
+    sendOk(response, await getTaskDetail(service.db, id, principal), `${TASK_ACTION_LABELS[action]} — đã báo qua Zalo`);
   }],
 ];

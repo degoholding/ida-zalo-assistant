@@ -26,6 +26,8 @@ export interface DataAccessContext {
   keyId: number | null;
   /** Mốc «bây giờ» của lời gọi (kiểm khoảng ngày, tính hạn); tiêm được cho test. */
   now: Date;
+  /** Đánh thức bộ chạy việc nền sau khi ghi (báo Zalo qua hàng đợi). Thiếu = bộ chạy tự quét theo chu kỳ. */
+  wakeJobs?: () => void;
 }
 
 export interface DataAccessContextInput {
@@ -38,6 +40,7 @@ export interface DataAccessContextInput {
   source: McpCallSource;
   keyId?: number | null;
   now?: Date;
+  wakeJobs?: () => void;
 }
 
 /**
@@ -50,6 +53,7 @@ export function buildDataAccessContext(input: DataAccessContextInput): DataAcces
     includeConfidential: canSeeConfidential(input.principal), maskPersonal: input.maskPersonal,
     ownDirectThreadsOnly: input.ownDirectThreadsOnly === true, ownDirectUid: input.ownDirectUid ?? null,
     source: input.source, keyId: input.keyId ?? null, now: input.now ?? new Date(),
+    wakeJobs: input.wakeJobs,
   };
 }
 
