@@ -1,7 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { extractErrorMessage } from '@/core/api'
 import { queryKeys } from '@/shared/constants/query-keys'
 import { conversationApi, type ThreadListParams } from '../api/conversation-api'
 import type { ChatMessage, MessagesCursor, MessagesPage } from '../types/conversation'
@@ -72,7 +71,6 @@ export function useSendText(id: number) {
   return useMutation({
     mutationFn: (text: string) => conversationApi.sendText(id, text),
     onSuccess: refresh,
-    onError: (error) => toast.error(extractErrorMessage(error), { duration: 8000 }),
   })
 }
 
@@ -84,6 +82,5 @@ export function useSendFile(id: number) {
       toast.success(message)
       refresh()
     },
-    onError: (error) => toast.error(extractErrorMessage(error), { duration: 8000 }),
   })
 }

@@ -2,6 +2,7 @@ import { Loader2, Paperclip, SendHorizontal, X } from 'lucide-react'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from 'sonner'
 
+import { usePermission } from '@/core/authorization/use-permission'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { formatFileSize } from '@/shared/utils/format-file-size'
@@ -18,28 +19,41 @@ interface MessageComposerProps {
 
 /**
  * Ô soạn tin dưới khung chat: Enter gửi, Shift+Enter xuống dòng; kẹp tệp / ảnh gửi từng cái.
- * Tin đi ra Zalo dưới tên tài khoản bot (web chỉ có phiên của bot).
+ * Chỉ hiện với người có quyền ghi hội thoại. Tin đi ra Zalo dưới tên tài khoản bot (web chỉ có phiên của bot).
  */
 export function MessageComposer({ threadId, botName }: MessageComposerProps) {
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const fileInput = useRef<HTMLInputElement>(null)
+  const sendingRef = useRef(false)
+  const { can } = usePermission()
   const sendText = useSendText(threadId)
   const sendFile = useSendFile(threadId)
   const busy = sendText.isPending || sendFile.isPending
+  const canSend = can('conversation', 'write')
 
   const submit = async () => {
+    // Chốt đồng bộ: ref đổi ngay, còn `busy` (state của mutation) chỉ cập nhật sau lần render kế —
+    // Enter đúp trong cùng một nhịp sẽ lọt qua nếu chỉ dựa vào `busy`.
+    if (sendingRef.current || busy) return
     const body = text.trim()
     if (!body && !files.length) return
-    if (body) {
-      await sendText.mutateAsync(body).catch(() => undefined)
-      setText('')
-    }
-    // Gửi tuần tự để thứ tự tệp đúng như người gõ chọn
-    for (const file of files) {
-      const ok = await sendFile.mutateAsync(file).then(() => true, () => false)
-      if (!ok) break
-      setFiles((current) => current.filter((item) => item !== file))
+    sendingRef.current = true
+    try {
+      if (body) {
+        // Lỗi đã có toast; giữ nguyên chữ để người gõ bấm gửi lại, không gửi tiếp tệp sau tin lỗi
+        const ok = await sendText.mutateAsync(body).then(() => true, () => false)
+        if (!ok) return
+        setText('')
+      }
+      // Gửi tuần tự để thứ tự tệp đúng như người gõ chọn; chỉ gỡ tệp khỏi danh sách sau khi đã gửi xong
+      for (const file of files) {
+        const ok = await sendFile.mutateAsync(file).then(() => true, () => false)
+        if (!ok) break
+        setFiles((current) => current.filter((item) => item !== file))
+      }
+    } finally {
+      sendingRef.current = false
     }
   }
 
@@ -59,6 +73,9 @@ export function MessageComposer({ threadId, botName }: MessageComposerProps) {
     if (fileInput.current) fileInput.current.value = ''
   }
 
+  // Nhân viên chỉ xem: máy chủ trả 403 cho mọi lệnh gửi, nên ẩn ô soạn thay vì để gõ xong mất chữ
+  if (!canSend) return null
+
   return (
     <div className="shrink-0 border-t bg-background p-3">
       {files.length > 0 && (
@@ -67,7 +84,7 @@ export function MessageComposer({ threadId, botName }: MessageComposerProps) {
             <span key={`${file.name}-${file.size}`} className="flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
               <span className="max-w-[220px] truncate">{file.name}</span>
               <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
-              <button type="button" onClick={() => setFiles((current) => current.filter((item) => item !== file))} aria-label={`Bỏ ${file.name}`} className="rounded hover:bg-background">
+              <button type="button" onClick={() => setFiles((current) => current.filter((item) => item !== file))} disabled={busy} aria-label={`Bỏ ${file.name}`} className="rounded hover:bg-background disabled:opacity-50">
                 <X className="size-3" />
               </button>
             </span>
@@ -84,6 +101,7 @@ export function MessageComposer({ threadId, botName }: MessageComposerProps) {
           onChange={(event) => setText(event.target.value.slice(0, MAX_TEXT_LENGTH))}
           onKeyDown={handleKeyDown}
           placeholder={`Nhắn dưới tên «${botName}» — Enter gửi, Shift+Enter xuống dòng`}
+          readOnly={busy}
           rows={1}
           className="max-h-40 min-h-9 resize-none"
           aria-label="Nội dung tin"
