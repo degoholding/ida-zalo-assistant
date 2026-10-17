@@ -265,7 +265,7 @@ describe("ticket qua bot", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
 
     async function login(username: string, password: string, role?: number): Promise<string> {
       if (role) {
-        await db.query("INSERT INTO app_user (username, email, full_name, role, is_active) VALUES (?, ?, ?, ?, 1)", [username, `${username}@ida.vn`, username, role]);
+        await db.query("INSERT INTO app_user (username, email, full_name, role, all_groups, is_active) VALUES (?, ?, ?, ?, 1, 1)", [username, `${username}@ida.vn`, username, role]);
         await setUserPassword(db, username, password);
       } else {
         await ensureAdminUser(db, username, password);
@@ -278,6 +278,8 @@ describe("ticket qua bot", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
       return apiDeps.sessions.create(Number(rows[0].id));
     }
 
+    // Từ 17/10/2026 ticket lọc theo nhóm nguồn: người dùng ở đây bật «mọi nhóm» để thấy cả ticket từ tin riêng
+    // (ca khoanh phạm vi nằm ở test/phase4-grants-and-scope.integration.test.ts).
     test("list + detail + accept from the web notifies the requester; staff may read but not act; only admins edit handlers", async () => {
       await say("u-lan", dmThread, "báo lỗi: camera cổng mất hình");
       await db.query("DELETE FROM job");

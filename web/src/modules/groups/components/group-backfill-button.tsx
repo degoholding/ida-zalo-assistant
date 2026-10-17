@@ -1,11 +1,17 @@
 import { History, Loader2 } from 'lucide-react'
 
+import { usePermission } from '@/core/authorization/use-permission'
 import { Button } from '@/shared/ui/button'
 import { useBackfillGroup } from '../hooks/use-groups'
 
-/** Nút «Lấy tin cũ» ở hàng nút dính của trang chi tiết nhóm, kèm tiến độ khi đang kéo. */
+/**
+ * Nút «Lấy tin cũ» ở hàng nút dính của trang chi tiết nhóm, kèm tiến độ khi đang kéo. Chỉ hiện cho người sửa được nhóm
+ * (Quản trị + Quản lý) — máy chủ cũng chặn Nhân viên (403), ẩn nút để khỏi bấm vào lỗi.
+ */
 export function GroupBackfillButton({ groupId }: { groupId: number }) {
   const { job, start, isStarting } = useBackfillGroup(groupId)
+  const { can } = usePermission()
+  if (!can('group', 'write')) return null
   const running = Boolean(job?.running)
   return (
     <div className="flex items-center gap-2">

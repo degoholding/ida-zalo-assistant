@@ -4,11 +4,12 @@ import type { Db } from "../../db/pool.js";
 import {
   acceptTicket, addTicketNote, cancelTicket, findTicket, finishTicket, reopenTicket, TicketActionError, type TicketActor,
 } from "../../tickets/ticket-service.js";
+import { groupScopeSql, type Principal } from "../../auth/principal.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
 import { buildContentDisposition, describeFileDownload } from "./file-download.js";
-import type { ListSpec } from "./list-query.js";
+import type { ListSpec, SqlPart } from "./list-query.js";
 import { runList } from "./list-runner.js";
 import { pipeStreamToResponse } from "../pipe-stream-to-response.js";
 
@@ -37,6 +38,15 @@ const TICKET_COLUMNS = `t.id, t.code, t.status, t.title, COALESCE(t.body, '') AS
   t.created_at, t.updated_at, t.accepted_at, t.closed_at,
   (SELECT COUNT(*) FROM ticket_attachment ta WHERE ta.ticket_id = t.id) AS attachment_count`;
 
+/**
+ * Phạm vi ticket theo NHÓM NGUỒN (chốt 17/10/2026, vá M1; cùng điều kiện với thực thể `tickets` của lõi truy cập dữ liệu):
+ * người bị khoanh phạm vi chỉ thấy ticket của nhóm được gán — ticket từ cuộc nhắn riêng / nhóm khác không thấy. Web người thật
+ * vẫn thấy ticket của nhóm Mật (câu hỏi 2). null = không giới hạn (quản trị / mọi nhóm).
+ */
+export function ticketScopeSql(principal: Principal): SqlPart | null {
+  return groupScopeSql(principal, "t.source_thread_id");
+}
+
 function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
   return rows.map((row) => {
     const inGroup = Number(row.source_thread_type) === ConversationType.Group;
@@ -48,8 +58,11 @@ function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
   });
 }
 
-export async function getTicketDetail(db: Db, id: number, tenantId: number): Promise<Record<string, unknown>> {
-  const [rows] = await db.query<RowDataPacket[]>(`SELECT ${TICKET_COLUMNS} ${TICKET_FROM} WHERE t.id = ? AND t.tenant_id = ?`, [id, tenantId]);
+export async function getTicketDetail(db: Db, id: number, principal: Principal): Promise<Record<string, unknown>> {
+  const scope = ticketScopeSql(principal);
+  const [rows] = await db.query<RowDataPacket[]>(
+    `SELECT ${TICKET_COLUMNS} ${TICKET_FROM} WHERE t.id = ? AND t.tenant_id = ?${scope ? ` AND ${scope.sql}` : ""}`,
+    [id, principal.tenantId, ...(scope?.params ?? [])]);
   if (!rows[0]) throw new ApiError(404, "not_found", "Không có ticket này");
   const [files] = await db.query<RowDataPacket[]>(
     `SELECT a.id, a.file_name, a.file_ext, a.status, a.stored_bytes, m.kind AS message_kind
@@ -76,22 +89,28 @@ export async function getTicketDetail(db: Db, id: number, tenantId: number): Pro
   };
 }
 
+function tenantAndScope(principal: Principal): SqlPart {
+  const scope = ticketScopeSql(principal);
+  return { sql: `t.tenant_id = ?${scope ? ` AND ${scope.sql}` : ""}`, params: [principal.tenantId, ...(scope?.params ?? [])] };
+}
+
 const ACTIONS = new Set(["accept", "done", "cancel", "reopen", "note"]);
 
 export const ticketRoutes: ApiRoute[] = [
   ["GET", /^\/api\/tickets$/, async ({ response, url, service, principal }) => sendOk(response, await runList(service.db, url.searchParams, TICKET_LIST_SPEC, {
-    select: TICKET_COLUMNS, from: TICKET_FROM, baseWhere: { sql: "t.tenant_id = ?", params: [principal.tenantId] }, decorate,
+    select: TICKET_COLUMNS, from: TICKET_FROM, baseWhere: tenantAndScope(principal), decorate,
   }))],
   ["GET", /^\/api\/tickets\/(\d+)$/, async ({ response, match, service, principal }) =>
-    sendOk(response, await getTicketDetail(service.db, parseId(match[1]), principal.tenantId))],
+    sendOk(response, await getTicketDetail(service.db, parseId(match[1]), principal))],
   ["GET", /^\/api\/tickets\/(\d+)\/files\/(\d+)$/, async ({ response, match, url, service, principal }) => {
     const ticketId = parseId(match[1]);
     const attachmentId = parseId(match[2]);
+    const where = tenantAndScope(principal);
     const [rows] = await service.db.query<RowDataPacket[]>(
       `SELECT a.storage_key, a.file_name, a.file_ext, m.kind AS message_kind
        FROM ticket t JOIN ticket_attachment ta ON ta.ticket_id = t.id JOIN attachment a ON a.id = ta.attachment_id
        LEFT JOIN message m ON m.id = a.message_id
-       WHERE t.id = ? AND t.tenant_id = ? AND a.id = ? AND a.status = ?`, [ticketId, principal.tenantId, attachmentId, AttachmentStatus.Stored]);
+       WHERE t.id = ? AND ${where.sql} AND a.id = ? AND a.status = ?`, [ticketId, ...where.params, attachmentId, AttachmentStatus.Stored]);
     const row = rows[0];
     const key = row?.storage_key as string | undefined;
     if (!row || !key) throw new ApiError(404, "not_found", "Tệp chưa có trong kho");
@@ -117,6 +136,7 @@ export const ticketRoutes: ApiRoute[] = [
     if (action === "note" && !note) throw new ApiError(422, "validation_error", "Chưa có nội dung nhắn");
     const ticket = await findTicket(service.db, id, principal.tenantId);
     if (!ticket) throw new ApiError(404, "not_found", "Không có ticket này");
+    await getTicketDetail(service.db, id, principal); // ngoài phạm vi nhóm nguồn → 404 trước khi thao tác
     const actor: TicketActor = { name: principal.fullName || principal.email || "Quản trị", contactId: null, via: "web" };
     const deps = service.tickets;
     try {
@@ -131,7 +151,7 @@ export const ticketRoutes: ApiRoute[] = [
     }
     const labels: Record<string, string> = { accept: "Nhận xử lý", done: "Báo xong", cancel: "Hủy", reopen: "Mở lại", note: "Nhắn người gửi" };
     await recordAudit(service.db, { entity: "ticket", entityId: id, action: "update", message: `${labels[action]} ${ticket.code}${note ? `: ${note.slice(0, 200)}` : ""}` });
-    sendOk(response, await getTicketDetail(service.db, id, principal.tenantId), `${labels[action]} — đã báo qua Zalo`);
+    sendOk(response, await getTicketDetail(service.db, id, principal), `${labels[action]} — đã báo qua Zalo`);
   }],
 
   // Người xử lý ticket: nhận tin báo ticket mới qua Zalo, gõ «nhận / xong T-12» được

@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { TaskEventKind, TaskPriority, TaskRemindStage, TaskSource, TaskStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import type { SqlPart } from "../web/api/list-query.js";
 
 // Đọc / ghi bảng task + task_event (migration 024). Thao tác có báo tin nằm ở task-service.ts.
 
@@ -85,7 +86,17 @@ export interface TaskListFilter {
   threadId?: number;
   /** Chỉ việc đã quá hạn tại mốc này */
   overdueAt?: Date;
+  /** Điều kiện nhóm nguồn (bảng `task t` + LEFT JOIN `zalo_group g`) — người xem việc của người khác theo phạm vi / Mật. */
+  visibility?: SqlPart;
   limit?: number;
+}
+
+/** Việc `taskId` có thỏa điều kiện nhóm nguồn không (không có điều kiện = có). */
+export async function isTaskVisible(db: Db, taskId: number, part: SqlPart | undefined): Promise<boolean> {
+  if (!part) return true;
+  const [rows] = await db.query<RowDataPacket[]>(
+    `SELECT 1 FROM task t LEFT JOIN zalo_group g ON g.id = t.source_thread_id WHERE t.id = ? AND ${part.sql} LIMIT 1`, [taskId, ...part.params]);
+  return rows.length > 0;
 }
 
 /** Việc theo bộ lọc — có hạn gần nhất trước, việc chưa có hạn sau cùng. */
@@ -117,8 +128,13 @@ export async function listTasks(db: Db, filter: TaskListFilter, tenantId = 1): P
     where.push("t.due_at IS NOT NULL AND IF(t.due_has_time = 1, t.due_at, t.due_at + INTERVAL 1 DAY) <= ?");
     params.push(filter.overdueAt);
   }
+  if (filter.visibility) {
+    where.push(`(${filter.visibility.sql})`);
+    params.push(...filter.visibility.params);
+  }
+  const join = filter.visibility ? " LEFT JOIN zalo_group g ON g.id = t.source_thread_id" : "";
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT ${TASK_COLUMNS} FROM task t WHERE ${where.join(" AND ")} ORDER BY t.due_at IS NULL, t.due_at, t.id LIMIT ?`,
+    `SELECT ${TASK_COLUMNS} FROM task t${join} WHERE ${where.join(" AND ")} ORDER BY t.due_at IS NULL, t.due_at, t.id LIMIT ?`,
     [...params, filter.limit ?? 30]);
   return rows.map(toTask);
 }

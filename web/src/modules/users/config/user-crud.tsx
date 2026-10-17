@@ -25,6 +25,7 @@ const ROLE_TONE: Record<number, StatusTone> = {
 }
 
 const SCOPE_SECTION = 'Phạm vi nhóm'
+const GRANT_SECTION = 'Quyền cấp thêm'
 
 /** Ô chọn vai trò trả CHUỖI, bản ghi tải về là SỐ — so bằng `Number` để cả hai cùng đúng. */
 const isAdminRole = (values: CrudRecord) => Number(values.role) === USER_ROLE.admin
@@ -116,6 +117,7 @@ export const userCrudConfig: CrudConfig<AppUserDetail> = {
   getItemName: (user) => user.full_name || user.username || user.email,
   formSections: {
     [SCOPE_SECTION]: 'Người này thấy những nhóm nào trên web (Hội thoại, Nhóm, Tệp, Danh bạ). Quản trị luôn thấy mọi nhóm.',
+    [GRANT_SECTION]: 'Quyền cấp riêng cho từng người, ngoài vai trò. Có hiệu lực ngay ở lượt hỏi / lần mở trang kế tiếp.',
   },
   formFields: [
     {
@@ -181,6 +183,24 @@ export const userCrudConfig: CrudConfig<AppUserDetail> = {
           hint="Chưa chọn nhóm nào thì người này đăng nhập được nhưng không thấy nhóm nào."
         />
       ),
+    },
+    {
+      name: 'can_view_confidential',
+      label: 'Cho AI đọc nhóm Mật',
+      type: 'switch',
+      section: GRANT_SECTION,
+      defaultValue: false,
+      hint: 'Bật thì MCP / trợ lý được đưa nội dung nhóm Mật cho AI khi người này hỏi. Bản tin, cảnh báo tự động vẫn không dùng nhóm Mật.',
+    },
+    {
+      name: 'can_view_audit',
+      label: 'Xem lịch sử thao tác',
+      type: 'switch',
+      section: GRANT_SECTION,
+      defaultValue: false,
+      // Quản trị luôn xem được mọi lịch sử → ẩn ô (khung CRUD chưa có ô khóa theo giá trị; công tắc tắt cho quản trị sẽ gây hiểu lầm)
+      showWhen: (values) => !isAdminRole(values),
+      hint: 'Chỉ thấy lịch sử của bản ghi trong phạm vi nhóm được xem.',
     },
   ],
   chips: (user) => [

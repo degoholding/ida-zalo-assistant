@@ -15,7 +15,7 @@ import type { AssistantService } from "../assistant/assistant-service.js";
 import { reportFileExtension, type GeneratedReportFile } from "../reports/report-exporter.js";
 import { splitForZalo } from "../assistant/assistant-service.js";
 import type { AppConfig } from "../config.js";
-import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ContactRole, ConversationType, MessageKind, SessionEvent } from "../constants.js";
+import { AssistantTurnStatus, AttachmentStatus, BotAccountStatus, CLOSE_CODE_DUPLICATE, CLOSE_CODE_KICKED, ConversationType, MessageKind, SessionEvent } from "../constants.js";
 import { decryptJson } from "../crypto/session-cipher.js";
 import type { RowDataPacket } from "mysql2";
 import type { Db } from "../db/pool.js";
@@ -59,7 +59,7 @@ import { ACK_DELAY_MS, pickAckText } from "./assistant-ack.js";
 import { AckTracker, enqueueDirectReply, type AckState, type DirectReplyPayload, type GroupReplyPayload } from "./reply-jobs.js";
 import type { JobRow } from "../jobs/job-queue.js";
 import { recordReaction } from "../flags/message-flags.js";
-import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
+import { canAskInDirectChat } from "../assistant/direct-chat-gate.js";
 import { questionWithAttachedImage } from "../assistant/attached-image-question.js";
 import { isTaskCommand, isTicketCommand, parseChatCommand } from "../assistant/chat-commands.js";
 import { toStyledContent } from "./rich-text.js";
@@ -523,10 +523,11 @@ export class AccountRunner {
     // «hướng dẫn»; câu hỏi khác của người chưa có vai trò vẫn không trả lời.
     // Lệnh việc: người phụ trách (nhân viên chưa có vai trò) báo «xong V-12» trong tin riêng — quyền kiểm theo từng việc
     // Bản tin / báo cáo (phase 8, «bản tin sáng», «báo cáo tuần»…): KHÔNG thêm vào ticketAllowed — cổng tin riêng này
-    // đã cho người nhận đang bật qua (isActiveRecipientUid), runBriefCommand (chat-commands.ts) chỉ cần kiểm lại
+    // đã cho người nhận đang bật qua (canAskInDirectChat), runBriefCommand (chat-commands.ts) chỉ cần kiểm lại
     // asker.recipientId; người lạ gõ đúng câu đó vẫn bị chặn ở đây như mọi câu hỏi khác (không lộ câu từ chối ra ngoài).
     const ticketAllowed = isTicketCommand(command) || isTaskCommand(command) || command?.kind === "help";
-    const canAsk = result.contact.role !== ContactRole.None || await isActiveRecipientUid(this.db, incoming.senderUid) || ticketAllowed;
+    // Cổng tin riêng (direct-chat-gate.ts): tài khoản web đang bật là đủ; tài khoản đã tắt thì vai trò / người nhận không còn mở cổng
+    const canAsk = await canAskInDirectChat(this.db, result.contact, incoming.senderUid, ticketAllowed);
     if (!this.assistant || !canAsk) {
       this.log.info(`tin riêng từ ${who}: đã lưu, không trả lời (${this.assistant ? "chưa có vai trò" : "trợ lý tắt"})`);
       return;

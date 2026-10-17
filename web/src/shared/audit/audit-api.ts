@@ -27,10 +27,8 @@ export interface AuditLogEntry {
 }
 
 /**
- * Nhật ký thao tác trên một bản ghi.
- *
- * ⚠️ Endpoint chỉ yêu cầu đăng nhập (`get_current_user`), KHÔNG kiểm tra quyền
- * theo entity — đừng dùng nó để suy ra người dùng có quyền xem bản ghi hay không.
+ * Nhật ký thao tác trên một bản ghi. Máy chủ: quản trị thấy hết; người được cấp «Xem lịch sử thao tác» chỉ thấy bản ghi trong
+ * phạm vi nhóm (ngoài phạm vi → 404); người không có quyền → 403. `AuditTimeline` chỉ gọi khi `can('audit', 'read')`.
  */
 export const auditApi = {
   list: (entity: string, entityId: number, limit = 100) =>

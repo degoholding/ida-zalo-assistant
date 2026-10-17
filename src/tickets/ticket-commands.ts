@@ -3,6 +3,7 @@ import {
   acceptTicket, addTicketNote, cancelTicket, createTicket, describeTicket, describeTicketLine, findTicket, finishTicket,
   isTicketHandler, listOpenTickets, listRequesterTickets, TicketActionError, type TicketActor, type TicketDeps, type TicketRow,
 } from "./ticket-service.js";
+import { groupScopePart, isTicketVisible, overseerPart, type TicketVisibilityInput } from "./ticket-visibility.js";
 
 // Lệnh ticket gõ trên Zalo (đọc ở src/assistant/chat-commands.ts). Ai làm được gì:
 // - Mọi người nhắn được cho bot (kể cả khách) hoặc gọi bot trong nhóm: báo ticket, xem ticket của mình, bổ sung, hủy hoặc tự báo xong ticket
@@ -18,7 +19,7 @@ export type TicketCommand =
   | { kind: "ticket_cancel"; ticketId: number; note: string }
   | { kind: "ticket_note"; ticketId: number; note: string };
 
-export interface TicketCommandContext {
+export interface TicketCommandContext extends TicketVisibilityInput {
   deps: TicketDeps;
   /** role = ContactRole (Quản lý / Trưởng phòng xem được mọi ticket, như người xử lý) */
   contact: { id: number; uid: string; name: string; role?: number };
@@ -55,15 +56,17 @@ export async function runTicketCommand(ctx: TicketCommandContext, command: Ticke
   }
 
   const handler = await ctx.isHandler();
-  // Quản lý / Trưởng phòng: xem mọi ticket (danh sách đang mở, tình hình) — nhận / xong vẫn chỉ người xử lý
-  const overseer = handler || (contact.role ?? 0) > 0;
+  // Quản lý / Trưởng phòng: xem ticket (danh sách đang mở, tình hình) — nhận / xong vẫn chỉ người xử lý. Tài khoản web đã tắt
+  // không còn đặc quyền suy từ vai trò (người xử lý do quản trị chỉ định ở màn Ticket thì giữ)
+  const roleDisabled = ctx.access ? (await ctx.access()).origin === "disabled_account" : false;
+  const overseer = handler || ((contact.role ?? 0) > 0 && !roleDisabled);
   if (command.kind === "ticket_list") {
     if (overseer) {
-      const open = await listOpenTickets(deps.db);
+      const open = await listOpenTickets(deps.db, 20, await overseerPart(ctx));
       if (!open.length) return "Hiện không có ticket nào đang mở.";
       return [`TICKET ĐANG MỞ (${open.length})`, ...open.map(describeTicketLine), "", "Nhắn «nhận T-12» / «xong T-12 <ghi chú>»."].join("\n");
     }
-    const mine = await listRequesterTickets(deps.db, contact.uid);
+    const mine = await listRequesterTickets(deps.db, contact.uid, 10, groupScopePart(ctx));
     if (!mine.length) return "Anh/chị chưa báo ticket nào. Báo bằng cách nhắn «báo lỗi: <nội dung>».";
     return [`TICKET CỦA ANH/CHỊ (${mine.length} gần nhất)`, ...mine.map(describeTicketLine)].join("\n");
   }
@@ -71,6 +74,9 @@ export async function runTicketCommand(ctx: TicketCommandContext, command: Ticke
   const ticket = await findTicket(deps.db, command.ticketId);
   const isRequester = Boolean(ticket && ticket.requester_uid === contact.uid);
   if (!ticket || (!isRequester && !overseer)) return NOT_FOUND(command.ticketId);
+  // Trong nhóm: chỉ ticket của nhóm này; người xem ticket của người khác còn phải qua luật nhóm / Mật (cùng luật danh sách)
+  if (ctx.scopeGroupId && ticket.source_thread_id !== ctx.scopeGroupId) return NOT_FOUND(command.ticketId);
+  if (!isRequester && !(await isTicketVisible(deps.db, ticket.id, await overseerPart(ctx)))) return NOT_FOUND(command.ticketId);
 
   try {
     switch (command.kind) {

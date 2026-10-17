@@ -1,6 +1,7 @@
 import { ChevronsUp, History, ScrollText } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import type { AxiosError } from 'axios'
 
 import { usePermission } from '@/core/authorization/use-permission'
 import { appRoutes } from '@/shared/constants/app-routes'
@@ -58,13 +59,18 @@ export function AuditTimeline({
   renderEntryAction,
 }: AuditTimelineProps) {
   const [visible, setVisible] = useState(PAGE_STEP)
-  const { data: logs, isLoading } = useAuditLogs(entity, entityId)
   const { can } = usePermission()
+  //  Quyền xem lịch sử là quyền CẤP ĐƯỢC (quản trị, hoặc người được bật «Xem lịch sử thao tác»): không có quyền thì
+  //  khỏi gọi API và khỏi hiện khối này — trước đây 403 bị nuốt thành «Chưa có thao tác nào», nghe như bản ghi chưa ai đụng tới.
+  const canReadAudit = can('audit', 'read')
+  const { data: logs, isLoading, error } = useAuditLogs(entity, entityId, canReadAudit)
 
   //  Gác đúng luật của `_can_read_logs` bên backend: `audit` HOẶC `setting`. Hiện
   //  nút cho người không mở được màn đó thì cú bấm rơi thẳng vào trang 403, mà từ
   //  đây họ không đoán ra vì sao — dòng thời gian này thì ai cũng đọc được.
   const canReadSystemLogs = can('audit', 'read') || can('setting', 'read')
+
+  if (!canReadAudit) return null
 
   const total = logs?.length ?? 0
   const remaining = total - visible
@@ -88,11 +94,13 @@ export function AuditTimeline({
       <CardContent className={cn(dense && 'px-4')}>
         {isLoading && <Skeleton className="h-24 w-full" />}
 
-        {!isLoading && total === 0 && (
+        {error && <p className="py-4 text-sm text-muted-foreground">{describeAuditError(error)}</p>}
+
+        {!isLoading && !error && total === 0 && (
           <p className="py-4 text-sm text-muted-foreground">Chưa có thao tác nào.</p>
         )}
 
-        {!isLoading && total > 0 && (
+        {!isLoading && !error && total > 0 && (
           <>
             <ol className="space-y-3">
               {logs?.slice(0, visible).map((log, index) => {
@@ -178,6 +186,14 @@ export function AuditTimeline({
       </CardContent>
     </Card>
   )
+}
+
+/** Lỗi tải lịch sử → câu nói rõ nguyên nhân (không nhầm với «chưa có thao tác»). */
+function describeAuditError(error: unknown): string {
+  const status = (error as AxiosError | undefined)?.response?.status
+  if (status === 403) return 'Bạn không có quyền xem lịch sử thao tác.'
+  if (status === 404) return 'Lịch sử của bản ghi này nằm ngoài phạm vi nhóm bạn được xem.'
+  return 'Không tải được lịch sử thao tác.'
 }
 
 /** Xanh lá = việc thành, đỏ = việc hỏng/hủy, còn lại xanh thương hiệu. */

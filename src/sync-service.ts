@@ -33,8 +33,9 @@ function buildWebSearchChain(tavilyApiKey: string): (query: string) => Promise<W
 import { MeetingScheduler } from "./google/calendar-meetings.js";
 import { DriveClient } from "./google/drive-client.js";
 import { hasDriveScope } from "./google/google-oauth.js";
-import { runOndemandRecap } from "./meetings/meeting-recap-ondemand.js";
+import { runOndemandRecap, type OndemandDestination } from "./meetings/meeting-recap-ondemand.js";
 import { AttachmentDownloader, requestAndAwaitDownload } from "./sync/attachment-downloader.js";
+import { BackfillBusyError, MAX_CONCURRENT_BACKFILLS_PER_ACCOUNT } from "./sync/backfill-busy-error.js";
 import { BriefKind, BriefTrigger, ConversationType, JobKind } from "./constants.js";
 import { CpuPool } from "./cpu/cpu-pool.js";
 import type { JobRow } from "./jobs/job-queue.js";
@@ -317,7 +318,7 @@ export class SyncService {
       requestFileDownload: (attachmentId: number) => requestAndAwaitDownload(this.db, this.downloader, attachmentId),
       meetingRecapOnDemand: {
         isAvailable: () => Boolean(this.config.meetingRecap.folderId) && hasDriveScope(this.config.google.calendarAccount),
-        run: (args: Record<string, unknown>, destination: { targetThreadId: number | null; requesterUid: string }, now: Date) => runOndemandRecap(
+        run: (args: Record<string, unknown>, destination: OndemandDestination, now: Date) => runOndemandRecap(
           this.db, { drive: new DriveClient(() => this.config.google, this.config.meetingRecap.folderId), calendar: meetingScheduler },
           args, destination, now,
         ),
@@ -443,6 +444,8 @@ export class SyncService {
 
   /** Việc lấy tin cũ đang chạy / vừa xong của từng nhóm (trong bộ nhớ; khởi động lại là mất, không sao). */
   private readonly backfillJobs = new Map<number, BackfillJob>();
+  /** Nhóm → tài khoản bot đang kéo tin cũ cho nhóm đó (để đếm trần theo tài khoản). */
+  private readonly backfillAccounts = new Map<number, number>();
 
   getBackfillJob(groupId: number): BackfillJob | null {
     return this.backfillJobs.get(groupId) ?? null;
@@ -455,16 +458,32 @@ export class SyncService {
   async startBackfill(groupId: number, options: { full: boolean }): Promise<BackfillJob> {
     const running = this.backfillJobs.get(groupId);
     if (running && !running.finishedAt) return running;
-    const [rows] = await this.db.query<RowDataPacket[]>(
-      `SELECT g.zalo_group_id, bg.bot_account_id FROM zalo_group g
-       JOIN bot_group bg ON bg.group_id = g.id AND bg.left_at IS NULL
-       WHERE g.id = ? ORDER BY bg.bot_account_id`,
-      [groupId],
-    );
-    const pick = rows.find((row) => this.runners.has(row.bot_account_id as number));
-    if (!pick) throw new Error("Không có bot nào đang chạy trong nhóm này");
+    // Giữ chỗ NGAY (trước await đầu tiên): hai lần bấm sát nhau không cùng qua được kiểm «đang chạy» rồi chạy đôi
     const job: BackfillJob = { groupId, full: options.full, startedAt: new Date(), finishedAt: null, pages: 0, fetched: 0, stored: 0, oldest: null, method: "", error: "" };
     this.backfillJobs.set(groupId, job);
+    const release = () => { this.backfillJobs.delete(groupId); this.backfillAccounts.delete(groupId); };
+    let pick: RowDataPacket | undefined;
+    try {
+      const [rows] = await this.db.query<RowDataPacket[]>(
+        `SELECT g.zalo_group_id, bg.bot_account_id FROM zalo_group g
+         JOIN bot_group bg ON bg.group_id = g.id AND bg.left_at IS NULL
+         WHERE g.id = ? ORDER BY bg.bot_account_id`,
+        [groupId],
+      );
+      pick = rows.find((row) => this.runners.has(row.bot_account_id as number));
+      if (!pick) throw new Error("Không có bot nào đang chạy trong nhóm này");
+      // Trần số nhóm đang lấy tin cũ cùng lúc trên MỘT tài khoản bot — kéo lịch sử nhiều nhóm một lúc dễ chạm giới hạn của Zalo
+      const accountId = pick.bot_account_id as number;
+      let busy = 0;
+      for (const [otherGroupId, otherAccountId] of this.backfillAccounts) {
+        if (otherAccountId === accountId && !this.backfillJobs.get(otherGroupId)?.finishedAt) busy += 1;
+      }
+      if (busy >= MAX_CONCURRENT_BACKFILLS_PER_ACCOUNT) throw new BackfillBusyError(busy);
+      this.backfillAccounts.set(groupId, accountId);
+    } catch (error) {
+      release();
+      throw error;
+    }
     const runner = this.runners.get(pick.bot_account_id as number)!;
     void runner
       .backfillGroup(pick.zalo_group_id as string, {

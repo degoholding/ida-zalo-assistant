@@ -57,6 +57,8 @@ export interface OndemandDestination {
   /** null = tin riêng — đích gửi là chính người hỏi (`requesterUid`). */
   targetThreadId: number | null;
   requesterUid: string;
+  /** Người hỏi có quyền Mật (tài khoản web + cờ «Xem nhóm Mật») — cho recap vào nhóm Mật (quyết định 7). */
+  allowConfidential?: boolean;
 }
 
 /** Đích gửi = CUỘC ĐANG HỎI (THUẦN): trong nhóm → nhóm đó; tin riêng → chính người hỏi. Người hỏi luôn là
@@ -171,12 +173,12 @@ export async function runOndemandRecap(
   const meetingFields = await resolveMeetingFields(deps.calendar, file);
   const targetThreadId = destination.targetThreadId ?? undefined;
   if (existing) {
-    await requeueOndemand(db, existing.id, { targetThreadId, requesterUid: destination.requesterUid, ...meetingFields });
+    await requeueOndemand(db, existing.id, { targetThreadId, requesterUid: destination.requesterUid, allowConfidential: destination.allowConfidential, ...meetingFields });
   } else {
     await insertDiscovered(db, {
       driveFileId: file.id, fileName: file.name, mime: file.mimeType, sizeBytes: file.size,
       driveCreatedAt: new Date(file.createdTime), status: MeetingRecordingStatus.Queued,
-      targetThreadId, requesterUid: destination.requesterUid, ...meetingFields,
+      targetThreadId, requesterUid: destination.requesterUid, allowConfidential: destination.allowConfidential, ...meetingFields,
     });
   }
   return { response: { status: "queued", reply: `Dạ em đang nghe bản ghi «${file.name}», khoảng vài phút em gửi recap ạ.` } };

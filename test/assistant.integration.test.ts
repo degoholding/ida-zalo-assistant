@@ -9,6 +9,7 @@ import type { RowDataPacket } from "mysql2";
 import { AssistantService, splitForZalo, stripMarkdown } from "../src/assistant/assistant-service.js";
 import { WebSearchUnavailableError, type GeminiContent, type ModelClient, type WebSearchResult } from "../src/assistant/gemini-client.js";
 import { runTool, type ToolContext } from "../src/assistant/tools.js";
+import { askerWithAccess } from "./assistant-access-test-support.js";
 import { AssistantTurnStatus, ContactKind, ContactRole, ConversationType, GroupKind } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { createPool, type Db } from "../src/db/pool.js";
@@ -170,7 +171,8 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
       content: { title: "Báo giá DL Thành Công.xlsx", href: "https://f/x", params: "{}" }, sentAtMs: NOW.getTime() - 600_000 }));
     await ingestGroupMessage(deps, botId, message({ msgId: "old", content: "tin hôm qua", sentAtMs: NOW.getTime() - 30 * 3_600_000 }));
     await db.query("INSERT INTO contact (zalo_uid, display_name) VALUES ('u-hoa', 'Chị Hòa')");
-    const context: ToolContext = { db, askerUid: "u-lan", filesToSend: [], now: NOW };
+    const { access } = await askerWithAccess(db, "u-lan");
+    const context: ToolContext = { db, askerUid: "u-lan", access, filesToSend: [], now: NOW };
 
     const groups = await runTool(context, "list_groups", { query: "ban hang" }) as any;
     assert.equal(groups.groups[0].id, group.id);
@@ -205,8 +207,9 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
     await ingestGroupMessage(deps, botId, message({ zaloGroupId: "g-mat", msgId: "m2", msgType: "share.file",
       content: { title: "Hop dong mat.pdf", href: "https://f/y", params: "{}" } }));
     const [secretFile] = await db.query<RowDataPacket[]>("SELECT id FROM attachment WHERE group_id = ?", [secret.id]);
+    const { access } = await askerWithAccess(db, "u-lan", { groupScopeId: group.id });
     const context: ToolContext = {
-      db, askerUid: "u-lan", filesToSend: [], now: NOW, scopeGroupId: group.id,
+      db, askerUid: "u-lan", access, filesToSend: [], now: NOW, scopeGroupId: group.id,
       readFile: async () => ({ error: "không được tới bước đọc" }),
     };
     const window = { from: "2026-10-01T00:00:00+07:00", to: "2026-10-01T23:59:59+07:00" };
@@ -219,7 +222,7 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
     const files = await runTool(context, "search_files", { query: "hop dong" }) as any;
     assert.equal(files.files.length, 0);
     const read = await runTool(context, "read_file", { attachment_id: secretFile[0].id }) as any;
-    assert.match(read.error, /không thuộc nhóm/);
+    assert.match(read.error, /Không có tệp này/);
     // export_report KHÔNG nằm trong danh sách chặn: mở cho hỏi trong nhóm từ 07/10/2026 (ae4f45a) — bảng do mô hình soạn
     // từ dữ liệu đã lấy qua các công cụ bị khóa nhóm ở trên, nên không mở thêm đường sang nhóm khác
     for (const blocked of ["find_people", "get_conversation_with_person", "list_contacts", "send_file"]) {
@@ -251,14 +254,19 @@ describe("tin riêng + Danh bạ + trợ lý", { skip: !databaseUrl && "chưa đ
       mentions: [{ uid: "u-binh", pos: 0, len: 6 }] }));
     await ingestGroupMessage(deps, botId, message({ msgId: "3", senderUid: "u-khac", senderName: "Người khác", content: "không liên quan" }));
     await ingestDirectMessage(deps, botId, message({ zaloGroupId: "u-binh", senderUid: "u-binh", senderName: "Anh Bình", msgId: "d1", content: "Bot ơi" }));
-    // Người hỏi là người THỨ BA — tin "@Bình" của Sếp chỉ lọt qua đúng điều kiện "nhắc tên"
-    const result = await runTool({ db, askerUid: "u-lan", filesToSend: [], now: NOW }, "get_conversation_with_person",
-      { person_uid: "u-binh", from: "2026-10-01T00:00:00+07:00", to: "2026-10-02T00:00:00+07:00" }) as any;
-    assert.equal(result.message_count, 3);
+    const args = { person_uid: "u-binh", from: "2026-10-01T00:00:00+07:00", to: "2026-10-02T00:00:00+07:00" };
+    // Người hỏi là người THỨ BA — tin "@Bình" của Sếp chỉ lọt qua đúng điều kiện "nhắc tên"; cuộc riêng Bình–bot KHÔNG lộ (H1)
+    const third = await askerWithAccess(db, "u-lan");
+    const result = await runTool({ db, askerUid: "u-lan", access: third.access, filesToSend: [], now: NOW }, "get_conversation_with_person", args) as any;
+    assert.equal(result.message_count, 2);
     assert.match(result.messages, /Em gửi báo cáo rồi/);
     assert.match(result.messages, /@Bình làm tiếp nhé/);
-    assert.match(result.messages, /\(nhắn riêng bot\) Anh Bình:\s+Bot ơi/);
+    assert.doesNotMatch(result.messages, /Bot ơi/);
     assert.doesNotMatch(result.messages, /không liên quan/);
+    // Chính Bình hỏi về mình: cuộc riêng của Bình với bot vẫn đọc được
+    const own = await askerWithAccess(db, "u-binh");
+    const mine = await runTool({ db, askerUid: "u-binh", access: own.access, filesToSend: [], now: NOW }, "get_conversation_with_person", args) as any;
+    assert.match(mine.messages, /\(nhắn riêng bot\) Anh Bình:\s+Bot ơi/);
   });
 
   test("vòng hỏi đáp: gọi công cụ → trả lời; lịch sử cuộc riêng đưa vào; gỡ markdown; ghi nhật ký", async () => {

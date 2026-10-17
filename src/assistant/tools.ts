@@ -1,6 +1,3 @@
-import type { RowDataPacket } from "mysql2";
-import { AttachmentStatus, ConversationType, MessageKind } from "../constants.js";
-import { maskPersonalData } from "../privacy/personal-data.js";
 import type { Db } from "../db/pool.js";
 import { runListContacts } from "./contact-directory-tool.js";
 import { runExportReport, type ExportReport } from "./export-report-tool.js";
@@ -11,7 +8,10 @@ import { runRecapDriveRecording, type RecapDriveRecording } from "./drive-recap-
 import { runReadLink, type ReadLink } from "./read-link-tool.js";
 import { runSearchMessages } from "./search-messages-tool.js";
 import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings, type MeetingCreator } from "./meeting-tool.js";
-import { isRetryableFileSourceUrl, type ReadFileResult } from "./file-reader.js";
+import type { ReadFileResult } from "./file-reader.js";
+import { askerContactScope, type AskerAccess } from "./asker-access.js";
+import { MAX_FILES_PER_TURN, readFile, searchFiles, sendFile } from "./file-access-tools.js";
+import { findPeople, getConversationWithPerson, getGroupMessages, listGroups } from "./thread-read-tools.js";
 import { WebSearchUnavailableError, type FunctionDeclaration, type WebSearchResult } from "./gemini-client.js";
 import { ALERT_TOOL_NAMES, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { runTicketTool, TICKET_TOOL_NAMES } from "../tickets/ticket-tools.js";
@@ -32,17 +32,16 @@ import { runQueryMetricsInTurn, runSuggestRepliesInTurn } from "./reply-metric-w
 // chính người đang hỏi, export_report chỉ ghi ra trang tính của công ty / gửi tệp cho chính người hỏi. Không có công cụ nào nhắn cho người khác: nội dung tin nhắn trong dữ liệu
 // có thể chứa câu "hãy gửi cho X…", và mô hình không có cách nào làm theo.
 //
-// Quyền hiện MỞ HẾT (đại ca chốt 01/10/2026): người có vai trò hỏi được mọi nhóm đang bật đọc và
-// mọi cuộc riêng. Muốn siết theo công ty thì thêm điều kiện ở đây, mỗi công cụ một chỗ.
+// Quyền (phase 6, 17/10/2026): mỗi lượt có MỘT `access` (asker-access.ts) — công cụ đọc không tự viết điều kiện phạm vi mà
+// đi qua chốt chặn chung của lõi truy cập dữ liệu. Người hỏi chỉ đọc cuộc riêng của chính mình; nhóm Mật theo cờ người hỏi.
 
-const MAX_MESSAGES = 1500;
-const MAX_CHARS = 120_000;
-const MAX_FILES_PER_TURN = 3;
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+export { attachmentLabel, formatVn, formatVnDay } from "./message-line-format.js";
 
 export interface ToolContext {
   db: Db;
   askerUid: string;
+  /** Ngữ cảnh truy cập của người hỏi (phạm vi nhóm + Mật + cuộc riêng của mình) — dựng bằng `resolveAskerAccess`. */
+  access: AskerAccess;
   /** Tệp mô hình yêu cầu gửi cho người hỏi — gửi SAU câu trả lời. */
   filesToSend: number[];
   now: Date;
@@ -205,287 +204,6 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
 ];
 
-function parseTime(raw: unknown, fallback: Date): Date {
-  if (typeof raw !== "string" || !raw.trim()) return fallback;
-  const value = new Date(raw);
-  return Number.isNaN(value.getTime()) ? fallback : value;
-}
-
-/** Giờ Việt Nam dạng dd/MM HH:mm — mô hình đọc giờ địa phương, không phải UTC. */
-const VN_WEEKDAYS = ["Chủ nhật", "thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy"];
-
-/**
- * «thứ Tư, 07/10/2026» theo giờ Việt Nam. Đưa sẵn cho mô hình — không có thì mô hình tự đoán thứ và đoán sai (gặp thật
- * 07/10/2026: bot nói «hôm nay thứ Ba» vào thứ Tư).
- */
-export function formatVnDay(date: Date): string {
-  const local = new Date(date.getTime() + VN_OFFSET_MS);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${VN_WEEKDAYS[local.getUTCDay()]}, ${pad(local.getUTCDate())}/${pad(local.getUTCMonth() + 1)}/${local.getUTCFullYear()}`;
-}
-
-export function formatVn(date: Date): string {
-  const local = new Date(date.getTime() + VN_OFFSET_MS);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(local.getUTCDate())}/${pad(local.getUTCMonth() + 1)} ${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`;
-}
-
-interface MessageLineRow extends RowDataPacket {
-  sent_at: Date;
-  sender_name: string;
-  sender_uid: string;
-  kind: number;
-  text: string | null;
-  quote_text: string | null;
-  file_name: string | null;
-  attachment_id: number | null;
-  /** Chữ đã đọc từ tệp (attachment_text) — ảnh tự đọc / tệp trợ lý từng đọc */
-  file_text: string | null;
-  group_name: string;
-  thread_type: number;
-}
-
-/** Chữ đọc từ ảnh đưa vào dòng tin tối đa ngần này ký tự — đủ để tóm tắt biết ảnh nói gì, muốn đủ thì read_file. */
-const IMAGE_TEXT_IN_LINE = 300;
-
-/** «[tệp #12: Bao gia.xlsx]» / «[ảnh #20: <chữ + mô tả đã đọc>]» (ảnh Zalo không có tên tệp). */
-export function attachmentLabel(row: Pick<MessageLineRow, "kind" | "file_name" | "attachment_id" | "file_text">): string {
-  if (row.file_name) return `[tệp #${row.attachment_id}: ${row.file_name}]`;
-  if (row.kind !== MessageKind.Image) return `[tệp #${row.attachment_id}]`;
-  // Che dữ liệu cá nhân TRƯỚC khi cắt — cắt trước có thể đứt đôi một SĐT / STK, nửa còn lại lọt qua mẫu che
-  const seen = maskPersonalData(row.file_text ?? "").replace(/\s+/g, " ").trim();
-  if (!seen) return `[ảnh #${row.attachment_id}]`;
-  return `[ảnh #${row.attachment_id}: ${seen.length > IMAGE_TEXT_IN_LINE ? `${seen.slice(0, IMAGE_TEXT_IN_LINE - 1)}…` : seen}]`;
-}
-
-function formatLines(rows: MessageLineRow[], withGroup: boolean): { text: string; truncated: boolean } {
-  const lines: string[] = [];
-  for (const row of rows) {
-    const where = withGroup ? ` (${row.thread_type === ConversationType.Direct ? "nhắn riêng bot" : row.group_name})` : "";
-    const quote = row.quote_text ? ` [trả lời: "${row.quote_text.slice(0, 80)}"]` : "";
-    const file = row.attachment_id ? ` ${attachmentLabel(row)}` : "";
-    const body = (row.text ?? "").replace(/\s+/g, " ").trim();
-    lines.push(`[${formatVn(row.sent_at)}]${where} ${row.sender_name || row.sender_uid}:${quote} ${body}${file}`.trim());
-  }
-  // Quá dài thì giữ phần MỚI nhất — câu hỏi thường về chuyện gần đây
-  let total = 0;
-  let start = lines.length;
-  while (start > 0 && total + lines[start - 1].length + 1 <= MAX_CHARS) {
-    start -= 1;
-    total += lines[start].length + 1;
-  }
-  return { text: lines.slice(start).join("\n"), truncated: start > 0 };
-}
-
-/** Câu báo khi mô hình chạm vào dữ liệu nhóm Mật (IDA câu 4: nhóm Mật không gửi sang AI). */
-const CONFIDENTIAL_ERROR = "Nhóm này để chế độ Mật — bot không đưa nội dung nhóm cho AI. Báo người hỏi xem trực tiếp trong nhóm.";
-
-const MESSAGE_SELECT = `
-  SELECT m.sent_at, m.sender_name, m.sender_uid, m.kind, m.text, m.quote_text, a.file_name, a.id AS attachment_id,
-         IF(m.kind = ${MessageKind.Image}, LEFT(t.text, 2000), NULL) AS file_text,
-         COALESCE(NULLIF(g.label, ''), g.name) AS group_name, g.thread_type
-  FROM message m
-  JOIN zalo_group g ON g.id = m.group_id
-  LEFT JOIN attachment a ON a.message_id = m.id
-  LEFT JOIN attachment_text t ON t.attachment_id = a.id`;
-
-async function listGroups(context: ToolContext, args: Record<string, unknown>) {
-  const query = typeof args.query === "string" ? args.query.trim() : "";
-  const [rows] = await context.db.query<RowDataPacket[]>(
-    `SELECT g.id, g.name, g.label, c.name AS company,
-            (SELECT COUNT(*) FROM message m WHERE m.group_id = g.id) AS message_count,
-            (SELECT MAX(m.sent_at) FROM message m WHERE m.group_id = g.id) AS last_message_at
-     FROM zalo_group g LEFT JOIN company c ON c.id = g.company_id
-     WHERE g.thread_type = ? AND g.read_messages = 1 AND g.is_confidential = 0
-       AND (? = '' OR g.name LIKE ? OR g.label LIKE ?) AND (? = 0 OR g.id = ?)
-     ORDER BY last_message_at DESC LIMIT 50`,
-    [ConversationType.Group, query, `%${query}%`, `%${query}%`, context.scopeGroupId ?? 0, context.scopeGroupId ?? 0],
-  );
-  return {
-    groups: rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      short_name: row.label,
-      company: row.company ?? "",
-      message_count: row.message_count,
-      last_message: row.last_message_at ? formatVn(row.last_message_at) : "",
-    })),
-  };
-}
-
-async function getGroupMessages(context: ToolContext, args: Record<string, unknown>) {
-  const groupId = context.scopeGroupId ?? Number(args.group_id);
-  const to = parseTime(args.to, context.now);
-  const from = parseTime(args.from, new Date(to.getTime() - 86_400_000));
-  const [groups] = await context.db.query<RowDataPacket[]>(
-    "SELECT id, name, is_confidential FROM zalo_group WHERE id = ? AND thread_type = ? AND read_messages = 1",
-    [groupId, ConversationType.Group],
-  );
-  if (!groups.length) return { error: "Không có nhóm này hoặc nhóm không được lưu tin — gọi list_groups để lấy id đúng." };
-  if (groups[0].is_confidential) return { error: CONFIDENTIAL_ERROR };
-  const [rows] = await context.db.query<MessageLineRow[]>(
-    `${MESSAGE_SELECT}
-     WHERE m.group_id = ? AND m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL
-     ORDER BY m.sent_at DESC LIMIT ?`,
-    [groupId, from, to, MAX_MESSAGES],
-  );
-  rows.reverse();
-  const { text, truncated } = formatLines(rows, false);
-  return {
-    group: groups[0].name,
-    from: formatVn(from),
-    to: formatVn(to),
-    message_count: rows.length,
-    truncated: truncated || rows.length >= MAX_MESSAGES,
-    messages: text || "(không có tin nào trong khoảng này)",
-  };
-}
-
-async function findPeople(context: ToolContext, args: Record<string, unknown>) {
-  const name = typeof args.name === "string" ? args.name.trim() : "";
-  if (name.length < 2) return { error: "Tên quá ngắn" };
-  // utf8mb4_unicode_ci không phân biệt dấu: "Lan" khớp "Lân", "hoa" khớp "Hòa"
-  const [rows] = await context.db.query<RowDataPacket[]>(
-    `SELECT c.zalo_uid, c.display_name, c.zalo_name,
-            GROUP_CONCAT(DISTINCT COALESCE(NULLIF(g.label, ''), g.name) SEPARATOR ', ') AS groups_in
-     FROM contact c
-     LEFT JOIN group_member gm ON gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL
-     LEFT JOIN zalo_group g ON g.id = gm.group_id AND g.read_messages = 1 AND g.is_confidential = 0
-     WHERE c.display_name LIKE ? OR c.zalo_name LIKE ?
-        OR c.zalo_uid IN (SELECT zalo_uid FROM group_member WHERE display_name LIKE ?)
-     GROUP BY c.id
-     LIMIT 10`,
-    [`%${name}%`, `%${name}%`, `%${name}%`],
-  );
-  return {
-    people: rows.map((row) => ({
-      uid: row.zalo_uid,
-      name: row.display_name || row.zalo_name,
-      zalo_name: row.zalo_name,
-      groups: row.groups_in ?? "",
-    })),
-  };
-}
-
-async function getConversationWithPerson(context: ToolContext, args: Record<string, unknown>) {
-  const personUid = String(args.person_uid ?? "");
-  const includeMe = args.include_me !== false;
-  const to = parseTime(args.to, context.now);
-  const from = parseTime(args.from, new Date(to.getTime() - 7 * 86_400_000));
-  if (!personUid) return { error: "Thiếu person_uid — gọi find_people trước." };
-  // Nhóm: tin của người đó, tin nhắc tên người đó, và (nếu cần) tin người hỏi gửi trong những nhóm
-  // mà người đó cũng nhắn trong khoảng này. Riêng: cuộc riêng giữa bot và người đó.
-  const [rows] = await context.db.query<MessageLineRow[]>(
-    `${MESSAGE_SELECT}
-     WHERE m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL AND g.read_messages = 1 AND g.is_confidential = 0
-       AND (
-         (g.thread_type = ? AND (
-            m.sender_uid = ?
-            OR JSON_CONTAINS(COALESCE(m.mentions, JSON_ARRAY()), JSON_OBJECT('uid', ?))
-            OR (? AND m.sender_uid = ? AND m.group_id IN (
-                  SELECT DISTINCT m2.group_id FROM message m2
-                  WHERE m2.sender_uid = ? AND m2.sent_at >= ? AND m2.sent_at < ?))))
-         OR (g.thread_type = ? AND g.zalo_group_id = ?)
-       )
-     ORDER BY m.sent_at DESC LIMIT ?`,
-    [from, to, ConversationType.Group, personUid, personUid, includeMe ? 1 : 0, context.askerUid, personUid, from, to,
-     ConversationType.Direct, personUid, MAX_MESSAGES],
-  );
-  rows.reverse();
-  const { text, truncated } = formatLines(rows, true);
-  return {
-    from: formatVn(from),
-    to: formatVn(to),
-    message_count: rows.length,
-    truncated: truncated || rows.length >= MAX_MESSAGES,
-    messages: text || "(không có trao đổi nào trong khoảng này)",
-  };
-}
-
-async function searchFiles(context: ToolContext, args: Record<string, unknown>) {
-  const query = typeof args.query === "string" ? args.query.trim() : "";
-  const groupId = context.scopeGroupId ?? (Number(args.group_id) || 0);
-  const from = parseTime(args.from, new Date(0));
-  const to = parseTime(args.to, new Date(context.now.getTime() + 86_400_000));
-  // Mỗi từ khóa phải xuất hiện trong tên tệp hoặc chú thích — "bao gia thanh cong" khớp
-  // "Báo giá DL Thành Công.xlsx" dù khác thứ tự chữ ở giữa
-  const words = query.split(/\s+/).filter((word) => word.length >= 2).slice(0, 6);
-  // Không từ khóa = tệp gần đây của CHÍNH người hỏi (họ gửi, hoặc nằm trong cuộc riêng của họ với bot) — để bot liệt kê cho chọn
-  // Có từ khóa: khớp tên tệp, chú thích, hoặc CHỮ ĐÃ BÓC từ tệp (attachment_text) — tệp bot từng đọc thì tìm được theo nội dung
-  // Trong nhóm, không từ khóa = tệp gần đây của nhóm đó
-  const conditions = words.length
-    ? words.map(() => "(a.file_name LIKE ? OR m.text LIKE ? OR t.text LIKE ?)").join(" AND ")
-    : context.scopeGroupId ? "1 = 1" : `(m.sender_uid = ? OR (g.thread_type = ${ConversationType.Direct} AND g.zalo_group_id = ?))`;
-  const conditionParams = words.length
-    ? words.flatMap((word) => [`%${word}%`, `%${word}%`, `%${word}%`])
-    : context.scopeGroupId ? [] : [context.askerUid, context.askerUid];
-  const [rows] = await context.db.query<RowDataPacket[]>(
-    `SELECT a.id, a.file_name, a.file_ext, a.status, a.stored_bytes, a.declared_size, m.sent_at, m.sender_name, m.zalo_msg_type,
-            COALESCE(NULLIF(g.label, ''), g.name) AS group_name, g.thread_type, t.char_count AS text_chars
-     FROM attachment a JOIN message m ON m.id = a.message_id JOIN zalo_group g ON g.id = a.group_id
-     LEFT JOIN attachment_text t ON t.attachment_id = a.id
-     WHERE ${conditions} AND (? = 0 OR a.group_id = ?) AND m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL
-       AND g.is_confidential = 0
-     ORDER BY m.sent_at DESC LIMIT 20`,
-    [...conditionParams, groupId, groupId, from, to],
-  );
-  return {
-    files: rows.map((row) => ({
-      id: row.id,
-      name: row.file_name || `(${row.zalo_msg_type})`,
-      group: row.thread_type === ConversationType.Direct ? "nhắn riêng bot" : row.group_name,
-      sender: row.sender_name,
-      sent: formatVn(row.sent_at),
-      size_kb: Math.round(((row.stored_bytes ?? row.declared_size) || 0) / 1024),
-      can_send: row.status === AttachmentStatus.Stored,
-      can_read: row.status === AttachmentStatus.Stored,
-      // Dòng tự đọc ảnh hỏng có char_count = 0 nhưng chưa có chữ — chưa tính là đã đọc
-      already_read: Number(row.text_chars ?? 0) > 0,
-    })),
-  };
-}
-
-/** Chữ đưa cho mô hình tối đa ngần này ký tự một lượt — hơn thì cắt và nói rõ. */
-const READ_FILE_MAX_CHARS = 60_000;
-/** Đúng câu báo của readAttachmentText (file-reader.ts) khi tệp chưa Stored — chỉ khi khớp câu NÀY mới thử tải lại,
- * tránh tải lại oan cho lỗi khác (đuôi tệp bị chặn, quá cỡ…) vẫn đi qua cùng nhánh "error" in result. */
-const NOT_STORED_ERROR_PATTERN = /chưa có trong kho/;
-
-async function readFile(context: ToolContext, args: Record<string, unknown>) {
-  if (!context.readFile) return { error: "Bot chưa bật đọc tệp" };
-  const attachmentId = Number(args.attachment_id);
-  if (!Number.isSafeInteger(attachmentId) || attachmentId <= 0) return { error: "Thiếu attachment_id" };
-  const [owner] = await context.db.query<RowDataPacket[]>(
-    "SELECT a.group_id, a.source_url, g.is_confidential FROM attachment a JOIN zalo_group g ON g.id = a.group_id WHERE a.id = ?", [attachmentId]);
-  if (context.scopeGroupId && Number(owner[0]?.group_id) !== context.scopeGroupId) return { error: "Tệp này không thuộc nhóm đang hỏi." };
-  if (owner[0]?.is_confidential) return { error: CONFIDENTIAL_ERROR };
-  let result = await context.readFile(attachmentId);
-  // Tệp chưa có trong kho (Skip / Failed / Pending) nhưng còn link Zalo (`source_url`) — người hỏi CHỦ ĐỘNG muốn đọc
-  // (không chỉ "nhóm chưa bật lấy file" là xong chuyện): đưa lại hàng tải rồi CHỜ ít lâu, đọc luôn trong lượt này thay
-  // vì bắt người hỏi gửi lại tệp (real case VPS 10/10/2026: nhóm capture_files=0, link Zalo vẫn còn hiệu lực).
-  if ("error" in result && context.requestFileDownload && isRetryableFileSourceUrl(owner[0]?.source_url) && NOT_STORED_ERROR_PATTERN.test(String(result.error))) {
-    const outcome = await context.requestFileDownload(attachmentId);
-    if (outcome === "pending") return { error: "Em đang tải tệp này về, anh/chị hỏi lại giúp em sau ít phút nhé." };
-    if (outcome === "failed") return { error: "Link tệp này trên Zalo đã hết hạn — anh/chị gửi lại tệp giúp em nhé." };
-    result = await context.readFile(attachmentId); // outcome === "stored" → đọc lại, cỡ tệp / đuôi tệp vẫn được kiểm như bình thường
-  }
-  if ("error" in result) return result;
-  if (context.usage) {
-    context.usage.inputTokens += result.inputTokens;
-    context.usage.outputTokens += result.outputTokens;
-  }
-  context.markHeavy?.(`đọc tệp ${result.fileName}`);
-  const truncated = result.text.length > READ_FILE_MAX_CHARS;
-  return {
-    file: result.fileName,
-    how: result.method,
-    summary: result.summary,
-    char_count: result.charCount,
-    truncated,
-    content: truncated ? result.text.slice(0, READ_FILE_MAX_CHARS) : result.text,
-  };
-}
-
 async function webSearch(context: ToolContext, args: Record<string, unknown>) {
   const query = typeof args.query === "string" ? args.query.trim().slice(0, 300) : "";
   if (!query) return { error: "Thiếu câu tìm" };
@@ -503,19 +221,6 @@ async function webSearch(context: ToolContext, args: Record<string, unknown>) {
     }
     throw error;
   }
-}
-
-async function sendFile(context: ToolContext, args: Record<string, unknown>) {
-  const attachmentId = Number(args.attachment_id);
-  if (context.filesToSend.length >= MAX_FILES_PER_TURN) return { error: `Mỗi lần chỉ gửi tối đa ${MAX_FILES_PER_TURN} tệp.` };
-  const [rows] = await context.db.query<RowDataPacket[]>(
-    "SELECT a.id, a.file_name, a.status, g.is_confidential FROM attachment a JOIN zalo_group g ON g.id = a.group_id WHERE a.id = ?", [attachmentId]);
-  const file = rows[0];
-  if (!file) return { error: "Không có tệp này." };
-  if (file.is_confidential) return { error: CONFIDENTIAL_ERROR };
-  if (file.status !== AttachmentStatus.Stored) return { error: "Tệp này chưa có trong kho (link Zalo hết hạn hoặc nhóm không bật lấy file)." };
-  if (!context.filesToSend.includes(attachmentId)) context.filesToSend.push(attachmentId);
-  return { queued: true, name: file.file_name };
 }
 
 const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unknown>) => Promise<unknown>> = {
@@ -540,7 +245,7 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
     return response;
   },
   export_report: (context, args) => runExportReport(context.exportReport, args),
-  list_contacts: (context, args) => runListContacts(context.db, args),
+  list_contacts: (context, args) => runListContacts(context.db, args, askerContactScope(context.access)),
   create_meeting_recap_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now),
   create_summary_pdf: (context, args) => runCreateRecapPdf(context.createRecapPdf, args, context.now, "document"),
   create_meeting: (context, args) =>
@@ -582,14 +287,15 @@ const EXECUTORS: Record<string, (context: ToolContext, args: Record<string, unkn
   },
   ...Object.fromEntries([...ALERT_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) =>
-      runAlertTool(context.alertTools, context.alertAsker, name, args, context.now, context.turnStartedAt ?? Date.now())])),
+      runAlertTool(context.alertTools, context.alertAsker, name, args, context.now, context.turnStartedAt ?? Date.now(), context.access)])),
   ...Object.fromEntries([...GROUP_ACTION_TOOL_NAMES].map((name) => [name,
     (context: ToolContext, args: Record<string, unknown>) =>
       runGroupAction(context.groupActions, (context.actionCounter ??= { done: 0 }), name, args, context.now)])),
 };
 
 export async function runTool(context: ToolContext, name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const executor = EXECUTORS[name];
+  // Object.hasOwn: tên như `constructor` / `__proto__` không được rơi vào prototype của object (M6 review)
+  const executor = Object.hasOwn(EXECUTORS, name) ? EXECUTORS[name] : undefined;
   if (!executor) return { error: `Không có công cụ ${name}` };
   if (context.scopeGroupId && !GROUP_SCOPE_TOOL_NAMES.has(name)) return { error: "Hỏi trong nhóm chỉ dùng được dữ liệu của nhóm này." };
   try {

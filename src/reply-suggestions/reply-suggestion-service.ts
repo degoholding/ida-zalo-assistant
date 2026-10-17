@@ -39,6 +39,8 @@ export interface SuggestInput {
   askerContactId?: number;
   /** Mã Zalo người hỏi — tin gốc trong cuộc nhắn riêng chỉ nhận cuộc của chính họ. */
   askerUid?: string;
+  /** Người hỏi được xem nhóm Mật (phase 6) — chuyển cho bộ nạp tin gốc. */
+  includeConfidential?: boolean;
 }
 
 export type SuggestOutcome =
@@ -64,7 +66,7 @@ export async function suggestReplies(deps: SuggestDeps, input: SuggestInput): Pr
 
   let source: ReplySource | null = null;
   if (input.messageId !== undefined) {
-    const loaded = await loadReplySource(deps.db, input.messageId, { scopeGroupId: input.scopeGroupId, askerUid: input.askerUid, maskPersonal: deps.maskPersonal });
+    const loaded = await loadReplySource(deps.db, input.messageId, { scopeGroupId: input.scopeGroupId, askerUid: input.askerUid, maskPersonal: deps.maskPersonal, includeConfidential: input.includeConfidential });
     if ("error" in loaded) return { error: loaded.error };
     source = loaded.source;
   }

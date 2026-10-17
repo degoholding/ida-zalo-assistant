@@ -15,6 +15,7 @@ import { filterLookupOptions } from '@/shared/lookups/use-lookups'
 import { Button } from '@/shared/ui/button'
 import { formatDateTime } from '@/shared/utils/format-date'
 import { ContactFilesTab, ContactGroupsTab, ContactRecentTab, ContactTurnsTab } from '../components/contact-detail-tabs'
+import { ContactRoleField } from '../components/contact-role-field'
 import { ContactTagsField } from '../components/contact-tags-field'
 import { CONTACT_CATALOG_KIND_OPTIONS, type ContactDetail } from '../types/contact'
 
@@ -148,7 +149,7 @@ export const contactCrudConfig: CrudConfig<ContactDetail> = {
       options: [{ value: KIND_MODE_AUTO, label: 'Theo nhóm (tự động)' }, ...CONTACT_KIND_OPTIONS],
       hint: 'Theo nhóm: nhóm nội bộ → nhân sự, còn lại → khách hàng. Chọn tay thì tự động không ghi đè nữa.',
     },
-    { name: 'role', label: 'Vai trò với bot', type: 'select', options: CONTACT_ROLE_OPTIONS, hint: 'Có vai trò thì bot trả lời khi người này nhắn riêng. Trong nhóm: nhân sự gọi được bot (cài đặt «Trong nhóm: nhân sự gọi được bot»), khách hàng thì không.' },
+    { name: 'role', label: 'Vai trò với bot', type: 'custom', render: (ctx) => <ContactRoleField control={ctx.control} name={ctx.name} disabled={ctx.disabled} /> },
     { name: 'company_id', label: 'Công ty', type: 'select', source: { url: LOOKUP_URLS.companiesWithNone } },
     { name: 'phone', label: 'SĐT', type: 'text', placeholder: '0912 345 678', hint: 'Số di động Việt Nam — để khớp với Danh mục NV / ĐL. Để trống nếu chưa biết.' },
     { name: 'tags', label: 'Thẻ', type: 'custom', render: (ctx) => <ContactTagsField control={ctx.control} name={ctx.name} disabled={ctx.disabled} /> },

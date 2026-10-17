@@ -11,6 +11,7 @@ import { runAiReview } from "../src/alerts/ai-review.js";
 import { AlertService } from "../src/alerts/alert-service.js";
 import { runReminders } from "../src/alerts/reminders.js";
 import { watchSessions } from "../src/alerts/session-watch.js";
+import { resolveAskerAccess } from "../src/assistant/asker-access.js";
 import { clearPendingAlertChanges, runAlertTool, type AlertAsker } from "../src/assistant/alert-tools.js";
 import { AssistantService } from "../src/assistant/assistant-service.js";
 import { parseChatCommand, runChatCommand, type ChatCommandContext } from "../src/assistant/chat-commands.js";
@@ -91,6 +92,11 @@ describe("phase 5 — cảnh báo tin nhắn", { skip: !databaseUrl && "chưa đ
     await db.query("INSERT INTO recipient_vip (recipient_id, contact_id) VALUES (?, ?)", [tp, cid("u-vip")]);
     alerts = new AlertService(db, config, () => calendar, () => undefined, async (recipientId, text) => { sent.push({ recipientId, text }); });
   });
+
+  /** Ngữ cảnh truy cập thật của người hỏi (cùng đường với một lượt hỏi) — «cần xử lý» / «xong tin số» lọc theo phạm vi nhóm + Mật. */
+  async function accessOf(uid: string) {
+    return resolveAskerAccess(db, (await findContactByUid(db, uid))!, { maskPersonal: false, now: NOW });
+  }
 
   async function receive(zaloGroupId: string, overrides: Partial<IncomingGroupMessage>): Promise<number> {
     const incoming = message({ zaloGroupId, ...overrides });
@@ -221,11 +227,11 @@ describe("phase 5 — cảnh báo tin nhắn", { skip: !databaseUrl && "chưa đ
     const saved: Record<string, unknown>[] = [];
     const deps = { db, config, saveSettings: async (patch: Record<string, unknown>) => { saved.push(patch); return Object.keys(patch); }, invalidate: () => undefined };
     const ceoAsker: AlertAsker = { uid: "u-ceo", name: "CEO", role: ContactRole.Manager, recipientId: ceo };
-    const list = await runAlertTool(deps, ceoAsker, "list_pending_items", {}, NOW, Date.now()) as any;
+    const list = await runAlertTool(deps, ceoAsker, "list_pending_items", {}, NOW, Date.now(), await accessOf("u-ceo")) as any;
     assert.equal(list.count, 1);
     assert.equal(list.items[0].muc, "KHẨN");
-    assert.equal((await runAlertTool(deps, ceoAsker, "mark_item_handled", { message_id: list.items[0].message_id }, NOW, Date.now()) as any).ok, true);
-    assert.equal((await runAlertTool(deps, ceoAsker, "list_pending_items", {}, NOW, Date.now()) as any).count, 0);
+    assert.equal((await runAlertTool(deps, ceoAsker, "mark_item_handled", { message_id: list.items[0].message_id }, NOW, Date.now(), await accessOf("u-ceo")) as any).ok, true);
+    assert.equal((await runAlertTool(deps, ceoAsker, "list_pending_items", {}, NOW, Date.now(), await accessOf("u-ceo")) as any).count, 0);
 
     const turn1 = Date.now();
     const proposal = await runAlertTool(deps, ceoAsker, "propose_alert_change", { action: "add_urgent_keyword", keyword: "Bể bao" }, NOW, turn1) as any;
@@ -254,7 +260,7 @@ describe("phase 5 — cảnh báo tin nhắn", { skip: !databaseUrl && "chưa đ
     const deps = { db, config, saveSettings: async (patch: Record<string, unknown>) => { saved.push(patch); return Object.keys(patch); }, invalidate: () => undefined };
     const ceoAsker: AlertAsker = { uid: "u-ceo", name: "CEO", role: ContactRole.Manager, recipientId: ceo };
     const tpAsker: AlertAsker = { uid: "u-tp", name: "Trưởng phòng", role: ContactRole.DepartmentHead, recipientId: tp };
-    const ctx = (asker: AlertAsker | null): ChatCommandContext => ({ db, alertTools: deps, asker, inGroup: false, now: NOW });
+    const ctx = (asker: AlertAsker | null): ChatCommandContext => ({ db, alertTools: deps, asker, inGroup: false, now: NOW, access: asker ? () => accessOf(asker.uid) : undefined });
     const say = async (asker: AlertAsker | null, text: string) => {
       const command = parseChatCommand(text);
       return command ? runChatCommand(ctx(asker), command) : null;

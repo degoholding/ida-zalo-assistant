@@ -14,6 +14,7 @@ import type { RowDataPacket } from "mysql2";
 import { AssistantService } from "../src/assistant/assistant-service.js";
 import type { GeminiContent, ModelClient } from "../src/assistant/gemini-client.js";
 import { runTool, type ToolContext } from "../src/assistant/tools.js";
+import { askerWithAccess } from "./assistant-access-test-support.js";
 import { AssistantTurnStatus, AttachmentStatus, ContactRole, FlagSource, MessagePriority, ReplyState, ScheduleRunStatus } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { createPool, type Db } from "../src/db/pool.js";
@@ -208,7 +209,8 @@ describe("phase 3 — hạ tầng xử lý nền", { skip: !databaseUrl && "chư
       content: { title: "luong.xlsx", href: "https://f/l", params: "{}" } }));
     await db.query("UPDATE attachment SET status = ?, storage_key = 'k/1'", [AttachmentStatus.Stored]);
     const [secretFile] = await db.query<RowDataPacket[]>("SELECT id FROM attachment WHERE group_id = ?", [secret.id]);
-    const context: ToolContext = { db, askerUid: "u-sep", filesToSend: [], now: NOW, readFile: async () => ({ error: "không được tới đây" }) };
+    const { access } = await askerWithAccess(db, "u-sep");
+    const context: ToolContext = { db, askerUid: "u-sep", access, filesToSend: [], now: NOW, readFile: async () => ({ error: "không được tới đây" }) };
     const window = { from: "2026-10-01T00:00:00+07:00", to: "2026-10-09T00:00:00+07:00" };
 
     const groups = await runTool(context, "list_groups", {}) as any;

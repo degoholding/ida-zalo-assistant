@@ -88,7 +88,8 @@ export async function findContactByUid(db: Db, zaloUid: string): Promise<Contact
 export interface ContactPatch {
   /** "auto" = trả về tự động theo nhóm; số = chỉnh tay. */
   kind: number | "auto";
-  role: number;
+  /** undefined = giữ nguyên cột vai trò (không ghi lại giá trị đã đọc — tránh đè thay đổi của người khác vừa lưu). */
+  role?: number;
   companyId: number | null;
   note: string;
   /** Dạng 0xxxxxxxxx; undefined = giữ nguyên, null = xóa. */
@@ -96,8 +97,8 @@ export interface ContactPatch {
 }
 
 export async function updateContact(db: Db, contactId: number, patch: ContactPatch): Promise<void> {
-  await db.query("UPDATE contact SET role = ?, company_id = ?, note = ? WHERE id = ?", [
-    patch.role,
+  await db.query("UPDATE contact SET role = COALESCE(?, role), company_id = ?, note = ? WHERE id = ?", [
+    patch.role ?? null,
     patch.companyId,
     patch.note.slice(0, 5000),
     contactId,

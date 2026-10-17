@@ -1,5 +1,7 @@
 import type { RowDataPacket } from "mysql2";
+import { threadVisibilitySql } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
+import type { AskerAccess } from "./asker-access.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 import { LinkReadError, type LinkContent } from "./link-reader.js";
 
@@ -39,19 +41,21 @@ export function linkFingerprint(raw: string): string | null {
   }
 }
 
-async function linkWasShared(db: Db, fingerprint: string, scopeGroupId: number | undefined): Promise<boolean> {
+async function linkWasShared(db: Db, access: AskerAccess, fingerprint: string, scopeGroupId: number | undefined): Promise<boolean> {
   const escaped = fingerprint.replace(/[\\%_]/g, (char) => `\\${char}`);
+  // Link chỉ tính khi nằm trong tin của cuộc người hỏi THẤY ĐƯỢC (phạm vi + cuộc riêng của mình + Mật theo cờ) — không thì
+  // «đọc link» thành đường đọc nội dung cuộc riêng của người khác / nhóm Mật
+  const visible = threadVisibilitySql(access, "g");
   const [rows] = await db.query<RowDataPacket[]>(
-    // Link chỉ xuất hiện trong nhóm Mật thì không tính — nội dung nhóm Mật không đi sang AI
     `SELECT 1 FROM message m JOIN zalo_group g ON g.id = m.group_id
-     WHERE m.text LIKE ? AND m.sent_at > NOW() - INTERVAL ? DAY AND g.is_confidential = 0 ${scopeGroupId ? "AND m.group_id = ?" : ""} LIMIT 1`,
-    [`%${escaped}%`, LINK_LOOKBACK_DAYS, ...(scopeGroupId ? [scopeGroupId] : [])],
+     WHERE m.text LIKE ? AND m.sent_at > NOW() - INTERVAL ? DAY AND m.recalled_at IS NULL AND ${visible.sql} ${scopeGroupId ? "AND m.group_id = ?" : ""} LIMIT 1`,
+    [`%${escaped}%`, LINK_LOOKBACK_DAYS, ...visible.params, ...(scopeGroupId ? [scopeGroupId] : [])],
   );
   return rows.length > 0;
 }
 
 export async function runReadLink(
-  context: { db: Db; readLink?: ReadLink; question?: string; scopeGroupId?: number },
+  context: { db: Db; access: AskerAccess; readLink?: ReadLink; question?: string; scopeGroupId?: number },
   args: Record<string, unknown>,
 ): Promise<{ response: Record<string, unknown>; content: LinkContent | null }> {
   if (!context.readLink) return { response: { error: "Bot chưa bật đọc link." }, content: null };
@@ -59,7 +63,7 @@ export async function runReadLink(
   const fingerprint = linkFingerprint(url);
   if (!fingerprint) return { response: { error: "Thiếu hoặc sai link — chép nguyên văn link trong tin nhắn." }, content: null };
   const inQuestion = Boolean(context.question?.includes(fingerprint));
-  if (!inQuestion && !(await linkWasShared(context.db, fingerprint, context.scopeGroupId))) {
+  if (!inQuestion && !(await linkWasShared(context.db, context.access, fingerprint, context.scopeGroupId))) {
     return { response: { error: "Link này không có trong tin nhắn — chỉ đọc link người dùng đã gửi (chép nguyên văn từ tin)." }, content: null };
   }
   try {

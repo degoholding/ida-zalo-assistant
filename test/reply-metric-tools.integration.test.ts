@@ -6,6 +6,7 @@ import { after, before, beforeEach, describe, test } from "node:test";
 import type { RowDataPacket } from "mysql2";
 import { AssistantService } from "../src/assistant/assistant-service.js";
 import type { GeminiContent, ModelClient } from "../src/assistant/gemini-client.js";
+import { resolveAskerAccess } from "../src/assistant/asker-access.js";
 import { runTool } from "../src/assistant/tools.js";
 import { AssistantTurnStatus, ContactRole, ReplyTemplateStatus } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";
@@ -142,6 +143,9 @@ describe("trợ lý: gợi ý trả lời + hỏi số liệu", { skip: !databas
 
   test("query_metrics: chưa có nguồn → nói rõ chưa có số liệu; có số → khớp DB + nguồn + giờ đọc", async () => {
     const { service, request } = await setup();
+    // Ngữ cảnh truy cập thật của «sếp» (Quản lý có vai trò Danh bạ) — query_metrics kiểm quyền «Số liệu» qua principal này
+    const sepContext = async () => ({ db, askerUid: "u-sep", filesToSend: [], now: NOW,
+      access: await resolveAskerAccess(db, (await findContactByUid(db, "u-sep"))!, { maskPersonal: false, now: NOW }) });
     const empty = new ScriptedModel([
       [{ functionCall: { name: "query_metrics", args: { metric: "doanh số", period: "this_week" } } }],
       [{ text: "Chưa có số liệu từ bảng Drive, em chưa đọc được." }],
@@ -160,16 +164,16 @@ describe("trợ lý: gợi ý trả lời + hỏi số liệu", { skip: !databas
         `INSERT INTO metric_value (source_id, metric_date, staff_key, staff_name, area_key, area_name, metric_code, value) VALUES (?, ?, ?, ?, ?, ?, 'doanh_so', ?)`,
         [src.insertId, date, `n:${staff}`, staff, foldText(area).trim(), area, value]);
     }
-    const result = await runTool({ db, askerUid: "u-sep", filesToSend: [], now: NOW }, "query_metrics", { metric: "doanh số", period: "this_week" }) as any;
+    const result = await runTool(await sepContext(), "query_metrics", { metric: "doanh số", period: "this_week" }) as any;
     assert.equal(result.total, 220);
     assert.equal(result.previous_total, 100);
     assert.equal(result.change_pct, 120);
     assert.match(result.source, /BCSale, đọc lúc 11:30/);
-    const byArea = await runTool({ db, askerUid: "u-sep", filesToSend: [], now: NOW }, "query_metrics", { metric: "doanh số", period: "this_week", area: "Cần Thơ" }) as any;
+    const byArea = await runTool(await sepContext(), "query_metrics", { metric: "doanh số", period: "this_week", area: "Cần Thơ" }) as any;
     assert.equal(byArea.total, 150);
-    const none = await runTool({ db, askerUid: "u-sep", filesToSend: [], now: NOW }, "query_metrics", { metric: "doanh số", period: "last_month" }) as any;
+    const none = await runTool(await sepContext(), "query_metrics", { metric: "doanh số", period: "last_month" }) as any;
     assert.match(none.error, /Chưa có số liệu «Doanh số» trong tháng trước/);
-    const unknown = await runTool({ db, askerUid: "u-sep", filesToSend: [], now: NOW }, "query_metrics", { metric: "lợi nhuận" }) as any;
+    const unknown = await runTool(await sepContext(), "query_metrics", { metric: "lợi nhuận" }) as any;
     assert.deepEqual(unknown.available_metrics, ["Doanh số"]);
   });
 });

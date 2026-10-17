@@ -35,15 +35,16 @@ export const USER_LIST_SPEC: ListSpec = {
 
 const USER_FROM = "FROM app_user u LEFT JOIN contact c ON c.id = u.contact_id";
 const USER_COLUMNS = `u.id, u.email, u.username, u.password_hash IS NOT NULL AS has_password, u.full_name, u.role, u.contact_id, COALESCE(NULLIF(c.display_name, ''), c.zalo_name) AS contact_name,
-  u.all_groups, u.is_active, u.last_login_at, u.created_at,
+  u.all_groups, u.can_view_confidential, u.can_view_audit, u.is_active, u.last_login_at, u.created_at,
   (SELECT COUNT(*) FROM user_group_scope s WHERE s.user_id = u.id) AS group_count`;
 
-const FIELD_LABELS = { email: "Email", username: "Tên đăng nhập", has_password: "Có mật khẩu", full_name: "Họ tên", role: "Vai trò", contact_id: "Người trên Zalo", all_groups: "Mọi nhóm", is_active: "Đang dùng", group_ids: "Nhóm được xem" };
+const FIELD_LABELS = { email: "Email", username: "Tên đăng nhập", has_password: "Có mật khẩu", full_name: "Họ tên", role: "Vai trò", contact_id: "Người trên Zalo", all_groups: "Mọi nhóm", can_view_confidential: "Cho AI đọc nhóm Mật", can_view_audit: "Xem lịch sử thao tác", is_active: "Đang dùng", group_ids: "Nhóm được xem" };
 
 function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
   return rows.map((row) => ({
     ...row, email: row.email ?? "", username: row.username ?? "", has_password: Boolean(row.has_password),
     contact_id: row.contact_id === null ? 0 : Number(row.contact_id), all_groups: Boolean(row.all_groups),
+    can_view_confidential: Boolean(row.can_view_confidential), can_view_audit: Boolean(row.can_view_audit),
     is_active: Boolean(row.is_active), group_count: Number(row.group_count),
   }));
 }
@@ -69,6 +70,8 @@ export interface UserInput {
   role?: UserRole;
   contactId?: number | null;
   allGroups?: boolean;
+  canViewConfidential?: boolean;
+  canViewAudit?: boolean;
   isActive?: boolean;
   groupIds?: number[];
 }
@@ -118,6 +121,8 @@ export async function parseUserInput(db: Db, body: Record<string, unknown>, crea
     }
   }
   if (body.all_groups !== undefined) input.allGroups = parseBool(body.all_groups, "Mọi nhóm");
+  if (body.can_view_confidential !== undefined) input.canViewConfidential = parseBool(body.can_view_confidential, "Cho AI đọc nhóm Mật");
+  if (body.can_view_audit !== undefined) input.canViewAudit = parseBool(body.can_view_audit, "Xem lịch sử thao tác");
   if (body.is_active !== undefined) input.isActive = parseBool(body.is_active, "Đang dùng");
   if (body.group_ids !== undefined) {
     if (!Array.isArray(body.group_ids) || body.group_ids.length > MAX_SCOPE_GROUPS) throw invalid(`Nhóm được xem phải là danh sách (tối đa ${MAX_SCOPE_GROUPS})`);
@@ -150,6 +155,18 @@ async function assertLoginFree(db: Db, input: UserInput, exceptId: number): Prom
   }
 }
 
+/**
+ * Một người Zalo chỉ gắn với MỘT tài khoản đang dùng — hai tài khoản cùng `contact_id` làm danh tính trợ lý / MCP mơ hồ.
+ * Lưu ý: kiểm rồi ghi không nằm trong một giao dịch, nên hai quản trị lưu CÙNG LÚC vẫn có thể gắn trùng (khe rất hẹp, màn này chỉ quản trị
+ * dùng). Chấp nhận được vì trợ lý không đoán khi gặp trùng: `linkedAccount` (asker-access.ts) ghi cảnh báo và lấy phạm vi HẸP NHẤT.
+ */
+async function assertContactFree(db: Db, contactId: number | null | undefined, exceptId: number): Promise<void> {
+  if (!contactId) return;
+  const [rows] = await db.query<RowDataPacket[]>(
+    "SELECT COALESCE(NULLIF(full_name, ''), username, email) AS name FROM app_user WHERE contact_id = ? AND is_active = 1 AND id <> ? LIMIT 1", [contactId, exceptId]);
+  if (rows[0]) throw invalid(`Người Zalo này đã gắn với tài khoản «${rows[0].name}»`);
+}
+
 export const userRoutes: ApiRoute[] = [
   ["GET", /^\/api\/users$/, async ({ response, url, service, principal }) => sendOk(response, await runList(service.db, url.searchParams, USER_LIST_SPEC, {
     select: USER_COLUMNS, from: USER_FROM, baseWhere: { sql: "u.tenant_id = ?", params: [principal.tenantId] }, decorate,
@@ -159,11 +176,12 @@ export const userRoutes: ApiRoute[] = [
     const db = service.db;
     const input = await parseUserInput(db, await readJson(request), true);
     await assertLoginFree(db, input, 0);
+    if (input.isActive !== false) await assertContactFree(db, input.contactId, 0);
     const [result] = await db.query<any>(
-      `INSERT INTO app_user (tenant_id, email, username, password_hash, full_name, role, contact_id, all_groups, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO app_user (tenant_id, email, username, password_hash, full_name, role, contact_id, all_groups, can_view_confidential, can_view_audit, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [principal.tenantId, input.email ?? null, input.username ?? null, input.passwordHash ?? null, input.fullName ?? "", input.role,
-        input.contactId ?? null, input.allGroups ? 1 : 0, input.isActive === false ? 0 : 1]);
+        input.contactId ?? null, input.allGroups ? 1 : 0, input.canViewConfidential ? 1 : 0, input.canViewAudit ? 1 : 0, input.isActive === false ? 0 : 1]);
     const id = Number(result.insertId);
     if (input.groupIds) await saveScope(db, id, input.groupIds);
     await recordAudit(db, { entity: "user", entityId: id, action: "create", message: `Thêm người dùng ${input.username ?? input.email}` });
@@ -175,6 +193,10 @@ export const userRoutes: ApiRoute[] = [
     const before = await getUserDetail(db, id);
     const input = await parseUserInput(db, await readJson(request), false);
     await assertLoginFree(db, input, id);
+    // Kiểm theo trạng thái SAU khi lưu: bật lại tài khoản cũng phải không trùng người Zalo
+    const contactAfter = input.contactId !== undefined ? input.contactId : Number(before.contact_id) || null;
+    const activeAfter = input.isActive !== undefined ? input.isActive : before.is_active === true;
+    if (activeAfter && (input.contactId !== undefined || input.isActive === true)) await assertContactFree(db, contactAfter, id);
     const sets: string[] = [];
     const values: unknown[] = [];
     const set = (column: string, value: unknown) => { sets.push(`${column} = ?`); values.push(value); };
@@ -185,6 +207,8 @@ export const userRoutes: ApiRoute[] = [
     if (input.role !== undefined) set("role", input.role);
     if (input.contactId !== undefined) set("contact_id", input.contactId);
     if (input.allGroups !== undefined) set("all_groups", input.allGroups ? 1 : 0);
+    if (input.canViewConfidential !== undefined) set("can_view_confidential", input.canViewConfidential ? 1 : 0);
+    if (input.canViewAudit !== undefined) set("can_view_audit", input.canViewAudit ? 1 : 0);
     if (input.isActive !== undefined) set("is_active", input.isActive ? 1 : 0);
     if (sets.length) await db.query(`UPDATE app_user SET ${sets.join(", ")} WHERE id = ?`, [...values, id]);
     if (input.groupIds) await saveScope(db, id, input.groupIds);
@@ -193,7 +217,7 @@ export const userRoutes: ApiRoute[] = [
     // Đặt lại mật khẩu (cùng / khác trạng thái «có mật khẩu») vẫn là một thay đổi — ghi nhật ký, đá phiên cũ
     if (input.passwordHash && !changed.includes("Mật khẩu")) changed.push("Mật khẩu");
     // Quyền / phạm vi đổi thì phiên đang mở phải đăng nhập lại để nhận quyền mới (tắt tài khoản = văng ngay)
-    if (changed.some((label) => ["Vai trò", "Mọi nhóm", "Đang dùng", "Nhóm được xem", "Email", "Tên đăng nhập", "Mật khẩu", "Có mật khẩu"].includes(label))) {
+    if (changed.some((label) => ["Vai trò", "Mọi nhóm", "Xem lịch sử thao tác", "Đang dùng", "Nhóm được xem", "Email", "Tên đăng nhập", "Mật khẩu", "Có mật khẩu"].includes(label))) {
       await sessions.revokeUser(id);
     }
     if (changed.length) await recordAudit(db, { entity: "user", entityId: id, action: "update", changedFields: changed });

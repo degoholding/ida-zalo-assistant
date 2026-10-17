@@ -29,7 +29,7 @@ export interface VerifiedMcpKey {
   /** Chủ khóa; `canViewConfidential` đã nhân với cờ của khóa (cả hai cùng bật mới nhận nhóm Mật). */
   principal: Principal;
   key: Pick<McpKeyInfo, "id" | "accessLevel" | "includeConfidential">;
-  /** Uid Zalo của danh bạ gắn với chủ khóa (`app_user.contact_id`) — cuộc nhắn riêng DUY NHẤT khóa này được đọc; null = không có. */
+  /** Uid Zalo của danh bạ gắn với chủ khóa (`app_user.contact_id`) — cuộc nhắn riêng DUY NHẤT khóa này được đọc; null = không có, và luôn null khi khóa không có cờ «đọc nhóm Mật». */
   ownDirectUid: string | null;
 }
 
@@ -60,20 +60,29 @@ export interface CreateMcpKeyInput {
   includeConfidential: boolean;
 }
 
-/** Tạo khóa. Trả khóa thô MỘT lần. Ném Error tiếng Việt khi sai đầu vào / quá trần / vượt vai trò. */
+/** Lỗi nghiệp vụ khi tạo khóa (tên / hạn / mức quyền / đủ số khóa…) — nơi gọi (API) đổi thành 422; Error khác là lỗi hệ thống (500). */
+export class McpKeyValidationError extends Error {
+  readonly code = "mcp_key_validation";
+  constructor(message: string) {
+    super(message);
+    this.name = "McpKeyValidationError";
+  }
+}
+
+/** Tạo khóa. Trả khóa thô MỘT lần. Ném McpKeyValidationError tiếng Việt khi sai đầu vào / quá trần / vượt vai trò. */
 export async function createMcpKey(db: Db, input: CreateMcpKeyInput): Promise<{ id: number; token: string; prefix: string }> {
   const name = input.name.trim();
-  if (!name || name.length > 100) throw new Error("Tên khóa phải từ 1 đến 100 ký tự");
+  if (!name || name.length > 100) throw new McpKeyValidationError("Tên khóa phải từ 1 đến 100 ký tự");
   if (input.days !== null && (!Number.isInteger(input.days) || input.days < 1 || input.days > MAX_KEY_DAYS)) {
-    throw new Error(`Số ngày hiệu lực phải là số nguyên từ 1 đến ${MAX_KEY_DAYS}`);
+    throw new McpKeyValidationError(`Số ngày hiệu lực phải là số nguyên từ 1 đến ${MAX_KEY_DAYS}`);
   }
-  if (input.accessLevel !== McpAccessLevel.Read && input.accessLevel !== McpAccessLevel.ReadWrite) throw new Error("Mức quyền khóa không hợp lệ");
+  if (input.accessLevel !== McpAccessLevel.Read && input.accessLevel !== McpAccessLevel.ReadWrite) throw new McpKeyValidationError("Mức quyền khóa không hợp lệ");
   const owner = await loadUserPrincipal(db, input.userId);
-  if (!owner) throw new Error("Người dùng không tồn tại hoặc đã bị tắt");
-  if (input.accessLevel > maxAccessLevelForRole(owner.role)) throw new Error("Vai trò của người này chỉ được tạo khóa chỉ đọc");
+  if (!owner) throw new McpKeyValidationError("Người dùng không tồn tại hoặc đã bị tắt");
+  if (input.accessLevel > maxAccessLevelForRole(owner.role)) throw new McpKeyValidationError("Vai trò của người này chỉ được tạo khóa chỉ đọc");
   const [active] = await db.query<RowDataPacket[]>(
     "SELECT COUNT(*) AS total FROM mcp_api_key WHERE user_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW(3))", [input.userId]);
-  if (Number(active[0]?.total) >= MAX_ACTIVE_KEYS_PER_USER) throw new Error(`Đã đủ ${MAX_ACTIVE_KEYS_PER_USER} khóa đang dùng — thu hồi bớt rồi tạo lại`);
+  if (Number(active[0]?.total) >= MAX_ACTIVE_KEYS_PER_USER) throw new McpKeyValidationError(`Đã đủ ${MAX_ACTIVE_KEYS_PER_USER} khóa đang dùng — thu hồi bớt rồi tạo lại`);
 
   for (let attempt = 0; attempt < PREFIX_RETRIES; attempt++) {
     const generated = generateMcpKey();
@@ -88,7 +97,7 @@ export async function createMcpKey(db: Db, input: CreateMcpKeyInput): Promise<{ 
       if ((error as { code?: string }).code !== "ER_DUP_ENTRY") throw error;
     }
   }
-  throw new Error("Không sinh được khóa duy nhất, thử lại");
+  throw new McpKeyValidationError("Không sinh được khóa duy nhất, thử lại");
 }
 
 /** Khóa thô → chủ khóa + thông tin khóa; sai định dạng / không có / thu hồi / hết hạn / chủ bị tắt → null. */
@@ -105,7 +114,9 @@ export async function verifyMcpKey(db: Db, token: string): Promise<VerifiedMcpKe
   const principal: Principal = { ...owner, canViewConfidential: owner.canViewConfidential === true && key.includeConfidential };
   const [contactRows] = await db.query<RowDataPacket[]>(
     "SELECT c.zalo_uid FROM app_user u JOIN contact c ON c.id = u.contact_id WHERE u.id = ?", [key.userId]);
-  const ownDirectUid = contactRows[0]?.zalo_uid ? String(contactRows[0].zalo_uid) : null;
+  // Quyết định chủ 17/10/2026: khóa KHÔNG có «đọc nhóm Mật» thì ẩn cả cuộc nhắn riêng của chủ khóa — câu bot trả lời trong đó có thể
+  // chứa nội dung nhóm Mật; chỉ khóa có cờ Mật mới đọc được cuộc riêng này.
+  const ownDirectUid = key.includeConfidential && contactRows[0]?.zalo_uid ? String(contactRows[0].zalo_uid) : null;
   return { principal, key: { id: key.id, accessLevel: key.accessLevel, includeConfidential: key.includeConfidential }, ownDirectUid };
 }
 

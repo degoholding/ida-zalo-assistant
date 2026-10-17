@@ -28,6 +28,8 @@ export interface DiscoveredRecording {
   targetThreadId?: number;
   requesterUid?: string;
   note?: string;
+  /** Recap theo yêu cầu của người có quyền Mật (xem migration 040) — cho phép gỡ băng khi nhóm đích là nhóm Mật. */
+  allowConfidential?: boolean;
 }
 
 /** Ghi một dòng mới phát hiện — `Queued` (đã khớp + rõ nơi gửi), `Unmatched` (không khớp), hoặc `Skipped` (không phải ghi âm / không rõ nơi gửi). */
@@ -35,12 +37,12 @@ export async function insertDiscovered(db: Db, row: DiscoveredRecording): Promis
   const [result] = await db.query<ResultSetHeader>(
     `INSERT IGNORE INTO meeting_recording
      (tenant_id, drive_file_id, file_name, mime, size_bytes, drive_created_at, status,
-      event_id, meeting_title, meeting_start, meeting_end, target_thread_id, requester_uid, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      event_id, meeting_title, meeting_start, meeting_end, target_thread_id, requester_uid, note, allow_confidential)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       row.tenantId ?? 1, row.driveFileId, row.fileName, row.mime, row.sizeBytes, row.driveCreatedAt, row.status,
       row.eventId ?? null, row.meetingTitle ?? null, row.meetingStart ?? null, row.meetingEnd ?? null,
-      row.targetThreadId ?? null, row.requesterUid ?? null, row.note ?? "",
+      row.targetThreadId ?? null, row.requesterUid ?? null, row.note ?? "", row.allowConfidential ? 1 : 0,
     ],
   );
   return result.affectedRows === 1;
@@ -76,6 +78,8 @@ export interface ClaimedRecording {
   recapJson: Record<string, unknown> | null;
   files: unknown[] | null;
   taskIds: number[] | null;
+  /** Người hỏi có quyền Mật khi xếp recap theo yêu cầu (migration 040); recap tự động luôn false. */
+  allowConfidential: boolean;
 }
 
 function mapRow(row: RowDataPacket): ClaimedRecording {
@@ -91,6 +95,7 @@ function mapRow(row: RowDataPacket): ClaimedRecording {
     requesterUid: row.requester_uid ? String(row.requester_uid) : null,
     attempts: Number(row.attempts),
     recapJson: row.recap_json ?? null, files: row.files ?? null, taskIds: row.task_ids ?? null,
+    allowConfidential: Number(row.allow_confidential ?? 0) === 1,
   };
 }
 
@@ -114,6 +119,7 @@ export interface OndemandRequeuePatch {
   meetingTitle?: string;
   meetingStart?: Date;
   meetingEnd?: Date;
+  allowConfidential?: boolean;
 }
 
 /**
@@ -127,11 +133,11 @@ export async function requeueOndemand(db: Db, id: number, patch: OndemandRequeue
   await db.query(
     `UPDATE meeting_recording
      SET status = ?, attempts = 0, retry_after = NULL, note = '', error = '', claimed_at = NULL, done_at = NULL,
-         target_thread_id = ?, requester_uid = ?,
+         target_thread_id = ?, requester_uid = ?, allow_confidential = ?,
          event_id = COALESCE(?, event_id), meeting_title = COALESCE(?, meeting_title),
          meeting_start = COALESCE(?, meeting_start), meeting_end = COALESCE(?, meeting_end)
      WHERE id = ?`,
-    [MeetingRecordingStatus.Queued, patch.targetThreadId ?? null, patch.requesterUid ?? null,
+    [MeetingRecordingStatus.Queued, patch.targetThreadId ?? null, patch.requesterUid ?? null, patch.allowConfidential ? 1 : 0,
      patch.eventId ?? null, patch.meetingTitle ?? null, patch.meetingStart ?? null, patch.meetingEnd ?? null, id],
   );
 }

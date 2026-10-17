@@ -32,7 +32,7 @@ test("staff can only read", () => {
 test("every API path maps to a permission, and unknown or admin paths fall back to admin-only", () => {
   assert.deepEqual(requiredPermission("GET", "/api/groups"), { entity: "group", action: "read" });
   assert.deepEqual(requiredPermission("PATCH", "/api/groups/5"), { entity: "group", action: "write" });
-  assert.deepEqual(requiredPermission("POST", "/api/groups/5/backfill"), { entity: "setting", action: "write" });
+  assert.deepEqual(requiredPermission("POST", "/api/groups/5/backfill"), { entity: "group", action: "write" });
   assert.deepEqual(requiredPermission("GET", "/api/files/7/download"), { entity: "file", action: "read" });
   assert.deepEqual(requiredPermission("PATCH", "/api/files/7"), { entity: "file", action: "write" });
   assert.deepEqual(requiredPermission("GET", "/api/settings"), { entity: "setting", action: "write" });

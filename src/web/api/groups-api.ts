@@ -5,6 +5,7 @@ import { ConversationType, GroupKind } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { describeError } from "../../logger.js";
 import type { BackfillJob, SyncService } from "../../sync-service.js";
+import { BackfillBusyError } from "../../sync/backfill-busy-error.js";
 import { applyInternalGroupDefaults, updateGroupSettings, type GroupSettingsPatch } from "../../sync/group-repository.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
@@ -226,6 +227,7 @@ export const groupRoutes: ApiRoute[] = [
     try {
       job = await service.startBackfill(id, { full: body.full !== false });
     } catch (error) {
+      if (error instanceof BackfillBusyError) throw new ApiError(429, "backfill_busy", error.message);
       throw new ApiError(409, "backfill_failed", `Lấy tin cũ không được: ${describeError(error)}`);
     }
     await recordAudit(service.db, { entity: "group", entityId: id, action: "backfill", message: job.full ? "Bắt đầu lấy toàn bộ tin cũ" : "Bắt đầu lấy tin gần nhất" });

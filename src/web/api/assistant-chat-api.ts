@@ -5,7 +5,9 @@ import { findContactByUid, type ContactRow } from "../../sync/contact-repository
 import { directKey, ensureThread, type GroupRow } from "../../sync/group-repository.js";
 import { reportFileExtension } from "../../reports/report-exporter.js";
 import { recordOutgoingMessage } from "../../sync/message-ingest.js";
+import { canSeeConfidential } from "../../auth/principal.js";
 import { ApiError, readJson, sendOk } from "./api-http.js";
+import { recordAudit } from "./audit-log.js";
 import type { ApiRoute } from "./api-route.js";
 
 // Khung «Hỏi trợ lý» trên web: quản trị hỏi trợ lý AI dưới tên một người có vai trò, không cần Zalo. Đi đúng
@@ -87,7 +89,7 @@ export const assistantChatRoutes: ApiRoute[] = [
     sendOk(response, await loadMessages(service.db, thread.id, contact.zalo_uid));
   }],
 
-  ["POST", /^\/api\/assistant-chat\/messages$/, async ({ request, response, service }) => {
+  ["POST", /^\/api\/assistant-chat\/messages$/, async ({ request, response, service, principal }) => {
     const body = await readJson(request);
     const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!question) throw new ApiError(422, "validation_error", "Chưa có câu hỏi");
@@ -101,7 +103,12 @@ export const assistantChatRoutes: ApiRoute[] = [
     const bot = { uid: ASSISTANT_UID, name: ASSISTANT_NAME };
 
     const questionMessageId = await recordOutgoingMessage(db, thread, asker, messageId("q"), question, { source: "web" });
-    const reply = await assistant.answer({ botAccountId, contact, threadId: thread.id, questionMessageId, question });
+    // Mô phỏng người được chọn: nhóm Mật cần CẢ cờ của người đó LẪN cờ của quản trị đang hỏi; không đọc cuộc riêng của người được chọn.
+    // Mỗi lượt hỏi ghi một dòng nhật ký (người đang đăng nhập là «actor»).
+    await recordAudit(db, { entity: "contact", entityId: contact.id, action: "assistant_ask", message: `Hỏi trợ lý thay ${asker.name}` });
+    const reply = await assistant.answer({
+      botAccountId, contact, threadId: thread.id, questionMessageId, question, webViewer: { canViewConfidential: canSeeConfidential(principal) },
+    });
     if (reply.text) await recordOutgoingMessage(db, thread, bot, messageId("a"), reply.text, { source: "web" });
     for (const draft of reply.followUps ?? []) await recordOutgoingMessage(db, thread, bot, messageId("a"), draft, { source: "web" });
     for (const file of reply.reportFiles ?? []) {

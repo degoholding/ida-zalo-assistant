@@ -3,6 +3,8 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType, TicketEventKind, TicketStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { enqueueContactMessage } from "../messaging/contact-message.js";
+import type { SqlPart } from "../web/api/list-query.js";
+import { visibilityClause } from "./ticket-visibility.js";
 
 // Ticket qua bot (08/10/2026, đại ca chốt: việc chung của IDA, chỉ trong bot, không nối ERP). Một chỗ cho mọi thao tác —
 // lệnh gõ trên Zalo (src/assistant/chat-commands.ts) và màn Ticket trên web (src/web/api/tickets-api.ts) đều gọi vào đây,
@@ -295,17 +297,19 @@ export async function addTicketNote(deps: TicketDeps, ticket: TicketRow, actor: 
 }
 
 /** Ticket của một người gửi (mới nhất trước). */
-export async function listRequesterTickets(db: Db, requesterUid: string, limit = 10): Promise<TicketRow[]> {
+export async function listRequesterTickets(db: Db, requesterUid: string, limit = 10, visibility?: SqlPart): Promise<TicketRow[]> {
+  const extra = visibilityClause(visibility);
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT ${TICKET_COLUMNS} FROM ticket WHERE tenant_id = 1 AND requester_uid = ? ORDER BY id DESC LIMIT ?`, [requesterUid, limit]);
+    `SELECT ${TICKET_COLUMNS} FROM ticket WHERE tenant_id = 1 AND requester_uid = ?${extra.sql} ORDER BY id DESC LIMIT ?`, [requesterUid, ...extra.params, limit]);
   return rows.map(toTicket);
 }
 
 /** Ticket đang mở (cho người xử lý): mới trước, rồi đang xử lý. */
-export async function listOpenTickets(db: Db, limit = 20): Promise<TicketRow[]> {
+export async function listOpenTickets(db: Db, limit = 20, visibility?: SqlPart): Promise<TicketRow[]> {
+  const extra = visibilityClause(visibility);
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT ${TICKET_COLUMNS} FROM ticket WHERE tenant_id = 1 AND status IN (?, ?) ORDER BY status, id LIMIT ?`,
-    [TicketStatus.New, TicketStatus.InProgress, limit]);
+    `SELECT ${TICKET_COLUMNS} FROM ticket WHERE tenant_id = 1 AND status IN (?, ?)${extra.sql} ORDER BY status, id LIMIT ?`,
+    [TicketStatus.New, TicketStatus.InProgress, ...extra.params, limit]);
   return rows.map(toTicket);
 }
 

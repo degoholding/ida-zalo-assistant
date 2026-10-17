@@ -1,5 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { BoardType, ThreadType, type API, type GroupMessage, type NoteDetail, type TMessage } from "zca-js";
+import { mayAskInConfidentialGroup, resolveAskerAccess } from "../assistant/asker-access.js";
 import { questionWithAttachedImage } from "../assistant/attached-image-question.js";
 import { splitForZalo, type AssistantService } from "../assistant/assistant-service.js";
 import type { GroupActions } from "../assistant/group-action-tools.js";
@@ -122,8 +123,9 @@ export class GroupAssistantReplier {
       log.info(`«${incoming.senderName}» gọi bot trong nhóm khách hàng «${groupName}» nhưng không phải nhân sự / chưa có vai trò — không trả lời`);
       return;
     }
-    // Nhóm Mật (IDA câu 4): không gửi nội dung nhóm sang AI — trả một câu cố định, không qua mô hình
-    if (group.is_confidential) {
+    // Nhóm Mật (IDA câu 4): chỉ người có tài khoản web + cờ «Xem nhóm Mật» được trợ lý trả lời bình thường (quyết định 7,
+    // 17/10/2026); người khác nhận một câu cố định, không qua mô hình
+    if (group.is_confidential && !(await mayAskInConfidentialGroup(db, contact, group.id))) {
       const api = this.deps.getApi();
       if (!api) return;
       const response = await sender.send(() => api.sendMessage({ msg: CONFIDENTIAL_GROUP_TEXT, quote: message.data }, incoming.zaloGroupId, ThreadType.Group));
@@ -220,9 +222,13 @@ export class GroupAssistantReplier {
     if (!assistant) return;
     if (!api) throw new Error("bot chưa kết nối");
     const group = await findThreadById(db, payload.groupId);
-    if (!group?.read_messages || group.is_confidential) return;
+    if (!group?.read_messages) return;
     const contact = await findContactByUid(db, incoming.senderUid);
     if (!contact) return;
+    // Việc nền kiểm lại: nhóm Mật mà người hỏi (nay) không còn cờ thì bỏ — cờ có thể vừa bị gỡ sau khi việc vào hàng đợi
+    // Phân giải MỘT lần cho cả việc: cổng Mật dùng, rồi truyền xuống trợ lý (không phân giải + log lại)
+    const access = await resolveAskerAccess(db, contact, { groupScopeId: group.id, maskPersonal: this.deps.config.privacy.maskPersonalData });
+    if (group.is_confidential && !access.includeConfidential) return;
     const groupName = group.label || group.name;
     const [rows] = await db.query<RowDataPacket[]>("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [group.id, incoming.msgId]);
     // Ảnh kèm chú thích: câu hỏi chỉ đúng mã ảnh để trợ lý đọc ngay ảnh vừa gửi
@@ -239,7 +245,7 @@ export class GroupAssistantReplier {
     };
     const reply = await assistant.answer({
       botAccountId: this.deps.accountId, contact, threadId: group.id, questionMessageId: rows[0]?.id ?? null, question: questionText,
-      groupScope: { groupId: group.id, groupName, actions: this.buildActions(api, incoming.zaloGroupId, groupName) },
+      groupScope: { groupId: group.id, groupName, actions: this.buildActions(api, incoming.zaloGroupId, groupName) }, access,
     }, {
       onAccepted: () => {
         if (ack.acked) return;

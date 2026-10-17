@@ -1,12 +1,14 @@
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../constants.js";
+import { threadVisibilitySql } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
+import type { AskerAccess } from "./asker-access.js";
 import { LIKE_WINDOW_DAYS, SEARCH_TIMEOUT_TEXT, isSearchTimeoutError, searchMessages } from "../search/message-search.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 import { formatVnTime, parseVnTime } from "./group-action-tools.js";
 
 // Công cụ search_messages (phase 6 — N4, IDA câu 21): tìm lại một trao đổi cũ theo từ khóa + nhóm + người + khoảng ngày,
-// thay cho việc đọc lần lượt từng nhóm. Cùng phạm vi các công cụ khác: chỉ nhóm đang «Đọc tin», không bao giờ nhóm Mật;
+// thay cho việc đọc lần lượt từng nhóm. Cùng phạm vi các công cụ khác (phase 6): theo `access` của người hỏi — nhóm trong phạm vi, cuộc riêng của chính mình, nhóm Mật chỉ khi có cờ;
 // hỏi trong nhóm thì chỉ tìm trong nhóm đó (bỏ qua tham số group mô hình truyền).
 
 const DEFAULT_LIMIT = 20;
@@ -51,25 +53,27 @@ export function parseSearchBound(raw: unknown, edge: "start" | "end"): Date | un
   return ms === null ? null : new Date(ms);
 }
 
-/** Nhóm (đang đọc, không Mật) khớp tên — để mô hình gõ «K52» thay vì phải biết id. */
-async function resolveGroupIds(db: Db, name: string): Promise<number[]> {
+/** Nhóm người hỏi thấy được khớp tên — để mô hình gõ «K52» thay vì phải biết id. */
+async function resolveGroupIds(db: Db, access: AskerAccess, name: string): Promise<number[]> {
   const like = `%${name.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const visible = threadVisibilitySql(access, "g");
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT id FROM zalo_group WHERE thread_type = ? AND read_messages = 1 AND is_confidential = 0 AND (name LIKE ? OR label LIKE ?)`,
-    [ConversationType.Group, like, like]);
+    `SELECT g.id FROM zalo_group g WHERE g.thread_type = ? AND ${visible.sql} AND (g.name LIKE ? OR g.label LIKE ?)`,
+    [ConversationType.Group, ...visible.params, like, like]);
   return rows.map((row) => Number(row.id));
 }
 
 /**
- * «Ai nhắc tới tôi»: tin trong nhóm (đang đọc, không Mật) có TAG người hỏi (cột mentions), kèm từ khóa nếu có — không qua
+ * «Ai nhắc tới tôi»: tin trong nhóm (trong phạm vi người hỏi) có TAG người hỏi (cột mentions), kèm từ khóa nếu có — không qua
  * bảng tìm toàn văn vì có thể không có từ khóa. Khoảng mặc định 7 ngày, tối đa 90 ngày (quét theo chỉ mục group_id + sent_at).
  */
 async function searchMentions(
-  context: { db: Db; scopeGroupId?: number; askerUid: string }, query: string, groupIds: number[] | undefined, from: Date, to: Date, limit: number,
+  context: { db: Db; scopeGroupId?: number; askerUid: string; access: AskerAccess }, query: string, groupIds: number[] | undefined, from: Date, to: Date, limit: number,
 ): Promise<Record<string, unknown>> {
-  const where = ["g.thread_type = ?", "g.read_messages = 1", "g.is_confidential = 0", "m.recalled_at IS NULL", "m.sent_at >= ?", "m.sent_at <= ?",
-    "JSON_CONTAINS(COALESCE(m.mentions, JSON_ARRAY()), JSON_OBJECT('uid', ?))"];
-  const params: unknown[] = [ConversationType.Group, from, to, context.askerUid];
+  const visible = threadVisibilitySql(context.access, "g");
+  const where = ["g.thread_type = ?", "m.recalled_at IS NULL", "m.sent_at >= ?", "m.sent_at <= ?",
+    "JSON_CONTAINS(COALESCE(m.mentions, JSON_ARRAY()), JSON_OBJECT('uid', ?))", visible.sql];
+  const params: unknown[] = [ConversationType.Group, from, to, context.askerUid, ...visible.params];
   if (groupIds) {
     where.push("m.group_id IN (?)");
     params.push(groupIds);
@@ -98,7 +102,7 @@ async function searchMentions(
 }
 
 export async function runSearchMessages(
-  context: { db: Db; scopeGroupId?: number; askerUid: string; now?: Date },
+  context: { db: Db; scopeGroupId?: number; askerUid: string; now?: Date; access: AskerAccess },
   args: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const query = typeof args.query === "string" ? args.query.trim() : "";
@@ -106,10 +110,14 @@ export async function runSearchMessages(
   if (!query && !mentionsMe) return { error: "Thiếu query (từ khóa cần tìm) — hoặc mentions_me = true để tìm tin nhắc tới người hỏi." };
   const groupName = typeof args.group === "string" ? args.group.trim() : "";
   let groupIds: number[] | undefined;
+  const access = context.access;
   if (context.scopeGroupId) groupIds = [context.scopeGroupId];
   else if (groupName) {
-    groupIds = await resolveGroupIds(context.db, groupName);
+    groupIds = await resolveGroupIds(context.db, access, groupName);
     if (!groupIds.length) return { error: `Không có nhóm nào đang đọc tên giống «${groupName}» — gọi list_groups để xem tên đúng.` };
+  } else if (access.origin !== "derived_role") {
+    // Người bị khoanh nhóm: giao với phạm vi (derived_role = mọi nhóm đang đọc + cuộc riêng của mình — `searchMessages` tự lọc)
+    groupIds = access.principal.groupIds ?? undefined;
   }
   const from = parseSearchBound(args.from, "start");
   const to = parseSearchBound(args.to, "end");
@@ -125,7 +133,8 @@ export async function runSearchMessages(
   let result: Awaited<ReturnType<typeof searchMessages>>;
   try {
     result = await searchMessages(context.db, {
-      query, groupIds, excludeConfidential: true, onlyReadGroups: true, limit: limit + 1,
+      query, groupIds, excludeConfidential: !access.includeConfidential, onlyReadGroups: false, onlyReadableThreads: true,
+      ownDirectThreads: { uid: access.ownDirectUid ?? null }, limit: limit + 1,
       senderName: typeof args.person === "string" ? args.person : undefined, from, to,
     });
   } catch (error) {

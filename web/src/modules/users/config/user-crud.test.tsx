@@ -90,6 +90,19 @@ describe('user form', () => {
     expect(defaults).toMatchObject({ role: USER_ROLE.staff, is_active: true, all_groups: false, contact_id: 0, group_ids: [] })
   })
 
+  it('offers the two grant switches, off by default; admins never see the audit switch (always allowed)', () => {
+    expect(buildFormDefaults(FIELDS, undefined)).toMatchObject({ can_view_confidential: false, can_view_audit: false })
+    renderForm(makeUser())
+    expect(screen.getByRole('switch', { name: 'Cho AI đọc nhóm Mật' })).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Xem lịch sử thao tác' })).toBeInTheDocument()
+  })
+
+  it('keeps the confidential switch but drops the audit one for an admin', () => {
+    renderForm(makeUser({ role: USER_ROLE.admin }))
+    expect(screen.getByRole('switch', { name: 'Cho AI đọc nhóm Mật' })).toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: 'Xem lịch sử thao tác' })).toBeNull()
+  })
+
   it('tells the admin the email is what Google login matches on, and that one of email / username is needed', () => {
     renderForm()
     expect(screen.getByText(/bấm được nút «Đăng nhập bằng Google» với đúng email đó/)).toBeInTheDocument()
@@ -99,7 +112,7 @@ describe('user form', () => {
   it('uses the exact field names the users API accepts', () => {
     //  Tên ô sai là máy chủ bỏ qua im lặng — bấm Lưu báo thành công mà không đổi gì.
     expect(FIELDS.map((field) => field.name).sort()).toEqual(
-      ['all_groups', 'contact_id', 'email', 'full_name', 'group_ids', 'is_active', 'password', 'role', 'username'].sort(),
+      ['all_groups', 'can_view_audit', 'can_view_confidential', 'contact_id', 'email', 'full_name', 'group_ids', 'is_active', 'password', 'role', 'username'].sort(),
     )
   })
 })

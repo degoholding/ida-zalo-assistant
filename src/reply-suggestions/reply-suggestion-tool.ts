@@ -35,6 +35,8 @@ export interface SuggestToolContext extends SuggestDeps {
   scopeGroupId?: number;
   askerContactId?: number;
   askerUid?: string;
+  /** Người hỏi được xem nhóm Mật (phase 6). */
+  includeConfidential?: boolean;
 }
 
 export interface SuggestToolOutcome {
@@ -51,7 +53,7 @@ export async function runSuggestRepliesTool(context: SuggestToolContext, args: R
   if (messageId !== undefined && !Number.isSafeInteger(messageId)) return { response: { error: "message_id phải là số nguyên (id từ search_messages)." } };
   const outcome = await suggestReplies(context, {
     tenantId: context.tenantId, question: request, messageId, toneHint: TONE_ARGS[String(args.tone ?? "").toLowerCase()],
-    scopeGroupId: context.scopeGroupId, askerContactId: context.askerContactId, askerUid: context.askerUid,
+    scopeGroupId: context.scopeGroupId, askerContactId: context.askerContactId, askerUid: context.askerUid, includeConfidential: context.includeConfidential,
   });
   if ("error" in outcome) return { response: { error: outcome.error } };
   if ("refusal" in outcome) {

@@ -2,6 +2,8 @@ import type { RowDataPacket } from "mysql2";
 import type { Db } from "../../db/pool.js";
 import { ApiError } from "./api-http.js";
 import { currentActorName } from "../../auth/principal.js";
+import { UserRole } from "../../constants.js";
+import { auditScopeSql } from "./audit-scope.js";
 import type { ApiRoute } from "./api-route.js";
 import { sendOk } from "./api-http.js";
 
@@ -41,6 +43,7 @@ const ACTION_LABEL: Record<string, string> = {
   approve: "Duyệt",
   submit: "Gửi duyệt",
   revoke: "Thu hồi",
+  assistant_ask: "Hỏi trợ lý thay",
 };
 
 const AUDIT_ENTITIES = new Set<string>(["contact", "group", "company", "bot_account", "file", "setting", "user", "recipient", "ticket", "task", "send_command", "reply_template", "metric_source", "catalog", "mcp_key"]);
@@ -68,11 +71,21 @@ export async function recordAudit(
 }
 
 export const auditRoutes: ApiRoute[] = [
-  ["GET", /^\/api\/audit-logs$/, async ({ response, url, service }) => {
+  ["GET", /^\/api\/audit-logs$/, async ({ response, url, service, principal }) => {
     const entity = url.searchParams.get("entity") ?? "";
     const entityId = Number(url.searchParams.get("entity_id"));
     if (!AUDIT_ENTITIES.has(entity) || !Number.isSafeInteger(entityId) || entityId <= 0) {
       throw new ApiError(422, "validation_error", "Thiếu hoặc sai entity / entity_id");
+    }
+    // Người được cấp «Xem lịch sử» (không phải quản trị): bản ghi đích phải trong phạm vi nhóm — ngoài phạm vi = 404.
+    // Web người thật vẫn thấy cả nhóm Mật (câu hỏi 2) nên includeConfidential = true.
+    if (principal.role !== UserRole.Admin) {
+      const scope = auditScopeSql(principal, true);
+      if (scope) {
+        const [visible] = await service.db.query<RowDataPacket[]>(
+          `SELECT 1 FROM (SELECT ? AS entity, ? AS entity_id) a WHERE ${scope.sql} LIMIT 1`, [entity, entityId, ...scope.params]);
+        if (!visible[0]) throw new ApiError(404, "not_found", "Không có lịch sử cho bản ghi này");
+      }
     }
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number(url.searchParams.get("limit")) || 100));
     const [rows] = await service.db.query<RowDataPacket[]>(

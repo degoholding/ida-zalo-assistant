@@ -3,6 +3,7 @@ import type { AppConfig } from "../config.js";
 import { ContactRole } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { parseKeywordList } from "../alerts/keyword-matcher.js";
+import type { AskerAccess } from "./asker-access.js";
 import { dropPendingChanges, latestPendingChange, runAlertTool, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { isBriefCommand, parseBriefCommand, type BriefCommand } from "../briefs/brief-command-parser.js";
 import { runBriefCommand, type BriefChatDeps } from "../briefs/brief-commands.js";
@@ -142,6 +143,8 @@ export interface ChatCommandContext {
   send?: SendChatContext;
   /** Người chỉ được dùng lệnh ticket (chưa có vai trò, không là người nhận) — «hướng dẫn» chỉ nói phần ticket */
   ticketOnly?: boolean;
+  /** Ngữ cảnh truy cập của người hỏi (phân giải lười) — «cần xử lý» / «xong tin số …» lọc theo phạm vi nhóm + Mật. */
+  access?: () => Promise<AskerAccess>;
 }
 
 const CONFIRM_HINT = "Anh/chị nhắn «đồng ý» để lưu (trong 15 phút), «hủy» để bỏ.";
@@ -267,7 +270,7 @@ async function buildConfigText(ctx: ChatCommandContext, config: AppConfig): Prom
 }
 
 async function listPendingText(ctx: ChatCommandContext, deps: AlertToolsDeps, asker: AlertAsker): Promise<string> {
-  const result = await runAlertTool(deps, asker, "list_pending_items", { limit: 15 }, ctx.now, Date.now()) as {
+  const result = await runAlertTool(deps, asker, "list_pending_items", { limit: 15 }, ctx.now, Date.now(), await ctx.access?.()) as {
     items: { message_id: number; muc: string; nhom: string; nguoi_gui: string; luc: string; tom_tat: string; qua_han: boolean; trang_thai: string }[];
     note?: string;
   };
@@ -342,7 +345,7 @@ export async function runChatCommand(ctx: ChatCommandContext, command: ChatComma
     case "list_pending":
       return listPendingText(ctx, deps, asker);
     case "mark_done": {
-      const result = await runAlertTool(deps, asker, "mark_item_handled", { message_id: command.messageId }, ctx.now, Date.now());
+      const result = await runAlertTool(deps, asker, "mark_item_handled", { message_id: command.messageId }, ctx.now, Date.now(), await ctx.access?.());
       return typeof result.error === "string" ? `Không có tin #${command.messageId} trong danh sách của anh/chị — gõ «cần xử lý» để xem số tin.` : String(result.message);
     }
     case "keyword": {

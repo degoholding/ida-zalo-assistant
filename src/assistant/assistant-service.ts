@@ -18,7 +18,7 @@ import { isAckText, UNCLEAR_REPLY } from "./assistant-ack-texts.js";
 import { GROUP_ACTION_DECLARATIONS, type GroupActions } from "./group-action-tools.js";
 import { CREATE_MEETING_DECLARATION, MEETING_MANAGE_DECLARATIONS, type MeetingCreator } from "./meeting-tool.js";
 import { RECAP_DRIVE_RECORDING_DECLARATION } from "./drive-recap-tool.js";
-import type { OndemandRecapOutcome } from "../meetings/meeting-recap-ondemand.js";
+import type { OndemandDestination, OndemandRecapOutcome } from "../meetings/meeting-recap-ondemand.js";
 import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
 import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, formatVnDay, runTool, type ToolContext } from "./tools.js";
 import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
@@ -37,6 +37,8 @@ import type { SendCommandDeps } from "../send-commands/send-command-deps.js";
 import { canIssueSendCommand } from "../send-commands/send-command-permissions.js";
 import { PROPOSE_SEND_DECLARATION, SEND_TOOL_PROMPT } from "../send-commands/send-command-tool.js";
 import { buildNoFakeActionPrompt } from "./no-fake-action-prompt.js";
+import { can } from "../auth/principal.js";
+import { resolveAskerAccess, type AskerAccess } from "./asker-access.js";
 import { MEETING_ANNOUNCE_TOOL_PROMPT, PROPOSE_MEETING_ANNOUNCEMENT_DECLARATION } from "../send-commands/send-meeting-announcement-tool.js";
 import { PIN_TOOL_PROMPT, PROPOSE_PIN_DECLARATION } from "../send-commands/send-pin-tool.js";
 import { PROPOSE_REMINDER_DECLARATION, REMINDER_TOOL_PROMPT } from "../send-commands/send-reminder-tool.js";
@@ -93,7 +95,7 @@ export interface AssistantOptions {
    * recap_drive_recording (chưa cấu hình thư mục hoặc chưa có quyền Drive). */
   meetingRecapOnDemand?: {
     isAvailable: () => boolean;
-    run: (args: Record<string, unknown>, destination: { targetThreadId: number | null; requesterUid: string }, now: Date) => Promise<OndemandRecapOutcome>;
+    run: (args: Record<string, unknown>, destination: OndemandDestination, now: Date) => Promise<OndemandRecapOutcome>;
   };
   /** Tệp Skip/Failed/Pending còn link Zalo — read_file chủ động đưa lại hàng tải rồi chờ ít lâu (phase 6). Không có =
    * read_file báo ngay «chưa có trong kho» như trước. */
@@ -111,6 +113,10 @@ export interface AssistantRequest {
    * của nhóm này (công cụ bị khóa vào nhóm), không đọc lịch sử chat như cuộc riêng.
    */
   groupScope?: { groupId: number; groupName: string; actions?: GroupActions };
+  /** Ngữ cảnh truy cập ĐÃ phân giải ở nơi gọi (cổng nhóm Mật) — truyền xuống để không phân giải + log lại lần nữa trong lượt. */
+  access?: AskerAccess;
+  /** Hỏi từ web «Hỏi trợ lý»: cờ Mật của quản trị đang đăng nhập (giao với cờ người được chọn) + không đọc cuộc riêng của người được chọn. */
+  webViewer?: { canViewConfidential: boolean };
 }
 
 function groupScopePrompt(groupName: string, memberNames: string[]): string {
@@ -259,14 +265,19 @@ export class AssistantService {
     // Lệnh gõ sẵn («hướng dẫn», «cấu hình», «cần xử lý», «thêm từ khẩn …», «đồng ý»…): trả lời ngay, không qua mô hình,
     // không tính token — chạy cả khi đã chạm trần token ngày
     const tickets = this.options.tickets;
+    // Ngữ cảnh truy cập của người hỏi: phân giải LƯỜI, MỘT lần cho cả lượt (lệnh ticket, công cụ, cổng) — xem asker-access.ts
+    let accessPromise: Promise<AskerAccess> | null = null;
+    const accessOnce = () => (accessPromise ??= request.access ? Promise.resolve({ ...request.access, now }) : resolveAskerAccess(this.db, request.contact, {
+      groupScopeId: request.groupScope?.groupId, maskPersonal: Boolean(this.options.privacy?.maskPersonalData), now, webViewer: request.webViewer }));
     const ticket = tickets ? buildTicketContext(tickets, {
       contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role },
       threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
+      scopeGroupId: request.groupScope?.groupId, access: accessOnce,
     }) : undefined;
     // Việc (checklist, phase 7) đi cùng ticket: cùng hàng đợi báo tin
     const task = tickets ? buildTaskContext({ db: this.db, wakeJobs: tickets.wakeJobs }, {
       contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role, kind: request.contact.kind },
-      threadId: request.threadId, messageId: request.questionMessageId, groupId: request.groupScope?.groupId ?? null,
+      threadId: request.threadId, messageId: request.questionMessageId, groupId: request.groupScope?.groupId ?? null, access: accessOnce,
     }) : undefined;
     // Lệnh gửi tin chỉ ở tin riêng Zalo thật; câu trả lời của lệnh gõ đã nằm trong runChatCommand
     const send = !request.groupScope && this.options.sendCommands
@@ -281,7 +292,7 @@ export class AssistantService {
       const contact = request.contact;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
-      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined }, command);
+      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce }, command);
       if (text !== null) {
         await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: command }], model: "lệnh" });
         return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };
@@ -336,8 +347,10 @@ export class AssistantService {
       : undefined;
     const reportFiles: GeneratedReportFile[] = [];
     const exporter = this.options.reportExporter;
+    // Phase 6: người hỏi → phạm vi nhóm + Mật + cuộc riêng của mình, MỘT lần mỗi lượt (xem asker-access.ts)
+    const access = await accessOnce();
     const context: ToolContext = {
-      db: this.db, askerUid: request.contact.zalo_uid, filesToSend: [], now, usage,
+      db: this.db, askerUid: request.contact.zalo_uid, access, filesToSend: [], now, usage,
       exportReport: exporter
         ? async (table, format) => {
           // Một lượt hỏi một báo cáo — mô hình gọi lặp thì không đẻ thêm tệp
@@ -382,7 +395,9 @@ export class AssistantService {
     const onDemandRecapAvailable = Boolean(onDemandRecap?.isAvailable());
     if (onDemandRecap && onDemandRecapAvailable) {
       context.onDemandRecap = async (args) => {
-        const destination = { targetThreadId: scope?.groupId ?? null, requesterUid: request.contact.zalo_uid };
+        // Tài khoản web đã tắt: không recap cuộc họp công ty; còn lại thì đích = cuộc đang hỏi, nhóm Mật chỉ khi người hỏi có quyền Mật
+        if (access.origin === "disabled_account" || !can(access.principal, "file", "read")) return { error: "Anh/chị chưa được cấp quyền xem tệp / ghi âm họp qua bot." };
+        const destination = { targetThreadId: scope?.groupId ?? null, requesterUid: request.contact.zalo_uid, allowConfidential: access.includeConfidential };
         const outcome = await onDemandRecap.run(args, destination, now);
         if (outcome.file) reportFiles.push(outcome.file);
         return outcome.response;

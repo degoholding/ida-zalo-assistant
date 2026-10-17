@@ -2,7 +2,7 @@ import { can, SYSTEM_PRINCIPAL, type Principal } from "../../auth/principal.js";
 import { toLocalPhone } from "../../catalog/catalog-text.js";
 import { assertContactVisible, contactScopeSql } from "./scope.js";
 import type { RowDataPacket } from "mysql2";
-import { ContactKind, ContactKindSource, ContactRole, ConversationType } from "../../constants.js";
+import { ContactKind, ContactKindSource, ContactRole, ConversationType, UserRole } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
 import { listCompanies } from "../../sync/company-repository.js";
 import { getContactTags, parseTags, setContactTags, updateContact } from "../../sync/contact-repository.js";
@@ -214,7 +214,11 @@ export async function parseCompanyId(db: Db, raw: unknown): Promise<number | nul
  * Sửa hồ sơ. `kind_mode`: "auto" = theo nhóm, số = chỉnh tay (vẫn nhận `kind` cũ). Chỉ nhận đúng các
  * ô cho sửa; ô lạ bỏ qua. Ô nào KHÔNG gửi thì giữ nguyên giá trị cũ (PATCH, không phải PUT).
  */
-export async function patchContact(db: Db, id: number, body: Record<string, unknown>): Promise<void> {
+/**
+ * `canChangeRole` = false (không phải quản trị): KHÔNG BAO GIỜ ghi cột vai trò — giá trị bằng hiện tại đã được route kiểm, và không ghi
+ * thì không thể đè một thay đổi vai trò của quản trị vừa lưu giữa lúc đọc và ghi (không cần khóa dòng).
+ */
+export async function patchContact(db: Db, id: number, body: Record<string, unknown>, canChangeRole = true): Promise<void> {
   const before = await loadContact(db, "c.id = ?", id);
 
   let kind: number | "auto" = before.kind_mode === KIND_MODE_AUTO ? "auto" : Number(before.kind);
@@ -242,7 +246,7 @@ export async function patchContact(db: Db, id: number, body: Record<string, unkn
     if (normalized === null) throw new ApiError(422, "validation_error", "SĐT phải là số di động Việt Nam, vd 0912 345 678");
     phone = normalized;
   }
-  await updateContact(db, id, { kind, role, companyId, note, phone: body.phone === undefined ? undefined : phone || null });
+  await updateContact(db, id, { kind, role: canChangeRole ? role : undefined, companyId, note, phone: body.phone === undefined ? undefined : phone || null });
   let tags = before.tags as string[];
   if (body.tags !== undefined) {
     tags = parseTags(Array.isArray(body.tags) ? body.tags.map(String).join(",") : String(body.tags));
@@ -262,7 +266,14 @@ export const contactRoutes: ApiRoute[] = [
   ["PATCH", /^\/api\/contacts\/(\d+)$/, async ({ request, response, match, service, principal }) => {
     const id = parseId(match[1]);
     await assertContactVisible(service.db, principal, { id });
-    await patchContact(service.db, id, await readJson(request));
+    const body = await readJson(request);
+    // H2: vai trò Danh bạ mở quyền gửi lệnh / tắt bot — chỉ quản trị ĐỔI, kiểm TRƯỚC mọi ghi. Biểu mẫu web gửi cả ô vai trò
+    // dù không sửa, nên giá trị bằng hiện tại thì cho qua (không phải đổi).
+    if (body.role !== undefined && principal.role !== UserRole.Admin) {
+      const [current] = await service.db.query<RowDataPacket[]>("SELECT role FROM contact WHERE id = ?", [id]);
+      if (Number(body.role) !== Number(current[0]?.role)) throw new ApiError(403, "forbidden", "Chỉ quản trị đổi vai trò.");
+    }
+    await patchContact(service.db, id, body, principal.role === UserRole.Admin);
     sendOk(response, await getContactDetail(service.db, id, can(principal, "catalog", "read")), "Đã lưu hồ sơ");
   }],
   ["GET", /^\/api\/contact-cards\/([A-Za-z0-9_-]{1,40})$/, async ({ response, match, service, principal }) => {

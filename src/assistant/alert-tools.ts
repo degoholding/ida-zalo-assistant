@@ -6,6 +6,8 @@ import { ContactRole, ConversationType, MessagePriority, ReplyState } from "../c
 import type { Db } from "../db/pool.js";
 import { parseKeywordList } from "../alerts/keyword-matcher.js";
 import { recordAudit } from "../web/api/audit-log.js";
+import { threadVisibilitySql } from "../data-access/visibility-guards.js";
+import { hasOnlyDisabledAccount, type AskerAccess } from "./asker-access.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 
 // Công cụ trợ lý cho cảnh báo (phase 5) — CHỈ trong tin riêng, chỉ người có vai trò (Quản lý / Trưởng phòng) hoặc người nhận:
@@ -108,6 +110,8 @@ CẢNH BÁO TIN NHẮN (người hỏi là quản lý / người nhận báo):
 
 /** Người hỏi có dùng được bộ công cụ cảnh báo không, và là người nhận nào. */
 export async function resolveAlertAsker(db: Db, contact: { zalo_uid: string; display_name: string; zalo_name: string; role: number }): Promise<AlertAsker | null> {
+  // Tài khoản web gắn với liên hệ đã bị tắt: không suy đặc quyền (công cụ cảnh báo, lệnh gửi tin, tắt bot) từ vai trò / người nhận
+  if (await hasOnlyDisabledAccount(db, contact.zalo_uid)) return null;
   const [rows] = await db.query<RowDataPacket[]>(
     "SELECT r.id FROM recipient r JOIN contact c ON c.id = r.contact_id WHERE c.zalo_uid = ? AND r.is_active = 1 LIMIT 1", [contact.zalo_uid]);
   const recipientId = rows[0] ? Number(rows[0].id) : null;
@@ -126,18 +130,20 @@ async function askerGroupIds(db: Db, asker: AlertAsker): Promise<number[] | null
 
 const VN = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", hour12: false });
 
-async function listPendingItems(db: Db, asker: AlertAsker, args: Record<string, unknown>, now: Date) {
+async function listPendingItems(db: Db, asker: AlertAsker, access: AskerAccess, args: Record<string, unknown>, now: Date) {
   const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
   const groups = await askerGroupIds(db, asker);
   if (groups && !groups.length) return { items: [], note: "Anh/chị chưa được gán nhóm nào để theo dõi (màn Người nhận)." };
+  // Phạm vi nhóm + Mật của người hỏi (như mọi công cụ đọc) GIAO với nhóm đã gán ở màn Người nhận
+  const visible = threadVisibilitySql(access, "g");
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT m.id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_name, m.sent_at, m.text, f.priority, f.reply_state, f.reason, f.due_at
      FROM message_flag f JOIN message m ON m.id = f.message_id JOIN zalo_group g ON g.id = m.group_id
-     WHERE g.thread_type = ? AND g.read_messages = 1 AND m.recalled_at IS NULL ${groups ? "AND m.group_id IN (?)" : ""}
+     WHERE g.thread_type = ? AND g.read_messages = 1 AND m.recalled_at IS NULL AND ${visible.sql} ${groups ? "AND m.group_id IN (?)" : ""}
        AND (f.for_uid IS NULL OR f.for_uid = ?) AND f.pending_ai = 0
        AND (f.reply_state IN (?, ?) OR (f.priority = ? AND f.reply_state <> ? AND m.sent_at > ?))
      ORDER BY f.priority DESC, m.sent_at LIMIT ?`,
-    [ConversationType.Group, ...(groups ? [groups] : []), asker.uid, ReplyState.Waiting, ReplyState.Seen, MessagePriority.Urgent, ReplyState.Handled,
+    [ConversationType.Group, ...visible.params, ...(groups ? [groups] : []), asker.uid, ReplyState.Waiting, ReplyState.Seen, MessagePriority.Urgent, ReplyState.Handled,
       new Date(now.getTime() - 86_400_000), limit]);
   return {
     count: rows.length,
@@ -152,17 +158,21 @@ async function listPendingItems(db: Db, asker: AlertAsker, args: Record<string, 
   };
 }
 
-async function markHandled(db: Db, asker: AlertAsker, args: Record<string, unknown>, now: Date) {
+async function markHandled(db: Db, asker: AlertAsker, access: AskerAccess, args: Record<string, unknown>, now: Date) {
   const messageId = Number(args.message_id);
   if (!Number.isSafeInteger(messageId) || messageId <= 0) return { error: "Thiếu message_id — gọi list_pending_items trước." };
   const groups = await askerGroupIds(db, asker);
+  const visible = threadVisibilitySql(access, "g");
   const [rows] = await db.query<RowDataPacket[]>(
-    "SELECT f.message_id, m.group_id FROM message_flag f JOIN message m ON m.id = f.message_id WHERE f.message_id = ?", [messageId]);
+    `SELECT f.message_id, m.group_id FROM message_flag f JOIN message m ON m.id = f.message_id JOIN zalo_group g ON g.id = m.group_id
+     WHERE f.message_id = ? AND ${visible.sql}`, [messageId, ...visible.params]);
   if (!rows[0] || (groups && !groups.includes(Number(rows[0].group_id)))) return { error: "Không có tin này trong danh sách của anh/chị." };
   await db.query("UPDATE message_flag SET reply_state = ?, handled_at = ?, handled_by_uid = ?, handled_message_id = NULL WHERE message_id = ?",
     [ReplyState.Handled, now, asker.uid, messageId]);
   return { ok: true, message: "Đã đánh dấu xong — em thôi nhắc tin này." };
 }
+
+const NO_ACCESS = { error: "Không xác định được phạm vi truy cập của người hỏi." };
 
 const canChangeGlobal = (asker: AlertAsker) => asker.role === ContactRole.Manager || asker.role === ContactRole.DepartmentHead;
 
@@ -268,11 +278,13 @@ async function confirmChange(deps: AlertToolsDeps, asker: AlertAsker, args: Reco
 /** Chạy một công cụ cảnh báo. `turnStartedAt` = lúc lượt hỏi này bắt đầu (để kiểm xác nhận ở lượt sau). */
 export async function runAlertTool(
   deps: AlertToolsDeps | undefined, asker: AlertAsker | undefined, name: string, args: Record<string, unknown>, now: Date, turnStartedAt: number,
+  access?: AskerAccess,
 ): Promise<Record<string, unknown>> {
   if (!deps || !asker) return { error: "Công cụ cảnh báo chỉ dành cho quản lý / người nhận báo, trong tin riêng." };
   switch (name) {
-    case "list_pending_items": return listPendingItems(deps.db, asker, args, now);
-    case "mark_item_handled": return markHandled(deps.db, asker, args, now);
+    // Đọc / sửa tin trong nhóm: bắt buộc có ngữ cảnh truy cập (phạm vi nhóm + Mật) — thiếu thì từ chối, không đoán
+    case "list_pending_items": return access ? listPendingItems(deps.db, asker, access, args, now) : NO_ACCESS;
+    case "mark_item_handled": return access ? markHandled(deps.db, asker, access, args, now) : NO_ACCESS;
     case "propose_alert_change": return proposeChange(deps, asker, args);
     case "confirm_alert_change": return confirmChange(deps, asker, args, turnStartedAt);
     default: return { error: `Không có công cụ ${name}` };

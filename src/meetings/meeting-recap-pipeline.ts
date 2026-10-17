@@ -142,7 +142,8 @@ async function run(deps: MeetingRecapDeps, row: ClaimedRecording, now: Date): Pr
   const hasAudioModel = Boolean(model && typeof model.readAudioSource === "function");
 
   const guardFailure = checkRecordingGuards(row, {
-    isConfidentialGroup: Boolean(group?.is_confidential), maxBytes: deps.config.meetingRecap.maxBytes, hasAudioModel,
+    // Nhóm Mật: chặn recap tự động; recap theo yêu cầu của người có quyền Mật (allowConfidential) thì cho qua
+    isConfidentialGroup: Boolean(group?.is_confidential) && !row.allowConfidential, maxBytes: deps.config.meetingRecap.maxBytes, hasAudioModel,
   });
   if (guardFailure) {
     await markSkipped(deps.db, row.id, guardFailure.note, now);

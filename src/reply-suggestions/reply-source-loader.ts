@@ -4,7 +4,7 @@ import type { Db } from "../db/pool.js";
 import { maskPersonalData } from "../privacy/personal-data.js";
 import type { ReplySource } from "./reply-suggestion-types.js";
 
-// Nạp tin gốc cần trả lời + ngữ cảnh (phase 10 — N2). Cùng phạm vi các công cụ đọc tin khác: nhóm đang «Đọc tin», KHÔNG BAO GIỜ nhóm Mật;
+// Nạp tin gốc cần trả lời + ngữ cảnh (phase 10 — N2). Cùng phạm vi các công cụ đọc tin khác: nhóm đang «Đọc tin», nhóm Mật CHỈ khi người hỏi được cấp (`includeConfidential`, phase 6);
 // cuộc nhắn riêng thì CHỈ cuộc của chính người hỏi (id tin là số tăng dần — đoán id là đọc được tin riêng người khác gửi bot).
 // Lỗi trả dạng `{ error }` (chữ cho mô hình / người hỏi), không ném.
 
@@ -12,7 +12,7 @@ const CONTEXT_MESSAGES = 5;
 const CONTEXT_WINDOW_MS = 3 * 86_400_000;
 const MAX_TEXT = 1500;
 
-export const CONFIDENTIAL_REFUSAL = "Tin này thuộc nhóm Mật — bot không đưa nội dung nhóm cho AI nên không soạn gợi ý được.";
+export const CONFIDENTIAL_REFUSAL = "Tin này thuộc nhóm Mật — anh/chị chưa được cấp quyền xem nhóm Mật qua bot nên không soạn gợi ý được.";
 
 export type LoadSourceResult = { source: ReplySource } | { error: string };
 
@@ -22,6 +22,8 @@ export interface LoadSourceOptions {
   /** Mã Zalo người hỏi — tin trong cuộc nhắn riêng chỉ nhận khi đó là cuộc của chính họ. */
   askerUid?: string;
   maskPersonal: boolean;
+  /** Người hỏi được xem nhóm Mật (cờ «Xem nhóm Mật» của tài khoản) — không bật thì tin nhóm Mật bị từ chối như cũ. */
+  includeConfidential?: boolean;
 }
 
 export const OTHER_DIRECT_REFUSAL = "Tin này nằm trong cuộc nhắn riêng của người khác với bot — không soạn gợi ý được.";
@@ -35,7 +37,7 @@ export async function loadReplySource(db: Db, messageId: number, options: LoadSo
      WHERE m.id = ? AND m.recalled_at IS NULL`, [messageId]);
   const row = rows[0];
   if (!row) return { error: "Không tìm thấy tin này (hoặc đã bị thu hồi)." };
-  if (row.is_confidential) return { error: CONFIDENTIAL_REFUSAL };
+  if (row.is_confidential && !options.includeConfidential) return { error: CONFIDENTIAL_REFUSAL };
   if (!row.read_messages) return { error: "Cuộc này không được bot lưu / đọc tin nên không soạn gợi ý được." };
   if (options.scopeGroupId && Number(row.group_id) !== options.scopeGroupId) return { error: "Tin này nằm ngoài nhóm đang hỏi." };
   const isDirect = Number(row.thread_type) === ConversationType.Direct;

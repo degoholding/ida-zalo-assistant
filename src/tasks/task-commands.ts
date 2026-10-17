@@ -1,3 +1,4 @@
+import { askerSourceVisibility, type AskerAccess } from "../assistant/asker-access.js";
 import { ContactKind, ContactRole, TaskSource, TaskStatus } from "../constants.js";
 import { findLatestRecapTaskIds } from "../meetings/meeting-recording-repository.js";
 import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
@@ -5,8 +6,8 @@ import { cleanPersonName, describeContactChoices, pickContactMatch, searchContac
 import type { TaskCommand, TaskListScope } from "./task-command-parser.js";
 import { parseDueArgument } from "./task-due-parser.js";
 import { describeTask, describeTaskLine, formatDue } from "./task-format.js";
-import { canManageTask, canViewTask, canWorkOnTask, type TaskViewer } from "./task-permissions.js";
-import { findTask, listTasks, shortTaskCode, type TaskActor, type TaskParty, type TaskRow } from "./task-repository.js";
+import { canManageTask, canViewTask, canWorkOnTask, isTaskAssignee, isTaskAssigner, type TaskViewer } from "./task-permissions.js";
+import { findTask, isTaskVisible, listTasks, shortTaskCode, type TaskActor, type TaskParty, type TaskRow } from "./task-repository.js";
 import {
   addTaskNote, cancelTask, confirmTask, createTask, finishTask, rejectTask, reopenTask, reassignTask, rescheduleTask, TaskActionError,
   type TaskDeps,
@@ -23,14 +24,25 @@ export interface TaskCommandContext {
   messageId: number | null;
   /** Hỏi trong nhóm: id nhóm (chỉ thấy việc của nhóm) — null = tin riêng */
   groupId: number | null;
-  /** Người có vai trò hoặc người nhận đang bật (hỏi DB một lần / lượt) */
+  /** Người có vai trò hoặc người nhận đang bật (hỏi DB một lần / lượt); tài khoản web đã tắt thì không */
   isOverseer: () => Promise<boolean>;
+  /** Ngữ cảnh truy cập của người hỏi (phân giải lười) — lọc việc của người khác theo phạm vi nhóm + Mật. Không có = không lọc. */
+  access?: () => Promise<AskerAccess>;
 }
 
 export function buildTaskContext(deps: TaskDeps, input: Omit<TaskCommandContext, "deps" | "isOverseer">): TaskCommandContext {
   let cached: Promise<boolean> | null = null;
-  const overseer = () => (cached ??= input.contact.role !== ContactRole.None ? Promise.resolve(true) : isActiveRecipientUid(deps.db, input.contact.uid));
-  return { deps, ...input, isOverseer: overseer };
+  const overseer = async () => {
+    if (input.access && (await input.access()).origin === "disabled_account") return false;
+    return input.contact.role !== ContactRole.None ? true : isActiveRecipientUid(deps.db, input.contact.uid);
+  };
+  return { deps, ...input, isOverseer: () => (cached ??= overseer()) };
+}
+
+/** Điều kiện nhóm nguồn khi «sếp» xem việc của người khác ở tin riêng (trong nhóm đã khóa theo nhóm; không có access = không lọc). */
+async function overseerVisibility(ctx: TaskCommandContext, viewer: TaskViewer) {
+  if (!ctx.access || !viewer.overseer || viewer.groupId !== null) return undefined;
+  return askerSourceVisibility(await ctx.access(), "t.source_thread_id", "g");
 }
 
 const LIST_LIMIT = 30;
@@ -56,7 +68,9 @@ async function listText(ctx: TaskCommandContext, viewer: TaskViewer, scope: Task
     involvingUid: scope === "mine" || !everyone ? viewer.uid : undefined,
     overdueAt: scope === "overdue" ? now : undefined,
   };
-  const tasks = await listTasks(ctx.deps.db, { ...filter, limit: LIST_LIMIT });
+  // «Sếp» xem việc của mọi người ở tin riêng: bỏ việc nhóm Mật (trừ khi có quyền Mật) và việc ngoài phạm vi nhóm của tài khoản
+  const visibility = everyone && scope !== "mine" ? await overseerVisibility(ctx, viewer) : undefined;
+  const tasks = await listTasks(ctx.deps.db, { ...filter, visibility, limit: LIST_LIMIT });
   const titles: Record<TaskListScope, string> = {
     mine: "VIỆC CỦA ANH/CHỊ (đang phụ trách hoặc đã giao)", group: inGroup ? "VIỆC CỦA NHÓM" : "VIỆC ĐANG LÀM",
     overdue: "VIỆC QUÁ HẠN", proposed: "VIỆC CHỜ XÁC NHẬN",
@@ -130,6 +144,10 @@ export async function runTaskCommand(ctx: TaskCommandContext, command: TaskComma
 
   const task = await findTask(deps.db, command.taskId);
   if (!task || !canViewTask(viewer, task)) return NOT_FOUND(command.taskId);
+  // Xem việc người khác chỉ nhờ vai trò «sếp» → cùng luật phạm vi / Mật với danh sách
+  if (!isTaskAssigner(viewer, task) && !isTaskAssignee(viewer, task) && !(await isTaskVisible(deps.db, task.id, await overseerVisibility(ctx, viewer)))) {
+    return NOT_FOUND(command.taskId);
+  }
   const code = shortTaskCode(task);
   try {
     switch (command.kind) {

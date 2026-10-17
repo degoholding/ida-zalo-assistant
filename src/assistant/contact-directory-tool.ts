@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { ContactKind, ContactKindSource } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import type { SqlPart } from "../web/api/list-query.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 
 // Công cụ list_contacts: đếm / liệt kê người trong Danh bạ theo loại (khách hàng, nhân sự). Chỉ đọc.
@@ -44,13 +45,18 @@ export const LIST_CONTACTS_DECLARATION: FunctionDeclaration = {
 interface ContactCountRow extends RowDataPacket { kind: number; kind_source: number; n: number }
 interface ContactListRow extends RowDataPacket { name: string; kind: number; kind_source: number; company: string | null; groups: number }
 
-export async function runListContacts(db: Db, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+/** `scope` = phạm vi Danh bạ của người hỏi (contactScopeSql; null = cả Danh bạ) — người có tài khoản bị khoanh nhóm chỉ đếm người ở nhóm của mình. */
+export async function runListContacts(db: Db, args: Record<string, unknown>, scope: SqlPart | null = null): Promise<Record<string, unknown>> {
   const kind = typeof args.kind === "string" && args.kind in KIND_BY_NAME ? KIND_BY_NAME[args.kind] : null;
-  const scope = args.scope === "everyone" ? "everyone" : "active";
+  const mode = args.scope === "everyone" ? "everyone" : "active";
   const query = typeof args.query === "string" ? args.query.trim().slice(0, 100) : "";
   const where = ["1 = 1"];
   const params: unknown[] = [];
-  if (scope === "active") {
+  if (scope) {
+    where.push(scope.sql);
+    params.push(...scope.params);
+  }
+  if (mode === "active") {
     where.push(`(c.last_dm_at IS NOT NULL OR EXISTS (
       SELECT 1 FROM group_member gm JOIN zalo_group g ON g.id = gm.group_id
       WHERE gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL AND g.read_messages = 1))`);
@@ -77,7 +83,7 @@ export async function runListContacts(db: Db, args: Record<string, unknown>): Pr
   );
   const matching = kind === null ? Object.values(byKind).reduce((sum, bucket) => sum + bucket.total, 0) : byKind[KIND_LABEL[kind]]?.total ?? 0;
   return {
-    scope: scope === "active" ? "người trong các nhóm bot đang đọc + người từng nhắn riêng bot" : "mọi người bot từng thấy (cả nhóm không đọc)",
+    scope: mode === "active" ? "người trong các nhóm bot đang đọc + người từng nhắn riêng bot" : "mọi người bot từng thấy (cả nhóm không đọc)",
     total_matching: matching,
     by_kind: byKind,
     note: "auto_guessed = hệ thống tự gán theo loại nhóm, chưa ai xác nhận — nhắc người hỏi vào Danh bạ chỉnh nếu cần số chính xác.",
