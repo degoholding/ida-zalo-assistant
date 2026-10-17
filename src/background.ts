@@ -1,3 +1,4 @@
+import type { ResultSetHeader } from "mysql2";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { purgeFinishedJobs, recoverStaleJobs, summarizeQueue } from "./jobs/job-queue.js";
@@ -33,6 +34,8 @@ const log = createLogger("background");
 const JOB_STALE_MS = 30 * 60_000;
 /** Việc đã xong / bỏ giữ lại ngần này ngày để tra cứu rồi xóa. */
 const JOB_KEEP_DAYS = 14;
+/** Nhật ký gọi MCP (mcp_call_log) giữ ngần này ngày. */
+const MCP_CALL_LOG_KEEP_DAYS = 180;
 const BACKUP_DIR = process.env.BACKUP_DIR?.trim() || "/backups";
 
 export interface BackgroundTasks {
@@ -63,6 +66,9 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
       const result = await purgeExpiredMessages(db, storage);
       const files = await purgeExpiredFiles(db, storage);
       if (result.messages || result.files || files) log.info(`dọn quá hạn: ${result.messages} tin, ${result.files + files} tệp`);
+      // Nhật ký gọi MCP giữ 180 ngày; xóa từng mẻ nhỏ để không khóa bảng lâu
+      const [callLog] = await db.query<ResultSetHeader>(`DELETE FROM mcp_call_log WHERE created_at < NOW() - INTERVAL ${MCP_CALL_LOG_KEEP_DAYS} DAY LIMIT 10000`);
+      if (callLog.affectedRows) log.info(`dọn nhật ký gọi MCP: ${callLog.affectedRows} dòng`);
     },
     "job-housekeeping": async () => {
       const recovered = await recoverStaleJobs(db, JOB_STALE_MS);

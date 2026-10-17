@@ -416,3 +416,30 @@ export enum CatalogMatchStatus {
   // Quản trị đã «Bỏ gắn»: lượt khớp tự động sau KHÔNG gắn lại; chỉ gắn khi quản trị chọn tay, hoặc nạp tệp đổi SĐT của mục (về Unmatched)
   Unlinked = 4,
 }
+
+/** Mức quyền của khóa MCP (cột mcp_api_key.access_level) — khóa chỉ HẠ được quyền của chủ khóa, không nâng. Giao diện chép sang web/src/modules/mcp-keys/types. */
+export enum McpAccessLevel {
+  Read = 1,
+  ReadWrite = 2,
+}
+
+/** Kết quả một lời gọi công cụ (cột mcp_call_log.status). */
+export enum McpCallStatus {
+  Ok = 0,
+  // Không đủ quyền / ngoài phạm vi
+  Denied = 1,
+  // Tham số sai (sai trường, sai phép so, quá trần)
+  Invalid = 2,
+  // Lỗi hệ thống
+  Error = 3,
+  // Vượt giới hạn nhịp theo khóa
+  RateLimited = 4,
+}
+
+/** Cổng gọi công cụ (cột mcp_call_log.source). */
+export enum McpCallSource {
+  // Máy chủ MCP /mcp (Claude, Codex, client SDK)
+  Http = 1,
+  // Trợ lý trong app (Gemini / OpenAI)
+  Assistant = 2,
+}

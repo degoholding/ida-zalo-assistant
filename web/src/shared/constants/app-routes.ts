@@ -43,6 +43,7 @@ export const appRoutes = {
     list: '/reply-templates',
     detail: (id: number | string) => `/reply-templates/${id}`,
   },
+  mcpKeys: { list: '/mcp-keys' },
   metrics: { list: '/metrics' },
   metricSources: {
     list: '/metric-sources',

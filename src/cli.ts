@@ -11,6 +11,7 @@
 //   npm run cli -- storage-to-r2                chép tệp đang nằm ở đĩa lên R2 (sau khi bật STORAGE_DRIVER=r2)
 //   npm run cli -- user-admin <tên> <mật khẩu>   tạo / nâng tài khoản quản trị (đường cứu khi không ai vào được web)
 //   npm run cli -- user-password <tên|email> <mật khẩu>   đặt lại mật khẩu một tài khoản
+//   npm run cli -- mcp-key create|list|revoke ...   khóa truy cập MCP (xem src/dev/mcp-key-cli.ts)
 //   npm run cli -- user-import <tệp.tsv> [vai trò 1|2|3]   nạp «email<TAB>họ tên»: tên đăng nhập = mật khẩu = email
 
 import fs from "node:fs";
@@ -24,6 +25,7 @@ import { runMigrations } from "./db/migrate.js";
 import { createPool, type Db } from "./db/pool.js";
 import { createFileStorage, R2WithLocalFallback } from "./storage/file-storage.js";
 import { moveLocalFilesToR2 } from "./storage/move-to-r2.js";
+import { runMcpKeyCommand } from "./dev/mcp-key-cli.js";
 import { ensureAdminUser, importUsersFromTsv, setUserPassword } from "./auth/user-admin.js";
 import { UserRole } from "./constants.js";
 import { createCompany, findCompanyByCode, listCompanies } from "./sync/company-repository.js";
@@ -189,7 +191,8 @@ async function main(): Promise<void> {
       if (!Object.values(UserRole).includes(role)) throw new Error("Vai trò là 1 (Quản trị), 2 (Quản lý) hoặc 3 (Nhân viên)");
       const result = await importUsersFromTsv(db, args[0], role as UserRole);
       console.log(`Đã tạo ${result.created} tài khoản, bỏ qua ${result.skipped} dòng (đã có / sai email).`);
-    } else if (command === "storage-to-r2") {
+    } else if (command === "mcp-key") await runMcpKeyCommand(db, args);
+    else if (command === "storage-to-r2") {
       const storage = createFileStorage(config);
       if (!(storage instanceof R2WithLocalFallback)) throw new Error("Chưa bật R2: đặt STORAGE_DRIVER=r2 + R2_* trong .env rồi chạy lại");
       const result = await moveLocalFilesToR2(db, storage, (line) => console.log(line));

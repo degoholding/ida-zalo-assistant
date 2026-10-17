@@ -57,6 +57,8 @@ export const ENTITIES = [
   'reply_template',
   'metric',
   'catalog',
+  // Khóa MCP (17/10/2026): mọi vai trò xem / tạo / thu hồi khóa CỦA MÌNH (phạm vi dòng kiểm ở máy chủ; quản trị thấy hết).
+  'mcp_key',
 ] as const
 
 export type PermissionEntity = (typeof ENTITIES)[number]

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseListRequest, type ListSpec } from "./list-query.js";
+import { buildCondition, buildConditionFromValues, escapeLikeText, MAX_IN_VALUES, OPERATORS, parseListRequest, type FieldSpec, type ListSpec } from "./list-query.js";
 
 const spec: ListSpec = {
   fields: {
@@ -56,4 +56,51 @@ test("sort_dir chỉ áp khi sort_by hợp lệ; trang & cỡ trang bị kẹp t
 test("điều kiện tự viết (EXISTS) nhận đủ danh sách giá trị", () => {
   const request = parse("tag__in=vip,đại lý");
   assert.deepEqual(request.where.params, [["vip", "đại lý"]]);
+});
+
+test("sort_by trùng thuộc tính của Object (constructor, __proto__, toString) → sắp xếp mặc định, không 500", () => {
+  for (const name of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+    const request = parse(`sort_by=${name}&sort_dir=asc`);
+    assert.equal(request.orderSql, "ORDER BY c.last_dm_at DESC, c.id", name);
+  }
+});
+
+test("buildConditionFromValues: nhận giá trị đã tách (không tách dấu phẩy), cùng kết quả với buildCondition", () => {
+  const kind = spec.fields.kind;
+  assert.deepEqual(buildConditionFromValues(kind, "in", ["1", "2"]), { sql: "c.kind IN (?)", params: [[1, 2]] });
+  assert.deepEqual(buildCondition(kind, "in", "1,2"), buildConditionFromValues(kind, "in", ["1", "2"]));
+  // chuỗi chứa dấu phẩy là MỘT giá trị khi đi đường JSON
+  const note = spec.fields.note;
+  assert.deepEqual(buildConditionFromValues(note, "eq", ["a,b"]), { sql: "c.note = ?", params: ["a,b"] });
+  assert.deepEqual(buildConditionFromValues(note, "contains", ["a,b"]), { sql: "c.note LIKE ?", params: ["%a,b%"] });
+  assert.deepEqual(buildConditionFromValues(kind, "between", ["1", "5"]), { sql: "c.kind BETWEEN ? AND ?", params: [1, 5] });
+});
+
+test("buildConditionFromValues: giá trị sai kiểu / thiếu → null; isnull; build tự viết nhận nguyên danh sách", () => {
+  const kind = spec.fields.kind;
+  assert.equal(buildConditionFromValues(kind, "eq", ["abc"]), null);
+  assert.equal(buildConditionFromValues(kind, "in", []), null);
+  assert.equal(buildConditionFromValues(kind, "between", ["1"]), null);
+  assert.deepEqual(buildConditionFromValues(kind, "isnull", ["true"]), { sql: "c.kind IS NULL", params: [] });
+  assert.deepEqual(buildConditionFromValues(kind, "isnull", ["false"]), { sql: "c.kind IS NOT NULL", params: [] });
+  const noSql: FieldSpec = { type: "text" };
+  assert.equal(buildConditionFromValues(noSql, "eq", ["x"]), null);
+  assert.deepEqual(buildConditionFromValues(spec.fields.tag, "in", ["a", "b"]).params, [["a", "b"]]);
+});
+
+test("OPERATORS + MAX_IN_VALUES được xuất cho lõi truy cập dữ liệu", () => {
+  assert.equal(OPERATORS.size, 12);
+  assert.ok(OPERATORS.has("between") && !OPERATORS.has("like" as never));
+  assert.equal(MAX_IN_VALUES, 200);
+  const many = Array.from({ length: 300 }, (_, index) => index).join(",");
+  assert.equal((buildCondition(spec.fields.kind, "in", many)?.params[0] as number[]).length, MAX_IN_VALUES);
+});
+
+test("contains / not_contains / ô tìm: thoát % _ \\ (không thành ký tự đại diện)", () => {
+  const note = spec.fields.note;
+  assert.deepEqual(buildConditionFromValues(note, "contains", ["50%_a\\b"]), { sql: "c.note LIKE ?", params: ["%50\\%\\_a\\\\b%"] });
+  assert.deepEqual(buildConditionFromValues(note, "not_contains", ["%"]), { sql: "c.note NOT LIKE ?", params: ["%\\%%"] });
+  assert.equal(escapeLikeText("a%b_c\\d"), "a\\%b\\_c\\\\d");
+  const request = parse("name=%25_");
+  assert.deepEqual(request.where.params, ["%\\%\\_%", "%\\%\\_%"]);
 });

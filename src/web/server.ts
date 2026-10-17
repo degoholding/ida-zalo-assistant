@@ -7,6 +7,7 @@ import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, SessionStore } from "../auth/s
 import { QrLoginManager } from "./qr-login.js";
 import { serveSpa, SPA_BASE } from "./spa-static.js";
 import { pipeStreamToResponse } from "./pipe-stream-to-response.js";
+import { createMcpGateway, MCP_PATH } from "../mcp/mcp-http-handler.js";
 
 // Máy chủ web: giao diện quản trị `web/` (React, khung ERP v2) dưới /app + lớp API JSON /api + ảnh đại diện.
 // Giao diện HTML cũ đã gỡ 01/10/2026 — mọi màn nằm trong /app.
@@ -65,6 +66,8 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
   const { db, config, storage } = service;
   const sessions = new SessionStore(db);
   const qrLogins = new QrLoginManager(service);
+  // Cổng MCP chỉ dựng khi MCP_ENABLED=true; tắt thì /mcp trả 404 như không tồn tại
+  const mcpGateway = config.mcp.enabled ? createMcpGateway(db, config) : null;
   const cookieFlags = `HttpOnly; SameSite=Strict; Path=/${config.web.cookieSecure ? "; Secure" : ""}`;
 
   async function handle(request: http.IncomingMessage, response: http.ServerResponse): Promise<void> {
@@ -74,6 +77,12 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
     const path = url.pathname;
     const forwardedIp = config.web.trustCloudflareIp ? request.headers["cf-connecting-ip"] : undefined;
     const clientKey = String(forwardedIp ?? request.socket.remoteAddress ?? "");
+
+    // /mcp xác thực bằng Bearer riêng, không dùng cookie / luật cùng-nguồn của /api/ — xử lý TRƯỚC mọi nhánh khác
+    if (path === MCP_PATH || path === `${MCP_PATH}/`) {
+      if (!mcpGateway) throw new HttpError(404, "Không có trang này");
+      return mcpGateway.handle(request, response, clientKey);
+    }
     const token = parseCookies(request.headers.cookie)[SESSION_COOKIE];
 
     if (serveSpa(config.web.spaDistDir, path, response)) return;
@@ -124,6 +133,10 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
       response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
       response.end(JSON.stringify({ success: false, error: { code: status === 404 ? "not_found" : "error", message } }));
     });
+  });
+
+  server.on("close", () => {
+    mcpGateway?.close().catch((error) => log.warn(`đóng cổng MCP: ${describeError(error)}`));
   });
 
   return new Promise((resolve) => {

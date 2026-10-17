@@ -45,11 +45,16 @@ export interface ListRequest {
   offset: number;
 }
 
-const OPERATORS = new Set<Operator>(["eq", "ne", "contains", "not_contains", "gt", "gte", "lt", "lte", "between", "in", "not_in", "isnull"]);
+export const OPERATORS = new Set<Operator>(["eq", "ne", "contains", "not_contains", "gt", "gte", "lt", "lte", "between", "in", "not_in", "isnull"]);
 const RESERVED = new Set(["page", "page_size", "sort_by", "sort_dir", "conjunction"]);
 const MAX_PAGE_SIZE = 200;
 const DEFAULT_PAGE_SIZE = 20;
-const MAX_IN_VALUES = 200;
+export const MAX_IN_VALUES = 200;
+
+/** Thoát `\` `%` `_` để chuỗi người dùng gõ luôn khớp NGUYÊN VĂN trong LIKE (không thành ký tự đại diện). */
+export function escapeLikeText(text: string): string {
+  return text.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
 
 function parseValue(type: FieldType, raw: string): unknown {
   switch (type) {
@@ -68,11 +73,20 @@ function parseValue(type: FieldType, raw: string): unknown {
   }
 }
 
-/** Một điều kiện cho một trường; giá trị không hợp lệ (số sai, ngày sai) → bỏ điều kiện đó. */
+/** Một điều kiện cho một trường từ chuỗi URL (web): tách dấu phẩy cho in / not_in / between rồi gọi `buildConditionFromValues`. */
 export function buildCondition(field: FieldSpec, operator: Operator, rawValue: string): SqlPart | null {
   const values = operator === "in" || operator === "not_in" || operator === "between"
     ? rawValue.split(",").map((value) => value.trim()).filter((value) => value !== "").slice(0, MAX_IN_VALUES)
     : [rawValue];
+  return buildConditionFromValues(field, operator, values);
+}
+
+/**
+ * Một điều kiện cho một trường từ danh sách giá trị ĐÃ TÁCH (máy chủ MCP nhận JSON, không có dấu phẩy để tách). Giá trị
+ * không hợp lệ (số sai, ngày sai) → null; người gọi quyết định báo lỗi hay bỏ qua.
+ */
+export function buildConditionFromValues(field: FieldSpec, operator: Operator, values: string[]): SqlPart | null {
+  const rawValue = values[0] ?? "";
   if (field.build) return field.build(operator, values);
   const column = field.sql;
   if (!column) return null;
@@ -84,8 +98,8 @@ export function buildCondition(field: FieldSpec, operator: Operator, rawValue: s
   switch (operator) {
     case "eq": return { sql: `${column} = ?`, params: [parsed[0]] };
     case "ne": return { sql: `${column} <> ?`, params: [parsed[0]] };
-    case "contains": return { sql: `${column} LIKE ?`, params: [`%${values[0]}%`] };
-    case "not_contains": return { sql: `${column} NOT LIKE ?`, params: [`%${values[0]}%`] };
+    case "contains": return { sql: `${column} LIKE ?`, params: [`%${escapeLikeText(values[0])}%`] };
+    case "not_contains": return { sql: `${column} NOT LIKE ?`, params: [`%${escapeLikeText(values[0])}%`] };
     case "gt": return { sql: `${column} > ?`, params: [parsed[0]] };
     case "gte": return { sql: `${column} >= ?`, params: [parsed[0]] };
     case "lt": return { sql: `${column} < ?`, params: [parsed[0]] };
@@ -108,7 +122,7 @@ export function parseListRequest(params: URLSearchParams, spec: ListSpec): ListR
   for (const [key, rawValue] of params) {
     if (RESERVED.has(key) || rawValue === "") continue;
     if (spec.search && key === spec.search.param) {
-      const like = `%${rawValue.trim()}%`;
+      const like = `%${escapeLikeText(rawValue.trim())}%`;
       conditions.push({ sql: `(${spec.search.columns.map((column) => `${column} LIKE ?`).join(" OR ")})`,
         params: spec.search.columns.map(() => like) });
       continue;
@@ -128,7 +142,7 @@ export function parseListRequest(params: URLSearchParams, spec: ListSpec): ListR
     : { sql: "", params: [] };
 
   const requestedSort = params.get("sort_by") ?? "";
-  const sortBy = spec.sorts[requestedSort] ? requestedSort : spec.defaultSort.by;
+  const sortBy = Object.hasOwn(spec.sorts, requestedSort) ? requestedSort : spec.defaultSort.by;
   const dirParam = params.get("sort_dir");
   const dir = sortBy === requestedSort && (dirParam === "asc" || dirParam === "desc") ? dirParam : spec.defaultSort.dir;
   const orderSql = `ORDER BY ${spec.sorts[sortBy]} ${dir.toUpperCase()}, ${spec.tieBreaker}`;

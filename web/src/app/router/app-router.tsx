@@ -7,6 +7,7 @@ import { assistantChatModule } from '@/modules/assistant-chat/routes'
 import { briefsModule } from '@/modules/briefs/routes'
 import { sendCommandsModule } from '@/modules/send-commands/routes'
 import { catalogModule } from '@/modules/catalog/routes'
+import { mcpKeysModule } from '@/modules/mcp-keys/routes'
 import { metricsModule } from '@/modules/metrics/routes'
 import { replyTemplatesModule } from '@/modules/reply-templates/routes'
 import { companiesModule } from '@/modules/companies/routes'
@@ -42,6 +43,7 @@ const MODULE_ROUTES = [
   sendCommandsModule,
   replyTemplatesModule,
   metricsModule,
+  mcpKeysModule,
   catalogModule,
   importsModule,
   companiesModule,

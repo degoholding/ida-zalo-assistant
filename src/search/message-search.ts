@@ -2,6 +2,7 @@ import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { createLogger } from "../logger.js";
+import { maskPersonalData } from "../privacy/personal-data.js";
 import { loadIndexedFrom } from "./message-search-index.js";
 
 // Tìm tin nhắn (phase 6 — N4, IDA câu 21). Dùng chung cho màn «Tìm tin» trên web và công cụ search_messages của trợ lý.
@@ -231,6 +232,12 @@ export interface MessageSearchOptions {
   excludeConfidential: boolean;
   /** Chỉ nhóm đang bật «Đọc tin» (không tìm tin riêng người khác nhắn bot) — đúng phạm vi các công cụ khác của trợ lý. */
   onlyReadGroups: boolean;
+  /** Cuộc riêng + nhóm bật «Đọc tin» (cùng điều kiện màn Hội thoại / lõi truy cập dữ liệu) — khác `onlyReadGroups` ở chỗ giữ cuộc riêng. */
+  onlyReadableThreads?: boolean;
+  /** Kèm `onlyReadableThreads`: cuộc riêng chỉ lấy của chính người hỏi (zalo_group_id = uid; uid null = không cuộc riêng nào). */
+  ownDirectThreads?: { uid: string | null };
+  /** Che SĐT / CCCD / STK trong cả tin TRƯỚC khi cắt đoạn trích (cắt rồi mới che sẽ để lộ số nằm ngay chỗ cắt). */
+  maskPersonal?: boolean;
   /** Lọc người gửi theo tên (khớp một phần). */
   senderName?: string;
   from?: Date;
@@ -274,6 +281,19 @@ export async function searchMessages(db: Db, options: MessageSearchOptions): Pro
       where.push("g.thread_type = ? AND g.read_messages = 1");
       params.push(ConversationType.Group);
     }
+    if (options.onlyReadableThreads) {
+      const own = options.ownDirectThreads;
+      if (!own) {
+        where.push("(g.thread_type = ? OR g.read_messages = 1)");
+        params.push(ConversationType.Direct);
+      } else if (own.uid) {
+        where.push("((g.thread_type = ? AND g.zalo_group_id = ?) OR (g.thread_type <> ? AND g.read_messages = 1))");
+        params.push(ConversationType.Direct, own.uid, ConversationType.Direct);
+      } else {
+        where.push("(g.thread_type <> ? AND g.read_messages = 1)");
+        params.push(ConversationType.Direct);
+      }
+    }
     if (options.senderName?.trim()) {
       where.push("m.sender_name LIKE ?");
       params.push(escapeLike(options.senderName.trim()));
@@ -294,7 +314,7 @@ export async function searchMessages(db: Db, options: MessageSearchOptions): Pro
     ));
     return rows.map((row) => ({
       messageId: Number(row.id), threadId: Number(row.group_id), threadName: String(row.thread_name ?? ""),
-      senderName: String(row.sender_name ?? ""), sentAt: row.sent_at as Date, snippet: buildSnippet(String(row.text ?? ""), options.query),
+      senderName: String(row.sender_name ?? ""), sentAt: row.sent_at as Date, snippet: buildSnippet(options.maskPersonal ? maskPersonalData(String(row.text ?? "")) : String(row.text ?? ""), options.query),
     }));
   };
   const likeFrom = likeWindowStart(options.from, options.to ?? now);

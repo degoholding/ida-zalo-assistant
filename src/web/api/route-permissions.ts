@@ -45,6 +45,9 @@ const RULES: Rule[] = [
   // Số liệu + danh mục (phase 10): chỉ đọc cho Quản lý. `/api/metric-sources*` và ghi `/api/catalog*` KHÔNG khai → chỉ quản trị
   ["GET", /^\/api\/metrics(\/|$)/, "metric", "read"],
   ["GET", /^\/api\/catalog(\/|$)/, "catalog", "read"],
+  // Khóa MCP (17/10/2026): mọi vai trò quản lý khóa CỦA MÌNH (phạm vi dòng kiểm trong API, quản trị thấy hết). Thu hồi = POST …/revoke
+  ["GET", /^\/api\/mcp-keys(\/|$)/, "mcp_key", "read"],
+  ["WRITE", /^\/api\/mcp-keys(\/\d+\/revoke)?$/, "mcp_key", "write"],
   ["WRITE", /^\/api\/accounts(\/|$)/, "bot_account", "write"],
 ];
 

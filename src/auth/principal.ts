@@ -15,19 +15,23 @@ export interface Principal {
   role: UserRole;
   /** Nhóm được xem; null = mọi nhóm (quản trị, hoặc người dùng tick «mọi nhóm»). */
   groupIds: number[] | null;
+  /** Cờ «Xem nhóm Mật» (app_user.can_view_confidential) — chỉ chi phối AI / MCP; web người thật giữ nguyên. Thiếu = false. */
+  canViewConfidential?: boolean;
+  /** Cờ «Xem Lịch sử thao tác» (app_user.can_view_audit) cấp cho người không phải quản trị. Thiếu = false. */
+  canViewAudit?: boolean;
 }
 
 /** Quyền đầy đủ cho lời gọi nội bộ (mặc định của các hàm danh sách khi không qua API). Không phiên nào mang danh này. */
 export const SYSTEM_PRINCIPAL: Principal = { userId: null, tenantId: 1, fullName: "Hệ thống", email: "", role: UserRole.Admin, groupIds: null };
 
 /** Thực thể của giao diện — phải khớp `ENTITIES` ở web/src/core/authorization/permission-types.ts. */
-export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task", "brief", "send_command", "reply_template", "metric", "catalog"] as const;
+export const ENTITIES = ["bot_account", "conversation", "contact", "group", "file", "company", "audit", "setting", "user", "recipient", "ticket", "task", "brief", "send_command", "reply_template", "metric", "catalog", "mcp_key"] as const;
 export type Entity = (typeof ENTITIES)[number];
 export type Action = "read" | "write" | "create" | "export" | "approve";
 export type PermissionMap = Record<string, Record<Action, boolean>>;
 
 /** Thực thể cho THÊM MỚI từ giao diện. Còn lại do Zalo sinh ra. */
-const CREATABLE = new Set<string>(["company", "bot_account", "user", "recipient", "reply_template", "metric"]);
+const CREATABLE = new Set<string>(["company", "bot_account", "user", "recipient", "reply_template", "metric", "mcp_key"]);
 
 const NONE = { read: false, write: false, create: false, export: false, approve: false };
 
@@ -41,6 +45,8 @@ export function permissionsFor(role: UserRole): PermissionMap {
     // (CREATABLE) chỉ để nút «Thêm nguồn số liệu» của khung CRUD hiện cho quản trị.
     if (entity === "reply_template") return [entity, { read: true, write: true, create: true, export: false, approve: role === UserRole.Manager }];
     if (entity === "metric") return [entity, role === UserRole.Manager ? { ...NONE, read: true, export: true } : NONE];
+    // Khóa MCP: mọi vai trò quản lý khóa CỦA MÌNH (phạm vi dòng kiểm trong API; quản trị thấy hết)
+    if (entity === "mcp_key") return [entity, { read: true, write: true, create: true, export: false, approve: false }];
     if (entity === "catalog") return [entity, role === UserRole.Manager ? { ...NONE, read: true } : NONE];
     const adminOnly = ["bot_account", "setting", "user", "recipient", "audit"].includes(entity);
     if (adminOnly) return [entity, NONE];
@@ -52,14 +58,29 @@ export function permissionsFor(role: UserRole): PermissionMap {
   })) as PermissionMap;
 }
 
+/**
+ * Ma trận quyền của MỘT người: theo vai trò, riêng `audit.read` thì quản trị HOẶC người được cấp cờ «Xem Lịch sử thao tác».
+ * Phạm vi dòng của nhật ký (chỉ bản ghi trong phạm vi nhóm) áp ở tầng truy vấn, không ở đây.
+ */
+export function permissionsForPrincipal(principal: Principal): PermissionMap {
+  const matrix = permissionsFor(principal.role);
+  if (principal.canViewAudit === true) matrix.audit = { ...matrix.audit, read: true };
+  return matrix;
+}
+
 export function can(principal: Principal, entity: Entity, action: Action): boolean {
-  return permissionsFor(principal.role)[entity]?.[action] === true;
+  return permissionsForPrincipal(principal)[entity]?.[action] === true;
+}
+
+/** Được đưa nhóm Mật cho AI / MCP không. KHÔNG tự cho quản trị — cờ cấp riêng cho mọi vai trò, mặc định tắt. */
+export function canSeeConfidential(principal: Principal): boolean {
+  return principal.canViewConfidential === true;
 }
 
 /** Người dùng (đang bật) → danh tính thao tác. null = không có / đã tắt. */
 export async function loadUserPrincipal(db: Db, userId: number): Promise<Principal | null> {
   const [rows] = await db.query<RowDataPacket[]>(
-    "SELECT id, tenant_id, email, username, full_name, role, all_groups, is_active FROM app_user WHERE id = ?", [userId]);
+    "SELECT id, tenant_id, email, username, full_name, role, all_groups, can_view_confidential, can_view_audit, is_active FROM app_user WHERE id = ?", [userId]);
   const user = rows[0];
   if (!user || !user.is_active) return null;
   const role = Number(user.role) as UserRole;
@@ -72,6 +93,7 @@ export async function loadUserPrincipal(db: Db, userId: number): Promise<Princip
     userId: Number(user.id), tenantId: Number(user.tenant_id), fullName: String(user.full_name || user.username || user.email),
     email: String(user.email ?? ""),
     role, groupIds,
+    canViewConfidential: Boolean(user.can_view_confidential), canViewAudit: Boolean(user.can_view_audit),
   };
 }
 

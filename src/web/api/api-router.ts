@@ -1,5 +1,5 @@
 import { GoogleTokenError, verifyGoogleIdToken } from "../../auth/google-id-token.js";
-import { can, currentPrincipal, loadUserPrincipal, permissionsFor, type Principal } from "../../auth/principal.js";
+import { can, currentPrincipal, loadUserPrincipal, permissionsForPrincipal, type Principal } from "../../auth/principal.js";
 import type { SessionStore } from "../../auth/session-store.js";
 import { createLogger, describeError } from "../../logger.js";
 import type { SyncService } from "../../sync-service.js";
@@ -21,6 +21,7 @@ import { groupRoutes } from "./groups-api.js";
 import { importRoutes } from "./imports-api.js";
 import { lookupRoutes } from "./lookups-api.js";
 import { catalogRoutes } from "./catalog-api.js";
+import { mcpKeyRoutes } from "./mcp-keys-api.js";
 import { metricRoutes } from "./metrics-api.js";
 import { metricSourceRoutes } from "./metric-sources-api.js";
 import { replyTemplateRoutes } from "./reply-templates-api.js";
@@ -42,7 +43,7 @@ const log = createLogger("api");
 const routes: ApiRoute[] = [
   ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...accountFriendRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
   ...userRoutes, ...recipientRoutes, ...ticketRoutes, ...taskRoutes, ...messageSearchRoutes, ...briefRoutes, ...sendCommandRoutes,
-  ...replyTemplateRoutes, ...metricRoutes, ...metricSourceRoutes, ...catalogRoutes,
+  ...replyTemplateRoutes, ...metricRoutes, ...metricSourceRoutes, ...catalogRoutes, ...mcpKeyRoutes,
 ];
 
 export interface ApiDeps {
@@ -61,7 +62,7 @@ export interface ApiSession {
 function describeUser(principal: Principal) {
   return {
     id: principal.userId ?? 0, full_name: principal.fullName, email: principal.email, role: principal.role,
-    all_groups: principal.groupIds === null, permissions: permissionsFor(principal.role),
+    all_groups: principal.groupIds === null, permissions: permissionsForPrincipal(principal),
   };
 }
 

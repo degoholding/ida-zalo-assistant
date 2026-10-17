@@ -43,6 +43,20 @@ export interface AppConfig {
    */
   workerEmbedded: boolean;
   web: { host: string; port: number; cookieSecure: boolean; trustCloudflareIp: boolean; spaDistDir: string };
+  /** Cổng MCP `/mcp` (phase 3) — chỉ biến môi trường, không có màn Cài đặt. Mặc định TẮT: bật thì /mcp trả lời, tắt thì 404. */
+  mcp: {
+    enabled: boolean;
+    /** Tên máy (không cổng) được phép trong tiêu đề Host — sau Cloudflare Tunnel là tên miền công khai. */
+    allowedHosts: string[];
+    /** Số lời gọi công cụ tối đa mỗi phút của MỘT khóa; đồng thời tối đa `maxConcurrentPerKey`. */
+    rateLimitPerMinute: number;
+    maxConcurrentPerKey: number;
+    /** Số lời gọi công cụ chạy cùng lúc tối đa TOÀN CỤC (mọi khóa) — bảo vệ pool MySQL dùng chung; dư thì xếp hàng `queueWaitMs` rồi báo bận. */
+    maxConcurrent: number;
+    queueWaitMs: number;
+    /** Số lần sai khóa tối đa mỗi phút của MỘT IP, quá thì chặn tạm (429). */
+    badKeyLimitPerMinute: number;
+  };
   defaultDirectRead: boolean;
   /** Số tin gần nhất xin Zalo khi lấy tin cũ của một nhóm. */
   defaultDirectCaptureFiles: boolean;
@@ -189,6 +203,15 @@ export function loadConfig(): AppConfig {
       trustCloudflareIp: readBool("TRUST_CLOUDFLARE_IP", false),
       // Bản build của giao diện mới (web/dist) — phục vụ dưới /app
       spaDistDir: readString("WEB_DIST_DIR", "web/dist"),
+    },
+    mcp: {
+      enabled: readBool("MCP_ENABLED", false),
+      allowedHosts: readString("MCP_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean),
+      rateLimitPerMinute: Math.max(1, readInt("MCP_RATE_LIMIT_PER_MINUTE", 60)),
+      maxConcurrentPerKey: Math.max(1, readInt("MCP_MAX_CONCURRENT_PER_KEY", 4)),
+      maxConcurrent: Math.max(1, readInt("MCP_MAX_CONCURRENT", 3)),
+      queueWaitMs: Math.max(0, readInt("MCP_QUEUE_WAIT_MS", 5000)),
+      badKeyLimitPerMinute: Math.max(1, readInt("MCP_BAD_KEY_LIMIT_PER_MINUTE", 20)),
     },
     // Người ta chủ động nhắn riêng cho bot nên mặc định LƯU (khác nhóm: mặc định không đọc)
     defaultDirectRead: readBool("DEFAULT_DM_READ", true),

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { UserRole } from "../constants.js";
 import { requiredPermission } from "../web/api/route-permissions.js";
-import { can, groupScopeSql, SYSTEM_PRINCIPAL, permissionsFor, type Principal } from "./principal.js";
+import { can, canSeeConfidential, ENTITIES, groupScopeSql, SYSTEM_PRINCIPAL, permissionsFor, permissionsForPrincipal, type Principal } from "./principal.js";
 
 const user = (role: UserRole, groupIds: number[] | null = [3]): Principal => ({ userId: 9, tenantId: 1, fullName: "A", email: "a@x.vn", role, groupIds });
 
@@ -84,4 +84,45 @@ test("phase 10 routes: reply templates by write, metrics / catalog reads by read
   assert.deepEqual(requiredPermission("POST", "/api/catalog/import"), { entity: "setting", action: "write" });
   assert.deepEqual(requiredPermission("GET", "/api/metric-sources"), { entity: "setting", action: "write" });
   assert.deepEqual(requiredPermission("POST", "/api/metric-sources/2/sync"), { entity: "setting", action: "write" });
+});
+
+test("audit.read: Nhân viên / Quản lý có cờ canViewAudit thì được, không cờ thì không; quản trị luôn được", () => {
+  for (const role of [UserRole.Staff, UserRole.Manager]) {
+    assert.equal(can(user(role), "audit", "read"), false, `${role} không cờ`);
+    assert.equal(can({ ...user(role), canViewAudit: true }, "audit", "read"), true, `${role} có cờ`);
+    assert.equal(permissionsForPrincipal({ ...user(role), canViewAudit: true }).audit.read, true);
+    // cờ chỉ mở ĐỌC nhật ký, không mở ghi
+    assert.equal(can({ ...user(role), canViewAudit: true }, "audit", "write"), false);
+  }
+  assert.equal(can(user(UserRole.Admin), "audit", "read"), true);
+  assert.equal(permissionsForPrincipal(user(UserRole.Staff)).audit.read, false);
+});
+
+test("permissionsForPrincipal không làm bẩn ma trận gốc của vai trò", () => {
+  permissionsForPrincipal({ ...user(UserRole.Staff), canViewAudit: true });
+  assert.equal(permissionsFor(UserRole.Staff).audit.read, false);
+});
+
+test("canSeeConfidential: chỉ khi cờ bật, KHÔNG tự cho quản trị", () => {
+  assert.equal(canSeeConfidential(user(UserRole.Admin)), false);
+  assert.equal(canSeeConfidential(SYSTEM_PRINCIPAL), false);
+  assert.equal(canSeeConfidential({ ...user(UserRole.Staff), canViewConfidential: false }), false);
+  assert.equal(canSeeConfidential({ ...user(UserRole.Staff), canViewConfidential: true }), true);
+});
+
+test("mcp_key: mọi vai trò xem / sửa / tạo; luật đường /api/mcp-keys khớp", () => {
+  for (const role of [UserRole.Admin, UserRole.Manager, UserRole.Staff]) {
+    const principal = user(role);
+    for (const action of ["read", "write", "create"] as const) assert.equal(can(principal, "mcp_key", action), true, `${role} ${action}`);
+    assert.equal(can(principal, "mcp_key", "approve"), role === UserRole.Admin);
+  }
+  assert.deepEqual(requiredPermission("GET", "/api/mcp-keys"), { entity: "mcp_key", action: "read" });
+  assert.deepEqual(requiredPermission("POST", "/api/mcp-keys"), { entity: "mcp_key", action: "write" });
+  assert.deepEqual(requiredPermission("POST", "/api/mcp-keys/5/revoke"), { entity: "mcp_key", action: "write" });
+  // đường lạ dưới /api/mcp-keys vẫn rơi về «chỉ quản trị»
+  assert.deepEqual(requiredPermission("POST", "/api/mcp-keys/5/delete"), { entity: "setting", action: "write" });
+});
+
+test("ENTITIES: mcp_key nằm CUỐI mảng (web chép cùng thứ tự)", () => {
+  assert.equal(ENTITIES[ENTITIES.length - 1], "mcp_key");
 });

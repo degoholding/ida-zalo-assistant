@@ -9,7 +9,7 @@ import { getContactTags, parseTags, setContactTags, updateContact } from "../../
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { diffFields, recordAudit } from "./audit-log.js";
-import type { ListSpec } from "./list-query.js";
+import { escapeLikeText, type FieldSpec, type ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
 
 // API Danh bạ cho giao diện `web/` — danh sách qua `runList`, chi tiết + sửa hồ sơ, thẻ nổi.
@@ -18,6 +18,37 @@ const DIRECT = ConversationType.Direct;
 
 /** Ô «Loại» của biểu mẫu: "auto" = theo nhóm, còn lại là mã loại chỉnh tay. */
 export const KIND_MODE_AUTO = "auto";
+
+/** Giới hạn của bộ lọc `group_id`: chỉ nhóm trong phạm vi người hỏi, và (AI / MCP) không đếm nhóm Mật khi không có quyền Mật. */
+export interface GroupFilterLimits {
+  /** null = mọi nhóm. */
+  allowedGroupIds: number[] | null;
+  hideConfidential: boolean;
+}
+const UNRESTRICTED_GROUPS: GroupFilterLimits = { allowedGroupIds: null, hideConfidential: false };
+
+/**
+ * Lọc «ở nhóm nào». Id người gọi gửi được GIAO với phạm vi + bỏ nhóm Mật (nếu `hideConfidential`) — không thì lọc `group_id = 999`
+ * liệt kê được thành viên nhóm ngoài phạm vi / nhóm Mật (kênh phụ, M1 review phase 2). Với `ne` / `not_in`, nhóm không thấy được
+ * coi như không tồn tại: «không ở nhóm X» đúng với mọi người, không lộ ai ở X.
+ */
+export function contactGroupIdField(limits: GroupFilterLimits): FieldSpec {
+  return {
+    type: "number",
+    build: (operator, values) => {
+      const asked = values.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
+      if (!asked.length) return null;
+      const allowed = limits.allowedGroupIds;
+      const ids = allowed ? asked.filter((id) => allowed.includes(id)) : asked;
+      const negate = operator === "ne" || operator === "not_in";
+      if (!ids.length) return { sql: negate ? "1 = 1" : "1 = 0", params: [] };
+      const exists = limits.hideConfidential
+        ? "EXISTS (SELECT 1 FROM group_member gm JOIN zalo_group zg ON zg.id = gm.group_id WHERE gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL AND gm.group_id IN (?) AND zg.is_confidential = 0)"
+        : "EXISTS (SELECT 1 FROM group_member gm WHERE gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL AND gm.group_id IN (?))";
+      return { sql: negate ? `NOT ${exists}` : exists, params: [ids] };
+    },
+  };
+}
 
 export const CONTACT_LIST_SPEC: ListSpec = {
   fields: {
@@ -41,21 +72,13 @@ export const CONTACT_LIST_SPEC: ListSpec = {
       type: "boolean",
       build: (_operator, values) => ({ sql: values[0] === "1" || values[0] === "true" ? "c.last_dm_at IS NOT NULL" : "c.last_dm_at IS NULL", params: [] }),
     },
-    group_id: {
-      type: "number",
-      build: (operator, values) => {
-        const ids = values.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
-        if (!ids.length) return null;
-        const exists = "EXISTS (SELECT 1 FROM group_member gm WHERE gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL AND gm.group_id IN (?))";
-        return { sql: operator === "ne" || operator === "not_in" ? `NOT ${exists}` : exists, params: [ids] };
-      },
-    },
+    group_id: contactGroupIdField(UNRESTRICTED_GROUPS),
     tag: {
       type: "text",
       build: (operator, values) => {
         if (!values.length) return null;
         if (operator === "contains") {
-          return { sql: "EXISTS (SELECT 1 FROM contact_tag t WHERE t.contact_id = c.id AND t.tag LIKE ?)", params: [`%${values[0]}%`] };
+          return { sql: "EXISTS (SELECT 1 FROM contact_tag t WHERE t.contact_id = c.id AND t.tag LIKE ?)", params: [`%${escapeLikeText(values[0])}%`] };
         }
         const exists = "EXISTS (SELECT 1 FROM contact_tag t WHERE t.contact_id = c.id AND t.tag IN (?))";
         return { sql: operator === "ne" || operator === "not_in" ? `NOT ${exists}` : exists, params: [values] };
@@ -121,14 +144,21 @@ async function decorate(db: Db, rows: RowDataPacket[], includePhone: boolean): P
 
 /** Bản ListSpec cho người KHÔNG xem được SĐT: bỏ lọc / tìm theo SĐT — không thì dò «phone=09…» là biết SĐT dù cột bị ẩn. */
 const { phone: _phoneFilter, ...FIELDS_WITHOUT_PHONE } = CONTACT_LIST_SPEC.fields;
-const CONTACT_LIST_SPEC_NO_PHONE: ListSpec = {
+export const CONTACT_LIST_SPEC_NO_PHONE: ListSpec = {
   ...CONTACT_LIST_SPEC, fields: FIELDS_WITHOUT_PHONE,
   search: { param: "q", columns: CONTACT_LIST_SPEC.search!.columns.filter((column) => column !== "c.phone") },
 };
 
+/** ListSpec theo người hỏi: có / không lọc SĐT, và bộ lọc nhóm bị giới hạn (`GroupFilterLimits`). */
+export function contactListSpec(includePhone: boolean, limits: GroupFilterLimits): ListSpec {
+  const base = includePhone ? CONTACT_LIST_SPEC : CONTACT_LIST_SPEC_NO_PHONE;
+  return { ...base, fields: { ...base.fields, group_id: contactGroupIdField(limits) } };
+}
+
 export function listContacts(db: Db, params: URLSearchParams, principal: Principal = SYSTEM_PRINCIPAL) {
   const includePhone = can(principal, "catalog", "read");
-  return runList(db, params, includePhone ? CONTACT_LIST_SPEC : CONTACT_LIST_SPEC_NO_PHONE, {
+  const spec = contactListSpec(includePhone, { allowedGroupIds: principal.groupIds, hideConfidential: false });
+  return runList(db, params, spec, {
     select: CONTACT_COLUMNS, from: CONTACT_FROM, baseWhere: contactScopeSql(principal) ?? undefined, decorate: (rows) => decorate(db, rows, includePhone),
   });
 }
