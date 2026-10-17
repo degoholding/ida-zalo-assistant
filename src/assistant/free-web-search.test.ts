@@ -34,7 +34,9 @@ test("only public addresses are fetched — localhost, private ranges and metada
   const resolve = async (host: string) => ({ "a.vn": ["1.2.3.4"], "noi-bo.vn": ["10.0.0.5"], "lan.vn": ["192.168.1.2", "1.1.1.1"] } as Record<string, string[]>)[host] ?? [];
   assert.equal(await isPublicUrl("https://a.vn/x", resolve), true);
   for (const url of ["http://localhost:8090/api", "http://127.0.0.1/", "http://169.254.169.254/latest", "https://noi-bo.vn/", "https://lan.vn/",
-    "http://[::1]/", "file:///etc/passwd", "https://khong-co.vn/", "http://172.20.0.3:3306/", "http://bot-tro-ly-mysql-1/"]) {
+    "http://[::1]/", "file:///etc/passwd", "https://khong-co.vn/", "http://172.20.0.3:3306/", "http://bot-tro-ly-mysql-1/",
+    // URL chuẩn hóa [::ffff:a.b.c.d] thành dạng hex — bộ kiểm cũ của tệp này để lọt
+    "http://[::ffff:127.0.0.1]/", "http://[::ffff:172.17.0.2]:3306/"]) {
     assert.equal(await isPublicUrl(url, resolve), false, url);
   }
 });

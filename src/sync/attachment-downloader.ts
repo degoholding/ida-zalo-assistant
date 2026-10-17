@@ -4,6 +4,8 @@ import type { Db } from "../db/pool.js";
 import { createLogger, describeError } from "../logger.js";
 import type { FileStorage } from "../storage/file-storage.js";
 import { sniffImageType } from "../storage/image-type-sniff.js";
+import type { AddressLookup } from "../net/public-address-guard.js";
+import { PermanentDownloadError, guardedDownload, type Fetcher } from "./guarded-download.js";
 
 // Link file của Zalo có hạn — tải NGAY lúc tin tới. Hàng đợi nằm trong tiến trình; tiến trình
 // chết giữa chừng thì lúc khởi động lại quét các dòng Pending trong DB rồi tải tiếp.
@@ -25,7 +27,7 @@ const EXTENSION_BY_MIME: Record<string, string> = {
 
 const log = createLogger("file");
 
-export type Fetcher = (url: string, init: { signal: AbortSignal }) => Promise<Response>;
+export type { Fetcher };
 
 interface AttachmentJob extends RowDataPacket {
   id: number;
@@ -68,6 +70,7 @@ export class AttachmentDownloader {
     private readonly storage: FileStorage,
     private readonly options: { concurrency: number; maxFileBytes: number },
     private readonly fetcher: Fetcher = fetch,
+    private readonly lookup?: AddressLookup,
   ) {}
 
   /** Đổi trần cỡ tệp (màn Cài đặt) — áp dụng cho tệp tải từ lúc này. */
@@ -153,25 +156,12 @@ export class AttachmentDownloader {
     }
   }
 
-  private async download(url: string): Promise<{ body: Buffer; contentType: string }> {
-    const response = await this.fetcher(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
-    if (response.status === 403 || response.status === 404 || response.status === 410) {
-      throw new PermanentDownloadError(`HTTP ${response.status} — link đã chết`);
-    }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const declared = Number(response.headers.get("content-length"));
-    if (declared > this.options.maxFileBytes) {
-      throw new PermanentDownloadError(`Tệp ${declared} byte vượt trần ${this.options.maxFileBytes}`);
-    }
-    const body = Buffer.from(await response.arrayBuffer());
-    if (body.length > this.options.maxFileBytes) {
-      throw new PermanentDownloadError(`Tệp ${body.length} byte vượt trần ${this.options.maxFileBytes}`);
-    }
-    return { body, contentType: response.headers.get("content-type") ?? "application/octet-stream" };
+  private download(url: string): Promise<{ body: Buffer; contentType: string }> {
+    return guardedDownload(url, {
+      fetcher: this.fetcher, maxBytes: this.options.maxFileBytes, signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS), lookup: this.lookup,
+    });
   }
 }
-
-class PermanentDownloadError extends Error {}
 
 /** Phần của `AttachmentDownloader` mà `requestAndAwaitDownload` cần — tách riêng để test tiêm được bản giả, không cần
  * dựng cả `AttachmentDownloader` thật (storage, fetcher…). `AttachmentDownloader` khớp kiểu này sẵn (cấu trúc, không

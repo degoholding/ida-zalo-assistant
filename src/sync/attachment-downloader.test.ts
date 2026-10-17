@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
-import { requestAndAwaitDownload, resolveExtension, sanitizeFileName, type DownloadEnqueuer } from "./attachment-downloader.js";
+import type { FileStorage } from "../storage/file-storage.js";
+import { AttachmentDownloader, requestAndAwaitDownload, resolveExtension, sanitizeFileName, type DownloadEnqueuer } from "./attachment-downloader.js";
 
 // requestAndAwaitDownload (phase 6, 10/10/2026): trợ lý chủ động đọc một tệp Skip/Failed/Pending còn link Zalo — đưa
 // về Pending + xếp hàng tải + CHỜ tới khi Stored / Failed / hết thời gian. Giả `db.query` thay vì dựng MySQL thật (hàm
@@ -74,4 +75,65 @@ test("resolveExtension: đuôi Zalo báo / content-type đi trước chữ ký; 
   assert.equal(resolveExtension("xlsx", "application/octet-stream", JPEG_BYTES), "xlsx");
   assert.equal(resolveExtension("", "image/png; charset=binary", JPEG_BYTES), "png");
   assert.equal(resolveExtension("", "application/octet-stream", Buffer.from("plain text")), "bin");
+});
+
+// Chống SSRF / cạn RAM ở cấp AttachmentDownloader (giả db + storage, không mạng thật).
+function runDownloader(sourceUrl: string, fetcher: (url: string) => Promise<Response>, maxFileBytes = 100) {
+  const updates: unknown[][] = [];
+  const stored: Buffer[] = [];
+  const db = {
+    query: async (sql: string, params?: unknown[]) => {
+      if (sql.startsWith("SELECT")) {
+        return [[{ id: 1, source_url: sourceUrl, file_name: "", file_ext: "", attempts: 0, zalo_group_id: "g", sent_at: new Date("2026-10-01") }]];
+      }
+      updates.push(params ?? []);
+      return [{ affectedRows: 1 }];
+    },
+  } as unknown as Db;
+  const storage = { put: async (key: string, body: Buffer) => { stored.push(body); return key; } } as unknown as FileStorage;
+  const lookup = async (host: string) => (host === "cdn.test" ? ["93.184.216.34"] : ["10.0.0.9"]);
+  const downloader = new AttachmentDownloader(db, storage, { concurrency: 1, maxFileBytes }, (url) => fetcher(url), lookup);
+  return { downloader, updates, stored };
+}
+
+test("AttachmentDownloader: link tới IP nội bộ → Failed, không gọi fetcher, không lưu gì", async () => {
+  let calls = 0;
+  const { downloader, updates, stored } = runDownloader("http://169.254.169.254/latest/meta-data", async () => { calls += 1; return new Response("secret"); });
+  downloader.enqueue(1);
+  await downloader.drain();
+  assert.equal(calls, 0);
+  assert.equal(stored.length, 0);
+  assert.equal(updates[0][0], AttachmentStatus.Failed);
+});
+
+test("AttachmentDownloader: CDN chuyển hướng vào 127.0.0.1 → Failed, chưa từng gọi tới đích nội bộ", async () => {
+  const urls: string[] = [];
+  const { downloader, updates, stored } = runDownloader("https://cdn.test/a.jpg", async (url) => {
+    urls.push(url);
+    return new Response(null, { status: 302, headers: { location: "http://127.0.0.1:3306/" } });
+  });
+  downloader.enqueue(1);
+  await downloader.drain();
+  assert.deepEqual(urls, ["https://cdn.test/a.jpg"]);
+  assert.equal(stored.length, 0);
+  assert.equal(updates[0][0], AttachmentStatus.Failed);
+});
+
+test("AttachmentDownloader: thân vô hạn không content-length bị cắt ở trần → Failed", async () => {
+  let pulls = 0;
+  const infinite = new ReadableStream<Uint8Array>({ pull(c) { pulls += 1; c.enqueue(new Uint8Array(40)); } });
+  const { downloader, updates, stored } = runDownloader("https://cdn.test/big", async () => new Response(infinite));
+  downloader.enqueue(1);
+  await downloader.drain();
+  assert.ok(pulls < 10);
+  assert.equal(stored.length, 0);
+  assert.equal(updates[0][0], AttachmentStatus.Failed);
+});
+
+test("AttachmentDownloader: tải CDN bình thường → Stored", async () => {
+  const { downloader, updates, stored } = runDownloader("https://cdn.test/a.png", async () => new Response(Buffer.from("png!"), { headers: { "content-type": "image/png" } }));
+  downloader.enqueue(1);
+  await downloader.drain();
+  assert.equal(stored[0].toString(), "png!");
+  assert.equal(updates[0][0], AttachmentStatus.Stored);
 });

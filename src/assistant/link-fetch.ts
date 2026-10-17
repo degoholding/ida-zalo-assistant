@@ -1,5 +1,4 @@
-import { lookup } from "node:dns/promises";
-import net from "node:net";
+import { UnsafeUrlError, assertPublicHttpUrl, isPrivateAddress } from "../net/public-address-guard.js";
 
 // Tải tệp qua link công khai, giới hạn an toàn: chặn SSRF (mọi bước chuyển hướng đều kiểm máy đích không phải địa chỉ
 // nội bộ — máy chủ bot nằm cùng mạng với MySQL), cắt theo trần byte NƠI GỌI quyết định (`pickLimit`) ngay sau khi có
@@ -22,28 +21,15 @@ const VIRUS_SCAN_TEXT =
   "Google Drive báo tệp này quá lớn để tự quét virus và cần xác nhận tải — bot đã thử tải thẳng nhưng Google vẫn chặn lại; " +
   "nhờ người gửi tải tệp về máy rồi gửi trực tiếp cho bot thay vì gửi link.";
 
-/** Địa chỉ nội bộ / dành riêng — không cho bot gọi tới. */
-export function isPrivateAddress(address: string): boolean {
-  // IPv4 gói trong IPv6: «::ffff:127.0.0.1» — trình phân tích URL viết lại thành dạng hex «::ffff:7f00:1» (lỗ cũ: dạng hex
-  // lọt qua vì không phải IPv4, tìm ra 07/10/2026 khi viết bài kiểm trạm Khóa AI)
-  const mappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(address);
-  const v4 = mappedHex
-    ? [parseInt(mappedHex[1], 16) >> 8, parseInt(mappedHex[1], 16) & 255, parseInt(mappedHex[2], 16) >> 8, parseInt(mappedHex[2], 16) & 255].join(".")
-    : address.startsWith("::ffff:") ? address.slice(7) : address;
-  if (net.isIPv4(v4)) {
-    const [a, b] = v4.split(".").map(Number);
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
-  }
-  const v6 = address.toLowerCase();
-  return v6 === "::" || v6 === "::1" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
-}
+export { isPrivateAddress };
 
 async function assertPublicHost(url: URL): Promise<void> {
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  const addresses = net.isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((item) => item.address);
-  if (!addresses.length) throw new LinkReadError(`Không tìm thấy máy chủ ${host}.`);
-  if (addresses.some(isPrivateAddress)) throw new LinkReadError("Không đọc link trỏ vào mạng nội bộ.");
+  try {
+    await assertPublicHttpUrl(url);
+  } catch (error) {
+    if (!(error instanceof UnsafeUrlError)) throw error;
+    throw new LinkReadError(error.reason === "not-found" ? error.message : "Không đọc link trỏ vào mạng nội bộ.");
+  }
 }
 
 /** Tên tệp trong header Content-Disposition — Drive hay trả content-type chung chung, phải đoán loại theo đuôi tên tệp. */

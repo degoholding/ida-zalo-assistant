@@ -1,5 +1,6 @@
 import dns from "node:dns/promises";
 import net from "node:net";
+import { isPrivateAddress } from "../net/public-address-guard.js";
 import type { WebSearchResult } from "./gemini-client.js";
 
 // Tìm web KHÔNG cần khóa (08/10/2026, đại ca: «bot ERP search được») — chép cách của bot ERP (ai-CR-110,
@@ -78,18 +79,6 @@ export function extractPageText(html: string): string {
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<(script|style|noscript|nav|footer|header|svg|form|aside|iframe)\b[\s\S]*?<\/\1>/gi, " ");
   return clean(stripped);
-}
-
-function isPrivateAddress(address: string): boolean {
-  if (net.isIPv4(address)) {
-    const [a, b] = address.split(".").map(Number);
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
-      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
-  }
-  const lower = address.toLowerCase();
-  if (lower.startsWith("::ffff:")) return isPrivateAddress(lower.slice(7));
-  return lower === "::1" || lower === "::" || lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("fe8")
-    || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb") || lower.startsWith("ff");
 }
 
 const defaultResolver: HostResolver = async (host) => (await dns.lookup(host, { all: true })).map((entry) => entry.address);

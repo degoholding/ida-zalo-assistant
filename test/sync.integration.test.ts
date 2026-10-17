@@ -58,6 +58,10 @@ function makeMessage(overrides: Partial<IncomingGroupMessage> = {}): IncomingGro
   };
 }
 
+/** Tên máy giả trong test (f, p, f.zdn.vn) không phân giải được bằng DNS thật — bộ chặn SSRF của bộ tải sẽ báo
+ * «không tìm thấy máy». Tiêm bộ phân giải trả một IP công khai để test đi đúng luồng tải. */
+const publicLookup = async (): Promise<string[]> => ["93.184.216.34"];
+
 function fakeResponse(status: number, body = "", headers: Record<string, string> = {}): Response {
   return new Response(status === 204 ? null : body, { status, headers });
 }
@@ -149,7 +153,7 @@ describe("đồng bộ tin nhóm trên MySQL", { skip: !databaseUrl && "chưa đ
     await enableGroup("g-ban-hang", true);
     const storage = new MemoryStorage();
     const fetcher: Fetcher = async () => fakeResponse(200, "noi-dung-tep", { "content-type": "application/pdf" });
-    const downloader = new AttachmentDownloader(db, storage, { concurrency: 2, maxFileBytes: 1024 }, fetcher);
+    const downloader = new AttachmentDownloader(db, storage, { concurrency: 2, maxFileBytes: 1024 }, fetcher, publicLookup);
     await ingestGroupMessage(
       { db, defaults: { readMessages: false, captureFiles: false }, onAttachmentQueued: (id) => downloader.enqueue(id) },
       botId,
@@ -168,7 +172,7 @@ describe("đồng bộ tin nhóm trên MySQL", { skip: !databaseUrl && "chưa đ
     const storage = new MemoryStorage();
     const fetcher: Fetcher = async (url) =>
       url.endsWith("/chet") ? fakeResponse(404) : fakeResponse(200, "x".repeat(2000));
-    const downloader = new AttachmentDownloader(db, storage, { concurrency: 1, maxFileBytes: 1000 }, fetcher);
+    const downloader = new AttachmentDownloader(db, storage, { concurrency: 1, maxFileBytes: 1000 }, fetcher, publicLookup);
     const deps = { db, defaults: { readMessages: false, captureFiles: false }, onAttachmentQueued: (id: number) => downloader.enqueue(id) };
     await ingestGroupMessage(deps, botId, makeMessage({ msgId: "a", msgType: "share.file", content: { title: "a.pdf", href: "https://f/chet" } }));
     await ingestGroupMessage(deps, botId, makeMessage({ msgId: "b", msgType: "share.file", content: { title: "b.pdf", href: "https://f/to" } }));
@@ -190,7 +194,7 @@ describe("đồng bộ tin nhóm trên MySQL", { skip: !databaseUrl && "chưa đ
     );
     const storage = new MemoryStorage();
     const downloader = new AttachmentDownloader(db, storage, { concurrency: 1, maxFileBytes: 1000 },
-      async () => fakeResponse(200, "anh", { "content-type": "image/jpeg" }));
+      async () => fakeResponse(200, "anh", { "content-type": "image/jpeg" }), publicLookup);
     assert.equal(await downloader.resumePending(), 1);
     await downloader.drain();
     const [rows] = await db.query<RowDataPacket[]>("SELECT status, storage_key FROM attachment WHERE group_id = ?", [group.id]);
@@ -253,7 +257,7 @@ describe("đồng bộ tin nhóm trên MySQL", { skip: !databaseUrl && "chưa đ
     await updateGroupSettings(db, group.id, { retentionDays: 30 });
     const storage = new MemoryStorage();
     const downloader = new AttachmentDownloader(db, storage, { concurrency: 1, maxFileBytes: 1000 },
-      async () => fakeResponse(200, "cu"));
+      async () => fakeResponse(200, "cu"), publicLookup);
     const deps = { db, defaults: { readMessages: false, captureFiles: false }, onAttachmentQueued: (id: number) => downloader.enqueue(id) };
     const old = Date.now() - 40 * 86_400_000;
     await ingestGroupMessage(deps, botId, makeMessage({ msgId: "cu", sentAtMs: old, msgType: "share.file",
