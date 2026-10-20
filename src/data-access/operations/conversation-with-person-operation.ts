@@ -4,6 +4,7 @@ import { MAX_MESSAGES, MESSAGE_SELECT, formatLines, formatVn, parseTime, type Me
 import { canUse } from "../data-access-context.js";
 import { DataAccessError, translateDbError } from "../data-access-errors.js";
 import { askerUidOf } from "../reads/message-search-core.js";
+import { QUERY_TIME_HINT } from "../query-compiler.js";
 import { threadVisibilitySql } from "../visibility-guards.js";
 import { UNTRUSTED_NOTICE, type ToolDefinition } from "../tool-definition.js";
 
@@ -14,6 +15,7 @@ import { UNTRUSTED_NOTICE, type ToolDefinition } from "../tool-definition.js";
 // Khai báo cho mô hình GIỮ NGUYÊN câu chữ cũ (test khớp khai báo); hỏi trong nhóm thì công cụ ẩn.
 
 const DEFAULT_DAYS = 7;
+const MAX_RANGE_DAYS = 366;
 const DAY_MS = 86_400_000;
 
 const inputSchema = z.object({
@@ -28,6 +30,11 @@ const outputSchema = z.object({
   from: z.string(), to: z.string(), message_count: z.number(), truncated: z.boolean(), messages: z.string(),
 });
 type ConversationOutput = z.infer<typeof outputSchema>;
+
+/** Chèn gợi ý MAX_EXECUTION_TIME ngay sau SELECT đầu tiên của khuôn chọn tin dùng chung. */
+function withTimeHint(select: string): string {
+  return select.replace(/^\s*SELECT\b/i, `SELECT ${QUERY_TIME_HINT}`);
+}
 
 export const conversationWithPersonTool: ToolDefinition<ConversationInput, ConversationOutput> = {
   name: "get_conversation_with_person",
@@ -48,13 +55,16 @@ export const conversationWithPersonTool: ToolDefinition<ConversationInput, Conve
     const includeMe = input.include_me !== false;
     const to = parseTime(input.to, ctx.now);
     const from = parseTime(input.from, new Date(to.getTime() - DEFAULT_DAYS * DAY_MS));
+    if (to.getTime() - from.getTime() > MAX_RANGE_DAYS * DAY_MS) {
+      throw new DataAccessError("range_too_wide", `Khoảng from → to dài quá ${MAX_RANGE_DAYS} ngày — thu hẹp lại (hoặc chia nhiều lần hỏi).`);
+    }
     // Không biết người hỏi (khóa MCP không gắn liên hệ) thì «tin của tôi» không có nghĩa — bỏ nhánh đó, không đoán
     const askerUid = askerUidOf(ctx);
     const visible = threadVisibilitySql(ctx, "g");
     let rows: MessageLineRow[];
     try {
       [rows] = await ctx.db.query<MessageLineRow[]>(
-        `${MESSAGE_SELECT}
+        `${withTimeHint(MESSAGE_SELECT)}
          WHERE m.sent_at >= ? AND m.sent_at < ? AND m.recalled_at IS NULL AND ${visible.sql}
            AND (
              (g.thread_type = ? AND (

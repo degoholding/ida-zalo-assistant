@@ -1,3 +1,4 @@
+// mcp-guard: legacy(send) — dựng `HighlightCache` của brief-ai-highlights (đọc DB điểm tin AI, chưa chuyển sang MCP); gỡ ở phase 13
 import type { AlertAsker } from "../assistant/alert-tools.js";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import type { AskerAccess } from "../assistant/infra/asker-access.js";

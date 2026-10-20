@@ -2,8 +2,10 @@ import { z } from "zod/v4";
 import { TaskSource } from "../../constants.js";
 import type { DataAccessContext } from "../data-access-context.js";
 import { DataAccessError } from "../data-access-errors.js";
-import { eraseTool, type AnyToolDefinition, type ToolDefinition } from "../tool-definition.js";
+import { eraseTool, type AnyToolDefinition, type ToolDefinition, type ToolOutcome } from "../tool-definition.js";
+import { formatDraftPreviewReply } from "../write/draft-preview-reply.js";
 import { executeImmediateWrite } from "../write/immediate-write.js";
+import { executeOrDraftWrite, type GuardedTarget } from "../write/own-text-target-guard.js";
 import { eraseAction } from "../write/write-action.js";
 import { actReply, createdReply, failureReply, listingReply, type TaskActOutcome, type TaskCreatedResult } from "../../tasks/task-command-replies.js";
 import { describeTask } from "../../tasks/task-format.js";
@@ -14,6 +16,9 @@ import { taskRelationshipBatchCreate, type TaskRecapSavedResult } from "./task-r
 import { taskRelationshipCreate, taskRelationshipUpdate } from "./task-relationship-write-actions.js";
 import { taskOutcomeOf } from "./task-write-outcomes.js";
 
+// D-A (20/10/2026): `task_action` hủy / giao lại / dời hạn / ghi chú (báo người khác) chỉ chạy NGAY khi mã V-n nằm trong chữ của chính người hỏi; không thì NHÁP + bản xem
+// trước chờ «đồng ý» (own-text-target-guard.ts). Giao việc mới / xong / mở lại / lưu đề xuất từ lời người hỏi giữ ghi ngay.
+//
 // Công cụ MÔ HÌNH của họ `tasks` (mặt `assistant_model`; tên + khai báo GIỮ NGUYÊN): `list_tasks`, `create_task`, `task_action`, `save_recap_tasks`.
 // Cùng lõi với lệnh gõ nhưng trả `{ result: "<câu>" }` y như công cụ cũ — lỗi quyền / trạng thái / không thấy người cũng là câu trả lời, không phải lỗi công cụ.
 // Ghi do mô hình khởi xướng GHI NGAY (BC1 bỏ), danh tính từ `ctx.contactActor`. Việc AI tự bắt từ nhóm vẫn là đề xuất chờ «ok V-12» (không đi qua đây).
@@ -38,7 +43,7 @@ const declaration = (name: string): string => {
 };
 
 const resultOutput = z.object({ result: z.string() });
-type Outcome<T> = Promise<{ structured: T; summary: string; rowCount: number; entity: string }>;
+type Outcome<T> = Promise<ToolOutcome<T> & { entity: string }>;
 const asOutcome = <T>(structured: T, summary: string, rowCount = 1) => ({ structured, summary, rowCount, entity: "task" });
 
 /** Lỗi quyền / trạng thái / phân giải → CÂU TRẢ LỜI (công cụ cũ trả `{ result: <câu> }`); lỗi khác ném tiếp. */
@@ -49,6 +54,12 @@ function asReply(error: unknown, taskId: number | null): { result: string } {
   }
   throw error;
 }
+
+/** Thao tác việc PHÁ HỦY / báo người khác (D-A): cần mã V-n do chính người hỏi nêu mới chạy ngay. */
+const GUARDED_TASK_ACTIONS: ReadonlySet<string> = new Set(["cancel", "reassign", "reschedule", "note"]);
+
+/** Chữ trả cho mô hình khi thao tác thành nháp — bản xem trước + mã do MÁY CHỦ gửi (`fixedReply`), mô hình không nhận mã. */
+const DRAFT_SENT_RESULT = "Đã tạo nháp và hệ thống đã gửi bản xem trước cho người hỏi. DỪNG: không viết thêm, không báo đã làm; chỉ làm khi người hỏi nhắn «đồng ý».";
 
 const invalid = (message: string) => new DataAccessError("invalid_value", message);
 
@@ -97,7 +108,7 @@ const actionInput = z.object({
 
 const taskActionTool: ToolDefinition<z.infer<typeof actionInput>, z.infer<typeof resultOutput>> = {
   ...modelBase, name: "task_action", title: "Thao tác một việc", description: declaration("task_action"),
-  input: () => actionInput, output: resultOutput, annotations: WRITE,
+  input: () => actionInput, output: resultOutput, annotations: WRITE, blocksAfterFixedReply: true,
   async handler(ctx, input): Outcome<z.infer<typeof resultOutput>> {
     if (!Number.isSafeInteger(input.task_id) || input.task_id <= 0) throw invalid("Thiếu số việc (V-12 → 12).");
     const note = (input.note ?? "").trim().slice(0, 2000);
@@ -111,9 +122,16 @@ const taskActionTool: ToolDefinition<z.infer<typeof actionInput>, z.infer<typeof
         const { task } = await loadTaskForActor(ctx, input.task_id);
         return asOutcome({ result: describeTask(task, ctx.now) }, `Việc V-${task.id}`);
       }
-      const outcome = taskOutcomeOf<TaskActOutcome>(await executeImmediateWrite(ctx, updateWrite, {
+      const target: GuardedTarget | null = GUARDED_TASK_ACTIONS.has(input.action) ? { kind: "task", id: input.task_id } : null;
+      const written = await executeOrDraftWrite(ctx, updateWrite, {
         task_id: input.task_id, action: input.action, note, due_text: due || undefined, assignee_name: assignee || undefined,
-      }));
+      }, target);
+      if (written.kind === "refused") return asOutcome({ result: written.reply }, `Việc V-${input.task_id}: cần xác nhận, không tạo nháp được`, 0);
+      if (written.kind === "drafted") {
+        return { ...asOutcome({ result: DRAFT_SENT_RESULT }, `Đã tạo nháp thao tác việc V-${input.task_id} chờ «đồng ý»`),
+          effects: { fixedReply: formatDraftPreviewReply(written.draft.preview, written.draft.code) } };
+      }
+      const outcome = taskOutcomeOf<TaskActOutcome>(written.done);
       return asOutcome({ result: actReply(outcome) }, `Việc ${outcome.code}: ${outcome.outcome}`);
     } catch (error) {
       return asOutcome(asReply(error, input.task_id), `Việc V-${input.task_id}: không thực hiện được`, 0);

@@ -315,7 +315,12 @@ describe("họ tasks qua MCP (phase 9)", { skip: !databaseUrl && "chưa đặt T
     const service = new AssistantService(db, model, "gia-lap", { maxPerHour: 100, dailyTokenCap: 10_000_000 }, () => NOW,
       { tickets: { db, wakeJobs: () => undefined }, mcpBridge: { families: () => parseMcpFamilies(families), gate: bridgeGate } });
     const contact = (await findContactByUid(db, persona.uid))!;
-    const reply = await service.answer({ botAccountId: 1, contact, threadId: dmThread, questionMessageId: null, question: "xử lý việc giúp anh" });
+    // D-A (20/10/2026): hủy / giao lại / dời hạn / ghi chú do mô hình khởi xướng chỉ ghi NGAY khi mã V-n nằm trong tin của chính người hỏi — lưu tin hỏi như thật
+    // (một dòng cho mỗi người hỏi: chạy lại không đổi id tin, nên `source_message_id` của việc mới giống nhau giữa hai chế độ)
+    const question = "xử lý việc V-1 giúp anh";
+    await db.query("INSERT IGNORE INTO message (group_id, zalo_msg_id, kind, sender_uid, sender_name, sent_at, text) VALUES (?, ?, 0, ?, ?, ?, ?)", [dmThread, `q-${persona.uid}`, persona.uid, persona.uid, NOW, question]);
+    const questionMessageId = Number((await rows("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [dmThread, `q-${persona.uid}`]))[0].id);
+    const reply = await service.answer({ botAccountId: 1, contact, threadId: dmThread, questionMessageId, question });
     const responses = model.requests.at(-1)!.contents.flatMap((content) => content.parts).flatMap((part) => (part.functionResponse ? [part.functionResponse.response] : []));
     return { reply, responses, model };
   }

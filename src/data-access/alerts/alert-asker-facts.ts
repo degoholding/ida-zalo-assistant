@@ -14,6 +14,12 @@ export interface AlertAsker {
   role: ContactRole;
   /** id người nhận nếu người hỏi là người nhận đang bật */
   recipientId: number | null;
+  /**
+   * Đổi được cấu hình CHUNG (từ khóa, số phút chờ): vai trò Danh bạ Quản lý / Trưởng phòng VÀ (D-B) — nếu có tài khoản web đang bật — tài khoản đó là Quản trị /
+   * Quản lý. `roleDeniedByWeb` = vai trò Danh bạ đủ nhưng tài khoản web chỉ là Nhân viên (để câu từ chối nói đúng lý do).
+   */
+  mayChangeGlobal: boolean;
+  roleDeniedByWeb: boolean;
 }
 
 /** Cài đặt cảnh báo đang chạy (từ `AppConfig.alerts` + giờ làm việc) — lõi không có `config`, nên nơi dựng ngữ cảnh đưa vào. */
@@ -45,7 +51,8 @@ export const ALERT_ASKER_REQUIRED = "Công cụ cảnh báo chỉ dành cho qu�
 /** Công cụ ĐỌC / ghi tin cần xử lý lên danh sách khi: có chủ thể Zalo, hỏi ở tin riêng, tài khoản không bị tắt, nơi dựng ctx đã bật họ (`alertRuntime`). */
 export function alertToolsAvailable(ctx: DataAccessContext): boolean {
   const actor = ctx.contactActor;
-  return Boolean(actor && actor.groupId === null && actor.origin !== "disabled_account" && alertRuntimeOf(ctx));
+  // `ownDirectUid` rỗng = «Hỏi trợ lý» mô phỏng từ web (L5): không công cụ cảnh báo, không nháp cấu hình / «xong tin» gắn vào người được mô phỏng
+  return Boolean(actor && actor.groupId === null && actor.origin !== "disabled_account" && ctx.ownDirectUid === actor.uid && alertRuntimeOf(ctx));
 }
 
 /** Công cụ ĐỔI cấu hình cần thêm khả năng lưu cài đặt (`ctx.saveSettings`). */
@@ -61,7 +68,9 @@ export function alertAskerOf(ctx: DataAccessContext): Promise<AlertAsker | null>
     const recipientId = rows[0] ? Number(rows[0].id) : null;
     const role = Number(actor.contactRole) as ContactRole;
     if (role === ContactRole.None && !recipientId) return null;
-    return { uid: actor.uid, name: actor.name, role, recipientId };
+    const contactRoleOk = role === ContactRole.Manager || role === ContactRole.DepartmentHead;
+    const webRoleOk = await actor.facts.webRoleAllowsOversight();
+    return { uid: actor.uid, name: actor.name, role, recipientId, mayChangeGlobal: contactRoleOk && webRoleOk, roleDeniedByWeb: contactRoleOk && !webRoleOk };
   });
 }
 
@@ -81,4 +90,10 @@ export async function askerGroupIds(ctx: DataAccessContext, asker: AlertAsker): 
   return groups.map((row) => Number(row.group_id));
 }
 
-export const canChangeGlobal = (asker: AlertAsker): boolean => asker.role === ContactRole.Manager || asker.role === ContactRole.DepartmentHead;
+export const canChangeGlobal = (asker: AlertAsker): boolean => asker.mayChangeGlobal;
+
+/** Câu từ chối đổi cấu hình chung: nói đúng lý do (vai trò Danh bạ, hay tài khoản web chỉ là Nhân viên — D-B). */
+export const globalChangeDeniedMessage = (asker: AlertAsker, what: string): string =>
+  asker.roleDeniedByWeb
+    ? `Đổi ${what} áp dụng cho cả công ty — tài khoản web của anh/chị cần vai trò Quản trị / Quản lý.`
+    : `Đổi ${what} áp dụng cho cả công ty — cần vai trò Quản lý / Trưởng phòng.`;

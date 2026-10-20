@@ -1,17 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ContactKind, ContactRole } from "../../constants.js";
+import { ContactKind, ContactRole, UserRole } from "../../constants.js";
 import { fakeDb } from "../data-access-test-support.js";
 import { actorFactMemo, buildContactActor, type AskerOrigin } from "./contact-actor.js";
 
 // Chủ thể liên hệ Zalo + sự thật lười (không DB thật): «DB» giả trả dòng theo câu SQL, đếm số lần hỏi.
 
-interface World { handler?: boolean; recipient?: boolean }
+interface World { handler?: boolean; recipient?: boolean; webRoles?: number[]; messages?: { id: number; text: string; sender: string }[] }
 
 function actorOf(role: number, origin: AskerOrigin, world: World = {}) {
-  const sim = fakeDb((sql) => {
+  const sim = fakeDb((sql, params) => {
     if (/FROM ticket_handler/.test(sql)) return world.handler ? [{ 1: 1 }] : [];
     if (/FROM recipient r/.test(sql)) return world.recipient ? [{ 1: 1 }] : [];
+    if (/FROM app_user/.test(sql)) return (world.webRoles ?? []).map((role) => ({ role }));
+    if (/FROM message WHERE id = \?/.test(sql)) return world.messages?.filter((message) => message.id === params[0]).map((message) => ({ text: message.text })) ?? [];
+    if (/FROM message WHERE group_id/.test(sql)) return (world.messages ?? []).filter((message) => message.sender !== "u-31").map((message) => ({ text: message.text }));
     return [];
   });
   const actor = buildContactActor(sim.db, {
@@ -82,4 +85,41 @@ test("actorFactMemo: nhớ theo contactActor (các bản sao ctx dùng chung), k
   assert.equal(await actorFactMemo(ctx, "flaky", flaky), "ok");
   const other = actorOf(ContactRole.None, "derived_recipient").actor;
   assert.equal(await actorFactMemo({ contactActor: other }, "alert-recipient", load), 5, "chủ thể (lượt) khác không dùng chung bộ nhớ");
+});
+
+test("D-B webRoleAllowsOversight: tài khoản web Nhân viên → không quyền «sếp» dù vai trò Danh bạ Quản lý; Quản trị / Quản lý → có; không tài khoản web → theo Danh bạ", async () => {
+  const staff = actorOf(ContactRole.Manager, "web_user", { webRoles: [UserRole.Staff] });
+  assert.equal(await staff.actor.facts.webRoleAllowsOversight(), false);
+  assert.equal(await staff.actor.facts.isTaskOverseer(), false);
+  assert.equal(await staff.actor.facts.isTicketOverseer(), false);
+  for (const role of [UserRole.Admin, UserRole.Manager]) {
+    const boss = actorOf(ContactRole.Manager, "web_user", { webRoles: [role] });
+    assert.equal(await boss.actor.facts.isTaskOverseer(), true);
+    assert.equal(await boss.actor.facts.isTicketOverseer(), true);
+  }
+  // Nhiều tài khoản cùng liên hệ: hẹp nhất; không dòng nào đang bật (tắt giữa chừng) → không quyền
+  assert.equal(await actorOf(ContactRole.Manager, "web_user", { webRoles: [UserRole.Manager, UserRole.Staff] }).actor.facts.isTaskOverseer(), false);
+  assert.equal(await actorOf(ContactRole.Manager, "web_user", { webRoles: [] }).actor.facts.isTaskOverseer(), false);
+  // Không tài khoản web / nguồn khác: không hỏi app_user, giữ luật Danh bạ
+  const derived = actorOf(ContactRole.Manager, "derived_role");
+  assert.equal(await derived.actor.facts.isTaskOverseer(), true);
+  assert.equal(derived.queries.filter((query) => /FROM app_user/.test(query.sql)).length, 0);
+  // Người nhận cảnh báo + web Nhân viên: cũng mất quyền «sếp» của việc; người xử lý ticket (quản trị chỉ định) giữ
+  assert.equal(await actorOf(ContactRole.None, "web_user", { webRoles: [UserRole.Staff], recipient: true }).actor.facts.isTaskOverseer(), false);
+  assert.equal(await actorOf(ContactRole.None, "web_user", { webRoles: [UserRole.Staff], handler: true }).actor.facts.isTicketOverseer(), true);
+});
+
+test("D-A ownTurnTexts: chữ của chính người hỏi đọc từ tin hỏi + câu bot liền trước (cuộc riêng); trong nhóm không có câu bot; ghi đè được; nhớ một lần", async () => {
+  const world: World = { messages: [{ id: 99, text: "hủy V-12 đi", sender: "u-31" }, { id: 50, text: "VIỆC CỦA ANH/CHỊ\nV-12 gửi báo giá", sender: "u-bot" }] };
+  const dm = actorOf(ContactRole.None, "derived_recipient", world);
+  assert.deepEqual(await dm.actor.facts.ownTurnTexts(), { asker: "hủy V-12 đi", previousBotReply: "VIỆC CỦA ANH/CHỊ\nV-12 gửi báo giá" });
+  await dm.actor.facts.ownTurnTexts();
+  assert.equal(dm.queries.length, 2, "mỗi truy vấn đúng một lần");
+  const db = fakeDb((sql) => (/FROM message/.test(sql) ? [{ text: "x" }] : [])).db;
+  const group = buildContactActor(db, { contact: { id: 31, uid: "u-31", name: "Lan", role: 0, kind: 2 }, origin: "derived_role", threadId: 9, messageId: 99, groupId: 9 });
+  assert.equal((await group.facts.ownTurnTexts()).previousBotReply, "", "hỏi trong nhóm: không tính câu bot");
+  const forced = buildContactActor(fakeDb().db, { contact: { id: 31, uid: "u-31", name: "Lan", role: 0, kind: 2 }, origin: "derived_role", askerText: "V-3", previousBotReply: "" });
+  assert.deepEqual(await forced.facts.ownTurnTexts(), { asker: "V-3", previousBotReply: "" });
+  const none = buildContactActor(fakeDb().db, { contact: { id: 31, uid: "u-31", name: "Lan", role: 0, kind: 2 }, origin: "derived_role" });
+  assert.deepEqual(await none.facts.ownTurnTexts(), { asker: "", previousBotReply: "" }, "không tin thật (mô phỏng web): rỗng");
 });

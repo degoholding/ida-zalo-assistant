@@ -1,6 +1,6 @@
 // Phase 5 — chủ thể «liên hệ Zalo»: migration 042–044, nháp gắn theo liên hệ (người KHÔNG có tài khoản web), nhật ký gọi có contact_id, bộ phân giải
-// tên người / nhóm so với `resolveAssignee`, và TEST VÀNG: luật quan hệ việc / ticket mới (data-access/actors) cho CÙNG quyết định với luật cũ
-// (task-permissions.ts + buildTaskContext, runTicketCommand) trên ma trận vai × người nhận × nguồn danh tính × quan hệ × cuộc. MySQL thật.
+// tên người so với `resolveAssignee`, và TEST VÀNG: luật quan hệ việc / ticket mới (data-access/actors) cho CÙNG quyết định với luật cũ
+// (task-permissions.ts + buildTaskContext, runTicketCommandLegacy — đường cũ nguyên bản, không qua MCP nên `npm run test:mcp` vẫn có nghĩa) trên ma trận vai × người nhận × nguồn danh tính × quan hệ × cuộc. MySQL thật.
 //
 // Chạy: TEST_DATABASE_URL=mysql://root:...@127.0.0.1:3308/bot_tro_ly_test_am5 npm test
 
@@ -17,7 +17,6 @@ import { buildContactActor, type AskerOrigin } from "../src/data-access/actors/c
 import { decideTaskRelationship, decideTicketRelationship, type TicketAction } from "../src/data-access/actors/contact-relationship-rules.js";
 import { buildDataAccessContext, type DataAccessContext } from "../src/data-access/data-access-context.js";
 import { findTool } from "../src/data-access/read-tool-catalog.js";
-import { requireOneGroup, resolveGroupName } from "../src/data-access/resolvers/group-name-resolver.js";
 import { resolvePersonName } from "../src/data-access/resolvers/person-name-resolver.js";
 import { runTool } from "../src/data-access/tool-runner.js";
 import { executeOpenDraft } from "../src/data-access/write/confirm-write-tool.js";
@@ -34,7 +33,8 @@ import { findContactByUid } from "../src/sync/contact-repository.js";
 import { buildTaskContext, resolveAssignee } from "../src/tasks/task-commands.js";
 import { canManageTask, canViewTask, canWorkOnTask, isTaskAssignee, isTaskAssigner, type TaskViewer } from "../src/tasks/task-permissions.js";
 import type { TaskRow } from "../src/tasks/task-repository.js";
-import { buildTicketContext, runTicketCommand, type TicketCommand } from "../src/tickets/ticket-commands.js";
+// Đường CŨ nguyên bản (không định tuyến qua MCP): `npm run test:mcp` bật mọi họ nên `runTicketCommand` sẽ so luật MỚI với chính nó (L1)
+import { buildTicketContext, runTicketCommandLegacy, type TicketCommand } from "../src/tickets/ticket-commands-legacy.js";
 import { isTicketVisible, overseerPart } from "../src/tickets/ticket-visibility.js";
 import { contactScopeSql } from "../src/web/api/scope.js";
 
@@ -87,6 +87,11 @@ describe("chủ thể liên hệ Zalo (phase 5)", { skip: !databaseUrl && "chưa
     return result.insertId;
   }
   const one = async (sql: string, params: unknown[] = []): Promise<RowDataPacket> => (await db.query<RowDataPacket[]>(sql, params))[0][0];
+  /** Gắn tài khoản web ĐANG BẬT vai trò Quản lý cho liên hệ (nguồn `web_user`): luật mới (D-B) đòi vai trò web Quản trị / Quản lý mới có quyền «sếp», đúng như luật cũ coi vai trò Danh bạ. */
+  const linkManagerAccount = async (contactId: number, uid: string): Promise<void> => {
+    await db.query("INSERT INTO app_user (email, username, full_name, role, contact_id, all_groups, can_view_confidential, is_active) VALUES (?, ?, ?, ?, ?, 1, 0, 1)",
+      [`${uid}@ida.vn`, uid, uid, UserRole.Manager, contactId]);
+  };
 
   // ------------------------------------------------------------------ Migration
   test("migration 042–044: chạy lại KHÔNG lỗi (có kiểm information_schema), cột + chỉ mục đúng", async () => {
@@ -216,21 +221,6 @@ describe("chủ thể liên hệ Zalo (phase 5)", { skip: !databaseUrl && "chưa
     assert.equal((await resolvePersonName(db, "Thư", { scope })).kind, "none");
   });
 
-  test("bộ phân giải nhóm: tên / nhãn, gập dấu, phạm vi, nhóm Mật cần cờ", async () => {
-    const principal = (groupIds: number[] | null, canViewConfidential = false) => ({ userId: 9, tenantId: 1, fullName: "x", email: "", role: UserRole.Manager, groupIds, canViewConfidential });
-    const ctx = (groupIds: number[] | null, confidential = false) => buildDataAccessContext({ db, principal: principal(groupIds, confidential), maskPersonal: false, source: McpCallSource.Assistant, now: NOW });
-    const idOf = async (c: DataAccessContext, name: string) => { const r = await resolveGroupName(c, name); return r.kind === "one" ? r.group.id : r.kind; };
-    assert.equal(await idOf(ctx(null), "k52"), groupA, "theo nhãn, không phân biệt hoa thường");
-    assert.equal(await idOf(ctx(null), "kho can tho"), groupA, "gập dấu");
-    assert.equal(await idOf(ctx(null), "Kế toán"), groupB);
-    assert.equal(await idOf(ctx([groupA]), "Kế toán"), "none", "ngoài phạm vi: không lộ");
-    assert.equal(await idOf(ctx(null), "ban giám đốc"), "confidential");
-    assert.equal(await idOf(ctx([groupA]), "ban giám đốc"), "none", "Mật nhưng cũng ngoài phạm vi: không lộ là có");
-    assert.equal(await idOf(ctx(null, true), "ban giám đốc"), secretGroup);
-    assert.equal(await idOf(ctx(null), "K"), "many");
-    await assert.rejects(requireOneGroup(ctx(null), "ban giám đốc"), (error: unknown) => (error as { code?: string }).code === "confidential");
-  });
-
   // ------------------------------------------------------------------ Test vàng: việc
   test("VÀNG việc: decideTaskRelationship == task-permissions + buildTaskContext trên vai × người nhận × nguồn × quan hệ × nhóm", async () => {
     let compared = 0;
@@ -240,6 +230,7 @@ describe("chủ thể liên hệ Zalo (phase 5)", { skip: !databaseUrl && "chưa
           const uid = `u-t-${seq++}`;
           const contactId = await insertContact(uid, uid, role);
           if (recipient !== "none") await db.query("INSERT INTO recipient (contact_id, name, is_active) VALUES (?, ?, ?)", [contactId, uid, recipient === "active" ? 1 : 0]);
+          if (origin === "web_user") await linkManagerAccount(contactId, uid);
           const contact = { id: contactId, uid, name: uid, role, kind: 2 };
           for (const groupId of [null, groupA]) {
             const actor = buildContactActor(db, { contact, origin, groupId });
@@ -300,6 +291,7 @@ describe("chủ thể liên hệ Zalo (phase 5)", { skip: !databaseUrl && "chưa
           const uid = `u-k-${seq++}`;
           const contactId = await insertContact(uid, uid, role);
           if (handler) await db.query("INSERT INTO ticket_handler (contact_id) VALUES (?)", [contactId]);
+          if (origin === "web_user") await linkManagerAccount(contactId, uid);
           const contact = { id: contactId, uid, name: uid, role, kind: 2 };
           const actor = buildContactActor(db, { contact, origin });
           assert.equal(await actor.facts.isTicketHandler(), handler);
@@ -314,7 +306,7 @@ describe("chủ thể liên hệ Zalo (phase 5)", { skip: !databaseUrl && "chưa
                   const ticketId = inserted.insertId as number;
                   const access = askerAccess(origin, uid);
                   const oldCtx = buildTicketContext({ db }, { contact: { id: contactId, uid, name: uid, role }, threadId: groupId ?? 1, messageId: null, botAccountId: 1, scopeGroupId: groupId ?? undefined, access: async () => access });
-                  const reply = await runTicketCommand(oldCtx, commands[action](ticketId), NOW);
+                  const reply = await runTicketCommandLegacy(oldCtx, commands[action](ticketId), NOW);
                   const visible = await isTicketVisible(db, ticketId, await overseerPart(oldCtx));
                   const next = decideTicketRelationship(
                     { uid, groupId }, { handler: await actor.facts.isTicketHandler(), overseer: await actor.facts.isTicketOverseer() },

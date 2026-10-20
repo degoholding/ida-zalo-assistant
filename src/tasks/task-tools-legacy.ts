@@ -38,7 +38,9 @@ function toCommand(action: TaskToolAction, taskId: number, args: Record<string, 
 
 /** Lưu bảng phân công recap: mỗi dòng một việc (người hỏi là người giao), báo lại dòng thiếu người / thiếu hạn. */
 async function saveRecapTasks(ctx: TaskCommandContext, args: Record<string, unknown>, now: Date): Promise<Record<string, unknown>> {
-  if (!(await ctx.isOverseer()) && ctx.contact.kind !== ContactKind.Staff) return { error: "Chỉ nhân sự công ty mới lưu việc vào checklist được." };
+  // Tài khoản web đã TẮT thì không lưu việc dù liên hệ là Nhân sự (L7)
+  const accountDisabled = ctx.access ? (await ctx.access()).origin === "disabled_account" : false;
+  if (accountDisabled || (!(await ctx.isOverseer()) && ctx.contact.kind !== ContactKind.Staff)) return { error: "Chỉ nhân sự công ty mới lưu việc vào checklist được." };
   const items = Array.isArray(args.tasks) ? args.tasks.slice(0, MAX_RECAP_TASKS) as Record<string, unknown>[] : [];
   if (!items.length) return { error: "Không có việc nào trong danh sách." };
   const assigner: TaskActor = { contactId: ctx.contact.id, uid: ctx.contact.uid, name: ctx.contact.name, via: "zalo" };

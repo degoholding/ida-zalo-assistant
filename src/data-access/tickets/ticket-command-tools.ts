@@ -1,7 +1,9 @@
 import { z } from "zod/v4";
+import { formatDraftPreviewReply } from "../write/draft-preview-reply.js";
 import { executeImmediateWrite } from "../write/immediate-write.js";
+import { executeOrDraftWrite, type GuardedTarget } from "../write/own-text-target-guard.js";
 import { eraseAction } from "../write/write-action.js";
-import { eraseTool, type AnyToolDefinition, type ToolDefinition } from "../tool-definition.js";
+import { eraseTool, type AnyToolDefinition, type ToolDefinition, type ToolOutcome } from "../tool-definition.js";
 import type { DataAccessContext } from "../data-access-context.js";
 import { DataAccessError } from "../data-access-errors.js";
 import { describeTicket } from "../../tickets/ticket-service.js";
@@ -43,7 +45,7 @@ const writeOutput = z.object({
 const resultOutput = z.object({ result: z.string() });
 
 type ActInput = z.infer<typeof actInput>;
-type Outcome<T> = Promise<{ structured: T; summary: string; rowCount: number; entity: string }>;
+type Outcome<T> = Promise<ToolOutcome<T> & { entity: string }>;
 
 const asOutcome = <T>(structured: T, summary: string, rowCount = 1) => ({ structured, summary, rowCount, entity: "ticket" });
 const runWrite = async (ctx: DataAccessContext, action: typeof createWrite, args: unknown): Promise<TicketWriteOutcome> =>
@@ -142,6 +144,10 @@ const modelCreateTicket: ToolDefinition<{ text: string }, z.infer<typeof resultO
   },
 };
 
+/** Thao tác ticket PHÁ HỦY / báo người khác (D-A): cần mã T-n do chính người hỏi nêu mới chạy ngay. */
+const GUARDED_TICKET_ACTIONS: ReadonlySet<string> = new Set(["cancel", "note"]);
+const DRAFT_SENT_RESULT = "Đã tạo nháp và hệ thống đã gửi bản xem trước cho người hỏi. DỪNG: không viết thêm, không báo đã làm; chỉ làm khi người hỏi nhắn «đồng ý».";
+
 const modelActInput = z.object({
   ticket_id: z.number().int(),
   action: z.enum(["status", "accept", "done", "cancel", "note"]),
@@ -150,14 +156,22 @@ const modelActInput = z.object({
 
 const modelTicketAction: ToolDefinition<z.infer<typeof modelActInput>, z.infer<typeof resultOutput>> = {
   ...modelBase, name: "ticket_action", title: "Thao tác một ticket", description: declaration("ticket_action"),
-  input: () => modelActInput, output: resultOutput, annotations: WRITE,
+  input: () => modelActInput, output: resultOutput, annotations: WRITE, blocksAfterFixedReply: true,
   async handler(ctx, input): Outcome<z.infer<typeof resultOutput>> {
     if (!Number.isSafeInteger(input.ticket_id) || input.ticket_id <= 0) throw new DataAccessError("invalid_value", "Thiếu số ticket (T-0012 → 12).");
     const note = (input.note ?? "").trim().slice(0, 2000);
     if (input.action === "note" && !note) throw new DataAccessError("invalid_value", "Thiếu nội dung bổ sung.");
     try {
       if (input.action === "status") return asOutcome({ result: (await describeOne(ctx, input.ticket_id)).description }, `Ticket T-${input.ticket_id}`);
-      const outcome = await runWrite(ctx, updateWrite, { ticket_id: input.ticket_id, action: input.action, note });
+      // D-A: hủy ticket / ghi chú (báo người khác) chỉ chạy ngay khi mã T-n do chính người hỏi nêu; không thì nháp chờ «đồng ý»
+      const target: GuardedTarget | null = GUARDED_TICKET_ACTIONS.has(input.action) ? { kind: "ticket", id: input.ticket_id } : null;
+      const written = await executeOrDraftWrite(ctx, updateWrite, { ticket_id: input.ticket_id, action: input.action, note }, target);
+      if (written.kind === "refused") return asOutcome({ result: written.reply }, `Ticket T-${input.ticket_id}: cần xác nhận, không tạo nháp được`, 0);
+      if (written.kind === "drafted") {
+        return { ...asOutcome({ result: DRAFT_SENT_RESULT }, `Đã tạo nháp thao tác ticket T-${input.ticket_id} chờ «đồng ý»`),
+          effects: { fixedReply: formatDraftPreviewReply(written.draft.preview, written.draft.code) } };
+      }
+      const outcome = ticketOutcomeOf(written.done);
       queueDownloads(ctx, outcome);
       return asOutcome({ result: actReply(outcome as Parameters<typeof actReply>[0]) }, `Ticket ${outcome.code}: ${outcome.outcome}`);
     } catch (error) {

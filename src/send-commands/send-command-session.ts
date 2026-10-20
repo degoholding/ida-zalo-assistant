@@ -2,6 +2,7 @@ import type { AskerAccess } from "../assistant/infra/asker-access.js";
 import { resolveAssistantMcpBridge } from "../assistant/mcp-bridge/assistant-mcp-bridge-config.js";
 import type { AssistantMcpTurn } from "../assistant/mcp-bridge/assistant-mcp-turn.js";
 import { openMcpTurn } from "../assistant/mcp-bridge/open-mcp-turn.js";
+import { OUTCOME_UNKNOWN_CODE } from "../assistant/mcp-bridge/assistant-mcp-turn.js";
 import { ERROR_META_KEY } from "../mcp/mcp-meta-keys.js";
 
 // Phiên MCP mặt `assistant_command` cho lớp lệnh của họ `send` (lệnh gửi gõ, «đồng ý» nháp gửi, tra bản tin, công cụ đề xuất phía trợ lý).
@@ -17,7 +18,7 @@ export interface CommandSessionSource {
 
 export type CommandToolCall = (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
-interface ToolFailure { message?: string }
+interface ToolFailure { code?: string; message?: string }
 
 export async function withCommandSession<T>(
   source: CommandSessionSource, tools: readonly string[], run: (call: CommandToolCall) => Promise<T>,
@@ -39,6 +40,8 @@ export async function withCommandSession<T>(
       const result = await active.callTool("assistant_command", name, args);
       if (result.isError || !result.structuredContent) {
         const failure = (result._meta as Record<string, unknown> | undefined)?.[ERROR_META_KEY] as ToolFailure | undefined;
+        // Lời gọi GHI quá hạn phía client: KHÔNG ném (ném = nơi gọi / việc nền thử lại ⇒ gửi đôi) — trả câu «chưa rõ kết quả» như câu trả lời của lệnh
+        if (failure?.code === OUTCOME_UNKNOWN_CODE) return { reply: failure.message ?? "", outcome_unknown: true };
         throw new Error(`lệnh gửi qua MCP lỗi (${name}): ${failure?.message ?? "không rõ"}`);
       }
       return result.structuredContent as Record<string, unknown>;

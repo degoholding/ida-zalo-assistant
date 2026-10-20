@@ -1,3 +1,4 @@
+// mcp-guard: legacy(files) — kho chữ bóc mặc định `sqlAttachmentTextStore` (đường cũ khi không tiêm kho MCP); gỡ ở phase 13 cùng họ files
 import * as XLSX from "xlsx";
 import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";

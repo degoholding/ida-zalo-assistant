@@ -1,3 +1,4 @@
+// mcp-guard: legacy(files) — dùng bản đọc SQL của gợi ý trả lời (reply-suggestion-sql-reader) cho đường hệ thống + họ `files` tắt; gỡ ở phase 13
 import type { ModelClient } from "../assistant/gemini-client.js";
 import type { ReplyTone } from "../constants.js";
 import type { Db } from "../db/pool.js";

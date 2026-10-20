@@ -4,6 +4,8 @@ import { ConversationType } from "../../constants.js";
 import { canUse } from "../data-access-context.js";
 import { DataAccessError, translateDbError } from "../data-access-errors.js";
 import { contactScopeOf } from "../reads/contact-scope-of-actor.js";
+import { QUERY_TIME_HINT } from "../query-compiler.js";
+import { escapeLikeText } from "../../web/api/list-query.js";
 import { threadVisibilitySql } from "../visibility-guards.js";
 import { UNTRUSTED_NOTICE, type ToolDefinition } from "../tool-definition.js";
 
@@ -40,11 +42,12 @@ export const findPeopleTool: ToolDefinition<FindPeopleInput, FindPeopleOutput> =
     const groupVisible = threadVisibilitySql(ctx, "g");
     const memberVisible = threadVisibilitySql(ctx, "g2");
     const scope = contactScopeOf(ctx);
+    const like = `%${escapeLikeText(name)}%`;
     let rows: RowDataPacket[];
     try {
       // utf8mb4_unicode_ci không phân biệt dấu: "Lan" khớp "Lân", "hoa" khớp "Hòa"
       [rows] = await ctx.db.query<RowDataPacket[]>(
-        `SELECT c.zalo_uid, c.display_name, c.zalo_name,
+        `SELECT ${QUERY_TIME_HINT} c.zalo_uid, c.display_name, c.zalo_name,
                 GROUP_CONCAT(DISTINCT COALESCE(NULLIF(g.label, ''), g.name) SEPARATOR ', ') AS groups_in
          FROM contact c
          LEFT JOIN group_member gm ON gm.zalo_uid = c.zalo_uid AND gm.left_at IS NULL
@@ -55,7 +58,7 @@ export const findPeopleTool: ToolDefinition<FindPeopleInput, FindPeopleOutput> =
            ${scope ? `AND ${scope.sql}` : ""}
          GROUP BY c.id
          LIMIT ${MAX_PEOPLE}`,
-        [ConversationType.Group, ...groupVisible.params, `%${name}%`, `%${name}%`, `%${name}%`, ConversationType.Group, ...memberVisible.params, ...(scope?.params ?? [])],
+        [ConversationType.Group, ...groupVisible.params, like, like, like, ConversationType.Group, ...memberVisible.params, ...(scope?.params ?? [])],
       );
     } catch (error) {
       return translateDbError(error);

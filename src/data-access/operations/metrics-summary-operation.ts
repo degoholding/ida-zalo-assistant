@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { McpCallSource } from "../../constants.js";
 import { ApiError } from "../../web/api/api-http.js";
 import { buildSummary, parseSummaryParams } from "../../web/api/metric-summary-query.js";
 import type { RowDataPacket } from "mysql2";
@@ -66,7 +67,14 @@ async function resolveSummaryInput(ctx: DataAccessContext, input: MetricsInput):
     } catch (error) {
       return translateDbError(error);
     }
-    if (match.codes.length === 0) throw new DataAccessError("invalid_value", `Không khớp chỉ tiêu «${name}». Chỉ tiêu đang có: ${match.available.join(", ") || "(chưa có)"}.`);
+    if (match.codes.length === 0) {
+      // Nhãn chỉ tiêu do nguồn nhập đặt (người ngoài kiểm soát): cổng /mcp ngoài nhận câu đếm + danh sách ở `allowed` (đánh dấu không đáng tin);
+      // trợ lý giữ câu cũ có nhãn trong chữ
+      if (ctx.source === McpCallSource.Http) {
+        throw new DataAccessError("invalid_value", `Không khớp chỉ tiêu «${name}». Có ${match.available.length} chỉ tiêu đang có (xem danh sách trong allowed).`, match.available);
+      }
+      throw new DataAccessError("invalid_value", `Không khớp chỉ tiêu «${name}». Chỉ tiêu đang có: ${match.available.join(", ") || "(chưa có)"}.`);
+    }
     codes = match.codes;
   }
   if (input.period) {
@@ -87,6 +95,8 @@ export const metricsSummaryTool: ToolDefinition<MetricsInput, MetricsOutput> = {
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   available: (ctx) => canUse(ctx, "metric", "read"),
   async handler(ctx, input) {
+    // Kiểm tenant TRƯỚC khi phân giải tên: tên chỉ tiêu khớp / danh sách «đang có» không được lộ nhãn của tenant khác
+    await assertSingleTenantMetrics(ctx);
     const resolved = await resolveSummaryInput(ctx, input);
     const query = new URLSearchParams({ metric: resolved.codes.join(","), from: resolved.from, to: resolved.to });
     if (input.group_by) query.set("group_by", input.group_by);
@@ -99,7 +109,6 @@ export const metricsSummaryTool: ToolDefinition<MetricsInput, MetricsOutput> = {
       if (error instanceof ApiError) throw new DataAccessError("invalid_value", error.message);
       throw error;
     }
-    await assertSingleTenantMetrics(ctx);
     const summary = await buildSummary(ctx.db, params, ctx.now);
     const rows = (summary.rows as Record<string, unknown>[]) ?? [];
     const structured: MetricsOutput = {

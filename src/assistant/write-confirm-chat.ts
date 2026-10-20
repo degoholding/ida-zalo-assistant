@@ -4,6 +4,7 @@ import { McpCallSource, McpCallStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { executeOpenDraft } from "../data-access/write/confirm-write-tool.js";
 import { DataAccessError } from "../data-access/data-access-errors.js";
+import { canPropose } from "../data-access/write/write-action.js";
 import { cancelDraft, draftBindingOf, findOpenDraft, listOpenDrafts, type DraftBinding, type DraftRecord } from "../data-access/write/write-draft-store.js";
 import { WRITE_ACTIONS } from "../data-access/write/write-tool-catalog.js";
 import { logMcpCall } from "../mcp/mcp-call-log.js";
@@ -38,14 +39,33 @@ export function parseWriteCodeCommand(input: string): WriteCodeCommand | null {
 const bindingOf = (access: AskerAccess): DraftBinding => draftBindingOf({ ...access, source: McpCallSource.Assistant, keyId: null });
 
 /**
- * Các nháp ghi đang chờ của người hỏi (tin riêng thật, tài khoản web); rỗng nếu không đủ điều kiện. Mới nhất trước.
+ * Ngữ cảnh để XEM / XÁC NHẬN nháp của người hỏi, hoặc null = không có nháp nào xử lý được. Hai loại nháp:
+ * - `propose_*` (liên hệ / nhóm / mẫu tin…): chỉ người ghi được qua trợ lý (tài khoản web Quản trị / Quản lý, tin riêng thật) — `assistantWriteAccess`;
+ * - nháp QUAN HỆ của chính họ (D-A: hủy / giao lại / dời hạn / ghi chú việc, hủy / ghi chú ticket, «xong tin» do mô hình khởi xướng mà mã không do họ nêu): MỌI liên hệ Zalo
+ *   (không cần tài khoản web hay quyền ghi), nhưng chỉ ở tin riêng thật — `ownDirectUid` rỗng là «Hỏi trợ lý» mô phỏng từ web, không xác nhận hộ người được chọn.
+ */
+function confirmAccessOf(access: AskerAccess): AskerAccess | null {
+  const writable = assistantWriteAccess(access, undefined);
+  if (writable) return writable;
+  const actor = access.contactActor;
+  return actor && actor.groupId === null && access.ownDirectUid === actor.uid ? access : null;
+}
+
+/** M4: chỉ nháp của thao tác trong `WRITE_ACTIONS` mà người hỏi đủ điều kiện làm — không lẫn nháp đổi cấu hình cảnh báo (kho + «đồng ý» riêng ở alert-chat-commands.ts). */
+const isWriteDraftOf = (access: AskerAccess, draft: DraftRecord): boolean => {
+  const action = WRITE_ACTIONS.get(draft.tool);
+  return action !== undefined && canPropose(access, action);
+};
+
+/**
+ * Các nháp ghi đang chờ của người hỏi (tin riêng thật); rỗng nếu không đủ điều kiện. Mới nhất trước.
  * Họ `drafts` bật (có `mcp`) → qua `list_open_drafts` của máy chủ MCP; tắt → đọc thẳng kho nháp (đường cũ).
  */
 export async function pendingWriteDrafts(db: Db, access: AskerAccess, now: Date, mcp?: () => Promise<AssistantMcpTurn | undefined>): Promise<PendingDraft[]> {
-  const writable = assistantWriteAccess(access, undefined);
-  if (!writable) return [];
+  const confirmAccess = confirmAccessOf(access);
+  if (!confirmAccess) return [];
   const turn = await draftCommandSession(await mcp?.());
-  return turn ? listOpenDraftsViaMcp(turn) : listOpenDrafts(db, bindingOf(writable), now);
+  return turn ? listOpenDraftsViaMcp(turn) : (await listOpenDrafts(db, bindingOf(confirmAccess), now)).filter((draft) => isWriteDraftOf(confirmAccess, draft));
 }
 
 const shortPreview = (draft: PendingDraft) => draft.preview.replace(/\s+/g, " ").slice(0, 160);
@@ -73,7 +93,7 @@ async function logOutcome(access: AskerAccess, tool: string, status: McpCallStat
 /** Chạy «đồng ý» / «hủy» lên đúng một nháp, hoặc hỏi lại mã khi mơ hồ. Trả đúng câu bot nhắn lại. */
 export async function runWriteConfirm(input: WriteConfirmInput): Promise<string> {
   const { access, drafts, now } = input;
-  const writable = assistantWriteAccess(access, undefined);
+  const writable = confirmAccessOf(access);
   if (!writable) return "Tài khoản này không ghi dữ liệu qua trợ lý được.";
   const turn = await draftCommandSession(await input.mcp?.());
   if (turn) {
@@ -83,10 +103,11 @@ export async function runWriteConfirm(input: WriteConfirmInput): Promise<string>
   let draft: DraftRecord | null = null;
   if (input.code) {
     draft = await findOpenDraft(access.db, bindingOf(writable), input.code, now);
-    if (!draft) return "Mã không đúng, đã hết hạn (10 phút) hoặc đã dùng — nhờ em tạo đề xuất mới.";
+    // Nháp đổi cấu hình cảnh báo (M4) xử lý ở alert-chat-commands.ts — ở đây coi như không có mã này
+    if (!draft || !WRITE_ACTIONS.has(draft.tool)) return "Mã không đúng, đã hết hạn (10 phút) hoặc đã dùng — nhờ em tạo đề xuất mới.";
   } else if (drafts.length === 1) {
     // `drafts` có thể đến từ MCP (chỉ id / xem trước) — đường cũ cần bản ghi đầy đủ
-    draft = (await listOpenDrafts(access.db, bindingOf(writable), now)).find((item) => item.id === drafts[0].id) ?? null;
+    draft = (await listOpenDrafts(access.db, bindingOf(writable), now)).find((item) => item.id === drafts[0].id && WRITE_ACTIONS.has(item.tool)) ?? null;
     if (!draft) return "Đề xuất này đã hết hạn hoặc đã xử lý rồi.";
   } else {
     const lines = drafts.slice(0, 5).map((item, index) => `${index + 1}. ${shortPreview(item)}`);

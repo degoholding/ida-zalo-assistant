@@ -68,11 +68,15 @@ export function describeContactChoices(rows: { name: string; kind: number }[], n
 /**
  * Chọn đúng MỘT người nếu rõ ràng: chỉ một người khớp; hoặc (trong số người ở nhóm, nếu có) chỉ một người khớp đúng tên /
  * chỉ một người ở nhóm. Không rõ thì null — nơi gọi đưa danh sách cho người dùng chọn. Hàm thuần.
+ *
+ * Biệt danh trong nhóm KHÔNG được âm thầm thắng một người khớp ĐÚNG tên Danh bạ nằm ngoài nhóm (L2): nếu người ở nhóm được chọn chỉ khớp một phần / theo biệt danh
+ * mà còn có người khớp đúng tên ở ngoài nhóm, hai người là hai khả năng → null để hỏi lại. Người ở nhóm khớp đúng tên vẫn thắng như cũ.
  */
 export function pickContactMatch(matches: ContactMatch[]): ContactMatch | null {
   if (matches.length === 1) return matches[0];
   const pool = matches.some((match) => match.inGroup) ? matches.filter((match) => match.inGroup) : matches;
-  if (pool.length === 1) return pool[0];
+  const exactOutsideGroup = matches.some((match) => match.exact && !pool.includes(match));
+  if (pool.length === 1) return pool[0].exact || !exactOutsideGroup ? pool[0] : null;
   const exact = pool.filter((match) => match.exact);
   return exact.length === 1 ? exact[0] : null;
 }

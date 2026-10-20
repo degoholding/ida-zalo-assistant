@@ -53,9 +53,14 @@ const initialStage = (due: TaskDue | null, now = new Date()) => {
   return deadline && deadline.getTime() <= now.getTime() ? TaskRemindStage.Overdue : TaskRemindStage.None;
 };
 
-/** UPDATE kèm điều kiện trạng thái; không dòng nào khớp = người khác vừa đổi → TaskActionError. */
+/**
+ * UPDATE kèm điều kiện «như lúc đọc»: trạng thái VÀ người phụ trách (quyền làm / quản lý đã được kiểm theo người phụ trách lúc đọc — giao lại xen giữa thì
+ * quyết định đó lạc hậu). Không dòng nào khớp = người khác vừa đổi → TaskActionError.
+ */
 async function transition(deps: TaskDeps, task: TaskRow, from: TaskStatus[], set: string, params: unknown[], extraWhere = ""): Promise<TaskRow> {
-  const [result] = await deps.db.query<ResultSetHeader>(`UPDATE task SET ${set} WHERE id = ? AND status IN (?) ${extraWhere}`, [...params, task.id, from]);
+  const [result] = await deps.db.query<ResultSetHeader>(
+    `UPDATE task SET ${set} WHERE id = ? AND status IN (?) AND assignee_contact_id <=> ? AND COALESCE(assignee_uid, '') = ? ${extraWhere}`,
+    [...params, task.id, from, task.assignee?.contactId ?? null, task.assignee?.uid ?? ""]);
   if (result.affectedRows === 0) throw new TaskActionError(`${shortTaskCode(task)} vừa được cập nhật — nhắn «${shortTaskCode(task)}» để xem.`);
   return (await findTask(deps.db, task.id))!;
 }

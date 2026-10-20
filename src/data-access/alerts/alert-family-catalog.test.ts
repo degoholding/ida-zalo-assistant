@@ -19,11 +19,15 @@ const runtime: AlertRuntime = {
 };
 type CtxExtra = DataAccessContext & { alertRuntime?: AlertRuntime };
 
-function ctxOf(options: { actor?: boolean; groupId?: number | null; origin?: "web_user" | "derived_role" | "derived_recipient" | "disabled_account"; runtime?: boolean; save?: boolean } = {}): DataAccessContext {
+function ctxOf(options: { actor?: boolean; groupId?: number | null; origin?: "web_user" | "derived_role" | "derived_recipient" | "disabled_account"; runtime?: boolean; save?: boolean; simulated?: boolean } = {}): DataAccessContext {
   const { db } = fakeDb();
   const contactActor = options.actor === false ? undefined
     : buildContactActor(db, { contact: { id: 5, uid: "u-5", name: "Hà", role: 1, kind: 2 }, origin: options.origin ?? "derived_role", groupId: options.groupId ?? null });
-  const ctx: CtxExtra = { ...makeCtx(manager({ userId: null }), { source: McpCallSource.Assistant, contactActor, saveSettings: options.save === false ? undefined : async () => [] }) };
+  const ctx: CtxExtra = {
+    ...makeCtx(manager({ userId: null }), { source: McpCallSource.Assistant, contactActor, saveSettings: options.save === false ? undefined : async () => [] }),
+    // Tin riêng thật: cuộc riêng của chính người hỏi; «Hỏi trợ lý» mô phỏng từ web không có (L5)
+    ownDirectThreadsOnly: true, ownDirectUid: options.simulated ? null : "u-5",
+  };
   if (options.runtime !== false) ctx.alertRuntime = runtime;
   return ctx;
 }
@@ -66,6 +70,8 @@ test("điều kiện hiện công cụ: cần chủ thể Zalo + tin riêng + t�
   assert.equal(read.available(ctxOf({ groupId: 12 })), false, "hỏi trong nhóm không có công cụ cảnh báo");
   assert.equal(read.available(ctxOf({ origin: "disabled_account" })), false);
   assert.equal(read.available(ctxOf({ runtime: false })), false, "chưa gắn alertRuntime ⇒ ẩn, trợ lý chạy đường cũ");
+  assert.equal(read.available(ctxOf({ simulated: true })), false, "L5: «Hỏi trợ lý» mô phỏng từ web không có công cụ cảnh báo (không nháp gắn vào người được mô phỏng)");
+  assert.equal(config.available(ctxOf({ simulated: true })), false);
   assert.equal(read.available(ctxOf({ save: false })), true);
   assert.equal(config.available(ctxOf({ save: false })), false);
   assert.equal(byName("alert_config_confirm").available(ctxOf({ save: false })), false);

@@ -8,7 +8,7 @@ import type { DataAccessContext } from "../data-access-context.js";
 import { DataAccessError } from "../data-access-errors.js";
 import { threadVisibilitySql } from "../visibility-guards.js";
 import type { WriteAction } from "../write/write-action.js";
-import { alertRuntimeOf, askerGroupIds, canChangeGlobal, requireAlertAsker, type AlertAsker } from "./alert-asker-facts.js";
+import { alertRuntimeOf, askerGroupIds, canChangeGlobal, globalChangeDeniedMessage, requireAlertAsker, type AlertAsker } from "./alert-asker-facts.js";
 
 // Hai thao tác ghi của họ `alerts`, đều theo QUAN HỆ của người đang nhắn (`permission: "relationship"`):
 // - `alert_item_handled`: «xong tin số N» — GHI NGAY (BC1 bỏ), phạm vi như danh sách «cần xử lý».
@@ -40,15 +40,20 @@ export const alertItemHandledAction: WriteAction<z.infer<typeof handledSchema>> 
     const groups = await askerGroupIds(ctx, asker);
     const visible = threadVisibilitySql(ctx, "g");
     const [rows] = await ctx.db.query<RowDataPacket[]>(
-      `SELECT f.message_id, m.group_id FROM message_flag f JOIN message m ON m.id = f.message_id JOIN zalo_group g ON g.id = m.group_id
-       WHERE f.message_id = ? AND ${visible.sql}`, [input.message_id, ...visible.params]);
+      `SELECT f.message_id, m.group_id, m.text FROM message_flag f JOIN message m ON m.id = f.message_id JOIN zalo_group g ON g.id = m.group_id
+       WHERE f.message_id = ? AND ${visible.sql} AND (f.for_uid IS NULL OR f.for_uid = ?) AND f.pending_ai = 0`, [input.message_id, ...visible.params, asker.uid]);
     if (!rows[0] || (groups && !groups.includes(Number(rows[0].group_id)))) throw new DataAccessError("not_found", NOT_IN_LIST);
-    return { preview: `Đánh dấu xong tin #${input.message_id}`, targetEntity: "message", targetId: input.message_id, stateToken: "" };
+    // Trích đầu tin (dữ liệu Zalo, đặt trong «…») để người duyệt nháp biết mình đang đánh dấu tin nào
+    const excerpt = String(rows[0].text ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+    return { preview: `Đánh dấu xong tin #${input.message_id}${excerpt ? ` «${excerpt}»` : ""}`, targetEntity: "message", targetId: input.message_id, stateToken: "" };
   },
   async execute(ctx, input) {
     const asker = await requireAlertAsker(ctx);
-    await ctx.db.query("UPDATE message_flag SET reply_state = ?, handled_at = ?, handled_by_uid = ?, handled_message_id = NULL WHERE message_id = ?",
-      [ReplyState.Handled, ctx.now, asker.uid, input.message_id]);
+    // Điều kiện «của người này» lặp lại ở UPDATE (như danh sách «cần xử lý»): tin gắn riêng cho người khác / còn chờ AI duyệt không bị đánh dấu xong nhầm
+    await ctx.db.query(
+      `UPDATE message_flag SET reply_state = ?, handled_at = ?, handled_by_uid = ?, handled_message_id = NULL
+       WHERE message_id = ? AND (for_uid IS NULL OR for_uid = ?) AND pending_ai = 0`,
+      [ReplyState.Handled, ctx.now, asker.uid, input.message_id, asker.uid]);
     return { entity: "message", id: input.message_id, changed: ["Đã xử lý"], message: "Đã đánh dấu xong — em thôi nhắc tin này." };
   },
 };
@@ -92,7 +97,7 @@ async function plan(ctx: DataAccessContext, asker: AlertAsker, input: ConfigChan
       return { recipientId: asker.recipientId, preview: `${action === "add_vip" ? "Thêm" : "Bỏ"} «${rows[0].name}» ${action === "add_vip" ? "vào" : "khỏi"} danh sách VIP của anh/chị` };
     }
     case "add_urgent_keyword": case "remove_urgent_keyword": case "add_important_keyword": case "remove_important_keyword": {
-      if (!canChangeGlobal(asker)) throw new DataAccessError("forbidden", "Đổi từ khóa áp dụng cho cả công ty — cần vai trò Quản lý / Trưởng phòng.");
+      if (!canChangeGlobal(asker)) throw new DataAccessError("forbidden", globalChangeDeniedMessage(asker, "từ khóa"));
       const keyword = (input.keyword ?? "").trim().toLowerCase();
       if (!keyword || keyword.length > 60 || /[,;\n]/.test(keyword)) throw invalid("Mỗi lần một từ khóa (tối đa 60 ký tự, không dấu phẩy).");
       return { recipientId: null, preview: `${action.startsWith("add") ? "Thêm" : "Bỏ"} từ khóa ${action.includes("urgent") ? "KHẨN" : "QUAN TRỌNG"} «${keyword}»` };
@@ -105,7 +110,7 @@ async function plan(ctx: DataAccessContext, asker: AlertAsker, input: ConfigChan
       return { recipientId: asker.recipientId, preview: `Giờ bản tin của anh/chị: sáng ${morning || "tắt"}, cuối ngày ${evening || "tắt"}` };
     }
     case "set_reply_wait_minutes": case "set_vip_wait_minutes": {
-      if (!canChangeGlobal(asker)) throw new DataAccessError("forbidden", "Đổi thời gian chờ áp dụng cho cả công ty — cần vai trò Quản lý / Trưởng phòng.");
+      if (!canChangeGlobal(asker)) throw new DataAccessError("forbidden", globalChangeDeniedMessage(asker, "thời gian chờ"));
       const minutes = Number(input.minutes);
       const [min, max] = action === "set_vip_wait_minutes" ? [5, 1440] : [10, 2880];
       if (!Number.isInteger(minutes) || minutes < min || minutes > max) throw invalid(`Số phút từ ${min} đến ${max}.`);

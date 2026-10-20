@@ -236,12 +236,21 @@ describe("họ tickets qua MCP (phase 8)", { skip: !databaseUrl && "chưa đặt
   });
 
   // ------------------------------------------------------------------ Mô hình
+  /** Lưu tin hỏi của `persona` (một dòng cho mỗi cặp người + câu — chạy lại không đổi id tin, nên `source_message_id` của ticket mới giống nhau giữa hai chế độ). */
+  async function storeQuestion(persona: Persona, question: string): Promise<number> {
+    const key = `q-${persona.uid}-${question}`.slice(0, 40);
+    await db.query("INSERT IGNORE INTO message (group_id, zalo_msg_id, kind, sender_uid, sender_name, sent_at, text) VALUES (?, ?, 0, ?, ?, ?, ?)", [dmThread, key, persona.uid, persona.uid, NOW, question]);
+    return Number((await rows("SELECT id FROM message WHERE group_id = ? AND zalo_msg_id = ?", [dmThread, key]))[0].id);
+  }
   async function modelRun(families: string, script: Parts[], persona: Persona = personas.handler) {
     const model = new ScriptedModel(script);
     const service = new AssistantService(db, model, "gia-lap", { maxPerHour: 100, dailyTokenCap: 10_000_000 }, () => NOW,
       { tickets: { db, wakeJobs: () => undefined }, mcpBridge: { families: () => parseMcpFamilies(families), gate: bridgeGate } });
     const contact = (await findContactByUid(db, persona.uid))!;
-    const request: AssistantRequest = { botAccountId: 1, contact, threadId: dmThread, questionMessageId: null, question: "đóng ticket 1 giúp anh" };
+    // D-A (20/10/2026): hủy / ghi chú ticket do mô hình khởi xướng chỉ ghi NGAY khi mã ticket nằm trong tin của chính người hỏi — lưu tin hỏi như thật
+    const question = "đóng ticket T-1 giúp anh";
+    const questionMessageId = await storeQuestion(persona, question);
+    const request: AssistantRequest = { botAccountId: 1, contact, threadId: dmThread, questionMessageId, question };
     const reply = await service.answer(request);
     const responses = model.requests.at(-1)!.contents.flatMap((content) => content.parts).flatMap((part) => (part.functionResponse ? [part.functionResponse.response] : []));
     return { reply, responses, model };
@@ -326,7 +335,8 @@ describe("họ tickets qua MCP (phase 8)", { skip: !databaseUrl && "chưa đặt
     const service = new AssistantService(db, model, "gia-lap", { maxPerHour: 100, dailyTokenCap: 10_000_000 }, () => NOW,
       { tickets: { db, wakeJobs: () => undefined, requestDownload: (ids) => { downloads.push(...ids); } }, mcpBridge: { families: () => parseMcpFamilies(families), gate: bridgeGate } });
     const contact = (await findContactByUid(db, persona.uid))!;
-    const reply = await service.answer({ botAccountId: 1, contact, threadId: dmThread, questionMessageId: null, question });
+    // D-A: tin hỏi được lưu để chốt chặn đọc mã ticket do chính người hỏi nêu
+    const reply = await service.answer({ botAccountId: 1, contact, threadId: dmThread, questionMessageId: await storeQuestion(persona, question), question });
     return { reply, model };
   }
   const waitForLogs = async (sql: string, min: number) => {
@@ -370,7 +380,7 @@ describe("họ tickets qua MCP (phase 8)", { skip: !databaseUrl && "chưa đặt
       await db.query("DELETE FROM ticket_attachment");
       await db.query("UPDATE attachment SET status = ?", [AttachmentStatus.Skipped]);
       downloads.length = 0;
-      await serviceTurn(families, personas.requester, "bổ sung", [[{ functionCall: { name: "ticket_action", args: { ticket_id: 1, action: "note", note: "kèm ảnh" } } }], [{ text: "xong" }]], downloads);
+      await serviceTurn(families, personas.requester, "bổ sung T-1", [[{ functionCall: { name: "ticket_action", args: { ticket_id: 1, action: "note", note: "kèm ảnh" } } }], [{ text: "xong" }]], downloads);
       assert.deepEqual(downloads, [attachmentId], `${families || "cũ"}: ticket_action note phải đưa ảnh về hàng tải`);
     }
   });

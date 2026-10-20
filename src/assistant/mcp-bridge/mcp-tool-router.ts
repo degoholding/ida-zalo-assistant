@@ -11,7 +11,9 @@ export type McpRoutedExecutor = (context: ToolContext, args: Record<string, unkn
 /** Executor đi qua MCP cho `name`, hoặc undefined nếu lượt này không chuyển công cụ đó sang MCP. */
 export function mcpExecutorFor(context: ToolContext, name: string): McpRoutedExecutor | undefined {
   const turn = context.mcp;
-  if (!turn || !turn.modelHasTool(name)) return undefined;
+  if (!turn) return undefined;
+  // M2: họ đã bật + phiên mở nhưng công cụ bị ẩn cho người hỏi này (hoặc tên cũ chỉ đường cũ như confirm_alert_change) → «không có công cụ», KHÔNG rơi về executor cũ
+  if (!turn.modelHasTool(name)) return turn.ownsTool(name) ? async () => ({ error: `Không có công cụ ${name}` }) : undefined;
   return async (ctx, args) => {
     if (ctx.fixedReply !== undefined && turn.blocksAfterFixedReply(name)) return { error: "Lượt này đã có câu trả lời dựng sẵn — không tạo thêm đề xuất." };
     // `values` → `value`, `isnull` chữ → boolean: phần TRÌNH BÀY riêng của khai báo cho mô hình (xem core-tool-arg-compat) — làm phía client, lõi giữ sơ đồ gốc

@@ -106,8 +106,9 @@ export const taskCreateAction: WriteAction<CreateInput> = {
   async prepare(ctx, input) {
     assertNoMaskedText(ctx, { title: input.title });
     const due = dueOf(ctx, input.due_date, input.due_time, input.due_text);
-    const assignee = await assigneeOf(ctx, input.assignee_contact_id, input.assignee_name, input.source_thread_id);
+    // Nhóm nguồn kiểm TRƯỚC khi phân giải người: tên người dùng nhóm làm ưu tiên tìm — nhóm ngoài phạm vi / Mật không được làm lộ gì qua câu báo trùng tên
     if (input.source_thread_id !== undefined) await assertThreadReadable(ctx, input.source_thread_id);
+    const assignee = await assigneeOf(ctx, input.assignee_contact_id, input.assignee_name, input.source_thread_id);
     const parts = [`Tạo việc ${quote(input.title)}`, `phụ trách: ${assignee ? quote(assignee.name) : "chưa có"}`, `hạn: ${formatDue(due?.at ?? null, due?.hasTime ?? false, ctx.now)}`];
     if (input.source_thread_id !== undefined) parts.push(`nhóm nguồn #${input.source_thread_id}`);
     return { preview: parts.join(" — "), targetEntity: "task", targetId: null, stateToken: `new${resolvedToken(usesText(input), due, assignee)}` };
@@ -115,9 +116,9 @@ export const taskCreateAction: WriteAction<CreateInput> = {
   async execute(ctx, input, expectedState) {
     assertNoMaskedText(ctx, { title: input.title });
     const due = dueOf(ctx, input.due_date, input.due_time, input.due_text);
+    if (input.source_thread_id !== undefined) await assertThreadReadable(ctx, input.source_thread_id);
     const assignee = await assigneeOf(ctx, input.assignee_contact_id, input.assignee_name, input.source_thread_id);
     if (`new${resolvedToken(usesText(input), due, assignee)}` !== expectedState) throw new DataAccessError("stale_target", STALE_MESSAGE);
-    if (input.source_thread_id !== undefined) await assertThreadReadable(ctx, input.source_thread_id);
     const assignerContactId = await resolveAssignerContactId(ctx.db, ctx.principal);
     const task = await createTask(taskDeps(ctx), {
       title: input.title, assignee, source: TaskSource.Assistant, sourceThreadId: input.source_thread_id ?? null, due, via: "web",

@@ -14,6 +14,11 @@ export class ConcurrencyGate {
 
   constructor(private readonly max: number, private readonly waitMs: number) {}
 
+  /** Thời gian chờ chỗ tối đa (ms) — bộ chờ lời gọi phía client dùng để đặt hạn chờ lớn hơn nó. */
+  get maxWaitMs(): number {
+    return this.waitMs;
+  }
+
   get inFlight(): number {
     return this.active;
   }

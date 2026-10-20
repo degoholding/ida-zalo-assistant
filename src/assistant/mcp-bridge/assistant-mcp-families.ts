@@ -5,6 +5,9 @@ import { createLogger } from "../../logger.js";
 
 const log = createLogger("assistant");
 
+/** Họ lạ đã cảnh báo (L4): hàm này chạy mỗi lượt — chỉ log mỗi giá trị lạ MỘT lần mỗi tiến trình. */
+const warnedUnknown = new Set<string>();
+
 export function parseMcpFamilies(raw: string | null | undefined): ReadonlySet<AssistantFamily> {
   const tokens = (raw ?? "").split(",").map((token) => token.trim().toLowerCase()).filter(Boolean);
   if (tokens.includes("all")) return new Set(ASSISTANT_FAMILIES);
@@ -12,7 +15,10 @@ export function parseMcpFamilies(raw: string | null | undefined): ReadonlySet<As
   const picked = new Set<AssistantFamily>();
   for (const token of tokens) {
     if (known.has(token)) picked.add(token as AssistantFamily);
-    else log.warn(`assistant_mcp_families: bỏ qua họ lạ «${token}»`);
+    else if (!warnedUnknown.has(token)) {
+      warnedUnknown.add(token);
+      log.warn(`assistant_mcp_families: bỏ qua họ lạ «${token}»`);
+    }
   }
   return picked;
 }

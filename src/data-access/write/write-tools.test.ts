@@ -18,7 +18,11 @@ test("khóa chỉ đọc: không công cụ ghi nào, kể cả quản trị", (
 
 test("khóa đọc+ghi: Quản lý đủ 6 propose + confirm_write; Nhân viên KHÔNG có công cụ ghi nào (D3, kể cả mẫu tin)", () => {
   assert.equal(WRITE_TOOLS.length, 7);
-  assert.deepEqual(names([manager(), write]).sort(), [...WRITE_ACTIONS.keys(), "confirm_write"].sort());
+  // `WRITE_ACTIONS` còn gồm thao tác QUAN HỆ chỉ để «đồng ý» tra nháp (D-A) — không có công cụ propose_* ở cổng ngoài
+  const proposable = [...WRITE_ACTIONS.values()].filter((action) => action.permission !== "relationship").map((action) => action.tool);
+  assert.deepEqual(names([manager(), write]).sort(), [...proposable, "confirm_write"].sort());
+  assert.deepEqual([...WRITE_ACTIONS.values()].filter((action) => action.permission === "relationship").map((action) => action.tool).sort(),
+    ["alert_item_handled", "task_relationship_update", "ticket_relationship_update"]);
   assert.deepEqual(names([staff(), write]), []);
 });
 

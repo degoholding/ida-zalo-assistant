@@ -151,11 +151,11 @@ describe("họ metrics qua MCP", { skip: !databaseUrl && "chưa đặt TEST_DATA
     assert.deepEqual(log.map((row) => [row.tool, Number(row.source), row.key_id, Number(row.status)]), [["query_metrics", McpCallSource.Assistant, null, 0]]);
   });
 
-  test("Nhân viên web bị từ chối như cũ ở cả hai chế độ", async () => {
+  test("Nhân viên web bị từ chối: đường cũ báo thiếu quyền; họ metrics bật thì công cụ ẨN (M2: không rơi về executor cũ ⇒ «không có công cụ»)", async () => {
     const legacy = await askMetrics("", "u-nv", { metric: "doanh số" });
     const viaMcp = await askMetrics("metrics", "u-nv", { metric: "doanh số" });
     assert.deepEqual(legacy.response, { error: "Anh/chị chưa được cấp quyền xem số liệu qua bot." });
-    assert.deepEqual(viaMcp.response, legacy.response);
+    assert.deepEqual(viaMcp.response, { error: "Không có công cụ query_metrics" });
   });
 
   test("MCP ngoài: metrics_summary theo tên chỉ tiêu + kỳ chữ trả số; kiểu cũ (mã + from / to) không đổi; lỗi rõ", async () => {
@@ -166,7 +166,7 @@ describe("họ metrics qua MCP", { skip: !databaseUrl && "chưa đặt TEST_DATA
     const byCode = await metricsSummaryTool.handler(ctx(UserRole.Manager), { metrics: ["doanh_so"], from: "2026-10-01", to: "2026-10-14", group_by: "area" });
     assert.deepEqual(byCode.structured.rows, byName.structured.rows, "cùng kỳ, cùng dòng");
     await assert.rejects(() => metricsSummaryTool.handler(ctx(UserRole.Manager), { metric_name: "lợi nhuận", period: "today" }),
-      (error: unknown) => error instanceof DataAccessError && error.code === "invalid_value" && /Doanh số/.test(error.message));
+      (error: unknown) => error instanceof DataAccessError && error.code === "invalid_value" && !/Doanh số/.test(error.message) && Boolean(error.allowed?.some((label) => /Doanh số/.test(label))));
     await assert.rejects(() => metricsSummaryTool.handler(ctx(UserRole.Manager), { metric_name: "doanh số" }),
       (error: unknown) => error instanceof DataAccessError && error.code === "invalid_value");
     assert.equal(metricsSummaryTool.available(ctx(UserRole.Staff)), false, "Nhân viên không thấy công cụ");

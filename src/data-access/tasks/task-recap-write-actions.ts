@@ -14,6 +14,7 @@ import { announceNewTasks } from "../../tasks/task-notify.js";
 import { findTask, shortTaskCode, type TaskParty, type TaskRow } from "../../tasks/task-repository.js";
 import { confirmTask, createTask, rejectTask, TaskActionError, type TaskDeps } from "../../tasks/task-service.js";
 import { assertMayAssign, priorityOfText, requireTaskActor } from "./task-actor-rules.js";
+import { personResolveOptions } from "./task-relationship-write-actions.js";
 import { executedTask } from "./task-write-outcomes.js";
 
 // Hai thao tác ghi việc theo loạt (recap họp), GHI NGAY như đường cũ (BC1 bỏ): lưu cả bảng phân công recap (`save_recap_tasks` của mô hình), và gộp
@@ -78,7 +79,7 @@ export const taskRelationshipBatchCreate: WriteAction<BatchInput> = {
       const ownerName = (item.owner ?? "").trim();
       let assignee: TaskParty | null = null;
       if (ownerName && !/^\(?chưa rõ\)?$/i.test(ownerName)) {
-        const found = await resolvePersonName(ctx.db, ownerName, { groupId: actor.groupId ?? actor.threadId });
+        const found = await resolvePersonName(ctx.db, ownerName, await personResolveOptions(ctx, actor));
         assignee = found.kind === "one" ? { contactId: found.contact.id, uid: found.contact.uid, name: found.contact.name } : { contactId: null, uid: null, name: ownerName };
       }
       const due = resolveDueText(item.due, ctx.now);

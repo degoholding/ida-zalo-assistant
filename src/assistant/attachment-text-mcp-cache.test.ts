@@ -31,3 +31,10 @@ test("save: gọi file_text_store đúng tham số; lõi từ chối → Attachm
   const denied = mcpAttachmentTextStore(async () => ({ error: "Không có tệp này." }));
   await assert.rejects(denied.save(5, { method: "text", text: "abc", summary: "", inputTokens: 0, outputTokens: 0 }), (error: unknown) => error instanceof AttachmentTextDeniedError && /Không có tệp này/.test(error.message));
 });
+
+test("lỗi hệ thống (không phải từ chối quyền) không bị báo thành «không có tệp»: save và load ném Error thường", async () => {
+  const broken = mcpAttachmentTextStore(async () => ({ error: "Công cụ lỗi" }));
+  await assert.rejects(broken.save(5, { method: "text", text: "abc", summary: "", inputTokens: 0, outputTokens: 0 }),
+    (error: unknown) => error instanceof Error && !(error instanceof AttachmentTextDeniedError) && /Công cụ lỗi/.test(error.message));
+  await assert.rejects(broken.load(5), (error: unknown) => error instanceof Error && /Công cụ lỗi/.test(error.message));
+});

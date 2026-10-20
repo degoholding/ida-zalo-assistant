@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../../constants.js";
-import { SEARCH_TIMEOUT_TEXT, isSearchTimeoutError, searchMessages } from "../../search/message-search.js";
+import { SEARCH_TIMEOUT_TEXT, SEARCH_TIME_HINT, isSearchTimeoutError, searchLimiter, searchMessages } from "../../search/message-search.js";
+import { escapeLikeText } from "../../web/api/list-query.js";
 import type { DataAccessContext } from "../data-access-context.js";
 import { DataAccessError, translateDbError } from "../data-access-errors.js";
 import { assertNoPersonalNumberProbe } from "../masked-filter-guard.js";
@@ -48,7 +49,7 @@ export interface MessageSearchOutcome {
 
 /** Nhóm người hỏi thấy được khớp tên — để mô hình gõ «K52» thay vì phải biết id. */
 export async function visibleGroupIdsByName(ctx: DataAccessContext, name: string): Promise<number[]> {
-  const like = `%${name.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+  const like = `%${escapeLikeText(name)}%`;
   const visible = threadVisibilitySql(ctx, "g");
   try {
     const [rows] = await ctx.db.query<RowDataPacket[]>(
@@ -85,14 +86,21 @@ async function searchMentions(ctx: DataAccessContext, params: MessageSearchParam
   }
   for (const word of params.query.split(/\s+/).filter((item) => item.length >= 2).slice(0, 5)) {
     where.push("m.text LIKE ?");
-    values.push(`%${word.replace(/[\\%_]/g, (char) => `\\${char}`)}%`);
+    values.push(`%${escapeLikeText(word)}%`);
+  }
+  // Lọc người gửi áp dụng thật (không bỏ qua im lặng): tên một phần, thoát ký tự đại diện
+  const sender = params.senderName?.trim();
+  if (sender) {
+    where.push("m.sender_name LIKE ?");
+    values.push(`%${escapeLikeText(sender)}%`);
   }
   let rows: RowDataPacket[];
   try {
-    [rows] = await ctx.db.query<RowDataPacket[]>(
-      `SELECT m.id, m.group_id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_name, m.sent_at, m.text
+    // Cùng trần số câu chạy đồng thời với câu tìm toàn văn + trần thời gian thực thi
+    [rows] = await searchLimiter.run(() => ctx.db.query<RowDataPacket[]>(
+      `SELECT ${SEARCH_TIME_HINT} m.id, m.group_id, COALESCE(NULLIF(g.label, ''), g.name) AS group_name, m.sender_name, m.sent_at, m.text
        FROM message m JOIN zalo_group g ON g.id = m.group_id
-       WHERE ${where.join(" AND ")} ORDER BY m.sent_at DESC LIMIT ?`, [...values, params.limit + 1]);
+       WHERE ${where.join(" AND ")} ORDER BY m.sent_at DESC LIMIT ?`, [...values, params.limit + 1]));
   } catch (error) {
     return translateDbError(error);
   }

@@ -23,3 +23,10 @@ export function resolveAssistantMcpBridge(explicit: AssistantMcpBridge | undefin
   envGate ??= new ConcurrencyGate(5, 20_000);
   return { families: () => parseMcpFamilies(raw), gate: envGate };
 }
+
+/** Chụp họ bật MỘT lần (L2): cả lượt — phiên lệnh lẫn phiên mô hình — thấy cùng một tập họ dù cài đặt đổi giữa chừng. */
+export function snapshotMcpBridge(bridge: AssistantMcpBridge | null): AssistantMcpBridge | null {
+  if (!bridge) return null;
+  const families = new Set(bridge.families());
+  return { families: () => families, gate: bridge.gate };
+}

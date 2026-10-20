@@ -41,7 +41,8 @@ test("htmlToText: lấy tiêu đề + chữ, bỏ script / style", () => {
 
 test("linkFingerprint: id tệp Google, hoặc máy + đường dẫn", () => {
   assert.equal(linkFingerprint("https://docs.google.com/spreadsheets/d/16Kf_RxhoeS8cwFZEm2HR5CPzJG_lXDNZJn0Dyy8929I/edit?usp=sharing"), "16Kf_RxhoeS8cwFZEm2HR5CPzJG_lXDNZJn0Dyy8929I");
-  assert.equal(linkFingerprint("https://vnexpress.net/abc/?x=1"), "vnexpress.net/abc");
+  assert.equal(linkFingerprint("https://vnexpress.net/abc/?x=1"), "vnexpress.net/abc/?x=1");
+  assert.equal(linkFingerprint("https://vnexpress.net/abc/"), "vnexpress.net/abc");
   assert.equal(linkFingerprint("rác"), null);
 });
 
@@ -188,4 +189,18 @@ test("readLinkContent: đường usercontent lỗi mạng → lùi về đườn
 test("readLinkContent: video (content-type video/*) vẫn từ chối rõ ràng", async () => {
   const fetcher = (async () => new Response("x", { status: 200, headers: { "content-type": "video/mp4" } })) as typeof fetch;
   await assert.rejects(readLinkContent("https://vnexpress.net/clip.mp4", undefined, {}, fetcher), /Chưa đọc được loại nội dung/);
+});
+
+// Review khu 3 (đọc): kiểm máy Google theo tên miền đúng; truy vấn là một phần của nhận dạng
+test("linkFingerprint: máy giả «…google.com» không được coi là Google; id chỉ nhận từ docs / drive", () => {
+  const id = "16Kf_RxhoeS8cwFZEm2HR5CPzJG_lXDNZJn0Dyy8929I";
+  assert.equal(linkFingerprint(`https://evilgoogle.com/spreadsheets/d/${id}/edit`), `evilgoogle.com/spreadsheets/d/${id}/edit`);
+  assert.equal(linkFingerprint(`https://google.com.evil.io/d/${id}`), `google.com.evil.io/d/${id}`);
+  assert.equal(linkFingerprint(`https://drive.google.com/file/d/${id}/view`), id);
+  assert.equal(linkFingerprint(`https://DOCS.google.com/document/d/${id}/edit?usp=sharing`), id);
+});
+
+test("linkFingerprint: thêm truy vấn vào link khác máy → nhận dạng khác (không tải được URL tự chế)", () => {
+  assert.notEqual(linkFingerprint("https://example.com/p?x=1"), linkFingerprint("https://example.com/p?x=1&secret=abc"));
+  assert.notEqual(linkFingerprint("https://example.com/p"), linkFingerprint("https://example.com/p?secret=abc"));
 });

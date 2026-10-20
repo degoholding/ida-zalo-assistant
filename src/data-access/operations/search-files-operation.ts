@@ -6,6 +6,7 @@ import { canUse, type DataAccessContext } from "../data-access-context.js";
 import { translateDbError } from "../data-access-errors.js";
 import { assertNoPersonalNumberProbe } from "../masked-filter-guard.js";
 import { QUERY_TIME_HINT } from "../query-compiler.js";
+import { escapeLikeText } from "../../web/api/list-query.js";
 import { threadVisibilitySql } from "../visibility-guards.js";
 import { UNTRUSTED_NOTICE, type ToolDefinition } from "../tool-definition.js";
 
@@ -42,13 +43,13 @@ export async function searchFilesCore(ctx: DataAccessContext, input: SearchFiles
   const from = parseTime(input.from, new Date(0));
   const to = parseTime(input.to, new Date(ctx.now.getTime() + 86_400_000));
   const words = query.split(/\s+/).filter((word) => word.length >= 2).slice(0, MAX_WORDS);
-  // Người hỏi: chủ thể liên hệ Zalo của lượt (mặt trợ lý). Cổng ngoài không có → không thu hẹp theo người gửi (chỉ phạm vi tài khoản)
+  // Người hỏi: chủ thể liên hệ Zalo của lượt (mặt trợ lý), hoặc liên hệ gắn với khóa MCP nếu có. Không biết người hỏi → không thu hẹp theo người gửi (chỉ phạm vi tài khoản). `%` `_` `\\` trong từ khóa được thoát nên khớp nguyên văn
   const askerUid = ctx.contactActor?.uid ?? ctx.ownDirectUid ?? undefined;
   const ownOnly = !words.length && scopeGroupId === undefined && askerUid !== undefined;
   const conditions = words.length
     ? words.map(() => "(a.file_name LIKE ? OR m.text LIKE ? OR t.text LIKE ?)").join(" AND ")
     : ownOnly ? `(m.sender_uid = ? OR (g.thread_type = ${ConversationType.Direct} AND g.zalo_group_id = ?))` : "1 = 1";
-  const conditionParams = words.length ? words.flatMap((word) => [`%${word}%`, `%${word}%`, `%${word}%`]) : ownOnly ? [askerUid, askerUid] : [];
+  const conditionParams = words.length ? words.flatMap((word) => { const like = `%${escapeLikeText(word)}%`; return [like, like, like]; }) : ownOnly ? [askerUid, askerUid] : [];
   const visible = threadVisibilitySql(ctx, "g");
   let rows: RowDataPacket[];
   try {
@@ -102,7 +103,7 @@ export const searchFilesModelTool: ToolDefinition<SearchFilesInput, SearchFilesO
 
 const externalOutputSchema = outputSchema.extend({ untrusted_fields: z.array(z.string()) });
 
-/** Bản cho cổng /mcp ngoài: cùng lõi; tên tệp / tên nhóm / người gửi do người dùng Zalo đặt nên khai là dữ liệu không đáng tin. Không có «người hỏi» nên không thu hẹp theo người gửi. */
+/** Bản cho cổng /mcp ngoài: cùng lõi; tên tệp / tên nhóm / người gửi do người dùng Zalo đặt nên khai là dữ liệu không đáng tin. Khóa không gắn liên hệ thì không có «người hỏi» nên không thu hẹp theo người gửi. */
 export const searchFilesExternalTool: ToolDefinition<SearchFilesInput, z.infer<typeof externalOutputSchema>> = {
   name: "search_files",
   title: "Tìm tệp đã gửi",

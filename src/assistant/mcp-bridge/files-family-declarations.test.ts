@@ -73,7 +73,10 @@ test("lời nhắc họ: lời nhắc suggest_replies cũ được thay bằng i
     const mcp = (await loadMcpTurnTools(turn, {}))!;
     assert.equal(mcp.instructions, SUGGEST_REPLIES_PROMPT);
     const system = `đầu\n${SUGGEST_REPLIES_PROMPT}\ncuối`;
-    assert.equal(applyMcpTurnPrompt(system, mcp).split(SUGGEST_REPLIES_PROMPT).length - 1, 1);
+    const declared = new Set(["search_files", "suggest_replies"]);
+    assert.equal(applyMcpTurnPrompt(system, mcp, declared).split(SUGGEST_REPLIES_PROMPT).length - 1, 1);
+    // H1: không có công cụ suggest_replies trong khai báo cuối (vd hỏi trong nhóm) ⇒ lời nhắc cũ gỡ, lời nhắc mới KHÔNG thêm
+    assert.equal(applyMcpTurnPrompt(system, mcp, new Set(["search_files"])).includes(SUGGEST_REPLIES_PROMPT), false);
   } finally {
     await turn.close();
   }

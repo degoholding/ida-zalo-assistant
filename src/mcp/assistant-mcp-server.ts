@@ -43,6 +43,7 @@ export function assistantToolsFor(ctx: DataAccessContext, surface: AssistantSurf
   return toolsFor(ctx, surface, deps.catalog ?? ALL_TOOLS).filter((tool) => tool.family !== undefined && deps.families.has(tool.family));
 }
 
+/** Lời nhắc của các họ ĐANG bật (không lọc theo công cụ — nơi gọi tự thu hẹp `families` về họ thật sự có công cụ). */
 export function assistantFamilyInstructions(deps: Pick<AssistantMcpServerDeps, "families" | "familyCatalogs">): string {
   return (deps.familyCatalogs ?? FAMILY_CATALOGS)
     .filter((catalog) => deps.families.has(catalog.family) && catalog.instructions)
@@ -51,9 +52,12 @@ export function assistantFamilyInstructions(deps: Pick<AssistantMcpServerDeps, "
 
 export function buildAssistantMcpServer(access: DataAccessContext, surface: AssistantSurface, deps: AssistantMcpServerDeps): McpServer {
   const ctx = assistantSurfaceContext(access, surface);
+  const tools = assistantToolsFor(ctx, surface, deps);
+  // H1: lời nhắc chỉ của họ có ÍT NHẤT MỘT công cụ đăng ký cho người hỏi này / mặt này (họ bật mà công cụ bị ẩn thì không nhắc về công cụ không có)
+  const registered = new Set(tools.flatMap((tool) => (tool.family ? [tool.family] : [])));
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION },
-    { maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS, instructions: assistantFamilyInstructions(deps) });
-  registerTools(server, assistantToolsFor(ctx, surface, deps), ctx, surface, {
+    { maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS, instructions: assistantFamilyInstructions({ ...deps, families: new Set([...deps.families].filter((family) => registered.has(family))) }) });
+  registerTools(server, tools, ctx, surface, {
     source: ctx.source, actorSuffix: "Trợ lý", clientIp: null, limiter: null, gate: deps.gate, logCall: deps.logCall,
   });
   return server;

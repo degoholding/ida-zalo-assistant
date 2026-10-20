@@ -220,7 +220,9 @@ describe("ticket qua bot", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
         return { content: { role: "model", parts: [{ functionCall: { name: "ticket_action", args: { ticket_id: ticketId, action: "done" } } }] }, inputTokens: 10, outputTokens: 5 };
       },
     });
-    const assistant = (id: number) => new AssistantService(db, model(id), "m", { maxPerHour: 30, dailyTokenCap: 1_000_000 }, () => NOW, { tickets: deps });
+    const assistant = (id: number) => new AssistantService(db, model(id), "m", { maxPerHour: 30, dailyTokenCap: 1_000_000 }, () => NOW,
+      // wakeJobs có thật như production: công cụ ticket của mô hình qua MCP chỉ hiện khi có móc này (họ bật mà công cụ ẩn thì không rơi về đường cũ)
+      { tickets: { ...deps, wakeJobs: () => undefined } });
     await db.query("UPDATE contact SET role = 2 WHERE zalo_uid IN ('u-it1', 'u-binh')");
     // Người xử lý nói câu thường → đóng thật, người gửi được báo
     const handler = (await findContactByUid(db, "u-it1"))!;

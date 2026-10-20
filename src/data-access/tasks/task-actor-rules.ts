@@ -18,7 +18,11 @@ export const TASK_ACTOR_REQUIRED = "Thao tác việc cần người đang nhắn
 
 /** Độ ưu tiên người gõ / mô hình truyền chữ («Cao», «TB», «trung bình», «Thấp»); không nhận ra → mặc định của task-service. */
 const PRIORITY_WORDS: Record<string, TaskPriority> = { cao: TaskPriority.High, tb: TaskPriority.Normal, "trung bình": TaskPriority.Normal, thấp: TaskPriority.Low };
-export const priorityOfText = (text: unknown): TaskPriority | undefined => PRIORITY_WORDS[String(text ?? "").toLowerCase()];
+export function priorityOfText(text: unknown): TaskPriority | undefined {
+  const word = String(text ?? "").toLowerCase();
+  // Khóa từ mô hình: không tra qua prototype («constructor», «__proto__», «toString»…)
+  return Object.hasOwn(PRIORITY_WORDS, word) ? PRIORITY_WORDS[word] : undefined;
+}
 
 /** Chủ thể của lượt; thiếu = lời gọi không đến từ tin Zalo (HTTP không bao giờ có). */
 export function requireTaskActor(ctx: DataAccessContext): ContactActor {
@@ -40,8 +44,12 @@ export function overseerVisibilityPart(ctx: DataAccessContext, actor: ContactAct
   return ctx.includeConfidential ? undefined : { sql: "(g.id IS NULL OR g.is_confidential = 0)", params: [] };
 }
 
-/** Giao việc: nhân sự công ty hoặc «sếp» (cổng tin riêng cho lệnh việc qua với mọi người để người phụ trách báo xong). */
+/**
+ * Giao việc: nhân sự công ty hoặc «sếp» (cổng tin riêng cho lệnh việc qua với mọi người để người phụ trách báo xong). Tài khoản web đã TẮT thì không
+ * giao được dù liên hệ là nhân sự (L7): người đã bị thu hồi quyền vào hệ thống không được giao việc qua Zalo.
+ */
 export async function assertMayAssign(actor: ContactActor): Promise<void> {
+  if (actor.origin === "disabled_account") throw denyTask("staff_only");
   if (!(await actor.facts.isTaskOverseer()) && actor.contactKind !== ContactKind.Staff) throw denyTask("staff_only");
 }
 

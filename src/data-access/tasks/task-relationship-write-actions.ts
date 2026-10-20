@@ -2,7 +2,10 @@ import { z } from "zod/v4";
 import { TaskSource } from "../../constants.js";
 import { taskActorOf } from "../actors/contact-relationship-rules.js";
 import type { DataAccessContext } from "../data-access-context.js";
-import { requireOnePerson } from "../resolvers/person-name-resolver.js";
+import { loadUserPrincipal } from "../../auth/principal.js";
+import { contactScopeSql } from "../../web/api/scope.js";
+import { contactScopeOf } from "../reads/contact-scope-of-actor.js";
+import { requireOnePerson, type PersonResolveOptions } from "../resolvers/person-name-resolver.js";
 import { requireDueText, requireDueTextStrict } from "../resolvers/due-text-resolver.js";
 import type { WriteAction } from "../write/write-action.js";
 import type { TaskActOutcome, TaskCreatedResult } from "../../tasks/task-command-replies.js";
@@ -18,6 +21,18 @@ import { executedTask } from "./task-write-outcomes.js";
 // xác nhận / bỏ đề xuất. GHI NGAY (`confirmMode: "immediate"`, BC1 bỏ): lệnh gõ = xác nhận, và ghi do mô hình khởi xướng giữ như hôm nay.
 // `prepare` = luật quan hệ + phân giải người / hạn (không đủ quyền → `not_allowed` + lý do; tên mơ hình → `ambiguous` / `not_found`); `execute` đi qua
 // task-service (báo Zalo qua hàng đợi việc nền — gửi thật ở ngoài). Thứ tự kiểm CHÉP đúng đường cũ: quyền → hạn → người.
+
+/**
+ * Tùy chọn tìm người: ưu tiên nhóm / cuộc đang nhắn; tài khoản web chỉ chọn được người trong PHẠM VI Danh bạ của TÀI KHOẢN (như màn Danh bạ — L2) — hỏi trong nhóm thì
+ * principal của lượt đã bị thu về đúng nhóm đó nên nạp lại phạm vi gốc của tài khoản. Người chỉ suy từ vai trò / người nhận giữ cách tìm cũ (cả Danh bạ) để không đổi lệnh gõ hôm nay.
+ */
+export async function personResolveOptions(ctx: DataAccessContext, actor: { origin: string; groupId: number | null; threadId: number | null }): Promise<PersonResolveOptions> {
+  const groupId = actor.groupId ?? actor.threadId;
+  if (actor.origin !== "web_user") return { groupId, scope: null };
+  if (actor.groupId === null || ctx.principal.userId === null) return { groupId, scope: contactScopeOf(ctx) };
+  const account = await loadUserPrincipal(ctx.db, ctx.principal.userId);
+  return { groupId, scope: account ? contactScopeSql(account) : contactScopeOf(ctx) };
+}
 
 const quote = (text: string) => `«${text.replace(/\s+/g, " ").slice(0, 200)}»`;
 const taskDeps = (ctx: DataAccessContext): TaskDeps => ({ db: ctx.db, wakeJobs: ctx.wakeJobs });
@@ -37,7 +52,7 @@ async function planCreate(ctx: DataAccessContext, input: CreateInput): Promise<{
   const actor = requireTaskActor(ctx);
   await assertMayAssign(actor);
   const due = requireDueText(input.due_text, ctx.now);
-  const person = await requireOnePerson(ctx.db, input.assignee_name, "giao <tên>: <việc> hạn <ngày>", { groupId: actor.groupId ?? actor.threadId });
+  const person = await requireOnePerson(ctx.db, input.assignee_name, "giao <tên>: <việc> hạn <ngày>", await personResolveOptions(ctx, actor));
   return { due: due && { at: due.at, hasTime: due.hasTime }, assignee: { contactId: person.id, uid: person.uid, name: person.name } };
 }
 
@@ -96,7 +111,7 @@ async function planUpdate(ctx: DataAccessContext, input: UpdateInput) {
   const due = input.action === "reschedule" ? requireDueTextStrict(input.due_text, ctx.now) : null;
   const code = shortTaskCode(task);
   const person = input.action === "reassign"
-    ? await requireOnePerson(ctx.db, input.assignee_name ?? "", `giao lại ${code} <tên>`, { groupId: actor.groupId ?? actor.threadId })
+    ? await requireOnePerson(ctx.db, input.assignee_name ?? "", `giao lại ${code} <tên>`, await personResolveOptions(ctx, actor))
     : null;
   const assignee: TaskParty | null = person && { contactId: person.id, uid: person.uid, name: person.name };
   return { actor, task, code, due, assignee };
@@ -115,7 +130,9 @@ export const taskRelationshipUpdate: WriteAction<UpdateInput> = {
     const detail = [due ? `hạn mới ${formatDue(due.at, due.hasTime, ctx.now)}` : "", assignee ? `giao cho ${quote(assignee.name)}` : "", input.note?.trim() ? `ghi chú ${quote(input.note.trim())}` : ""].filter(Boolean);
     return {
       preview: `Việc ${task.code} ${quote(task.title)} (${TASK_STATUS_LABELS[task.status]}): ${ACTION_LABELS[input.action]}${detail.length ? ` — ${detail.join("; ")}` : ""}`,
-      targetEntity: "task", targetId: task.id, stateToken: `${task.status}|${task.due_at?.toISOString() ?? ""}|${task.assignee?.contactId ?? task.assignee?.name ?? ""}`,
+      // Gồm cả người / hạn đã PHÂN GIẢI từ chữ (D-A: nháp chờ «đồng ý»): danh bạ / «mai 17h» đổi giữa lúc đề xuất và xác nhận thì báo lạc hậu, không giao nhầm người
+      targetEntity: "task", targetId: task.id,
+      stateToken: `${task.status}|${task.due_at?.toISOString() ?? ""}|${task.assignee?.contactId ?? task.assignee?.name ?? ""}|${due?.at.toISOString() ?? ""}|${assignee?.contactId ?? ""}`,
     };
   },
   async execute(ctx, input) {

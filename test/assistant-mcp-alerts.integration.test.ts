@@ -213,7 +213,10 @@ describe("họ alerts qua MCP (phase 10)", { skip: !databaseUrl && "chưa đặt
         const old = json(await runAlertTool(deps, asker, "mark_item_handled", { message_id: target }, NOW, Date.now(), await accessOf(who, false)));
         const oldState = json(await flagState());
         await seed();
-        const turn = openTurn(await accessOf(who));
+        // D-A (20/10/2026): mô hình chỉ ghi NGAY khi mã tin nằm trong chữ của chính người hỏi — ở đây người hỏi nêu «tin số <id>» (ma trận nháp: assistant-injection-guard-and-web-role)
+        const access = await accessOf(who);
+        const named = { ...access, contactActor: { ...access.contactActor!, facts: { ...access.contactActor!.facts, ownTurnTexts: async () => ({ asker: `xong tin số ${target}`, previousBotReply: "" }) } } };
+        const turn = openTurn(named);
         const viaModel = await structured(turn, "assistant_model", "mark_item_handled", { message_id: target });
         const modelState = json(await flagState());
         const model = viaModel.isError ? { error: viaModel.error!.message } : viaModel.data;
@@ -366,7 +369,10 @@ describe("họ alerts qua MCP (phase 10)", { skip: !databaseUrl && "chưa đặt
     const model = new ScriptedModel(script);
     const service = new AssistantService(db, model, "gia-lap", { maxPerHour: 100, dailyTokenCap: 10_000_000 }, () => NOW, { alertTools: deps, mcpBridge: bridge });
     const contact = (await findContactByUid(db, uids[who]))!;
-    const reply = await service.answer({ botAccountId: 1, contact, threadId: dmThread, questionMessageId: null, question, access: await accessOf(who) });
+    // Tin hỏi được lưu như thật: chốt chặn D-A đọc chữ CỦA CHÍNH người hỏi từ đây
+    const questionMessageId = await insertId("INSERT INTO message (group_id, zalo_msg_id, kind, sender_uid, sender_name, sent_at, text) VALUES (?, ?, 0, ?, ?, ?, ?)",
+      [dmThread, `q-${Date.now()}-${Math.random()}`, uids[who], uids[who], NOW, question]);
+    const reply = await service.answer({ botAccountId: 1, contact, threadId: dmThread, questionMessageId, question, access: await accessOf(who) });
     const responses = (model.requests.at(-1)?.contents ?? []).flatMap((content) => content.parts).flatMap((part) => (part.functionResponse ? [part.functionResponse.response] : []));
     return { reply, responses, model };
   }
@@ -387,8 +393,8 @@ describe("họ alerts qua MCP (phase 10)", { skip: !databaseUrl && "chưa đặt
     assert.deepEqual(saved, [{ alert_urgent_keywords: "gấp, khẩn, bể bao" }]);
   });
 
-  test("mô hình: list_pending_items + mark_item_handled giữ tên, mark ghi NGAY (BC1 bỏ), người lạ nhận câu từ chối cũ", async () => {
-    const run = await modelTurn("tp", "hôm nay có tin nào gấp chưa ai trả lời không em", [[call("list_pending_items", { limit: 5 })], [call("mark_item_handled", { message_id: msg.urgentB })], [{ text: "đã xong" }]]);
+  test("mô hình: list_pending_items + mark_item_handled giữ tên, mark ghi NGAY khi người hỏi nêu mã tin (D-A), người lạ nhận câu từ chối cũ", async () => {
+    const run = await modelTurn("tp", `hôm nay có tin nào gấp chưa ai trả lời không em, xong tin số ${msg.urgentB} giúp anh`, [[call("list_pending_items", { limit: 5 })], [call("mark_item_handled", { message_id: msg.urgentB })], [{ text: "đã xong" }]]);
     const [listing, marked] = run.responses as any[];
     assert.ok(listing.items.length > 0 && listing.items.every((item: { message_id: number }) => item.message_id > 0));
     assert.deepEqual(marked, { ok: true, message: "Đã đánh dấu xong — em thôi nhắc tin này." });

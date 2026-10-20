@@ -1,5 +1,5 @@
 import { DRAFT_NOT_FOUND_MESSAGE } from "../../data-access/catalog/drafts-family-tools.js";
-import type { AssistantMcpTurn } from "./assistant-mcp-turn.js";
+import { OUTCOME_UNKNOWN_CODE, type AssistantMcpTurn } from "./assistant-mcp-turn.js";
 
 // «đồng ý» / «hủy» nháp ghi chạy qua MẶT LỆNH của máy chủ MCP trong tiến trình (`confirm_draft` / `cancel_draft`) thay cho gọi thẳng kho nháp.
 // Câu trả lời cho người dùng KHÔNG đổi một ký tự so với đường cũ (write-confirm-chat.ts).
@@ -43,6 +43,8 @@ export async function runDraftCommandViaMcp(turn: AssistantMcpTurn, kind: "confi
   const structured = result.structuredContent as Record<string, unknown> | undefined;
   if (result.isError || !structured) {
     const meta = (result._meta as Record<string, unknown> | undefined)?.["bot-tro-ly/error"] as { code?: string; message?: string } | undefined;
+    // Quá hạn phía client: kết quả chưa rõ — nói đúng câu đó, không ném (ném = thử lại ⇒ ghi đôi)
+    if (meta?.code === OUTCOME_UNKNOWN_CODE && meta.message) return meta.message;
     if (!meta?.message || meta.code === "internal" || meta.code === "server_busy") throw new Error(`lệnh nháp qua MCP lỗi: ${meta?.message ?? "không rõ"}`);
     return meta.message === DRAFT_NOT_FOUND_MESSAGE ? meta.message : `Chưa ghi được: ${meta.message}`;
   }

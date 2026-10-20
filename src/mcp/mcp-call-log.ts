@@ -9,6 +9,8 @@ import { maskPersonalData } from "../privacy/personal-data.js";
 
 const log = createLogger("mcp");
 const PREVIEW_MAX = 500;
+/** Cắt trước khi chạy bộ che (regex) — tham số có thể dài hàng trăm nghìn ký tự (chữ bóc từ tệp). Dư vài trăm để phần bị cắt không làm hụt bản xem trước. */
+const PREVIEW_PRE_MASK_MAX = 2000;
 
 export interface McpCallLogEntry {
   userId: number | null;
@@ -42,8 +44,28 @@ export function hashArgs(args: unknown): string {
   return crypto.createHash("sha256").update(stableStringify(args)).digest("hex");
 }
 
-export function previewArgs(args: unknown): string {
-  return maskPersonalData(stableStringify(args)).slice(0, PREVIEW_MAX);
+/**
+ * Trường chữ DÀI / nhạy cảm theo công cụ — nhật ký chỉ giữ độ dài, không bao giờ nội dung (thân tin gửi, chữ bóc của tệp). Công cụ nào nhận nội dung
+ * tin do người dùng viết thì thêm vào đây.
+ */
+const LENGTH_ONLY_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  file_text_store: ["text", "summary"],
+  send_draft_create: ["body", "question"],
+  send_pin_draft_create: ["content", "question"],
+  propose_send_message: ["content"],
+};
+
+export function redactForPreview(tool: string | undefined, args: unknown): unknown {
+  const fields = tool ? LENGTH_ONLY_FIELDS[tool] : undefined;
+  if (!fields || !args || typeof args !== "object" || Array.isArray(args)) return args;
+  const copy: Record<string, unknown> = { ...(args as Record<string, unknown>) };
+  for (const field of fields) if (typeof copy[field] === "string") copy[field] = `[${(copy[field] as string).length} ký tự]`;
+  return copy;
+}
+
+export function previewArgs(args: unknown, tool?: string): string {
+  // Cắt TRƯỚC khi che: bộ che chạy regex, không để nó quét chuỗi vài trăm nghìn ký tự
+  return maskPersonalData(stableStringify(redactForPreview(tool, args)).slice(0, PREVIEW_PRE_MASK_MAX)).slice(0, PREVIEW_MAX);
 }
 
 /**
@@ -66,7 +88,7 @@ export async function logMcpCall(db: Db, entry: McpCallLogEntry): Promise<void> 
                                  duration_ms, status, error_code, client_ip)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [entry.tenantId, entry.userId, entry.contactId ?? null, entry.keyId, entry.source, entry.tool.slice(0, 64), entry.entity ?? null, hashArgs(args),
-        previewArgs(args), entry.rowCount, entry.resultChars, Math.round(entry.durationMs), entry.status,
+        previewArgs(args, entry.tool), entry.rowCount, entry.resultChars, Math.round(entry.durationMs), entry.status,
         entry.errorCode ? entry.errorCode.slice(0, 64) : null, entry.clientIp ? entry.clientIp.slice(0, 64) : null]);
   } catch (error) {
     log.error(`không ghi được mcp_call_log (${entry.tool}): ${describeError(error)}`);

@@ -132,7 +132,9 @@ export async function runTaskCommandLegacy(ctx: TaskCommandContext, command: Tas
   if (command.kind === "task_list") return listText(ctx, viewer, command.scope, now);
   if (command.kind === "task_create") {
     // Cổng tin riêng cho lệnh việc qua với mọi người (để người phụ trách báo xong) — giao việc thì chỉ nhân sự / sếp
-    if (!viewer.overseer && contact.kind !== ContactKind.Staff) return "Chỉ nhân sự công ty mới giao việc qua bot được.";
+    // Tài khoản web đã TẮT thì không giao việc dù liên hệ là Nhân sự (L7) — cùng luật `assertMayAssign` của lõi
+    const accountDisabled = ctx.access ? (await ctx.access()).origin === "disabled_account" : false;
+    if (accountDisabled || (!viewer.overseer && contact.kind !== ContactKind.Staff)) return "Chỉ nhân sự công ty mới giao việc qua bot được.";
     const due = command.dueText ? parseDueArgument(command.dueText, now) : null;
     if (command.dueText && !due) return `Em chưa hiểu hạn «${command.dueText}». Ghi hạn dạng «mai», «thứ 6», «20/10», «17h thứ 6» giúp em.`;
     const person = await resolveAssignee(ctx, command.assigneeName, "giao <tên>: <việc> hạn <ngày>");
