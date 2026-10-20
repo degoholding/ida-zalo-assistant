@@ -51,21 +51,22 @@ test("M2: bật che dữ liệu cá nhân → không lọc / tìm theo SĐT (con
   assert.match(compile("catalog", { search: "lan" }, makeCtx(admin())).sql, /e\.phone LIKE/);
 });
 
-test("M2: bật che → từ chối contains / search có dãy ≥ 4 chữ số (chống dò SĐT); tắt che thì cho; eq theo mã không bị chặn", () => {
+test("M2: bật che → từ chối contains / search có dãy ≥ 9 chữ số (chống dò SĐT); tắt che thì cho; eq theo mã không bị chặn", () => {
   const byThread = { field: "thread_id", op: "eq" as const, value: 12 };
-  for (const value of ["0912", "09 12 34", "0912.345", "+84 912"]) {
+  for (const value of ["0912345678", "0912 345 678", "0912.345.678", "+84 912 345 678"]) {
     rejects(() => compile("messages", { filters: [byThread, { field: "text", op: "contains", value }] }, masked()), "invalid_value", /che dữ liệu/);
   }
-  rejects(() => compile("messages", { filters: [byThread], search: "0912" }, masked()), "invalid_value");
+  rejects(() => compile("messages", { filters: [byThread], search: "0912345678" }, masked()), "invalid_value");
   rejects(() => compile("files", { search: "0912345678" }, masked()), "invalid_value");
   assert.doesNotThrow(() => compile("messages", { filters: [byThread, { field: "text", op: "contains", value: "báo giá 123" }] }, masked()));
+  assert.doesNotThrow(() => compile("messages", { filters: [byThread, { field: "text", op: "contains", value: "0912" }] }, masked()));
   assert.doesNotThrow(() => compile("messages", { filters: [byThread, { field: "text", op: "contains", value: "0912" }] }, makeCtx(admin())));
   assert.doesNotThrow(() => compile("messages", { filters: [byThread, { field: "sender_uid", op: "eq", value: "1234567890" }] }, masked()));
 });
 
-test("M2: search_messages bật che → từ chối từ khóa toàn số; đoạn trích che TRƯỚC khi cắt (L1)", async () => {
+test("M2: search_messages bật che → từ chối từ khóa toàn số ≥ 9 chữ số; đoạn trích che TRƯỚC khi cắt (L1)", async () => {
   const ctx = masked();
-  assert.equal((await runTool(tool("search_messages"), ctx, { query: "0912345" })).errorCode, "invalid_value");
+  assert.equal((await runTool(tool("search_messages"), ctx, { query: "0912345678" })).errorCode, "invalid_value");
   const long = `${"x".repeat(85)} 0912345678 gọi giúp`;
   const { db, queries } = fakeDb((sql) => (sql.includes("FROM message_search") ? [{ id: 5, group_id: 12, thread_name: "KD", sender_name: "Huy", sent_at: new Date("2026-10-16T02:00:00Z"), text: long }] : []));
   const result = await runTool(tool("search_messages"), makeCtx(admin(), { maskPersonal: true }, db), { query: "gọi" });
