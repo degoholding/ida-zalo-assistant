@@ -118,9 +118,10 @@ test("runTool dispatches query_records through the core: scope + confidential gu
   const log = queries.find((q) => /INSERT INTO mcp_call_log/.test(q.sql))!;
   assert.ok(log, "phải ghi mcp_call_log");
   assert.equal(log.params[1], 7); // user_id của principal
-  assert.equal(log.params[2], null); // key_id
-  assert.equal(log.params[3], McpCallSource.Assistant);
-  assert.equal(log.params[4], "query_records");
+  assert.equal(log.params[2], null); // contact_id (ngữ cảnh thử không có chủ thể liên hệ)
+  assert.equal(log.params[3], null); // key_id
+  assert.equal(log.params[4], McpCallSource.Assistant);
+  assert.equal(log.params[5], "query_records");
 });
 
 test("core tool errors come back as { error: { code, message } } for the model to fix, not thrown", async () => {

@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import type { McpCallSource } from "../../constants.js";
+import { McpCallSource } from "../../constants.js";
 import type { Db } from "../../db/pool.js";
+import type { DataAccessContext } from "../data-access-context.js";
 import { DataAccessError } from "../data-access-errors.js";
 
 // Kho nháp ghi (bảng mcp_write_draft). Mã xác nhận 6 ký tự chỉ lưu BĂM; nháp gắn người dùng + khóa (hoặc nguồn trợ lý) + băm payload,
@@ -10,6 +11,8 @@ import { DataAccessError } from "../data-access-errors.js";
 // (không gian 32^6 chỉ ~1e9, SHA-256 trần dò được trong vài phút) và không tự dựng lại được băm payload để sửa nháp.
 
 export const DRAFT_TTL_MS = 10 * 60_000;
+/** Thao tác có thể đặt hạn riêng (`WriteAction.ttlMs`); mặc định 10 phút. */
+export const draftTtlOf = (ttlMs?: number): number => (ttlMs && ttlMs > 0 ? ttlMs : DRAFT_TTL_MS);
 /** Nháp chưa dùng / chưa hết hạn tối đa mỗi (người, nguồn) — máy khách MCP chạy lung tung không chặn được nháp của trợ lý. */
 export const MAX_OPEN_DRAFTS_PER_USER = 20;
 /** Số nháp tạo trong 1 phút tối đa mỗi (người, khóa) — chặn AI spam đề xuất. */
@@ -62,12 +65,37 @@ export function canonicalJson(value: unknown): string {
 }
 export const hashPayload = (payload: unknown): string => hmacHex(`payload:${canonicalJson(payload)}`);
 
-/** Ràng buộc nháp: ai, qua đâu. */
+/**
+ * Ràng buộc nháp: ai, qua đâu. Cổng HTTP khớp theo `userId` + `keyId`; trợ lý (nguồn khác Http) khớp theo `contactId` — liên hệ Zalo luôn có,
+ * còn tài khoản web thì không (nháp của người không tài khoản có `user_id` NULL). Thiếu định danh cần khớp = không khớp nháp nào.
+ */
 export interface DraftBinding {
   tenantId: number;
-  userId: number;
+  userId: number | null;
+  contactId?: number | null;
   keyId: number | null;
   source: McpCallSource;
+}
+
+/** Ràng buộc nháp của lời gọi hiện tại: cổng HTTP theo (người, khóa); trợ lý theo liên hệ Zalo đang nhắn (`ctx.contactActor`, luôn do tin Zalo đặt). */
+export function draftBindingOf(ctx: Pick<DataAccessContext, "principal" | "keyId" | "source" | "contactActor">): DraftBinding {
+  return {
+    tenantId: ctx.principal.tenantId, userId: ctx.principal.userId, contactId: ctx.source === McpCallSource.Http ? null : ctx.contactActor?.contactId ?? null,
+    keyId: ctx.keyId, source: ctx.source,
+  };
+}
+
+/** Mệnh đề «đúng chủ thể» (nguồn Http: người; trợ lý: liên hệ). Không định danh được → mệnh đề luôn sai (không khớp nháp nào). */
+function identityClause(binding: DraftBinding): { sql: string; params: unknown[] } {
+  const http = binding.source === McpCallSource.Http;
+  const id = http ? binding.userId : binding.contactId;
+  return id == null ? { sql: "1 = 0", params: [] } : { sql: `${http ? "user_id" : "contact_id"} = ?`, params: [id] };
+}
+
+/** Chủ thể + khóa MCP (nháp của khóa khác không khớp). */
+function subjectClause(binding: DraftBinding): { sql: string; params: unknown[] } {
+  const identity = identityClause(binding);
+  return { sql: `${identity.sql} AND key_id <=> ?`, params: [...identity.params, binding.keyId] };
 }
 
 export interface NewDraft extends DraftBinding {
@@ -78,6 +106,8 @@ export interface NewDraft extends DraftBinding {
   payload: unknown;
   preview: string;
   now: Date;
+  /** Hạn riêng của thao tác (mili giây); mặc định `DRAFT_TTL_MS`. */
+  ttlMs?: number;
 }
 
 export interface DraftRecord extends DraftBinding {
@@ -94,31 +124,36 @@ export interface DraftRecord extends DraftBinding {
 
 /** Tạo nháp: kiểm trần theo người / khóa, sinh mã, lưu băm. Trả mã GỐC (chỉ lộ một lần, ở kết quả `propose_*`). */
 export async function createDraft(db: Db, draft: NewDraft): Promise<{ id: number; code: string; expiresAt: Date }> {
+  const identity = identityClause(draft);
+  if (identity.sql === "1 = 0") throw new DataAccessError("forbidden", "Không xác định được người đề xuất nên không tạo nháp.");
+  const subject = subjectClause(draft);
   const minuteAgo = new Date(draft.now.getTime() - 60_000);
   const [recent] = await db.query<RowDataPacket[]>(
-    "SELECT COUNT(*) AS n FROM mcp_write_draft WHERE user_id = ? AND key_id <=> ? AND source = ? AND created_at > ?", [draft.userId, draft.keyId, draft.source, minuteAgo]);
+    `SELECT COUNT(*) AS n FROM mcp_write_draft WHERE ${subject.sql} AND source = ? AND created_at > ?`, [...subject.params, draft.source, minuteAgo]);
   if (Number(recent[0]?.n ?? 0) >= MAX_PROPOSALS_PER_MINUTE) {
     throw new DataAccessError("rate_limited", `Đề xuất ghi quá nhanh (tối đa ${MAX_PROPOSALS_PER_MINUTE} lần / phút) — đợi một lát rồi thử lại.`);
   }
+  // Trần nháp mở theo (chủ thể, nguồn) — không theo khóa
   const [open] = await db.query<RowDataPacket[]>(
-    "SELECT COUNT(*) AS n FROM mcp_write_draft WHERE user_id = ? AND source = ? AND used_at IS NULL AND expires_at > ?", [draft.userId, draft.source, draft.now]);
+    `SELECT COUNT(*) AS n FROM mcp_write_draft WHERE ${identity.sql} AND source = ? AND used_at IS NULL AND expires_at > ?`, [...identity.params, draft.source, draft.now]);
   if (Number(open[0]?.n ?? 0) >= MAX_OPEN_DRAFTS_PER_USER) {
     throw new DataAccessError("rate_limited", `Đang có ${MAX_OPEN_DRAFTS_PER_USER} nháp chờ xác nhận — xác nhận hoặc đợi hết hạn (10 phút) rồi đề xuất tiếp.`);
   }
   // M2: một nháp GIỐNG HỆT vừa được thực hiện mà lỗi giữa chừng (có thể đã ghi một phần / đã báo Zalo) thì không cho đề xuất lại ngay
   const payloadHash = hashPayload(draft.payload);
   const [attempted] = await db.query<RowDataPacket[]>(
-    `SELECT id FROM mcp_write_draft WHERE user_id = ? AND payload_hash = ? AND used_at > ? AND JSON_UNQUOTE(JSON_EXTRACT(result_json, '$.status')) IN (?, ?) LIMIT 1`,
-    [draft.userId, payloadHash, new Date(draft.now.getTime() - ATTEMPT_BLOCK_MS), DraftOutcome.Attempted, DraftOutcome.Failed]);
+    `SELECT id FROM mcp_write_draft WHERE ${identity.sql} AND payload_hash = ? AND used_at > ?
+       AND JSON_UNQUOTE(JSON_EXTRACT(result_json, '$.status')) IN (?, ?) LIMIT 1`,
+    [...identity.params, payloadHash, new Date(draft.now.getTime() - ATTEMPT_BLOCK_MS), DraftOutcome.Attempted, DraftOutcome.Failed]);
   if (attempted[0]) {
     throw new DataAccessError("invalid_state", "Thao tác giống hệt vừa được thực hiện nhưng lỗi giữa chừng (có thể đã ghi một phần) — kiểm tra lại bản ghi trước, đừng đề xuất lại ngay kẻo bị trùng.");
   }
   const code = generateCode();
-  const expiresAt = new Date(draft.now.getTime() + DRAFT_TTL_MS);
+  const expiresAt = new Date(draft.now.getTime() + draftTtlOf(draft.ttlMs));
   const [result] = await db.query<ResultSetHeader>(
-    `INSERT INTO mcp_write_draft (tenant_id, user_id, key_id, source, tool, target_entity, target_id, payload_json, payload_hash, preview, code_hash, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [draft.tenantId, draft.userId, draft.keyId, draft.source, draft.tool, draft.targetEntity, draft.targetId, canonicalJson(draft.payload), payloadHash,
+    `INSERT INTO mcp_write_draft (tenant_id, user_id, contact_id, key_id, source, tool, target_entity, target_id, payload_json, payload_hash, preview, code_hash, expires_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [draft.tenantId, draft.userId, draft.contactId ?? null, draft.keyId, draft.source, draft.tool, draft.targetEntity, draft.targetId, canonicalJson(draft.payload), payloadHash,
       draft.preview.slice(0, 2000), hashCode(code), expiresAt, draft.now]);
   return { id: result.insertId, code, expiresAt };
 }
@@ -135,19 +170,21 @@ function toRecord(binding: DraftBinding, row: RowDataPacket): DraftRecord {
 
 /** Nháp còn hiệu lực khớp mã + đúng người + đúng khóa / nguồn; không khớp (sai mã, quá hạn, đã dùng, khóa khác) đều trả null. */
 export async function findOpenDraft(db: Db, binding: DraftBinding, code: string, now: Date): Promise<DraftRecord | null> {
+  const subject = subjectClause(binding);
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${DRAFT_COLUMNS} FROM mcp_write_draft
-     WHERE code_hash = ? AND tenant_id = ? AND user_id = ? AND key_id <=> ? AND source = ? AND used_at IS NULL AND expires_at > ? ORDER BY id DESC LIMIT 1`,
-    [hashCode(code), binding.tenantId, binding.userId, binding.keyId, binding.source, now]);
+     WHERE code_hash = ? AND tenant_id = ? AND ${subject.sql} AND source = ? AND used_at IS NULL AND expires_at > ? ORDER BY id DESC LIMIT 1`,
+    [hashCode(code), binding.tenantId, ...subject.params, binding.source, now]);
   return rows[0] ? toRecord(binding, rows[0]) : null;
 }
 
 /** Mọi nháp còn hiệu lực của (người, nguồn, khóa), mới nhất trước — trợ lý dùng để xử lý «đồng ý» / «hủy» ở tin sau. */
 export async function listOpenDrafts(db: Db, binding: DraftBinding, now: Date): Promise<DraftRecord[]> {
+  const subject = subjectClause(binding);
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${DRAFT_COLUMNS} FROM mcp_write_draft
-     WHERE tenant_id = ? AND user_id = ? AND key_id <=> ? AND source = ? AND used_at IS NULL AND expires_at > ? ORDER BY id DESC LIMIT ?`,
-    [binding.tenantId, binding.userId, binding.keyId, binding.source, now, MAX_OPEN_DRAFTS_PER_USER]);
+     WHERE tenant_id = ? AND ${subject.sql} AND source = ? AND used_at IS NULL AND expires_at > ? ORDER BY id DESC LIMIT ?`,
+    [binding.tenantId, ...subject.params, binding.source, now, MAX_OPEN_DRAFTS_PER_USER]);
   return rows.map((row) => toRecord(binding, row));
 }
 

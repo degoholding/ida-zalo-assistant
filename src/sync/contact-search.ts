@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { ContactKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import type { SqlPart } from "../web/api/list-query.js";
 
 // Tìm người trong Danh bạ theo tên người dùng gõ («Minh», «anh Nam») — dùng chung cho «thêm vip <tên>» và «giao <tên>: …».
 // Không phân biệt dấu / hoa thường (collation của bảng). Xếp: ở nhóm đang nói trước, khớp đúng tên trước, người từng nhắn
@@ -22,6 +23,8 @@ export interface ContactSearchOptions {
   /** Chỉ trong VIP của người nhận này */
   vipOfRecipientId?: number;
   limit?: number;
+  /** Điều kiện thêm lên bảng `contact` (bí danh `c`) — MCP ngoài lọc theo phạm vi Danh bạ (`contactScopeSql`). Bỏ trống = không lọc như trước. */
+  scope?: SqlPart | null;
 }
 
 /** Bỏ «anh / chị / em / @» đầu tên người dùng hay gõ kèm. Hàm thuần. */
@@ -44,9 +47,10 @@ export async function searchContactsByName(db: Db, rawName: string, options: Con
      WHERE (c.display_name LIKE ? OR c.zalo_name LIKE ? ${groupId ? `OR ${memberOf} AND gm.display_name LIKE ?)` : ""})
        AND c.zalo_uid NOT IN (SELECT zalo_uid FROM bot_account WHERE zalo_uid IS NOT NULL)
        ${options.vipOfRecipientId ? "AND c.id IN (SELECT contact_id FROM recipient_vip WHERE recipient_id = ?)" : ""}
+       ${options.scope ? `AND ${options.scope.sql}` : ""}
      ORDER BY in_group DESC, exact DESC, c.last_dm_at IS NULL, name LIMIT ?`,
     [name, ...(groupId ? [groupId] : []), like, like, ...(groupId ? [groupId, like] : []),
-      ...(options.vipOfRecipientId ? [options.vipOfRecipientId] : []), options.limit ?? 8]);
+      ...(options.vipOfRecipientId ? [options.vipOfRecipientId] : []), ...(options.scope ? options.scope.params : []), options.limit ?? 8]);
   return rows.map((row) => ({
     id: Number(row.id), uid: String(row.zalo_uid), name: String(row.name ?? ""), kind: Number(row.kind),
     exact: Number(row.exact) === 1, inGroup: Number(row.in_group) === 1,

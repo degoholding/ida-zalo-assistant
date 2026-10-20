@@ -4,7 +4,7 @@ import { McpCallSource, McpCallStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { executeOpenDraft } from "../data-access/write/confirm-write-tool.js";
 import { DataAccessError } from "../data-access/data-access-errors.js";
-import { cancelDraft, findOpenDraft, listOpenDrafts, type DraftBinding, type DraftRecord } from "../data-access/write/write-draft-store.js";
+import { cancelDraft, draftBindingOf, findOpenDraft, listOpenDrafts, type DraftBinding, type DraftRecord } from "../data-access/write/write-draft-store.js";
 import { WRITE_ACTIONS } from "../data-access/write/write-tool-catalog.js";
 import { logMcpCall } from "../mcp/mcp-call-log.js";
 import type { AskerAccess } from "./infra/asker-access.js";
@@ -34,7 +34,8 @@ export function parseWriteCodeCommand(input: string): WriteCodeCommand | null {
   return { kind: ["huy", "bo qua", "cancel"].includes(match[1]) ? "cancel" : "confirm", code: match[2].toUpperCase() };
 }
 
-const bindingOf = (access: AskerAccess): DraftBinding => ({ tenantId: access.principal.tenantId, userId: access.principal.userId!, keyId: null, source: McpCallSource.Assistant });
+/** Nháp của trợ lý gắn theo LIÊN HỆ Zalo đang nhắn (`contact_id`) — người khác gõ «đồng ý <mã>» không khớp. */
+const bindingOf = (access: AskerAccess): DraftBinding => draftBindingOf({ ...access, source: McpCallSource.Assistant, keyId: null });
 
 /**
  * Các nháp ghi đang chờ của người hỏi (tin riêng thật, tài khoản web); rỗng nếu không đủ điều kiện. Mới nhất trước.
@@ -64,7 +65,7 @@ export interface WriteConfirmInput {
 async function logOutcome(access: AskerAccess, tool: string, status: McpCallStatus, errorCode?: string): Promise<void> {
   // Không ghi mã vào log: args rỗng
   await logMcpCall(access.db, {
-    userId: access.principal.userId, tenantId: access.principal.tenantId, keyId: null, source: McpCallSource.Assistant, tool, entity: "write_draft",
+    userId: access.principal.userId, contactId: access.contactActor?.contactId ?? null, tenantId: access.principal.tenantId, keyId: null, source: McpCallSource.Assistant, tool, entity: "write_draft",
     args: {}, rowCount: 0, resultChars: 0, durationMs: 0, status, errorCode, clientIp: null,
   });
 }

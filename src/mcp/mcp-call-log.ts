@@ -12,6 +12,8 @@ const PREVIEW_MAX = 500;
 
 export interface McpCallLogEntry {
   userId: number | null;
+  /** Liên hệ Zalo đang nhắn bot (lượt trợ lý) — người không có tài khoản web vẫn truy được về ai. */
+  contactId?: number | null;
   tenantId: number;
   keyId: number | null;
   source: McpCallSource;
@@ -60,10 +62,10 @@ export async function logMcpCall(db: Db, entry: McpCallLogEntry): Promise<void> 
   const args = redactCodes(entry.tool, entry.args);
   try {
     await db.query(
-      `INSERT INTO mcp_call_log (tenant_id, user_id, key_id, source, tool, entity, args_hash, args_preview, row_count, result_chars,
+      `INSERT INTO mcp_call_log (tenant_id, user_id, contact_id, key_id, source, tool, entity, args_hash, args_preview, row_count, result_chars,
                                  duration_ms, status, error_code, client_ip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [entry.tenantId, entry.userId, entry.keyId, entry.source, entry.tool.slice(0, 64), entry.entity ?? null, hashArgs(args),
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [entry.tenantId, entry.userId, entry.contactId ?? null, entry.keyId, entry.source, entry.tool.slice(0, 64), entry.entity ?? null, hashArgs(args),
         previewArgs(args), entry.rowCount, entry.resultChars, Math.round(entry.durationMs), entry.status,
         entry.errorCode ? entry.errorCode.slice(0, 64) : null, entry.clientIp ? entry.clientIp.slice(0, 64) : null]);
   } catch (error) {

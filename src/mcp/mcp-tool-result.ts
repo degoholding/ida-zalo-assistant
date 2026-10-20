@@ -40,7 +40,7 @@ export function toCallToolResult(result: ToolResult, rich = false): McpToolResul
 /** Lỗi nghiệp vụ → Denied (không đủ quyền / ngoài phạm vi) hoặc Invalid (tham số sai); timeout tính Error. */
 export function statusOf(result: ToolResult): McpCallStatus {
   if (!result.isError) return McpCallStatus.Ok;
-  if (result.errorCode === "forbidden" || result.errorCode === "not_found") return McpCallStatus.Denied;
+  if (result.errorCode === "forbidden" || result.errorCode === "not_found" || result.errorCode === "confidential" || result.errorCode === "not_allowed") return McpCallStatus.Denied;
   if (result.errorCode === "timeout") return McpCallStatus.Error;
   if (result.errorCode === "rate_limited") return McpCallStatus.RateLimited;
   return McpCallStatus.Invalid;

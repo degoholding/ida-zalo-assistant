@@ -1,5 +1,6 @@
 import { McpCallSource } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import type { ContactActor } from "./actors/contact-actor.js";
 import { can, canSeeConfidential, type Entity, type Principal } from "../auth/principal.js";
 
 // Ngữ cảnh một lời gọi vào lõi truy cập dữ liệu: AI là AI NÀO của ai, được thấy gì. Mọi hàm của lõi nhận ngữ cảnh này —
@@ -30,6 +31,13 @@ export interface DataAccessContext {
   now: Date;
   /** Đánh thức bộ chạy việc nền sau khi ghi (báo Zalo qua hàng đợi). Thiếu = bộ chạy tự quét theo chu kỳ. */
   wakeJobs?: () => void;
+  /**
+   * Người đang nhắn bot trên Zalo (có hoặc không tài khoản web) — chủ thể của các thao tác ghi theo QUAN HỆ (`WriteAction.permission =
+   * "relationship"`). Chỉ trợ lý đặt (từ tin Zalo đã nhận); cổng HTTP không bao giờ có ⇒ công cụ quan hệ không lộ ra MCP ngoài.
+   */
+  contactActor?: ContactActor;
+  /** Lưu cài đặt áp nóng (dịch vụ cài đặt) — chỉ ctx trợ lý có, HTTP không. Trả danh sách khóa đã đổi. */
+  saveSettings?: (patch: Record<string, unknown>, actor: string) => Promise<string[]>;
 }
 
 export interface DataAccessContextInput {
@@ -43,6 +51,8 @@ export interface DataAccessContextInput {
   keyId?: number | null;
   now?: Date;
   wakeJobs?: () => void;
+  contactActor?: ContactActor;
+  saveSettings?: DataAccessContext["saveSettings"];
 }
 
 /**
@@ -55,7 +65,7 @@ export function buildDataAccessContext(input: DataAccessContextInput): DataAcces
     includeConfidential: canSeeConfidential(input.principal), maskPersonal: input.maskPersonal,
     ownDirectThreadsOnly: input.ownDirectThreadsOnly === true, ownDirectUid: input.ownDirectUid ?? null,
     source: input.source, keyId: input.keyId ?? null, now: input.now ?? new Date(),
-    wakeJobs: input.wakeJobs,
+    wakeJobs: input.wakeJobs, contactActor: input.contactActor, saveSettings: input.saveSettings,
   };
 }
 

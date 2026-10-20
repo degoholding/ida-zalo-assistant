@@ -6,7 +6,7 @@ import { canUse, type DataAccessContext } from "../data-access-context.js";
 import { DataAccessError } from "../data-access-errors.js";
 import { eraseTool, type AnyToolDefinition } from "../tool-definition.js";
 import { canPropose, type AnyWriteAction, type WriteExecuted } from "./write-action.js";
-import { claimDraft, DraftOutcome, findOpenDraft, hashPayload, saveDraftResult, type DraftRecord } from "./write-draft-store.js";
+import { claimDraft, DraftOutcome, draftBindingOf, findOpenDraft, hashPayload, saveDraftResult, type DraftRecord } from "./write-draft-store.js";
 import { guardWrite } from "./write-errors.js";
 import { STALE_MESSAGE } from "./write-row-lock.js";
 
@@ -36,7 +36,7 @@ export async function executeOpenDraft(ctx: DataAccessContext, actions: Readonly
   const { principal } = ctx;
   if (hashPayload(draft.payload) !== draft.payloadHash) throw new DataAccessError("invalid_code", INVALID_CODE);
   const action = actions.get(draft.tool);
-  if (!action || !canPropose(ctx, action) || !canUse(ctx, action.entity, "write")) throw new DataAccessError("forbidden", "Tài khoản / khóa này không còn quyền thực hiện nháp này.");
+  if (!action || !canPropose(ctx, action) || (action.permission !== "relationship" && !canUse(ctx, action.entity, "write"))) throw new DataAccessError("forbidden", "Tài khoản / khóa này không còn quyền thực hiện nháp này.");
   const { args, state } = draft.payload as { args: unknown; state: string };
   const parsed = action.schema.safeParse(args);
   if (!parsed.success) throw new DataAccessError("invalid_code", INVALID_CODE);
@@ -81,7 +81,7 @@ export function confirmWriteTool(actions: ReadonlyMap<string, AnyWriteAction>): 
       if (principal.userId === null) throw new DataAccessError("forbidden", "Chỉ tài khoản web ghi được dữ liệu qua AI.");
       // Trợ lý KHÔNG xác nhận bằng công cụ (D1): mô hình không bao giờ tự xác nhận — chỉ tin «đồng ý» của người dùng, xử lý bằng mã ở chat-commands
       if (ctx.source !== McpCallSource.Http) throw new DataAccessError("forbidden", "Trợ lý chỉ thực hiện khi người dùng nhắn «đồng ý».");
-      const draft = await findOpenDraft(ctx.db, { tenantId: principal.tenantId, userId: principal.userId, keyId: ctx.keyId, source: ctx.source }, input.code, ctx.now);
+      const draft = await findOpenDraft(ctx.db, draftBindingOf(ctx), input.code, ctx.now);
       if (!draft) throw new DataAccessError("invalid_code", INVALID_CODE);
       const done = await executeOpenDraft(ctx, actions, draft);
       return {

@@ -40,7 +40,7 @@ export function wrapTool(tool: AnyToolDefinition, ctx: DataAccessContext, opts: 
   const rich = opts.source !== McpCallSource.Http;
   const record = (entry: Pick<McpCallLogEntry, "args" | "status" | "durationMs"> & Partial<McpCallLogEntry>): void => {
     opts.logCall({
-      userId: principal.userId, tenantId: principal.tenantId, keyId: ctx.keyId, source: opts.source, tool: tool.name,
+      userId: principal.userId, contactId: ctx.contactActor?.contactId ?? null, tenantId: principal.tenantId, keyId: ctx.keyId, source: opts.source, tool: tool.name,
       rowCount: 0, resultChars: 0, clientIp: opts.clientIp, ...entry,
     }).catch((error) => log.error(`ghi nhật ký gọi ${tool.name}: ${describeError(error)}`));
   };

@@ -2,6 +2,7 @@
 import type { RowDataPacket } from "mysql2";
 import { loadUserPrincipal, type Principal } from "../../auth/principal.js";
 import { ContactRole, ConversationType, McpCallSource, UserRole } from "../../constants.js";
+import { buildContactActor, type AskerOrigin, type ContactActor } from "../../data-access/actors/contact-actor.js";
 import { sourceThreadVisibilitySql } from "../../data-access/visibility-guards.js";
 import { buildDataAccessContext, type DataAccessContext } from "../../data-access/data-access-context.js";
 import type { Db } from "../../db/pool.js";
@@ -20,8 +21,9 @@ import type { SqlPart } from "../../web/api/list-query.js";
 
 const log = createLogger("assistant");
 
-/** `disabled_account`: có tài khoản web gắn với liên hệ nhưng không còn dòng nào đang bật — KHÔNG suy quyền từ vai trò Danh bạ. */
-export type AskerOrigin = "web_user" | "derived_role" | "derived_recipient" | "disabled_account";
+// `AskerOrigin` định nghĩa ở lõi (actors/contact-actor.ts) để chủ thể liên hệ không phụ thuộc ngược vào hạ tầng trợ lý.
+// `disabled_account`: có tài khoản web gắn với liên hệ nhưng không còn dòng nào đang bật — KHÔNG suy quyền từ vai trò Danh bạ.
+export type { AskerOrigin };
 
 /** Ngữ cảnh truy cập của lượt hỏi kèm nguồn gốc danh tính (để soát log + quyết định phạm vi Danh bạ). */
 export interface AskerAccess extends DataAccessContext {
@@ -34,6 +36,23 @@ export interface AskerContact {
   role: number;
   display_name?: string;
   zalo_name?: string;
+  /** ContactKind; thiếu = 0 (chưa phân loại). */
+  kind?: number;
+}
+
+/** Cuộc đang nhắn + tin chứa câu hỏi — đi vào `contactActor` (việc / ticket mới gắn vào đây). */
+export interface AskerTurn {
+  threadId?: number | null;
+  messageId?: number | null;
+  botAccountId?: number | null;
+}
+
+/** Chủ thể «liên hệ Zalo» của người hỏi (luật quan hệ — xem actors/contact-actor.ts). Dùng cả khi ngữ cảnh đã phân giải sẵn ở nơi khác. */
+export function askerContactActor(db: Db, contact: AskerContact, origin: AskerOrigin, groupId: number | null | undefined, turn: AskerTurn = {}): ContactActor {
+  return buildContactActor(db, {
+    contact: { id: contact.id, uid: contact.zalo_uid, name: contact.display_name || contact.zalo_name || contact.zalo_uid, role: contact.role, kind: contact.kind ?? 0 },
+    origin, groupId: groupId ?? null, ...turn,
+  });
 }
 
 export interface ResolveAskerOptions {
@@ -46,6 +65,11 @@ export interface ResolveAskerOptions {
    * quản trị đang đăng nhập; không đọc cuộc nhắn riêng của người được chọn (ownDirectUid = null, bỏ cuộc riêng khỏi phạm vi).
    */
   webViewer?: { canViewConfidential: boolean };
+  /** Cuộc + tin của lượt (cho `contactActor`); lần dò kiểm cổng không cần. */
+  turn?: AskerTurn;
+  /** Móc áp cho ctx trợ lý: đánh thức việc nền sau ghi, lưu cài đặt áp nóng (phase 10). */
+  wakeJobs?: () => void;
+  saveSettings?: DataAccessContext["saveSettings"];
   /** Tắt dòng log «lượt hỏi» (lần dò chỉ để kiểm cổng, không phải lượt hỏi thật). */
   quiet?: boolean;
 }
@@ -177,6 +201,8 @@ export async function resolveAskerAccess(db: Db, contact: AskerContact, options:
   const access = buildDataAccessContext({
     db, principal, allowWrite: false, maskPersonal: options.maskPersonal, source: McpCallSource.Assistant, now: options.now,
     ownDirectThreadsOnly: true, ownDirectUid: options.webViewer ? null : contact.zalo_uid,
+    wakeJobs: options.wakeJobs, saveSettings: options.saveSettings,
+    contactActor: askerContactActor(db, contact, origin, options.groupScopeId, options.turn),
   });
   if (!options.quiet) log.info(`lượt hỏi: người hỏi #${contact.id} · nguồn ${origin}${principal.userId ? ` · tài khoản #${principal.userId}` : ""} · Mật ${access.includeConfidential ? "bật" : "tắt"}`);
   return { ...access, origin };

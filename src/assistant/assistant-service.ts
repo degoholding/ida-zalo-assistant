@@ -44,7 +44,7 @@ import { canIssueSendCommand } from "../send-commands/send-command-permissions.j
 import { PROPOSE_SEND_DECLARATION, SEND_TOOL_PROMPT } from "../send-commands/send-command-tool.js";
 import { buildNoFakeActionPrompt } from "./no-fake-action-prompt.js";
 import { can } from "../auth/principal.js";
-import { resolveAskerAccess, type AskerAccess } from "./infra/asker-access.js";
+import { askerContactActor, resolveAskerAccess, type AskerAccess } from "./infra/asker-access.js";
 import { checkTurnLimits, logAssistantTurn, type AssistantLimits, type TurnLogDetail } from "./infra/assistant-turn-log.js";
 import { loadHistory } from "./infra/conversation-history.js";
 import { MEETING_ANNOUNCE_TOOL_PROMPT, PROPOSE_MEETING_ANNOUNCEMENT_DECLARATION } from "../send-commands/send-meeting-announcement-tool.js";
@@ -174,8 +174,15 @@ export class AssistantService {
     const tickets = this.options.tickets;
     // Ngữ cảnh truy cập của người hỏi: phân giải LƯỜI, MỘT lần cho cả lượt (lệnh ticket, công cụ, cổng) — xem asker-access.ts
     let accessPromise: Promise<AskerAccess> | null = null;
-    const accessOnce = () => (accessPromise ??= request.access ? Promise.resolve({ ...request.access, now }) : resolveAskerAccess(this.db, request.contact, {
-      groupScopeId: request.groupScope?.groupId, maskPersonal: Boolean(this.options.privacy?.maskPersonalData), now, webViewer: request.webViewer }));
+    const turn = { threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId };
+    const groupId = request.groupScope?.groupId;
+    const accessOnce = () => (accessPromise ??= request.access
+      // Phân giải sẵn ở nơi gọi (cổng nhóm Mật): chỉ thêm cuộc + tin của lượt vào chủ thể liên hệ (và móc nền)
+      ? Promise.resolve({ ...request.access, now, wakeJobs: tickets?.wakeJobs, saveSettings: this.options.alertTools?.saveSettings,
+        contactActor: askerContactActor(this.db, request.contact, request.access.origin, groupId, turn) })
+      : resolveAskerAccess(this.db, request.contact, {
+        groupScopeId: groupId, maskPersonal: Boolean(this.options.privacy?.maskPersonalData), now, webViewer: request.webViewer,
+        turn, wakeJobs: tickets?.wakeJobs, saveSettings: this.options.alertTools?.saveSettings }));
     const ticket = tickets ? buildTicketContext(tickets, {
       contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role },
       threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,

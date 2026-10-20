@@ -76,7 +76,7 @@ export async function runCoreTool(
   const normalized = normalizeCoreToolArgs(def.name, args);
   const record = (fields: { status: McpCallStatus; rowCount?: number; resultChars?: number; entity?: string; errorCode?: string }) => {
     void logMcpCall(access.db, {
-      userId: access.principal.userId, tenantId: access.principal.tenantId, keyId: null, source: access.source, tool: def.name,
+      userId: access.principal.userId, contactId: access.contactActor?.contactId ?? null, tenantId: access.principal.tenantId, keyId: null, source: access.source, tool: def.name,
       args: normalized, rowCount: 0, resultChars: 0, durationMs: performance.now() - startedAt, clientIp: null, ...fields,
     });
   };

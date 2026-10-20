@@ -25,6 +25,16 @@ export interface WriteExecuted {
   message: string;
 }
 
+/**
+ * Ai được đề xuất / thực hiện thao tác: `role` = tài khoản web Quản trị / Quản lý (D3 — ghi CHUNG: danh bạ, nhóm, mẫu tin, cấu hình);
+ * `relationship` = người đang nhắn bot trên Zalo (`ctx.contactActor`) theo QUAN HỆ với bản ghi (người giao / phụ trách / người báo / người xử lý /
+ * sếp) — luật cụ thể kiểm trong `prepare`. Cổng HTTP không có `contactActor` nên không bao giờ thấy thao tác `relationship`.
+ */
+export type WritePermission = "role" | "relationship";
+
+/** `draft` = đề xuất tạo nháp → «đồng ý <mã>» mới ghi (mặc định); `immediate` = ghi NGAY khi mô hình / lệnh gọi (chỉ thao tác quan hệ, BC1 đã bỏ). */
+export type WriteConfirmMode = "draft" | "immediate";
+
 export interface WriteAction<P = unknown> {
   /** Tên công cụ `propose_*`; cũng là cột `mcp_write_draft.tool`. */
   tool: string;
@@ -32,6 +42,12 @@ export interface WriteAction<P = unknown> {
   description: string;
   /** Quyền vai trò bắt buộc có `write` trên thực thể này. */
   entity: Entity;
+  /** Mặc định `role`. */
+  permission?: WritePermission;
+  /** Mặc định `draft`. */
+  confirmMode?: WriteConfirmMode;
+  /** Hạn nháp riêng (mili giây); mặc định 10 phút. */
+  ttlMs?: number;
   schema: z.ZodType<P>;
   prepare(ctx: DataAccessContext, payload: P): Promise<WritePrepared>;
   /**
@@ -46,8 +62,12 @@ export type AnyWriteAction = WriteAction<unknown>;
 /** Vai trò được ghi qua AI (D3, 17/10/2026): chỉ Quản trị / Quản lý. Nhân viên chỉ đọc qua AI ở mọi cổng, kể cả mẫu tin. */
 export const roleMayWriteViaAi = (ctx: DataAccessContext): boolean => maxAccessLevelForRole(ctx.principal.role) === McpAccessLevel.ReadWrite;
 
-/** Ghi được qua AI = khóa / trợ lý mức đọc+ghi ∧ có tài khoản web thật (không phải principal suy ra) ∧ vai trò Quản trị / Quản lý ∧ có quyền ghi thực thể. */
+/**
+ * Đề xuất được không. `role`: khóa / trợ lý mức đọc+ghi ∧ có tài khoản web thật (không phải principal suy ra) ∧ vai trò Quản trị / Quản lý ∧ có quyền
+ * ghi thực thể. `relationship`: có `contactActor` (không đòi tài khoản web / vai trò web; luật quan hệ kiểm trong `prepare`).
+ */
 export function canPropose(ctx: DataAccessContext, action: AnyWriteAction): boolean {
+  if (action.permission === "relationship") return ctx.contactActor != null;
   return ctx.principal.userId !== null && roleMayWriteViaAi(ctx) && canUse(ctx, action.entity, "write");
 }
 

@@ -1,5 +1,5 @@
 import { z } from "zod/v4";
-import { createDraft } from "./write-draft-store.js";
+import { createDraft, draftBindingOf } from "./write-draft-store.js";
 import { canPropose, eraseAction, type WriteAction } from "./write-action.js";
 import { guardWrite } from "./write-errors.js";
 import { eraseTool, UNTRUSTED_NOTICE, type AnyToolDefinition } from "../tool-definition.js";
@@ -21,6 +21,7 @@ const NEXT_MCP = "Đưa bản xem trước cho người dùng; CHỈ gọi confi
 const WRITE_NOTICE = "Công cụ này CHỈ TẠO NHÁP (chưa đổi dữ liệu): trả bản xem trước + mã xác nhận 6 ký tự, hiệu lực 10 phút. Phải hỏi người dùng và gọi confirm_write({code}) khi họ đồng ý.";
 
 export function proposeTool<P>(action: WriteAction<P>): AnyToolDefinition {
+  if (action.confirmMode === "immediate") throw new Error(`Thao tác ${action.tool} ghi ngay (immediate) — không dựng công cụ nháp propose_*`);
   const tool = {
     name: action.tool,
     title: action.title,
@@ -32,7 +33,7 @@ export function proposeTool<P>(action: WriteAction<P>): AnyToolDefinition {
     handler: async (ctx: Parameters<typeof canPropose>[0], input: P) => {
       const prepared = await guardWrite(() => action.prepare(ctx, input));
       const { code, expiresAt } = await createDraft(ctx.db, {
-        tenantId: ctx.principal.tenantId, userId: ctx.principal.userId!, keyId: ctx.keyId, source: ctx.source, tool: action.tool,
+        ...draftBindingOf(ctx), tool: action.tool, ttlMs: action.ttlMs,
         targetEntity: prepared.targetEntity, targetId: prepared.targetId, payload: { args: input, state: prepared.stateToken },
         preview: prepared.preview, now: ctx.now,
       });

@@ -9,6 +9,7 @@ import { after, before, beforeEach, describe, test } from "node:test";
 import type { RowDataPacket } from "mysql2";
 import type { Principal } from "../src/auth/principal.js";
 import { McpAccessLevel, McpCallSource, ReplyTemplateStatus, TaskStatus, TicketStatus, UserRole } from "../src/constants.js";
+import { buildContactActor } from "../src/data-access/actors/contact-actor.js";
 import { buildDataAccessContext, type DataAccessContext } from "../src/data-access/data-access-context.js";
 import { findTool } from "../src/data-access/read-tool-catalog.js";
 import { runTool, type ToolResult } from "../src/data-access/tool-runner.js";
@@ -42,6 +43,8 @@ describe("ghi qua MCP / trợ lý: nháp → confirm_write (MySQL)", { skip: !da
     });
     return { ...base, ...rest };
   };
+  /** Người hỏi trợ lý (liên hệ Zalo): nháp nguồn trợ lý gắn theo contact_id nên ctx trợ lý phải có chủ thể này (phase 5). */
+  const asker = () => buildContactActor(db, { contact: { id: outsiderContactId || contactId, uid: "w8-asker", name: "Người hỏi", role: 0, kind: 2 }, origin: "web_user" });
   const call = (name: string, args: unknown, ctx: DataAccessContext): Promise<ToolResult> => runTool(findTool(name)!, ctx, args);
   const manager = () => principal(UserRole.Manager);
 
@@ -258,7 +261,7 @@ describe("ghi qua MCP / trợ lý: nháp → confirm_write (MySQL)", { skip: !da
   });
 
   test("trợ lý không xác nhận bằng công cụ: confirm_write với nguồn trợ lý → forbidden dù nháp của chính nó; nháp MCP không dùng được ở trợ lý", async () => {
-    const assistantCtx = (now: Date) => ctxOf(manager(), { source: McpCallSource.Assistant, keyId: null, now });
+    const assistantCtx = (now: Date) => ctxOf(manager(), { source: McpCallSource.Assistant, keyId: null, now, contactActor: asker() });
     const code = await propose("propose_contact_update", { contact_id: contactId, note: "qua trợ lý" }, assistantCtx(NOW));
     assert.equal(errorOf(await confirm(code, assistantCtx(new Date(NOW.getTime() + 60_000)))), "forbidden");
     assert.notEqual((await one("SELECT note FROM contact WHERE id = ?", [contactId])).note, "qua trợ lý");
@@ -333,7 +336,7 @@ describe("ghi qua MCP / trợ lý: nháp → confirm_write (MySQL)", { skip: !da
         payload: { args: { n: i }, state: "s" }, preview: "p", now: NOW });
     }
     assert.equal(errorOf(await call("propose_contact_update", { contact_id: contactId, note: "thừa MCP" }, ctxOf(manager()))), "rate_limited");
-    const assistantCtx = ctxOf(manager(), { source: McpCallSource.Assistant, keyId: null });
+    const assistantCtx = ctxOf(manager(), { source: McpCallSource.Assistant, keyId: null, contactActor: asker() });
     assert.equal(errorOf(await call("propose_contact_update", { contact_id: contactId, note: "của trợ lý" }, assistantCtx)), "ok");
   });
 

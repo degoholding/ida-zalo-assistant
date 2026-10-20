@@ -3,7 +3,7 @@ import { McpCallSource } from "../../constants.js";
 import type { DataAccessContext } from "../data-access-context.js";
 import { DataAccessError } from "../data-access-errors.js";
 import { executeOpenDraft } from "../write/confirm-write-tool.js";
-import { cancelDraft, findOpenDraft, listOpenDrafts, type DraftBinding, type DraftRecord } from "../write/write-draft-store.js";
+import { cancelDraft, draftBindingOf, findOpenDraft, listOpenDrafts, type DraftBinding, type DraftRecord } from "../write/write-draft-store.js";
 import { eraseTool, type AnyToolDefinition, type ToolDefinition } from "../tool-definition.js";
 import type { FamilyCatalog } from "./family-catalog.js";
 
@@ -20,11 +20,10 @@ const draftRefInput = z.object({
 type DraftRefInput = z.infer<typeof draftRefInput>;
 
 /** Chỉ người hỏi có quyền ghi qua trợ lý (`allowWrite` do lớp trợ lý đặt: tài khoản web, tin riêng thật, Quản trị / Quản lý). */
-const availableToWriter = (ctx: DataAccessContext): boolean => ctx.allowWrite && ctx.principal.userId !== null;
+const availableToWriter = (ctx: DataAccessContext): boolean => ctx.allowWrite && (ctx.principal.userId !== null || ctx.contactActor != null);
 
-function bindingOf(ctx: DataAccessContext): DraftBinding {
-  return { tenantId: ctx.principal.tenantId, userId: ctx.principal.userId!, keyId: null, source: McpCallSource.Assistant };
-}
+/** Nháp của trợ lý gắn theo LIÊN HỆ Zalo đang nhắn (`contact_id`) — người khác gõ «đồng ý <mã>» không khớp. */
+const bindingOf = (ctx: DataAccessContext): DraftBinding => draftBindingOf({ ...ctx, source: McpCallSource.Assistant, keyId: null });
 
 async function findDraft(ctx: DataAccessContext, input: DraftRefInput): Promise<DraftRecord> {
   const binding = bindingOf(ctx);

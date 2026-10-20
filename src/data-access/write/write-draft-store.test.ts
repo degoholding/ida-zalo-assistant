@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { test } from "node:test";
-import { McpCallSource } from "../../constants.js";
+import { McpCallSource, UserRole } from "../../constants.js";
 import { DataAccessError } from "../data-access-errors.js";
-import { fakeDb, NOW } from "../data-access-test-support.js";
+import { fakeDb, NOW, principalOf } from "../data-access-test-support.js";
 import {
-  canonicalJson, CODE_ALPHABET, CODE_LENGTH, claimDraft, createDraft, DRAFT_TTL_MS, findOpenDraft, generateCode, hashCode, hashPayload,
+  canonicalJson, CODE_ALPHABET, CODE_LENGTH, claimDraft, createDraft, draftBindingOf, draftTtlOf, DRAFT_TTL_MS, findOpenDraft, generateCode, hashCode, hashPayload, listOpenDrafts,
   MAX_OPEN_DRAFTS_PER_USER, MAX_PROPOSALS_PER_MINUTE, normalizeCode,
 } from "./write-draft-store.js";
 
@@ -89,10 +89,64 @@ test("createDraft: trần nháp mở đếm theo (người, NGUỒN) — MCP ch�
     sqls.push({ sql, params });
     return sql.startsWith("SELECT COUNT(*)") ? [[{ n: 0 }], []] : sql.startsWith("SELECT id") ? [[], []] : [{ insertId: 1 }, []];
   } } as never;
-  await createDraft(db, { ...newDraft, source: McpCallSource.Assistant, keyId: null });
+  await createDraft(db, { ...newDraft, source: McpCallSource.Assistant, keyId: null, contactId: 31 });
   const open = sqls.find((query) => query.sql.startsWith("SELECT COUNT(*)") && !query.sql.includes("created_at >"))!;
-  assert.match(open.sql, /user_id = \? AND source = \?/);
-  assert.deepEqual(open.params.slice(0, 2), [7, McpCallSource.Assistant]);
+  assert.match(open.sql, /contact_id = \? AND source = \?/, "trợ lý đếm theo liên hệ Zalo");
+  assert.deepEqual(open.params.slice(0, 2), [31, McpCallSource.Assistant]);
+  sqls.length = 0;
+  await createDraft(db, newDraft);
+  const http = sqls.find((query) => query.sql.startsWith("SELECT COUNT(*)") && !query.sql.includes("created_at >"))!;
+  assert.match(http.sql, /user_id = \? AND source = \?/, "cổng HTTP vẫn đếm theo người");
+});
+
+test("nháp của trợ lý gắn theo contact_id: INSERT lưu contact_id + user_id NULL được (người không có tài khoản web)", async () => {
+  const inserts: unknown[][] = [];
+  const insertSql: string[] = [];
+  const db = { query: async (sql: string, params: unknown[]) => {
+    if (sql.startsWith("SELECT COUNT(*)")) return [[{ n: 0 }], []];
+    if (sql.startsWith("SELECT id")) return [[], []];
+    insertSql.push(sql);
+    inserts.push(params);
+    return [{ insertId: 5 }, []];
+  } } as never;
+  await createDraft(db, { ...newDraft, source: McpCallSource.Assistant, keyId: null, userId: null, contactId: 31 });
+  assert.match(insertSql[0], /\(tenant_id, user_id, contact_id, key_id,/);
+  assert.deepEqual(inserts[0].slice(0, 4), [1, null, 31, null]);
+});
+
+test("createDraft: không xác định được chủ thể (trợ lý thiếu contactId / HTTP thiếu userId) → forbidden, không chạm DB", async () => {
+  const { db, queries } = fakeDb();
+  await assert.rejects(createDraft(db, { ...newDraft, source: McpCallSource.Assistant, userId: 7, contactId: null }), (error: unknown) => error instanceof DataAccessError && error.code === "forbidden");
+  await assert.rejects(createDraft(db, { ...newDraft, userId: null }), (error: unknown) => error instanceof DataAccessError && error.code === "forbidden");
+  assert.equal(queries.length, 0);
+});
+
+test("TTL theo thao tác: ttlMs riêng thay mặc định 10 phút", async () => {
+  const result = await createDraft(countingDb({ recent: 0, open: 0 }), { ...newDraft, ttlMs: 2 * 60_000 });
+  assert.equal(result.expiresAt.getTime() - NOW.getTime(), 120_000);
+  assert.equal(draftTtlOf(undefined), DRAFT_TTL_MS);
+  assert.equal(draftTtlOf(0), DRAFT_TTL_MS);
+});
+
+test("findOpenDraft / listOpenDrafts theo trợ lý khớp contact_id, không khớp user_id; thiếu contactId → mệnh đề sai, không nháp nào", async () => {
+  const assistant = { tenantId: 1, userId: 7, contactId: 31, keyId: null, source: McpCallSource.Assistant };
+  const find = fakeDb();
+  await findOpenDraft(find.db, assistant, "k7q2mx", NOW);
+  assert.match(find.queries[0].sql, /contact_id = \? AND key_id <=> \?/);
+  assert.ok(!/user_id/.test(find.queries[0].sql));
+  assert.deepEqual(find.queries[0].params, [hashCode("K7Q2MX"), 1, 31, null, McpCallSource.Assistant, NOW]);
+  const list = fakeDb();
+  assert.deepEqual(await listOpenDrafts(list.db, { ...assistant, contactId: null }, NOW), []);
+  assert.match(list.queries[0].sql, /1 = 0/);
+});
+
+test("draftBindingOf: HTTP theo (người, khóa); trợ lý theo liên hệ Zalo, kể cả khi không có tài khoản web", () => {
+  const actor = { contactId: 31 } as never;
+  const http = draftBindingOf({ principal: principalOf(UserRole.Manager), keyId: 5, source: McpCallSource.Http, contactActor: actor });
+  assert.deepEqual(http, { tenantId: 1, userId: 7, contactId: null, keyId: 5, source: McpCallSource.Http });
+  const noAccount = draftBindingOf({ principal: principalOf(UserRole.Staff, { userId: null }), keyId: null, source: McpCallSource.Assistant, contactActor: actor });
+  assert.deepEqual(noAccount, { tenantId: 1, userId: null, contactId: 31, keyId: null, source: McpCallSource.Assistant });
+  assert.equal(draftBindingOf({ principal: principalOf(UserRole.Staff), keyId: null, source: McpCallSource.Assistant }).contactId, null);
 });
 
 test("createDraft: nháp giống hệt vừa 'attempted' / 'failed' → invalid_state, không INSERT (M2)", async () => {

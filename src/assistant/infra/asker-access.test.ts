@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ContactRole, McpCallSource, UserRole } from "../../constants.js";
+import { buildDataAccessContext } from "../../data-access/data-access-context.js";
 import { fakeDb } from "../../data-access/data-access-test-support.js";
 import { askerContactScope, mayAskInConfidentialGroup, relaxConfidential, resolveAskerAccess, type AskerContact } from "./asker-access.js";
 
@@ -152,4 +153,35 @@ test("mayAskInConfidentialGroup: flag holder with an account yes; derived or unf
   assert.equal(await mayAskInConfidentialGroup(world({ linked: [9], user: user({ can_view_confidential: 1 }) }).db, MANAGER, 7), true);
   assert.equal(await mayAskInConfidentialGroup(world({ linked: [9], user: user({ can_view_confidential: 0 }) }).db, MANAGER, 7), false);
   assert.equal(await mayAskInConfidentialGroup(world({}).db, MANAGER, 7), false);
+});
+
+test("contactActor: có cho MỌI người hỏi (tài khoản / vai trò / người nhận / đã tắt), mang cuộc + tin của lượt; danh tính từ liên hệ, không từ tham số", async () => {
+  const turn = { threadId: 4, messageId: 40, botAccountId: 2 };
+  const cases: [string, ReturnType<typeof world>, AskerContact, string][] = [
+    ["web_user", world({ linked: [9], user: user({ all_groups: 1 }) }), MANAGER, "web_user"],
+    ["derived_role", world({}), MANAGER, "derived_role"],
+    ["derived_recipient", world({}), NO_ROLE, "derived_recipient"],
+    ["disabled_account", world({ disabledLinked: [9] }), MANAGER, "disabled_account"],
+  ];
+  for (const [label, sim, contact, origin] of cases) {
+    const access = await resolveAskerAccess(sim.db, contact, { maskPersonal: false, turn });
+    const actor = access.contactActor!;
+    assert.ok(actor, label);
+    assert.deepEqual([actor.contactId, actor.uid, actor.origin, actor.threadId, actor.messageId, actor.botAccountId, actor.groupId], [contact.id, contact.zalo_uid, origin, 4, 40, 2, null], label);
+    assert.equal(actor.name, contact.display_name);
+  }
+  const inGroup = await resolveAskerAccess(world({}).db, MANAGER, { groupScopeId: 7, maskPersonal: false });
+  assert.equal(inGroup.contactActor!.groupId, 7);
+  assert.equal(inGroup.contactActor!.threadId, null);
+});
+
+test("móc ctx trợ lý: wakeJobs / saveSettings truyền vào ctx; cổng HTTP (buildDataAccessContext không đặt) không có contactActor / saveSettings", async () => {
+  const wake = () => undefined;
+  const save = async () => ["k"];
+  const access = await resolveAskerAccess(world({}).db, MANAGER, { maskPersonal: false, wakeJobs: wake, saveSettings: save });
+  assert.equal(access.wakeJobs, wake);
+  assert.equal(access.saveSettings, save);
+  const http = buildDataAccessContext({ db: world({}).db, principal: access.principal, maskPersonal: false, source: McpCallSource.Http });
+  assert.equal(http.contactActor, undefined);
+  assert.equal(http.saveSettings, undefined);
 });
