@@ -7,13 +7,18 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type { RowDataPacket } from "mysql2";
+import mysql from "mysql2/promise";
 import { JobKind, JobStatus } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { createPool, type Db } from "../src/db/pool.js";
 import { claimJobs, completeJob, enqueueJob, failJob, purgeFinishedJobs, recoverOrphanedJobs, recoverStaleJobs, summarizeQueue } from "../src/jobs/job-queue.js";
 import { JobRunner } from "../src/jobs/job-runner.js";
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
+const sharedDatabaseUrl = process.env.TEST_DATABASE_URL;
+// Tệp này tự dựng một DB RIÊNG cho mỗi lần chạy (cùng máy chủ với TEST_DATABASE_URL) rồi bỏ đi lúc xong. Lý do: bảng `job`
+// là nơi mọi bài kiểm khẳng định «đúng các việc này, không hơn» — hai lần chạy bộ kiểm cùng lúc trên MỘT DB (nhiều tác nhân /
+// `npm test` + `npm run test:mcp`) thì `DELETE FROM job` và các lượt claim của bên kia lọt vào giữa bài, làm các bài 2, 6, 7
+// (và đôi khi 1, 8) hỏng ngẫu nhiên; chạy riêng tệp thì không thấy vì không có bên thứ hai.
 const DIRECT = JobKind.AssistantDirectReply;
 const GROUP = JobKind.AssistantGroupReply;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -23,15 +28,33 @@ async function statusOf(db: Db, id: number): Promise<{ status: JobStatus; attemp
   return rows[0] as { status: JobStatus; attempts: number; last_error: string };
 }
 
-describe("hàng đợi việc", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_URL" }, () => {
+/** Tạo DB riêng `<tên>_jobs_<pid>_<giờ>` trên cùng máy chủ; trả về URL của nó. */
+async function createPrivateDatabase(baseUrl: string): Promise<{ url: string; name: string }> {
+  const url = new URL(baseUrl);
+  const name = `${url.pathname.slice(1)}_jobs_${process.pid}_${Date.now()}`;
+  const admin = await mysql.createConnection(baseUrl);
+  try { await admin.query(`CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`); } finally { await admin.end(); }
+  url.pathname = `/${name}`;
+  return { url: url.toString(), name };
+}
+
+describe("hàng đợi việc", { skip: !sharedDatabaseUrl && "chưa đặt TEST_DATABASE_URL" }, () => {
   let db: Db;
+  let privateName = "";
 
   before(async () => {
+    const created = await createPrivateDatabase(sharedDatabaseUrl!);
+    privateName = created.name;
     // Hai lần gọi song song như app + worker cùng khởi động: khóa tên giữ cho không tệp nào chạy hai lần
-    await Promise.all([runMigrations(databaseUrl!), runMigrations(databaseUrl!)]);
-    db = createPool(databaseUrl!);
+    await Promise.all([runMigrations(created.url), runMigrations(created.url)]);
+    db = createPool(created.url);
   });
-  after(async () => { await db?.end(); });
+  after(async () => {
+    await db?.end();
+    if (!privateName) return;
+    const admin = await mysql.createConnection(sharedDatabaseUrl!);
+    try { await admin.query(`DROP DATABASE IF EXISTS \`${privateName}\``); } finally { await admin.end(); }
+  });
   beforeEach(async () => { await db.query("DELETE FROM job"); });
 
   test("the same dedupe key is stored once — a second bot in the group cannot queue the same message again", async () => {

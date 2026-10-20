@@ -8,6 +8,8 @@ import { UNTRUSTED_NOTICE, type AnyToolDefinition } from "./tool-definition.js";
 import { runTool } from "./tool-runner.js";
 
 const NAMES = ["whoami", "describe_entities", "query_records", "search_messages", "get_thread_messages", "get_file_text", "metrics_summary"];
+// Công cụ của họ trợ lý mở thêm cho cổng ngoài (catalog/*-family-tools.ts, mặt mcp_http): họ reads (phase 6 plan trợ lý qua MCP)
+const FAMILY_HTTP_NAMES = ["find_people", "get_conversation_with_person"];
 const toolNames = (ctx: ReturnType<typeof makeCtx>) => toolsFor(ctx).map((tool) => tool.name);
 const tool = (name: string): AnyToolDefinition => findTool(name)!;
 
@@ -25,9 +27,9 @@ test("danh mục có đúng 7 công cụ đọc, tên duy nhất, chỉ đọc, 
 });
 
 test("ma trận available: Nhân viên không có metrics_summary; Quản lý / Quản trị có đủ 7", () => {
-  assert.deepEqual(toolNames(makeCtx(admin())), NAMES);
-  assert.deepEqual(toolNames(makeCtx(manager())), NAMES);
-  assert.deepEqual(toolNames(makeCtx(staff())), NAMES.filter((name) => name !== "metrics_summary"));
+  assert.deepEqual(toolNames(makeCtx(admin())), [...NAMES, ...FAMILY_HTTP_NAMES]);
+  assert.deepEqual(toolNames(makeCtx(manager())), [...NAMES, ...FAMILY_HTTP_NAMES]);
+  assert.deepEqual(toolNames(makeCtx(staff())), [...NAMES.filter((name) => name !== "metrics_summary"), ...FAMILY_HTTP_NAMES]);
 });
 
 test("sơ đồ vào / ra của mọi công cụ đổi được sang JSON Schema (cổng MCP cần)", () => {

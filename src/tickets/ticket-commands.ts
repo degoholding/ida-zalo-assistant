@@ -1,117 +1,92 @@
-// mcp-guard: legacy(tickets) — lệnh ticket gọi ticket-service; phase 8
-import { TicketStatus } from "../constants.js";
+import { openMcpTurn } from "../assistant/mcp-bridge/open-mcp-turn.js";
+import { resolveAssistantMcpBridge } from "../assistant/mcp-bridge/assistant-mcp-bridge-config.js";
+import type { AssistantMcpTurn } from "../assistant/mcp-bridge/assistant-mcp-turn.js";
+import type { CallToolResultLike } from "../assistant/mcp-bridge/mcp-call-result-mapper.js";
+import { ERROR_META_KEY } from "../mcp/mcp-meta-keys.js";
 import {
-  acceptTicket, addTicketNote, cancelTicket, createTicket, describeTicket, describeTicketLine, findTicket, finishTicket,
-  isTicketHandler, listOpenTickets, listRequesterTickets, TicketActionError, type TicketActor, type TicketDeps, type TicketRow,
-} from "./ticket-service.js";
-import { groupScopePart, isTicketVisible, overseerPart, type TicketVisibilityInput } from "./ticket-visibility.js";
+  actReply, createdReply, failureReply, listingReply, type TicketActOutcome, type TicketCreatedResult, type TicketListingResult, type TicketToolFailure,
+} from "./ticket-command-replies.js";
+import { runTicketCommandLegacy, type TicketCommand, type TicketCommandContext } from "./ticket-commands-legacy.js";
 
-// Lệnh ticket gõ trên Zalo (đọc ở src/assistant/chat-commands.ts). Ai làm được gì:
-// - Mọi người nhắn được cho bot (kể cả khách) hoặc gọi bot trong nhóm: báo ticket, xem ticket của mình, bổ sung, hủy hoặc tự báo xong ticket
-//   mình báo.
-// - Người xử lý (bảng ticket_handler, sửa trên màn Ticket): xem ticket đang mở, nhận, xong, hủy, nhắn người gửi.
+// Lệnh ticket gõ trên Zalo (đọc ở src/assistant/chat-commands.ts), định tuyến theo họ `tickets`: họ BẬT → gọi công cụ lệnh của máy chủ MCP trong
+// tiến trình (mặt `assistant_command`; luật quyền ở lõi `data-access/tickets/`) rồi dựng câu từ kết quả có cấu trúc (ticket-command-replies.ts);
+// họ TẮT → đường cũ ticket-commands-legacy.ts. Lệnh gõ chạy NGAY (lệnh gõ = xác nhận). Thông báo Zalo (gửi thật) vẫn đi qua hàng việc nền.
 
-export type TicketCommand =
-  | { kind: "ticket_create"; text: string }
-  | { kind: "ticket_list" }
-  | { kind: "ticket_status"; ticketId: number }
-  | { kind: "ticket_accept"; ticketId: number }
-  | { kind: "ticket_done"; ticketId: number; note: string }
-  | { kind: "ticket_cancel"; ticketId: number; note: string }
-  | { kind: "ticket_note"; ticketId: number; note: string };
+export { buildTicketContext, isOpenTicket, type TicketCommand, type TicketCommandContext } from "./ticket-commands-legacy.js";
 
-export interface TicketCommandContext extends TicketVisibilityInput {
-  deps: TicketDeps;
-  /** role = ContactRole (Quản lý / Trưởng phòng xem được mọi ticket, như người xử lý) */
-  contact: { id: number; uid: string; name: string; role?: number };
-  /** Cuộc đang nhắn (tin riêng / nhóm) và tin chứa lệnh — để gắn ảnh vừa gửi, báo lại đúng chỗ */
-  threadId: number | null;
-  messageId: number | null;
-  botAccountId: number | null;
-  /** Người này có là người xử lý ticket không (hỏi DB một lần / lượt) */
-  isHandler: () => Promise<boolean>;
+const COMMAND_TOOLS = ["ticket_list_for_actor", "ticket_get", "ticket_create", "ticket_act"] as const;
+const ACT_ACTION = { ticket_accept: "accept", ticket_done: "done", ticket_cancel: "cancel", ticket_note: "note" } as const;
+
+interface CommandSession {
+  turn: AssistantMcpTurn;
+  /** Phiên do chính lệnh này mở (không có `ctx.mcp`) → phải đóng. */
+  owned: boolean;
 }
 
-/** Dựng ngữ cảnh ticket cho một lượt hỏi. */
-export function buildTicketContext(deps: TicketDeps, input: Omit<TicketCommandContext, "deps" | "isHandler">): TicketCommandContext {
-  let cached: Promise<boolean> | null = null;
-  return { deps, ...input, isHandler: () => (cached ??= isTicketHandler(deps.db, input.contact.uid)) };
+/** Phiên lệnh nếu họ `tickets` bật và máy chủ liệt kê đủ công cụ lệnh; không thì undefined (đường cũ). */
+async function openSession(ctx: TicketCommandContext): Promise<CommandSession | undefined> {
+  let session: CommandSession | undefined;
+  if (ctx.mcp) {
+    const turn = await ctx.mcp();
+    session = turn ? { turn, owned: false } : undefined;
+  } else if (ctx.access) {
+    const access = await ctx.access();
+    // Cuộc + tin của lệnh này đi vào chủ thể (nơi gọi có thể phân giải ngữ cảnh mà không kèm cuộc): việc gắn ảnh / báo lại đúng chỗ cần chúng
+    const contactActor = access.contactActor && { ...access.contactActor, threadId: ctx.threadId, messageId: ctx.messageId, botAccountId: ctx.botAccountId, groupId: ctx.scopeGroupId ?? null };
+    const turn = openMcpTurn({ ...access, contactActor }, resolveAssistantMcpBridge(undefined), { groupScopeId: ctx.scopeGroupId, wakeJobs: ctx.deps.wakeJobs });
+    session = turn ? { turn, owned: true } : undefined;
+  }
+  if (!session?.turn.familyEnabled("tickets")) return await discard(session);
+  const listed = await session.turn.command();
+  return listed && COMMAND_TOOLS.every((name) => listed.toolNames.has(name)) ? session : await discard(session);
 }
 
-const NOT_FOUND = (id: number) => `Em không thấy ticket T-${id} của anh/chị. Nhắn «ticket» để xem danh sách.`;
+async function discard(session: CommandSession | undefined): Promise<undefined> {
+  if (session?.owned) await session.turn.close();
+  return undefined;
+}
+
+/** Gọi một công cụ lệnh; lỗi nghiệp vụ → câu bot, lỗi hệ thống (không phải của luật ticket) ném tiếp như đường cũ. */
+async function callCommandTool(turn: AssistantMcpTurn, name: (typeof COMMAND_TOOLS)[number], args: Record<string, unknown>, ticketId: number | null):
+  Promise<{ reply: string } | { structured: Record<string, unknown> }> {
+  const result: CallToolResultLike = await turn.callTool("assistant_command", name, args);
+  if (result.isError || !result.structuredContent) {
+    const meta = (result._meta as Record<string, unknown> | undefined)?.[ERROR_META_KEY] as TicketToolFailure | undefined;
+    const reply = meta ? failureReply(meta, ticketId) : null;
+    if (reply !== null) return { reply };
+    throw new Error(`lệnh ticket qua MCP lỗi (${name}): ${meta?.message ?? "không rõ"}`);
+  }
+  return { structured: result.structuredContent as Record<string, unknown> };
+}
+
+async function runViaMcp(ctx: TicketCommandContext, turn: AssistantMcpTurn, command: TicketCommand): Promise<string> {
+  // Số ticket 0 («T-0») không có thật: cùng câu «không thấy» như đường cũ, khỏi gọi công cụ
+  const ticketId = "ticketId" in command ? command.ticketId : null;
+  if (ticketId !== null && ticketId <= 0) return failureReply({ code: "not_allowed", message: "", reason: "not_found" }, ticketId) ?? "";
+  let called: Awaited<ReturnType<typeof callCommandTool>>;
+  if (command.kind === "ticket_create") called = await callCommandTool(turn, "ticket_create", { text: command.text }, null);
+  else if (command.kind === "ticket_list") called = await callCommandTool(turn, "ticket_list_for_actor", {}, null);
+  else if (command.kind === "ticket_status") called = await callCommandTool(turn, "ticket_get", { ticket_id: command.ticketId }, command.ticketId);
+  else called = await callCommandTool(turn, "ticket_act", { ticket_id: command.ticketId, action: ACT_ACTION[command.kind], note: "note" in command ? command.note : undefined }, command.ticketId);
+  if ("reply" in called) return called.reply;
+  const data = called.structured;
+  // Tệp đưa về hàng tải: bộ tải ở lớp ngoài (lõi chỉ gom id), chuyển đúng như ticket-service cũ gọi `requestDownload`
+  const downloads = data.download_ids as number[] | undefined;
+  if (downloads?.length) ctx.deps.requestDownload?.(downloads);
+  switch (command.kind) {
+    case "ticket_create": return createdReply(data as unknown as TicketCreatedResult);
+    case "ticket_list": return listingReply(data as unknown as TicketListingResult);
+    case "ticket_status": return String(data.description);
+    default: return actReply(data as unknown as TicketActOutcome);
+  }
+}
 
 export async function runTicketCommand(ctx: TicketCommandContext, command: TicketCommand, now: Date): Promise<string> {
-  const { deps, contact } = ctx;
-  const actor: TicketActor = { name: contact.name, contactId: contact.id, via: "zalo" };
-  if (command.kind === "ticket_create") {
-    const result = await createTicket(deps, {
-      requesterContactId: contact.id, requesterUid: contact.uid, requesterName: contact.name, sourceThreadId: ctx.threadId,
-      sourceMessageId: ctx.messageId, botAccountId: ctx.botAccountId, text: command.text, now,
-    });
-    const short = `T-${result.ticket.id}`;
-    return [
-      `Dạ em đã ghi nhận ticket ${result.ticket.code}${result.attachmentCount ? ` (kèm ${result.attachmentCount} ảnh / tệp)` : ""}` +
-        (result.handlerCount ? " và đã báo người xử lý." : "; hiện chưa cài người xử lý — em đã lưu, quản trị sẽ xem trên màn Ticket."),
-      `Nhắn «${short}» để xem tình hình, «${short}: <nội dung>» để bổ sung (gửi thêm ảnh trước rồi nhắn).`,
-    ].join("\n");
-  }
-
-  const handler = await ctx.isHandler();
-  // Quản lý / Trưởng phòng: xem ticket (danh sách đang mở, tình hình) — nhận / xong vẫn chỉ người xử lý. Tài khoản web đã tắt
-  // không còn đặc quyền suy từ vai trò (người xử lý do quản trị chỉ định ở màn Ticket thì giữ)
-  const roleDisabled = ctx.access ? (await ctx.access()).origin === "disabled_account" : false;
-  const overseer = handler || ((contact.role ?? 0) > 0 && !roleDisabled);
-  if (command.kind === "ticket_list") {
-    if (overseer) {
-      const open = await listOpenTickets(deps.db, 20, await overseerPart(ctx));
-      if (!open.length) return "Hiện không có ticket nào đang mở.";
-      return [`TICKET ĐANG MỞ (${open.length})`, ...open.map(describeTicketLine), "", "Nhắn «nhận T-12» / «xong T-12 <ghi chú>»."].join("\n");
-    }
-    const mine = await listRequesterTickets(deps.db, contact.uid, 10, groupScopePart(ctx));
-    if (!mine.length) return "Anh/chị chưa báo ticket nào. Báo bằng cách nhắn «báo lỗi: <nội dung>».";
-    return [`TICKET CỦA ANH/CHỊ (${mine.length} gần nhất)`, ...mine.map(describeTicketLine)].join("\n");
-  }
-
-  const ticket = await findTicket(deps.db, command.ticketId);
-  const isRequester = Boolean(ticket && ticket.requester_uid === contact.uid);
-  if (!ticket || (!isRequester && !overseer)) return NOT_FOUND(command.ticketId);
-  // Trong nhóm: chỉ ticket của nhóm này; người xem ticket của người khác còn phải qua luật nhóm / Mật (cùng luật danh sách)
-  if (ctx.scopeGroupId && ticket.source_thread_id !== ctx.scopeGroupId) return NOT_FOUND(command.ticketId);
-  if (!isRequester && !(await isTicketVisible(deps.db, ticket.id, await overseerPart(ctx)))) return NOT_FOUND(command.ticketId);
-
+  const session = await openSession(ctx);
+  if (!session) return runTicketCommandLegacy(ctx, command, now);
   try {
-    switch (command.kind) {
-      case "ticket_status":
-        return describeTicket(ticket);
-      case "ticket_accept":
-        if (!handler) return "Chỉ người xử lý ticket mới nhận được. Quản trị thêm người xử lý ở màn Ticket.";
-        await acceptTicket(deps, ticket, actor);
-        return `Dạ anh/chị đã nhận ${ticket.code}; em đã báo ${ticket.requester_name}. Xong thì nhắn «xong T-${ticket.id} <ghi chú>».`;
-      case "ticket_done":
-        // Người gửi tự báo xong (lỗi tự hết / tự xử lý được) → đóng, báo người xử lý
-        if (!handler && !isRequester) return "Chỉ người xử lý ticket (hoặc chính người báo) mới báo xong được.";
-        if (!handler) {
-          await finishTicket(deps, ticket, actor, command.note, true);
-          return `Dạ em đã đóng ${ticket.code} theo báo của anh/chị. Còn vấn đề thì nhắn «T-${ticket.id}: <nội dung>» để mở lại.`;
-        }
-        await finishTicket(deps, ticket, actor, command.note);
-        return `Dạ đã đóng ${ticket.code} và báo ${ticket.requester_name}.`;
-      case "ticket_cancel":
-        await cancelTicket(deps, ticket, actor, command.note, isRequester && !handler);
-        return `Dạ đã hủy ${ticket.code}.`;
-      case "ticket_note": {
-        const fromRequester = isRequester;
-        const result = await addTicketNote(deps, ticket, actor, command.note, { fromRequester, threadId: ctx.threadId, messageId: ctx.messageId, now });
-        if (!fromRequester) return `Dạ em đã chuyển lời nhắn tới ${ticket.requester_name}.`;
-        return `Dạ em đã thêm vào ${ticket.code}${result.attachmentCount ? ` (kèm ${result.attachmentCount} ảnh / tệp)` : ""}` +
-          `${result.reopened ? " và MỞ LẠI ticket" : ""}; người xử lý sẽ nhận được.`;
-      }
-    }
-  } catch (error) {
-    if (error instanceof TicketActionError) return error.message;
-    throw error;
+    return await runViaMcp(ctx, session.turn, command);
+  } finally {
+    if (session.owned) await session.turn.close();
   }
 }
-
-/** Cho bài kiểm / gợi ý: ticket còn mở không. */
-export const isOpenTicket = (ticket: TicketRow) => ticket.status === TicketStatus.New || ticket.status === TicketStatus.InProgress;

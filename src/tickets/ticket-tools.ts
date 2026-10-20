@@ -1,12 +1,11 @@
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";
-import { runTicketCommand, type TicketCommand, type TicketCommandContext } from "./ticket-commands.js";
+import type { TicketCommandContext } from "./ticket-commands-legacy.js";
+import { runTicketToolLegacy, TICKET_TOOL_ACTIONS } from "./ticket-tools-legacy.js";
 
 // Công cụ ticket cho trợ lý AI (08/10/2026, đại ca: «đánh dấu nó là đã xong» mà bot báo «chưa có công cụ»). Câu tự nhiên
-// → mô hình gọi công cụ → chạy ĐÚNG đường của lệnh gõ (runTicketCommand), nên luật quyền y hệt: nhận / xong chỉ người xử lý
-// (người báo được tự đóng ticket của mình), xem chỉ người báo / người xử lý / quản lý.
-
-const ACTIONS = ["status", "accept", "done", "cancel", "note"] as const;
-type TicketToolAction = (typeof ACTIONS)[number];
+// → mô hình gọi công cụ → chạy ĐÚNG luật của lệnh gõ, nên quyền y hệt: nhận / xong chỉ người xử lý (người báo được tự đóng ticket
+// của mình), xem chỉ người báo / người xử lý / quản lý. Tệp này giữ KHAI BÁO + lời nhắc (cả hai đường dùng chung: họ `tickets` bật
+// thì lõi MCP khai lại đúng chữ này — `data-access/catalog/tickets-family-tools.ts`); executor cũ ở ticket-tools-legacy.ts.
 
 export const TICKET_TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
@@ -25,7 +24,7 @@ export const TICKET_TOOL_DECLARATIONS: FunctionDeclaration[] = [
       type: "object",
       properties: {
         ticket_id: { type: "integer" },
-        action: { type: "string", enum: [...ACTIONS] },
+        action: { type: "string", enum: [...TICKET_TOOL_ACTIONS] },
         note: { type: "string", description: "Ghi chú / lý do / nội dung bổ sung (tùy việc)" },
       },
       required: ["ticket_id", "action"],
@@ -46,29 +45,10 @@ export const TICKET_TOOLS_PROMPT = `
 TICKET: người hỏi muốn xem / nhận / đánh dấu xong / hủy / bổ sung một ticket, hoặc báo lỗi mới → gọi list_tickets / ticket_action /
 create_ticket NGAY lượt này rồi báo lại đúng kết quả công cụ, 1–2 câu. Không bảo người hỏi tự gõ lệnh khi công cụ làm được.`;
 
-function toCommand(action: TicketToolAction, ticketId: number, note: string): TicketCommand {
-  switch (action) {
-    case "status": return { kind: "ticket_status", ticketId };
-    case "accept": return { kind: "ticket_accept", ticketId };
-    case "done": return { kind: "ticket_done", ticketId, note };
-    case "cancel": return { kind: "ticket_cancel", ticketId, note };
-    case "note": return { kind: "ticket_note", ticketId, note };
-  }
-}
-
-export async function runTicketTool(ctx: TicketCommandContext | undefined, name: string, args: Record<string, unknown>, now: Date): Promise<Record<string, unknown>> {
-  if (!ctx) return { error: "Ticket chưa bật ở bot này." };
-  if (name === "list_tickets") return { result: await runTicketCommand(ctx, { kind: "ticket_list" }, now) };
-  if (name === "create_ticket") {
-    const text = String(args.text ?? "").trim();
-    if (text.length < 3) return { error: "Thiếu nội dung ticket — hỏi lại người hỏi muốn báo gì." };
-    return { result: await runTicketCommand(ctx, { kind: "ticket_create", text: text.slice(0, 3000) }, now) };
-  }
-  const ticketId = Number(args.ticket_id);
-  const action = String(args.action ?? "") as TicketToolAction;
-  if (!Number.isSafeInteger(ticketId) || ticketId <= 0) return { error: "Thiếu số ticket (T-0012 → 12)." };
-  if (!ACTIONS.includes(action)) return { error: "Việc không hợp lệ." };
-  const note = String(args.note ?? "").trim().slice(0, 2000);
-  if (action === "note" && !note) return { error: "Thiếu nội dung bổ sung." };
-  return { result: await runTicketCommand(ctx, toCommand(action, ticketId, note), now) };
+/**
+ * Executor của đường CŨ (họ `tickets` tắt, hoặc phiên MCP không mở được). Họ bật thì bộ định tuyến của lượt gọi thẳng công cụ MCP cùng
+ * tên (`tool-registry.resolveExecutor`) và hàm này không chạy.
+ */
+export function runTicketTool(ctx: TicketCommandContext | undefined, name: string, args: Record<string, unknown>, now: Date): Promise<Record<string, unknown>> {
+  return runTicketToolLegacy(ctx, name, args, now);
 }

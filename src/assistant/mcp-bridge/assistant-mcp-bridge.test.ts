@@ -93,7 +93,7 @@ test("Nhân viên (không ghi qua AI) và hỏi trong nhóm: không có propose_
   const http = toolsFor(access(manager()), "mcp_http").map((tool) => tool.name);
   assert.ok(!http.includes("confirm_draft") && !http.includes("cancel_draft"));
   assert.equal(new Set(toolsFor(access(manager()), "mcp_http").map((tool) => tool.name)).size, http.length);
-  assert.ok(ALL_TOOLS.filter((tool) => tool.surfaces?.includes("assistant_model")).every((tool) => tool.family === "core"));
+  assert.ok(ALL_TOOLS.filter((tool) => tool.surfaces?.includes("assistant_model")).every((tool) => tool.family !== undefined), "công cụ mặt model đều khai họ (bật theo họ)");
 });
 
 test("describe_entities qua cặp InMemoryTransport = gọi thẳng lõi; ghi mcp_call_log nguồn Assistant, không khóa", async () => {

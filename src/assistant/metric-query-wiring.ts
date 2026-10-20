@@ -2,7 +2,8 @@ import { can } from "../auth/principal.js";
 import { runQueryMetricsTool } from "../metrics/metric-query-tool.js";
 import type { ToolContext } from "./tools.js";
 
-// Nối công cụ `query_metrics` (phase 10) vào trợ lý — chỉ tin riêng. Phase 11 (họ `metrics`) sửa tệp này.
+// Đường CŨ của `query_metrics` (họ `metrics` tắt) — chỉ tin riêng. Họ bật thì `resolveExecutor` đã chuyển lời gọi sang MCP trước khi tới đây
+// (công cụ `query_metrics` ở data-access/metrics/query-metrics-tool.ts, cùng hàm lõi). Gỡ ở phase 13.
 
 /** `query_metrics`: chỉ tin riêng. */
 export async function runQueryMetricsInTurn(context: ToolContext, args: Record<string, unknown>): Promise<Record<string, unknown>> {

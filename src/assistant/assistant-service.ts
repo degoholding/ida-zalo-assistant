@@ -361,7 +361,7 @@ export class AssistantService {
     ], mcpTools).filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
-    const groupSource = scope ? await groupContextSource(this.db, scope.groupId, request.questionMessageId) : null;
+    const groupSource = scope ? await groupContextSource(this.db, scope.groupId, request.questionMessageId, mcpTurn) : null;
     const system = applyMcpTurnPrompt(buildSystemPrompt(request.contact, now) + (scope && groupSource ? groupScopePrompt(scope.groupName, groupSource.memberNames) : "")
       + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + coreTools.prompt + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "")
       + (task ? TASK_TOOLS_PROMPT : "") + (briefAsker ? BRIEF_TOOL_PROMPT : "") + (sendAsker ? SEND_TOOL_PROMPT + REMINDER_TOOL_PROMPT + PIN_TOOL_PROMPT : "")

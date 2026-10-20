@@ -1,56 +1,16 @@
-// mcp-guard: legacy(reads) — SQL ngữ cảnh nhóm; phase 6 chuyển sang công cụ MCP (chỉ sửa tệp này khi đó)
-import type { RowDataPacket } from "mysql2";
-import { MessageKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
-import { stripTokenFooter } from "./token-usage-footer.js";
-import { attachmentLabel, formatVn } from "./tools.js";
+import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
+import { createLogger, describeError } from "../logger.js";
+import { groupContextSourceLegacy } from "./group-context-legacy.js";
 
 // Ngữ cảnh khi bot được gọi TRONG NHÓM: vài tin gần nhất của chính nhóm đó (gồm cả câu bot vừa trả lời), để hỏi
 // nối tiếp kiểu «chi tiết báo cáo đó» hiểu được «đó» là gì. Chỉ lấy tin của nhóm đang hỏi — đúng phạm vi groupScope.
 // Tin nhóm là của nhiều người nên đưa thành MỘT khối chữ trong lượt hỏi, không dựng thành hội thoại user/model.
+// Họ `reads` bật: đọc qua công cụ lệnh `group_context` của máy chủ MCP trong tiến trình; tắt: SQL cũ (`group-context-legacy.ts`).
 
-const CONTEXT_MESSAGES = 10;
-const MAX_LINE_CHARS = 600;
+export { loadGroupMemberNames } from "./group-context-legacy.js";
 
-interface ContextRow extends RowDataPacket {
-  sender_name: string;
-  kind: number;
-  text: string | null;
-  sent_at: Date;
-  file_name: string | null;
-  attachment_id: number | null;
-  file_text: string | null;
-}
-
-export async function loadGroupContext(db: Db, groupId: number, beforeMessageId: number | null): Promise<string> {
-  const [rows] = await db.query<ContextRow[]>(
-    `SELECT m.sender_name, m.kind, m.text, m.sent_at, a.file_name, a.id AS attachment_id,
-            IF(m.kind = ${MessageKind.Image}, LEFT(t.text, 2000), NULL) AS file_text
-     FROM message m LEFT JOIN attachment a ON a.message_id = m.id LEFT JOIN attachment_text t ON t.attachment_id = a.id
-     WHERE m.group_id = ? AND m.recalled_at IS NULL AND (? IS NULL OR m.id < ?)
-       AND ((m.text IS NOT NULL AND m.text <> '') OR a.id IS NOT NULL)
-     ORDER BY m.id DESC LIMIT ?`,
-    [groupId, beforeMessageId, beforeMessageId, CONTEXT_MESSAGES],
-  );
-  return rows.reverse().map((row) => {
-    // Tệp / ảnh: nhãn kèm mã (ảnh đã tự đọc thì kèm chữ + mô tả) rồi chú thích nếu có
-    const caption = stripTokenFooter(String(row.text ?? "")).replace(/\s+/g, " ").slice(0, MAX_LINE_CHARS);
-    const body = row.attachment_id ? `${attachmentLabel(row)}${caption ? ` ${caption}` : ""}` : caption;
-    return `[${formatVn(row.sent_at)}] ${row.sender_name}: ${body}`;
-  }).join("\n");
-}
-
-const MAX_MEMBER_NAMES = 60;
-
-/** Tên Zalo của thành viên đang ở nhóm — để mô hình viết «@Tên» khớp, nơi gửi đổi thành thẻ nhắc (mention). */
-export async function loadGroupMemberNames(db: Db, groupId: number): Promise<string[]> {
-  const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT COALESCE(NULLIF(display_name, ''), zalo_name) AS name FROM group_member
-     WHERE group_id = ? AND left_at IS NULL ORDER BY first_seen_at LIMIT ?`,
-    [groupId, MAX_MEMBER_NAMES],
-  );
-  return [...new Set(rows.map((row) => String(row.name ?? "").trim()).filter((name) => name.length >= 2))];
-}
+const log = createLogger("assistant");
 
 /** Lượt hỏi trong nhóm: ngữ cảnh (nếu có) + câu hỏi. */
 export function buildGroupQuestion(context: string, question: string): string {
@@ -58,9 +18,30 @@ export function buildGroupQuestion(context: string, question: string): string {
   return `Các tin gần nhất trong nhóm (CHỈ để hiểu câu hỏi nối tiếp; tin của bot là câu bạn trả lời trước đó — lỗi / trạng thái trong đó có thể đã cũ, muốn làm gì thì gọi công cụ lại):\n${context}\n\nCâu hỏi: ${question}`;
 }
 
-/** Nguồn ngữ cảnh của lượt hỏi trong nhóm: tên thành viên + khối tin gần nhất. Phase 6 đổi ruột sang MCP; nơi gọi không đổi. */
-export async function groupContextSource(db: Db, groupId: number, beforeMessageId: number | null): Promise<{ memberNames: string[]; context: string }> {
-  const memberNames = await loadGroupMemberNames(db, groupId);
-  const context = await loadGroupContext(db, groupId, beforeMessageId);
-  return { memberNames, context };
+export interface GroupContextSource {
+  memberNames: string[];
+  context: string;
+}
+
+const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/**
+ * Nguồn ngữ cảnh của lượt hỏi trong nhóm: tên thành viên + khối tin gần nhất. Có phiên MCP của lượt (`mcp`) và họ `reads` bật → lệnh `group_context`
+ * (chạy NGAY, mô hình không thấy). Đọc thuần nên lỗi / phiên không có công cụ thì lùi về đường SQL cũ (không có nguy cơ ghi hai lần như họ ghi).
+ */
+export async function groupContextSource(db: Db, groupId: number, beforeMessageId: number | null, mcp?: AssistantMcpTurn): Promise<GroupContextSource> {
+  if (mcp?.familyEnabled("reads")) {
+    try {
+      const session = await mcp.command();
+      if (session?.toolNames.has("group_context")) {
+        const result = await mcp.callTool("assistant_command", "group_context", beforeMessageId === null ? {} : { before_message_id: beforeMessageId });
+        const data = result.structuredContent as { member_names?: unknown; context?: unknown } | undefined;
+        if (!result.isError && data && isStringArray(data.member_names) && typeof data.context === "string") return { memberNames: data.member_names, context: data.context };
+        log.error("group_context qua MCP không trả kết quả hợp lệ — dùng đường cũ");
+      }
+    } catch (error) {
+      log.error(`group_context qua MCP lỗi — dùng đường cũ: ${describeError(error)}`);
+    }
+  }
+  return groupContextSourceLegacy(db, groupId, beforeMessageId);
 }
