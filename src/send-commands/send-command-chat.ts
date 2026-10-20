@@ -1,8 +1,12 @@
-import { cancelSendCommand, confirmDraft, listForRequester } from "./send-command-actions.js";
+// mcp-guard: legacy(send) — kho nháp gửi đọc qua send-command-lifecycle-queries; phase 12 chuyển sang họ `send`
+import type { PendingStoreProvider } from "../assistant/chat-confirm-router.js";
+import { cancelLatestDraft, cancelSendCommand, confirmDraft, listForRequester } from "./send-command-actions.js";
+import { findLatestLiveDraft } from "./send-command-lifecycle-queries.js";
+import { CONFIRM_TTL_MS } from "./send-command-limits.js";
 import type { SendCommandDeps } from "./send-command-deps.js";
 import { createDraft } from "./send-command-draft-service.js";
 import type { SendChatCommand } from "./send-command-parser.js";
-import type { SendRequester } from "./send-command-types.js";
+import type { SendCommandRow, SendRequester } from "./send-command-types.js";
 
 // Cầu nối lệnh gõ → dịch vụ (phase 9): phase 4 gọi `runSendChatCommand` từ chat-commands.ts với kết quả `parseSendCommand`.
 // «đồng ý» / «hủy» TRẦN không nằm ở parser (dùng chung với đổi cấu hình cảnh báo): chat-commands thử `confirmDraft(…, "latest")` /
@@ -50,3 +54,22 @@ export async function runSendChatCommand(command: SendChatCommand, context: Send
       return (await confirmDraft(context.deps, context.requester, command.commandId, now)).reply;
   }
 }
+
+/** Lúc dựng nháp theo giờ APP: `confirm_expires_at` do app ghi = now + CONFIRM_TTL_MS (không dùng created_at — giờ DB, múi phiên DB). */
+function draftIssuedAt(draft: SendCommandRow): number {
+  return draft.confirmExpiresAt ? draft.confirmExpiresAt.getTime() - CONFIRM_TTL_MS : draft.createdAt.getTime();
+}
+
+/** Kho chờ xác nhận của nháp lệnh gửi (tin riêng): «đồng ý» / «hủy» trơn áp cho nháp còn sống mới nhất của người hỏi. */
+export const sendPendingProvider: PendingStoreProvider = {
+  async latest({ chat }) {
+    const send = chat.send;
+    const draft = send ? await findLatestLiveDraft(send.deps.db, send.uid, chat.now) : null;
+    if (!send || !draft) return null;
+    return {
+      at: draftIssuedAt(draft),
+      confirm: async () => (send.requester ? (await confirmDraft(send.deps, send.requester, draft.id, chat.now)).reply : NOT_ALLOWED_REPLY),
+      cancel: async () => (await cancelLatestDraft(send.deps, send.uid, send.name, chat.now)).reply,
+    };
+  },
+};

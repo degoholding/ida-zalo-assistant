@@ -77,9 +77,30 @@ const cancelDraftTool: ToolDefinition<DraftRefInput, z.infer<typeof cancelOutput
   },
 };
 
+const listOutput = z.object({ drafts: z.array(z.object({ id: z.number(), preview: z.string(), created_at: z.string() })) });
+const emptyInput = z.object({}).strict();
+
+/** Nháp ghi đang chờ của người hỏi (mới nhất trước) — để «đồng ý» / «hủy» trơn biết có nháp nào và so thứ tự với các kho chờ khác. */
+const listOpenDraftsTool: ToolDefinition<Record<string, never>, z.infer<typeof listOutput>> = {
+  name: "list_open_drafts",
+  title: "Liệt kê nháp đang chờ (lệnh «đồng ý» / «hủy»)",
+  description: "Các nháp ghi đang chờ xác nhận của người hỏi, mới nhất trước. Không lộ mã xác nhận.",
+  input: () => emptyInput as unknown as z.ZodType<Record<string, never>>,
+  output: listOutput,
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  surfaces: ["assistant_command"],
+  family: "drafts",
+  available: availableToWriter,
+  async handler(ctx) {
+    const drafts = (await listOpenDrafts(ctx.db, bindingOf(ctx), ctx.now))
+      .map((draft) => ({ id: draft.id, preview: draft.preview, created_at: draft.createdAt.toISOString() }));
+    return { structured: { drafts }, summary: `${drafts.length} nháp đang chờ`, rowCount: drafts.length, entity: "write_draft" };
+  },
+};
+
 export const draftsFamilyCatalog: FamilyCatalog = {
   family: "drafts",
-  tools: [eraseTool(confirmDraftTool), eraseTool(cancelDraftTool)] as readonly AnyToolDefinition[],
+  tools: [eraseTool(confirmDraftTool), eraseTool(cancelDraftTool), eraseTool(listOpenDraftsTool)] as readonly AnyToolDefinition[],
   actions: [],
   instructions: "",
 };

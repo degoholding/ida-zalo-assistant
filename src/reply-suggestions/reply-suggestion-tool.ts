@@ -1,3 +1,4 @@
+// mcp-guard: legacy(files) — suggest_replies gọi reply-suggestion-service; phase 7
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";
 import { ReplyTone } from "../constants.js";
 import { suggestReplies, type SuggestDeps } from "./reply-suggestion-service.js";

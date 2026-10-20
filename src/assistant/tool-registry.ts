@@ -1,5 +1,5 @@
 import { mcpExecutorFor } from "./mcp-bridge/mcp-tool-router.js";
-import { askerContactScope } from "./asker-access.js";
+import { askerContactScope } from "./infra/asker-access.js";
 import { runListContacts } from "./contact-directory-tool.js";
 import { coreToolOptions, findAssistantCoreTool, runCoreTool } from "./core-tool-adapter.js";
 import { runExportReport } from "./export-report-tool.js";
@@ -10,7 +10,8 @@ import { runRecapDriveRecording } from "./drive-recap-tool.js";
 import { runCreateRecapPdf } from "./meeting-recap-tool.js";
 import { meetingScopeTag, runCancelMeeting, runCreateMeeting, runListMeetings } from "./meeting-tool.js";
 import { runReadLink } from "./read-link-tool.js";
-import { runQueryMetricsInTurn, runSuggestRepliesInTurn } from "./reply-metric-wiring.js";
+import { runQueryMetricsInTurn } from "./metric-query-wiring.js";
+import { runSuggestRepliesInTurn } from "./reply-suggestion-wiring.js";
 import { ASSISTANT_WRITE_TOOL_NAMES, runWriteTool } from "./write-tool-adapter.js";
 import { runSearchMessages } from "./search-messages-tool.js";
 import { findPeople, getConversationWithPerson, getGroupMessages, listGroups } from "./thread-read-tools.js";

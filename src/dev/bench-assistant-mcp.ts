@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks";
-import type { AskerAccess } from "../assistant/asker-access.js";
+import type { AskerAccess } from "../assistant/infra/asker-access.js";
 import { AssistantMcpTurn } from "../assistant/mcp-bridge/assistant-mcp-turn.js";
 import { McpCallSource, UserRole } from "../constants.js";
 import { buildDataAccessContext } from "../data-access/data-access-context.js";

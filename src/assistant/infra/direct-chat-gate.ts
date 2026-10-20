@@ -1,6 +1,7 @@
-import { ContactRole } from "../constants.js";
-import type { Db } from "../db/pool.js";
-import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
+// mcp-guard: infra — cổng tin riêng: ai được bot trả lời (kiểm người nhận / tài khoản web), trước khi vào MCP
+import { ContactRole } from "../../constants.js";
+import type { Db } from "../../db/pool.js";
+import { isActiveRecipientUid } from "../../recipients/recipient-repository.js";
 import { linkedAccountStatus } from "./asker-access.js";
 
 // Cổng tin riêng: ai được bot trả lời câu hỏi (ngoài lệnh ticket / việc / «hướng dẫn» mà mọi người dùng được).

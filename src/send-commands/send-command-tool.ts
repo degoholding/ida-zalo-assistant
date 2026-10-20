@@ -1,3 +1,4 @@
+// mcp-guard: legacy(send) — propose_send_message gọi send-command-draft-service; phase 12
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";
 import type { SendChatContext } from "./send-command-chat.js";
 import { NOT_ALLOWED_REPLY } from "./send-command-chat.js";

@@ -1,4 +1,5 @@
-import { askerSourceVisibility, type AskerAccess } from "../assistant/asker-access.js";
+// mcp-guard: legacy(tasks) — lệnh việc gọi task-service / task-repository; phase 9
+import { askerSourceVisibility, type AskerAccess } from "../assistant/infra/asker-access.js";
 import { ContactKind, ContactRole, TaskSource, TaskStatus } from "../constants.js";
 import { findLatestRecapTaskIds } from "../meetings/meeting-recording-repository.js";
 import { isActiveRecipientUid } from "../recipients/recipient-repository.js";

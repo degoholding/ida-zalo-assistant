@@ -7,7 +7,7 @@ import type { RecapDriveRecording } from "./drive-recap-tool.js";
 import type { ReadLink } from "./read-link-tool.js";
 import type { MeetingCreator } from "./meeting-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
-import type { AskerAccess } from "./asker-access.js";
+import type { AskerAccess } from "./infra/asker-access.js";
 import { MAX_FILES_PER_TURN } from "./file-access-tools.js";
 import type { FunctionDeclaration, WebSearchResult } from "./gemini-client.js";
 import { resolveExecutor } from "./tool-registry.js";

@@ -1,15 +1,16 @@
+// mcp-guard: infra — kho khóa AI của chính trợ lý (bảng ai_key), không phải dữ liệu nghiệp vụ
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import type { AppConfig } from "../config.js";
-import { AiKeyProvider } from "../constants.js";
-import { decryptJson, encryptJson } from "../crypto/session-cipher.js";
-import type { Db } from "../db/pool.js";
-import { createLogger, describeError } from "../logger.js";
-import { ApiError } from "../web/api/api-http.js";
-import { AI_PROVIDERS, AiKeyCheckError, assertPublicStation, isAiKeyProvider, normalizeBaseUrl, probeAiKey } from "./ai-key-providers.js";
-import { GeminiClient } from "./gemini-client.js";
-import { KeyUsageLedger, vnDayKey, type ChainKey, type KeyProblem } from "./key-chain-client.js";
-import { resolveModelKeys } from "./model-router-client.js";
-import { OpenAIClient } from "./openai-client.js";
+import type { AppConfig } from "../../config.js";
+import { AiKeyProvider } from "../../constants.js";
+import { decryptJson, encryptJson } from "../../crypto/session-cipher.js";
+import type { Db } from "../../db/pool.js";
+import { createLogger, describeError } from "../../logger.js";
+import { ApiError } from "../../web/api/api-http.js";
+import { AI_PROVIDERS, AiKeyCheckError, assertPublicStation, isAiKeyProvider, normalizeBaseUrl, probeAiKey } from "../ai-key-providers.js";
+import { GeminiClient } from "../gemini-client.js";
+import { KeyUsageLedger, vnDayKey, type ChainKey, type KeyProblem } from "../key-chain-client.js";
+import { resolveModelKeys } from "../model-router-client.js";
+import { OpenAIClient } from "../openai-client.js";
 
 // Kho «Khóa AI» (bảng ai_key, 07/10/2026): nạp các khóa còn dùng vào bộ nhớ (đã giải mã — CHỈ dùng trong máy chủ), dựng
 // chuỗi khóa cho trợ lý, thêm / sửa / đổi thứ tự / gỡ cho API, và chép một lần từ cài đặt cũ. Khóa thô không bao giờ đi ra

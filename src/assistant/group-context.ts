@@ -1,3 +1,4 @@
+// mcp-guard: legacy(reads) — SQL ngữ cảnh nhóm; phase 6 chuyển sang công cụ MCP (chỉ sửa tệp này khi đó)
 import type { RowDataPacket } from "mysql2";
 import { MessageKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
@@ -55,4 +56,11 @@ export async function loadGroupMemberNames(db: Db, groupId: number): Promise<str
 export function buildGroupQuestion(context: string, question: string): string {
   if (!context) return question;
   return `Các tin gần nhất trong nhóm (CHỈ để hiểu câu hỏi nối tiếp; tin của bot là câu bạn trả lời trước đó — lỗi / trạng thái trong đó có thể đã cũ, muốn làm gì thì gọi công cụ lại):\n${context}\n\nCâu hỏi: ${question}`;
+}
+
+/** Nguồn ngữ cảnh của lượt hỏi trong nhóm: tên thành viên + khối tin gần nhất. Phase 6 đổi ruột sang MCP; nơi gọi không đổi. */
+export async function groupContextSource(db: Db, groupId: number, beforeMessageId: number | null): Promise<{ memberNames: string[]; context: string }> {
+  const memberNames = await loadGroupMemberNames(db, groupId);
+  const context = await loadGroupContext(db, groupId, beforeMessageId);
+  return { memberNames, context };
 }

@@ -1,6 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { collectOnlyThreadSql, processableThreadSql } from "../sync/collect-only.js";
-import { AiKeyStore } from "../assistant/ai-key-store.js";
+import { AiKeyStore } from "../assistant/infra/ai-key-store.js";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import { KeyChainClient } from "../assistant/key-chain-client.js";
 import type { AppConfig } from "../config.js";

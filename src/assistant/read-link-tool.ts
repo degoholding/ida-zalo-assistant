@@ -1,7 +1,8 @@
+// mcp-guard: legacy(files) — read_link kiểm nguồn tin / tệp bằng SQL; phase 7 chuyển sang họ `files`
 import type { RowDataPacket } from "mysql2";
 import { threadVisibilitySql } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
-import type { AskerAccess } from "./asker-access.js";
+import type { AskerAccess } from "./infra/asker-access.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 import { LinkReadError, type LinkContent } from "./link-reader.js";
 

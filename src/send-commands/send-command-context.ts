@@ -1,3 +1,4 @@
+// mcp-guard: legacy(send) — dựng ngữ cảnh lệnh gửi bằng SQL; phase 12
 import type { RowDataPacket } from "mysql2";
 import type { ContactRow } from "../sync/contact-repository.js";
 import type { SendChatContext } from "./send-command-chat.js";

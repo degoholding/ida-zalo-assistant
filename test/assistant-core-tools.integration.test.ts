@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type { RowDataPacket } from "mysql2";
-import { resolveAskerAccess } from "../src/assistant/asker-access.js";
+import { resolveAskerAccess } from "../src/assistant/infra/asker-access.js";
 import { runTool, type ToolContext } from "../src/assistant/tools.js";
 import { ContactRole, McpCallSource, UserRole } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";

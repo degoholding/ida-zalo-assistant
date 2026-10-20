@@ -10,7 +10,25 @@ const shortPreview = (preview: string): string => preview.replace(/\s+/g, " ").s
 export async function draftCommandSession(turn: AssistantMcpTurn | undefined): Promise<AssistantMcpTurn | undefined> {
   if (!turn?.familyEnabled("drafts")) return undefined;
   const session = await turn.command();
-  return session?.toolNames.has("confirm_draft") && session.toolNames.has("cancel_draft") ? turn : undefined;
+  return ["confirm_draft", "cancel_draft", "list_open_drafts"].every((name) => session?.toolNames.has(name)) ? turn : undefined;
+}
+
+/** Nháp đang chờ — phần «đồng ý» / «hủy» cần (id, bản xem trước, lúc dựng). */
+export interface PendingDraft {
+  id: number;
+  preview: string;
+  createdAt: Date;
+}
+
+/** Liệt kê nháp chờ qua `list_open_drafts` (mặt lệnh); mới nhất trước. Lỗi hệ thống ném tiếp như đường cũ. */
+export async function listOpenDraftsViaMcp(turn: AssistantMcpTurn): Promise<PendingDraft[]> {
+  const result = await turn.callTool("assistant_command", "list_open_drafts", {});
+  const drafts = (result.structuredContent as { drafts?: { id: number; preview: string; created_at: string }[] } | undefined)?.drafts;
+  if (result.isError || !drafts) {
+    const meta = (result._meta as Record<string, unknown> | undefined)?.["bot-tro-ly/error"] as { message?: string } | undefined;
+    throw new Error(`liệt kê nháp qua MCP lỗi: ${meta?.message ?? "không rõ"}`);
+  }
+  return drafts.map((draft) => ({ id: draft.id, preview: draft.preview, createdAt: new Date(draft.created_at) }));
 }
 
 export interface DraftRef {

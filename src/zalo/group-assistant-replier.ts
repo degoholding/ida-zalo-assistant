@@ -1,7 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { BoardType, ThreadType, type API, type GroupMessage, type NoteDetail, type TMessage } from "zca-js";
-import { mayAskInConfidentialGroup, resolveAskerAccess } from "../assistant/asker-access.js";
-import { questionWithAttachedImage } from "../assistant/attached-image-question.js";
+import { mayAskInConfidentialGroup, resolveAskerAccess } from "../assistant/infra/asker-access.js";
+import { questionWithAttachedImage } from "../assistant/infra/attached-image-question.js";
 import { splitForZalo, type AssistantService } from "../assistant/assistant-service.js";
 import type { GroupActions } from "../assistant/group-action-tools.js";
 import type { AppConfig } from "../config.js";

@@ -2,7 +2,7 @@ import { parseMcpFamilies } from "./assistant/mcp-bridge/assistant-mcp-families.
 import { ConcurrencyGate } from "./mcp/mcp-concurrency-gate.js";
 import type { RowDataPacket } from "mysql2";
 import { AssistantService } from "./assistant/assistant-service.js";
-import type { AiKeyStore } from "./assistant/ai-key-store.js";
+import type { AiKeyStore } from "./assistant/infra/ai-key-store.js";
 import { HEAVY_MODEL_ALIAS, KeyChainClient } from "./assistant/key-chain-client.js";
 import { ModelRouterClient, missingKeyProblem, primaryModels, resolveModelKeys, type ModelPlan } from "./assistant/model-router-client.js";
 import type { AppConfig } from "./config.js";

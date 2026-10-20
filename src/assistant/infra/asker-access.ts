@@ -1,12 +1,13 @@
+// mcp-guard: infra — phân giải người hỏi thành ngữ cảnh truy cập (tương đương Bearer đã xác thực) trước khi vào MCP
 import type { RowDataPacket } from "mysql2";
-import { loadUserPrincipal, type Principal } from "../auth/principal.js";
-import { ContactRole, ConversationType, McpCallSource, UserRole } from "../constants.js";
-import { sourceThreadVisibilitySql } from "../data-access/visibility-guards.js";
-import { buildDataAccessContext, type DataAccessContext } from "../data-access/data-access-context.js";
-import type { Db } from "../db/pool.js";
-import { createLogger } from "../logger.js";
-import { contactScopeSql } from "../web/api/scope.js";
-import type { SqlPart } from "../web/api/list-query.js";
+import { loadUserPrincipal, type Principal } from "../../auth/principal.js";
+import { ContactRole, ConversationType, McpCallSource, UserRole } from "../../constants.js";
+import { sourceThreadVisibilitySql } from "../../data-access/visibility-guards.js";
+import { buildDataAccessContext, type DataAccessContext } from "../../data-access/data-access-context.js";
+import type { Db } from "../../db/pool.js";
+import { createLogger } from "../../logger.js";
+import { contactScopeSql } from "../../web/api/scope.js";
+import type { SqlPart } from "../../web/api/list-query.js";
 
 // Phase 6: người hỏi trợ lý → MỘT DataAccessContext cho cả lượt. Mọi công cụ đọc của trợ lý lọc qua `threadVisibilitySql` /
 // `assert*Readable` của lõi truy cập dữ liệu với ngữ cảnh này (vá H1: không còn «người có vai trò đọc mọi cuộc riêng»).

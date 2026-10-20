@@ -1,13 +1,12 @@
-import { can } from "../auth/principal.js";
+// mcp-guard: legacy(files) — kiểm tin gốc đọc được bằng visibility-guards; phase 7 (nguồn gợi ý trả lời)
 import { DataAccessError } from "../data-access/data-access-errors.js";
 import { assertMessageReadable } from "../data-access/visibility-guards.js";
-import { runQueryMetricsTool } from "../metrics/metric-query-tool.js";
 import { runSuggestRepliesTool } from "../reply-suggestions/reply-suggestion-tool.js";
-import { relaxConfidential } from "./asker-access.js";
+import { relaxConfidential } from "./infra/asker-access.js";
 import type { ToolContext } from "./tools.js";
 
-// Nối hai công cụ phase 10 (suggest_replies, query_metrics) vào trợ lý — chỉ tin riêng. Tách khỏi tools.ts / assistant-service.ts
-// (đã quá 200 dòng). Bản nháp đi thành từng tin Zalo riêng qua `followUps`; bot KHÔNG gửi bản nháp cho ai khác.
+// Nối công cụ `suggest_replies` (phase 10) vào trợ lý — chỉ tin riêng. Bản nháp đi thành từng tin Zalo riêng qua `followUps`;
+// bot KHÔNG gửi bản nháp cho ai khác. Phase 7 (họ `files` / nguồn gợi ý) sửa tệp này.
 
 /** Lời nhắc bổ sung (ngoài SUGGEST_REPLIES_PROMPT của lõi N2): ép dùng công cụ, không tự viết nháp. */
 export const SUGGEST_REPLIES_MANDATORY_PROMPT = `
@@ -37,13 +36,4 @@ export async function runSuggestRepliesInTurn(context: ToolContext, args: Record
     context.followUps = outcome.reply.drafts;
   }
   return outcome.response;
-}
-
-/** `query_metrics`: chỉ tin riêng. */
-export async function runQueryMetricsInTurn(context: ToolContext, args: Record<string, unknown>): Promise<Record<string, unknown>> {
-  if (context.scopeGroupId !== undefined) return { error: "Số liệu chỉ hỏi được khi nhắn riêng cho bot." };
-  // Quyền «Số liệu» theo vai trò tài khoản web (Quản lý / Quản trị). Người có vai trò Danh bạ chưa có tài khoản giữ như trước (principal suy ra
-  // = Quản lý); người chỉ là người nhận / tài khoản đã tắt không có quyền này.
-  if (!can(context.access.principal, "metric", "read")) return { error: "Anh/chị chưa được cấp quyền xem số liệu qua bot." };
-  return runQueryMetricsTool({ db: context.db, now: context.now }, args);
 }

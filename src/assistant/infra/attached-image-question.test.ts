@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Db } from "../db/pool.js";
+import type { Db } from "../../db/pool.js";
 import { attachedImageNote, questionWithAttachedImage } from "./attached-image-question.js";
 
 const fakeDb = (rows: unknown[]) => ({ query: async () => [rows] }) as unknown as Db;

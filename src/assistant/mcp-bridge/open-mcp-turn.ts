@@ -1,5 +1,5 @@
 import { logMcpCall } from "../../mcp/mcp-call-log.js";
-import type { AskerAccess } from "../asker-access.js";
+import type { AskerAccess } from "../infra/asker-access.js";
 import { assistantWriteAccess } from "../write-tool-adapter.js";
 import type { AssistantMcpBridge } from "./assistant-mcp-bridge-config.js";
 import { AssistantMcpTurn } from "./assistant-mcp-turn.js";

@@ -1,8 +1,9 @@
+// mcp-guard: legacy(reads) — search_messages bằng SQL; phase 6 chuyển sang họ `reads`
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../constants.js";
 import { threadVisibilitySql } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
-import type { AskerAccess } from "./asker-access.js";
+import type { AskerAccess } from "./infra/asker-access.js";
 import { LIKE_WINDOW_DAYS, SEARCH_TIMEOUT_TEXT, isSearchTimeoutError, searchMessages } from "../search/message-search.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 import { formatVnTime, parseVnTime } from "./group-action-tools.js";

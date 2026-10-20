@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import type http from "node:http";
 import { Readable } from "node:stream";
 import { test } from "node:test";
-import { AiKeyProvider } from "../constants.js";
-import { decryptJson, generateKey } from "../crypto/session-cipher.js";
-import type { Db } from "../db/pool.js";
-import { aiKeyRoutes } from "../web/api/ai-keys-api.js";
-import type { ApiContext } from "../web/api/api-route.js";
-import type { SyncService } from "../sync-service.js";
+import { AiKeyProvider } from "../../constants.js";
+import { decryptJson, generateKey } from "../../crypto/session-cipher.js";
+import type { Db } from "../../db/pool.js";
+import { aiKeyRoutes } from "../../web/api/ai-keys-api.js";
+import type { ApiContext } from "../../web/api/api-route.js";
+import type { SyncService } from "../../sync-service.js";
 import { AiKeyStore, LEGACY_MIGRATION_ACTOR, parseAiKeyInput, parseAiKeyPatch, planLegacyKeyRows } from "./ai-key-store.js";
 
 const ENCRYPTION_KEY = generateKey();

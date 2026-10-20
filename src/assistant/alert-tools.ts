@@ -1,3 +1,4 @@
+// mcp-guard: legacy(alerts) — công cụ cảnh báo đọc / ghi DB trực tiếp; phase 10 chuyển sang họ `alerts`
 import crypto from "node:crypto";
 import type { RowDataPacket } from "mysql2";
 import { currentPrincipal, SYSTEM_PRINCIPAL } from "../auth/principal.js";
@@ -7,7 +8,7 @@ import type { Db } from "../db/pool.js";
 import { parseKeywordList } from "../alerts/keyword-matcher.js";
 import { recordAudit } from "../web/api/audit-log.js";
 import { threadVisibilitySql } from "../data-access/visibility-guards.js";
-import { hasOnlyDisabledAccount, type AskerAccess } from "./asker-access.js";
+import { hasOnlyDisabledAccount, type AskerAccess } from "./infra/asker-access.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 
 // Công cụ trợ lý cho cảnh báo (phase 5) — CHỈ trong tin riêng, chỉ người có vai trò (Quản lý / Trưởng phòng) hoặc người nhận:

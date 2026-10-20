@@ -1,3 +1,4 @@
+// mcp-guard: legacy(tasks) — công cụ việc gọi task-service / task-repository; phase 9
 import crypto from "node:crypto";
 import { ContactKind, TaskPriority, TaskSource } from "../constants.js";
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";

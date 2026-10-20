@@ -1,3 +1,4 @@
+// mcp-guard: legacy(metrics) — query_metrics gọi metric-query-service; phase 11
 import type { RowDataPacket } from "mysql2";
 import { foldText } from "../alerts/keyword-matcher.js";
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";

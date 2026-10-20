@@ -1,8 +1,9 @@
+// mcp-guard: legacy(core) — bộ chuyển công cụ ghi lõi (đường cũ khi họ `core` tắt); gỡ ở phase 13
 import { findTool } from "../data-access/read-tool-catalog.js";
 import type { AnyToolDefinition } from "../data-access/tool-definition.js";
 import { formatDraftPreviewReply } from "../data-access/write/draft-preview-reply.js";
 import { roleMayWriteViaAi } from "../data-access/write/write-action.js";
-import type { AskerAccess } from "./asker-access.js";
+import type { AskerAccess } from "./infra/asker-access.js";
 import { runCoreTool, toFunctionDeclaration } from "./core-tool-adapter.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 

@@ -1,3 +1,4 @@
+// mcp-guard: legacy(core) — bộ chuyển công cụ lõi (đường cũ khi họ `core` tắt); gỡ ở phase 13
 import { z } from "zod/v4";
 import { McpCallStatus } from "../constants.js";
 import { READ_TOOLS } from "../data-access/read-tool-catalog.js";
@@ -6,7 +7,7 @@ import { runTool as runCoreToolDefinition } from "../data-access/tool-runner.js"
 import { createLogger, describeError } from "../logger.js";
 import { logMcpCall } from "../mcp/mcp-call-log.js";
 import { statusOf } from "../mcp/mcp-tool-result.js";
-import type { AskerAccess } from "./asker-access.js";
+import type { AskerAccess } from "./infra/asker-access.js";
 import {
   GROUP_SCOPE_ENTITIES, entityGuardError, normalizeCoreToolArgs, patchCoreToolSchema, type CoreToolSchemaOptions,
 } from "./core-tool-arg-compat.js";

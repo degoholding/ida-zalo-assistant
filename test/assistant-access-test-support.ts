@@ -1,5 +1,5 @@
 import type { Db } from "../src/db/pool.js";
-import { resolveAskerAccess, type AskerAccess } from "../src/assistant/asker-access.js";
+import { resolveAskerAccess, type AskerAccess } from "../src/assistant/infra/asker-access.js";
 import { findContactByUid, type ContactRow } from "../src/sync/contact-repository.js";
 import { ContactRole } from "../src/constants.js";
 

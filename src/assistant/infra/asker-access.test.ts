@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ContactRole, McpCallSource, UserRole } from "../constants.js";
-import { fakeDb } from "../data-access/data-access-test-support.js";
+import { ContactRole, McpCallSource, UserRole } from "../../constants.js";
+import { fakeDb } from "../../data-access/data-access-test-support.js";
 import { askerContactScope, mayAskInConfidentialGroup, relaxConfidential, resolveAskerAccess, type AskerContact } from "./asker-access.js";
 
 // Phân giải người hỏi → ngữ cảnh truy cập (không DB thật): «DB» giả trả dòng theo câu SQL.

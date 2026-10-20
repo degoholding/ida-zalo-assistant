@@ -4,7 +4,7 @@ import { McpCallSource } from "../constants.js";
 import { z } from "zod/v4";
 import { buildDataAccessContext } from "../data-access/data-access-context.js";
 import { fakeDb, manager, staff, NOW } from "../data-access/data-access-test-support.js";
-import type { AskerAccess } from "./asker-access.js";
+import type { AskerAccess } from "./infra/asker-access.js";
 import { ASSISTANT_CORE_TOOL_NAMES, coreToolDeclarations, coreToolOptions, findAssistantCoreTool, toFunctionDeclaration } from "./core-tool-adapter.js";
 import { buildCoreQueryTools } from "./core-tools-wiring.js";
 import { GROUP_SCOPE_ENTITIES, normalizeCoreToolArgs } from "./core-tool-arg-compat.js";

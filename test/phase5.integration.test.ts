@@ -11,7 +11,7 @@ import { runAiReview } from "../src/alerts/ai-review.js";
 import { AlertService } from "../src/alerts/alert-service.js";
 import { runReminders } from "../src/alerts/reminders.js";
 import { watchSessions } from "../src/alerts/session-watch.js";
-import { resolveAskerAccess } from "../src/assistant/asker-access.js";
+import { resolveAskerAccess } from "../src/assistant/infra/asker-access.js";
 import { clearPendingAlertChanges, runAlertTool, type AlertAsker } from "../src/assistant/alert-tools.js";
 import { AssistantService } from "../src/assistant/assistant-service.js";
 import { parseChatCommand, runChatCommand, type ChatCommandContext } from "../src/assistant/chat-commands.js";

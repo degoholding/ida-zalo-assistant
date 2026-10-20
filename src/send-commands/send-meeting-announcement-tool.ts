@@ -1,3 +1,4 @@
+// mcp-guard: legacy(send) — propose_meeting_announcement gọi send-command-draft-service; phase 12
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";
 import type { MeetingCreator } from "../assistant/meeting-tool.js";
 import { NOT_ALLOWED_REPLY, type SendChatContext } from "./send-command-chat.js";

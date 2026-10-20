@@ -1,3 +1,4 @@
+// mcp-guard: legacy(files) — dịch vụ gợi ý trả lời (SQL + mẫu tin); phase 7
 import type { RowDataPacket } from "mysql2";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import type { ReplyTone } from "../constants.js";

@@ -1,5 +1,5 @@
 import { AiKeyCheckError } from "../../assistant/ai-key-providers.js";
-import { parseAiKeyInput, parseAiKeyPatch, type AiKeyStore, type AiKeyView } from "../../assistant/ai-key-store.js";
+import { parseAiKeyInput, parseAiKeyPatch, type AiKeyStore, type AiKeyView } from "../../assistant/infra/ai-key-store.js";
 import type { SyncService } from "../../sync-service.js";
 import { ApiError, readJson, sendOk } from "./api-http.js";
 import { currentActorName } from "../../auth/principal.js";

@@ -1,8 +1,9 @@
+// mcp-guard: legacy(reads) — list_groups / get_group_messages / find_people bằng SQL; phase 6 chuyển sang họ `reads`
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../constants.js";
 import { threadVisibilitySql } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
-import { CONFIDENTIAL_ERROR, askerContactScope, relaxConfidential, type AskerAccess } from "./asker-access.js";
+import { CONFIDENTIAL_ERROR, askerContactScope, relaxConfidential, type AskerAccess } from "./infra/asker-access.js";
 import { MAX_MESSAGES, MESSAGE_SELECT, formatLines, formatVn, parseTime, type MessageLineRow } from "./message-line-format.js";
 
 // Bốn công cụ đọc theo cuộc / người của trợ lý (list_groups, get_group_messages, find_people, get_conversation_with_person).

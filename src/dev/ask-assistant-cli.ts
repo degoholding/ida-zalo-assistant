@@ -4,7 +4,7 @@
 // Hội thoại, và câu sau hiểu được câu trước («gửi tệp số 2»).
 
 import type { RowDataPacket } from "mysql2";
-import { AiKeyStore } from "../assistant/ai-key-store.js";
+import { AiKeyStore } from "../assistant/infra/ai-key-store.js";
 import { loadConfig } from "../config.js";
 import path from "node:path";
 import { AssistantTurnStatus, MessageKind } from "../constants.js";

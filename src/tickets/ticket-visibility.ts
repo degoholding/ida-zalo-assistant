@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { askerSourceVisibility, type AskerAccess } from "../assistant/asker-access.js";
+import { askerSourceVisibility, type AskerAccess } from "../assistant/infra/asker-access.js";
 import { andParts } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
 import type { SqlPart } from "../web/api/list-query.js";

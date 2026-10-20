@@ -1,5 +1,5 @@
 import { coreToolDeclarations, coreToolOptions } from "./core-tool-adapter.js";
-import type { AskerAccess } from "./asker-access.js";
+import type { AskerAccess } from "./infra/asker-access.js";
 import { CORE_QUERY_TOOLS_PROMPT, WRITE_TOOLS_PROMPT } from "./core-tools-prompt.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
 import { writeToolDeclarations } from "./write-tool-adapter.js";

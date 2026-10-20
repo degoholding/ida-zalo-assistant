@@ -1,3 +1,4 @@
+// mcp-guard: legacy(drafts) — đường cũ của «đồng ý / hủy» nháp ghi khi họ `drafts` tắt; gỡ ở phase 13
 import { foldKeepLength } from "./fold-text.js";
 import { McpCallSource, McpCallStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
@@ -6,10 +7,12 @@ import { DataAccessError } from "../data-access/data-access-errors.js";
 import { cancelDraft, findOpenDraft, listOpenDrafts, type DraftBinding, type DraftRecord } from "../data-access/write/write-draft-store.js";
 import { WRITE_ACTIONS } from "../data-access/write/write-tool-catalog.js";
 import { logMcpCall } from "../mcp/mcp-call-log.js";
-import type { AskerAccess } from "./asker-access.js";
-import { draftCommandSession, runDraftCommandViaMcp } from "./mcp-bridge/draft-confirm-via-mcp.js";
+import type { AskerAccess } from "./infra/asker-access.js";
+import { draftCommandSession, listOpenDraftsViaMcp, runDraftCommandViaMcp, type PendingDraft } from "./mcp-bridge/draft-confirm-via-mcp.js";
 import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
 import { assistantWriteAccess } from "./write-tool-adapter.js";
+import type { PendingStoreProvider } from "./chat-confirm-router.js";
+import type { ChatCommandContext } from "./chat-commands.js";
 
 // D1 (chủ chốt 17/10/2026): xác nhận ghi ở trợ lý làm y như lệnh gửi («đồng ý G-12»). MÁY CHỦ gửi bản xem trước + mã (không phải mô hình),
 // và việc ghi CHỈ chạy khi tin kế tiếp của chính người hỏi là «đồng ý» (đúng một nháp đang mở) hoặc «đồng ý <mã>» (nhiều nháp). Kiểm bằng
@@ -33,20 +36,25 @@ export function parseWriteCodeCommand(input: string): WriteCodeCommand | null {
 
 const bindingOf = (access: AskerAccess): DraftBinding => ({ tenantId: access.principal.tenantId, userId: access.principal.userId!, keyId: null, source: McpCallSource.Assistant });
 
-/** Các nháp ghi đang chờ của người hỏi (tin riêng thật, tài khoản web); rỗng nếu không đủ điều kiện. Mới nhất trước. */
-export async function pendingWriteDrafts(db: Db, access: AskerAccess, now: Date): Promise<DraftRecord[]> {
+/**
+ * Các nháp ghi đang chờ của người hỏi (tin riêng thật, tài khoản web); rỗng nếu không đủ điều kiện. Mới nhất trước.
+ * Họ `drafts` bật (có `mcp`) → qua `list_open_drafts` của máy chủ MCP; tắt → đọc thẳng kho nháp (đường cũ).
+ */
+export async function pendingWriteDrafts(db: Db, access: AskerAccess, now: Date, mcp?: () => Promise<AssistantMcpTurn | undefined>): Promise<PendingDraft[]> {
   const writable = assistantWriteAccess(access, undefined);
-  return writable ? listOpenDrafts(db, bindingOf(writable), now) : [];
+  if (!writable) return [];
+  const turn = await draftCommandSession(await mcp?.());
+  return turn ? listOpenDraftsViaMcp(turn) : listOpenDrafts(db, bindingOf(writable), now);
 }
 
-const shortPreview = (draft: DraftRecord) => draft.preview.replace(/\s+/g, " ").slice(0, 160);
+const shortPreview = (draft: PendingDraft) => draft.preview.replace(/\s+/g, " ").slice(0, 160);
 
 export interface WriteConfirmInput {
   kind: "confirm" | "cancel";
   /** Mã người gõ; không có = áp cho nháp duy nhất đang mở. */
   code?: string;
   access: AskerAccess;
-  drafts: DraftRecord[];
+  drafts: PendingDraft[];
   now: Date;
   wakeJobs?: () => void;
   /** Phiên MCP của lệnh (lười): họ `drafts` bật thì «đồng ý» / «hủy» đi qua `confirm_draft` / `cancel_draft`; không có = đường cũ. */
@@ -76,7 +84,9 @@ export async function runWriteConfirm(input: WriteConfirmInput): Promise<string>
     draft = await findOpenDraft(access.db, bindingOf(writable), input.code, now);
     if (!draft) return "Mã không đúng, đã hết hạn (10 phút) hoặc đã dùng — nhờ em tạo đề xuất mới.";
   } else if (drafts.length === 1) {
-    draft = drafts[0];
+    // `drafts` có thể đến từ MCP (chỉ id / xem trước) — đường cũ cần bản ghi đầy đủ
+    draft = (await listOpenDrafts(access.db, bindingOf(writable), now)).find((item) => item.id === drafts[0].id) ?? null;
+    if (!draft) return "Đề xuất này đã hết hạn hoặc đã xử lý rồi.";
   } else {
     const lines = drafts.slice(0, 5).map((item, index) => `${index + 1}. ${shortPreview(item)}`);
     return [`Đang có ${drafts.length} đề xuất chờ nên em chưa biết anh/chị chọn cái nào:`, ...lines,
@@ -97,3 +107,20 @@ export async function runWriteConfirm(input: WriteConfirmInput): Promise<string>
     return `Chưa ghi được: ${error.message}`;
   }
 }
+
+/** «đồng ý <mã>» / «hủy <mã>»: không có quyền ghi / không có nháp nào đang mở thì null (coi là câu thường). */
+export async function runWriteCodeConfirm(chat: ChatCommandContext, access: AskerAccess | null, kind: "confirm" | "cancel", code: string): Promise<string | null> {
+  const drafts = access ? await pendingWriteDrafts(chat.db, access, chat.now, chat.mcp) : [];
+  if (!access || !drafts.length) return null;
+  return runWriteConfirm({ kind, code, access, drafts, now: chat.now, wakeJobs: chat.wakeJobs, mcp: chat.mcp });
+}
+
+/** Kho chờ xác nhận của nháp ghi dữ liệu do trợ lý đề xuất (D1: chỉ xác nhận ở đây — mô hình không có công cụ xác nhận). */
+export const writePendingProvider: PendingStoreProvider = {
+  async latest({ chat, access }) {
+    const drafts = access ? await pendingWriteDrafts(chat.db, access, chat.now, chat.mcp) : [];
+    if (!access || !drafts.length) return null;
+    const run = (kind: "confirm" | "cancel") => runWriteConfirm({ kind, access, drafts, now: chat.now, wakeJobs: chat.wakeJobs, mcp: chat.mcp });
+    return { at: drafts[0].createdAt.getTime(), confirm: () => run("confirm"), cancel: () => run("cancel") };
+  },
+};

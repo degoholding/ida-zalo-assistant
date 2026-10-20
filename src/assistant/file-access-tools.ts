@@ -1,9 +1,10 @@
+// mcp-guard: legacy(files) — search_files / read_file / send_file đọc DB trực tiếp; phase 7 chuyển sang họ `files`
 import type { RowDataPacket } from "mysql2";
 import { AttachmentStatus, ConversationType } from "../constants.js";
 import { DataAccessError } from "../data-access/data-access-errors.js";
 import { assertAttachmentReadable, threadVisibilitySql } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
-import { CONFIDENTIAL_ERROR, relaxConfidential, type AskerAccess } from "./asker-access.js";
+import { CONFIDENTIAL_ERROR, relaxConfidential, type AskerAccess } from "./infra/asker-access.js";
 import { isRetryableFileSourceUrl, type ReadFileResult } from "./file-reader.js";
 import { formatVn, parseTime } from "./message-line-format.js";
 

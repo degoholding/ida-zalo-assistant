@@ -6,7 +6,7 @@ import { after, before, beforeEach, describe, test } from "node:test";
 import type { RowDataPacket } from "mysql2";
 import { AssistantService } from "../src/assistant/assistant-service.js";
 import type { GeminiContent, ModelClient } from "../src/assistant/gemini-client.js";
-import { resolveAskerAccess } from "../src/assistant/asker-access.js";
+import { resolveAskerAccess } from "../src/assistant/infra/asker-access.js";
 import { runTool } from "../src/assistant/tools.js";
 import { AssistantTurnStatus, ContactRole, ReplyTemplateStatus } from "../src/constants.js";
 import { runMigrations } from "../src/db/migrate.js";

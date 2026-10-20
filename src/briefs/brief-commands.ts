@@ -1,3 +1,4 @@
+// mcp-guard: legacy(send) — lệnh bản tin tra người nhận / nhật ký bản tin trực tiếp; phase 12
 import type { RowDataPacket } from "mysql2";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import type { AlertAsker } from "../assistant/alert-tools.js";

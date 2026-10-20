@@ -115,11 +115,11 @@ describe("trợ lý ↔ máy chủ MCP trong tiến trình", { skip: !databaseUr
     await beforeEachReset();
     const on = await scenario("core,drafts");
     assert.equal(on.proposeGateAcquires, 3, "describe_entities + query_records + propose_contact_update đều là tools/call thật");
-    assert.equal(on.totalGateAcquires, 4, "thêm confirm_draft ở mặt lệnh");
+    assert.equal(on.totalGateAcquires, 5, "thêm list_open_drafts + confirm_draft ở mặt lệnh");
     assert.equal(on.gateInFlight, 0, "chỗ cổng được trả sau mỗi lời gọi");
     assert.deepEqual(on.log.map((row) => [row.tool, Number(row.source), row.key_id]), [
       ["describe_entities", McpCallSource.Assistant, null], ["query_records", McpCallSource.Assistant, null],
-      ["propose_contact_update", McpCallSource.Assistant, null], ["confirm_draft", McpCallSource.AssistantCommand, null],
+      ["propose_contact_update", McpCallSource.Assistant, null], ["list_open_drafts", McpCallSource.AssistantCommand, null], ["confirm_draft", McpCallSource.AssistantCommand, null],
     ]);
     assert.ok(on.log.every((row) => Number(row.status) === 0), JSON.stringify(on.log));
     assert.equal(on.codeLeakedToModel, false, "mô hình không nhận được mã xác nhận");

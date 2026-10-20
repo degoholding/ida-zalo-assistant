@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { McpCallSource } from "../constants.js";
 import { admin, fakeDb, makeCtx, manager, staff } from "../data-access/data-access-test-support.js";
-import type { AskerAccess, AskerOrigin } from "./asker-access.js";
+import type { AskerAccess, AskerOrigin } from "./infra/asker-access.js";
 import { buildCoreQueryTools } from "./core-tools-wiring.js";
 import { WRITE_TOOLS_PROMPT } from "./core-tools-prompt.js";
 import { findExecutor } from "./tool-registry.js";

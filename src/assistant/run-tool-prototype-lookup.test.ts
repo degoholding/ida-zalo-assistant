@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fakeDb } from "../data-access/data-access-test-support.js";
-import { resolveAskerAccess } from "./asker-access.js";
+import { resolveAskerAccess } from "./infra/asker-access.js";
 import { runTool, type ToolContext } from "./tools.js";
 
 // M6 của review: `EXECUTORS[name]` với tên lấy từ mô hình rơi vào prototype của object (`constructor`, `__proto__`…).

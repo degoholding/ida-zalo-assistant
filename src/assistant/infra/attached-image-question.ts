@@ -1,6 +1,7 @@
+// mcp-guard: infra — ảnh người hỏi VỪA gửi kèm câu hỏi (câu hỏi mở 4, 19/10/2026)
 import type { RowDataPacket } from "mysql2";
-import { MessageKind } from "../constants.js";
-import type { Db } from "../db/pool.js";
+import { MessageKind } from "../../constants.js";
+import type { Db } from "../../db/pool.js";
 
 // Ảnh kèm chú thích (dán ảnh rồi gõ chữ lên ảnh, gặp thật 15/10/2026: «đọc cái hình này cho anh nha đệ» → bot im):
 // Zalo gửi MỘT tin ảnh, chú thích nằm trong tin đó. Chú thích là câu hỏi; thêm dòng chỉ đúng mã ảnh để trợ lý read_file

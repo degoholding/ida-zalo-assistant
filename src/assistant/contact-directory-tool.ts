@@ -1,3 +1,4 @@
+// mcp-guard: legacy(reads) — list_contacts đếm Danh bạ bằng SQL; phase 6 chuyển sang họ `reads`
 import type { RowDataPacket } from "mysql2";
 import { ContactKind, ContactKindSource } from "../constants.js";
 import type { Db } from "../db/pool.js";

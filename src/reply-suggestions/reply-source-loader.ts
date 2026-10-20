@@ -1,3 +1,4 @@
+// mcp-guard: legacy(files) — nạp tin nguồn gợi ý trả lời bằng SQL; phase 7
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";

@@ -2,7 +2,7 @@
 // đợi việc, kèm giao diện web quản trị (đăng nhập QR, cấu hình nhóm, tải file). Việc nền (dọn quá hạn, ảnh đại diện…)
 // chạy ở tiến trình worker riêng (src/worker.ts), hoặc ngay đây khi WORKER_EMBEDDED=true.
 
-import { AiKeyStore } from "./assistant/ai-key-store.js";
+import { AiKeyStore } from "./assistant/infra/ai-key-store.js";
 import { loadConfig } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";

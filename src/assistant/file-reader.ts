@@ -1,3 +1,4 @@
+// mcp-guard: legacy(files) — đọc / lưu chữ đã bóc của tệp bằng SQL; phase 7 chuyển sang họ `files`
 import type { RowDataPacket } from "mysql2";
 import * as XLSX from "xlsx";
 import { AttachmentStatus } from "../constants.js";

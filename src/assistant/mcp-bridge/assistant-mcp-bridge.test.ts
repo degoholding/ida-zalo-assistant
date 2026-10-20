@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { z } from "zod/v4";
 import { McpCallSource, McpCallStatus } from "../../constants.js";
 import { buildDataAccessContext } from "../../data-access/data-access-context.js";
-import { fakeDb, manager, staff, NOW } from "../../data-access/data-access-test-support.js";
+import { admin, fakeDb, manager, staff, NOW } from "../../data-access/data-access-test-support.js";
 import { ALL_TOOLS, toolsFor } from "../../data-access/read-tool-catalog.js";
 import type { AnyToolDefinition } from "../../data-access/tool-definition.js";
 import { eraseTool } from "../../data-access/tool-definition.js";
@@ -11,7 +11,7 @@ import { runTool as runCoreToolDefinition } from "../../data-access/tool-runner.
 import { ConcurrencyGate } from "../../mcp/mcp-concurrency-gate.js";
 import type { McpCallLogEntry } from "../../mcp/mcp-call-log.js";
 import type { Principal } from "../../auth/principal.js";
-import type { AskerAccess } from "../asker-access.js";
+import type { AskerAccess } from "../infra/asker-access.js";
 import { coreToolDeclarations, coreToolOptions } from "../core-tool-adapter.js";
 import { writeToolDeclarations } from "../write-tool-adapter.js";
 import type { AssistantMcpBridge } from "./assistant-mcp-bridge-config.js";
@@ -65,13 +65,13 @@ test("phiên mở LƯỜI: chưa gọi model()/command() thì chưa mở gì; m�
   assert.equal(turn!.modelHasTool("query_records"), false);
 });
 
-test("hai mặt tách bằng cấu trúc: model có đọc + propose_*, không confirm_draft; command chỉ có confirm_draft / cancel_draft", async () => {
+test("hai mặt tách bằng cấu trúc: model có đọc + propose_*, không confirm_draft; command chỉ có confirm_draft / cancel_draft / list_open_drafts", async () => {
   const { turn } = rig("core,drafts");
   try {
     const model = (await turn!.model())!;
     const command = (await turn!.command())!;
     assert.deepEqual([...model.toolNames].sort(), ["describe_entities", "propose_contact_update", "propose_group_update", "propose_reply_template_save", "query_records"]);
-    assert.deepEqual([...command.toolNames].sort(), ["cancel_draft", "confirm_draft"]);
+    assert.deepEqual([...command.toolNames].sort(), ["cancel_draft", "confirm_draft", "list_open_drafts"]);
     // Mô hình gọi thẳng confirm_draft vào máy chủ của mình: không có công cụ này — lỗi, không chạm DB
     await assert.rejects(turn!.callTool("assistant_model", "confirm_draft", { code: "ABCDEF" }), /not found/i);
     assert.equal(turn!.modelHasTool("confirm_draft"), false);
@@ -191,8 +191,8 @@ test("cổng đồng thời RIÊNG: đầy ⇒ server_busy cho trợ lý, cổng
   }
 });
 
-test("khai báo dựng từ tools/list KHỚP khai báo cũ của công cụ đã ở lõi (Quản lý / Nhân viên × tin riêng / trong nhóm)", async () => {
-  for (const principal of [manager(), staff()]) {
+test("khai báo dựng từ tools/list KHỚP khai báo cũ của công cụ đã ở lõi (Quản trị / Quản lý / Nhân viên × tin riêng / trong nhóm)", async () => {
+  for (const principal of [admin(), manager(), staff()]) {
     for (const groupScopeId of [undefined, 11]) {
       const asker = access(principal);
       const { turn } = rig("core", { asker, groupScopeId });

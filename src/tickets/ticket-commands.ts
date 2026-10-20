@@ -1,3 +1,4 @@
+// mcp-guard: legacy(tickets) — lệnh ticket gọi ticket-service; phase 8
 import { TicketStatus } from "../constants.js";
 import {
   acceptTicket, addTicketNote, cancelTicket, createTicket, describeTicket, describeTicketLine, findTicket, finishTicket,
