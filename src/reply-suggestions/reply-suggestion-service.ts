@@ -1,5 +1,3 @@
-// mcp-guard: legacy(files) — dịch vụ gợi ý trả lời (SQL + mẫu tin); phase 7
-import type { RowDataPacket } from "mysql2";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import type { ReplyTone } from "../constants.js";
 import type { Db } from "../db/pool.js";
@@ -8,9 +6,8 @@ import { maskPersonalData } from "../privacy/personal-data.js";
 import { generateDrafts, ReplyGenerationError } from "./reply-draft-generator.js";
 import { guardDraft } from "./reply-fact-guard.js";
 import { formatNoTemplateReply, formatSuggestion } from "./reply-suggestion-format.js";
-import { loadReplySource } from "./reply-source-loader.js";
-import type { ReplySource } from "./reply-suggestion-types.js";
-import { listApprovedTemplates } from "./reply-template-repository.js";
+import { sqlReplySourceReader } from "./reply-suggestion-sql-reader.js";
+import type { ReplySource, ReplySourceReader } from "./reply-suggestion-types.js";
 import { pickTemplates } from "./reply-template-picker.js";
 
 // Dịch vụ «gợi ý trả lời» (phase 10 — N2): tin gốc → mẫu ĐÃ DUYỆT → 1 lượt mô hình → kiểm sau sinh → chữ trả lời do máy chủ dựng.
@@ -19,7 +16,10 @@ import { pickTemplates } from "./reply-template-picker.js";
 export const HOURLY_LIMIT = 30;
 
 export interface SuggestDeps {
+  /** Dùng cho bản đọc SQL mặc định; có `reader` thì dịch vụ không chạm DB. */
   db: Db;
+  /** Nguồn đọc (số lượt / tin gốc / mẫu). Bỏ trống = bản SQL của `db`; trợ lý (họ `files` bật) truyền bản đi qua MCP. */
+  reader?: ReplySourceReader;
   model: ModelClient;
   /** Token của lượt hỏi — lượt gọi mô hình cộng vào đây. */
   usage?: { inputTokens: number; outputTokens: number };
@@ -50,31 +50,24 @@ export type SuggestOutcome =
   | { refusal: string }
   | { error: string };
 
-async function hourlyCount(db: Db, contactId: number, now: Date): Promise<number> {
-  const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT COUNT(*) AS total FROM assistant_turn
-     WHERE contact_id = ? AND created_at >= ? AND JSON_CONTAINS(tool_calls, JSON_OBJECT('name', 'suggest_replies'))`,
-    [contactId, new Date(now.getTime() - 3_600_000)]);
-  return Number(rows[0]?.total ?? 0);
-}
-
 export async function suggestReplies(deps: SuggestDeps, input: SuggestInput): Promise<SuggestOutcome> {
+  const reader = deps.reader ?? sqlReplySourceReader(deps.db);
   const question = input.question.trim();
   if (!question) return { error: "Thiếu request — mô tả tình huống cần trả lời." };
-  if (input.askerContactId && await hourlyCount(deps.db, input.askerContactId, deps.now) >= HOURLY_LIMIT) {
+  if (input.askerContactId && await reader.hourlyCount(input.askerContactId, deps.now) >= HOURLY_LIMIT) {
     return { refusal: `Anh/chị đã xin gợi ý ${HOURLY_LIMIT} lần trong giờ qua — chờ một lát rồi hỏi tiếp giúp em.` };
   }
 
   let source: ReplySource | null = null;
   if (input.messageId !== undefined) {
-    const loaded = await loadReplySource(deps.db, input.messageId, { scopeGroupId: input.scopeGroupId, askerUid: input.askerUid, maskPersonal: deps.maskPersonal, includeConfidential: input.includeConfidential });
+    const loaded = await reader.loadSource(input.messageId, { scopeGroupId: input.scopeGroupId, askerUid: input.askerUid, maskPersonal: deps.maskPersonal, includeConfidential: input.includeConfidential });
     if ("error" in loaded) return { error: loaded.error };
     source = loaded.source;
   }
   const maskedQuestion = deps.maskPersonal ? maskPersonalData(question) : question;
 
   // Chỉ mẫu ĐÃ DUYỆT (repository lọc + picker lọc lại) — không ứng viên thì KHÔNG sinh.
-  const approved = await listApprovedTemplates(deps.db, input.tenantId);
+  const approved = await reader.listApprovedTemplates(input.tenantId);
   const matchText = `${maskedQuestion}\n${source?.text ?? ""}`;
   const candidates = pickTemplates(approved, matchText);
   if (!candidates.length) return { refusal: formatNoTemplateReply(approved.map((template) => template.name)) };

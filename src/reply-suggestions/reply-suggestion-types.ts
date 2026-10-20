@@ -68,3 +68,21 @@ export interface SuggestionResult {
   /** Câu hỏi / tin gốc thuộc chủ đề kỹ thuật BVTV. */
   agro: boolean;
 }
+
+/** Phần ĐỌC dữ liệu của «gợi ý trả lời»: số lượt trong giờ, tin gốc + ngữ cảnh, mẫu đã duyệt. Đường hệ thống dùng bản SQL (`reply-suggestion-sql-reader.ts`),
+ *  trợ lý dùng bản đi qua công cụ MCP `reply_sources`. Phần sinh AI không nằm ở đây (tác động ngoài). */
+export interface ReplySourceReader {
+  /** Số lần `suggest_replies` của liên hệ trong 1 giờ trước `now`. */
+  hourlyCount(contactId: number, now: Date): Promise<number>;
+  loadSource(messageId: number, options: ReplySourceOptions): Promise<{ source: ReplySource } | { error: string }>;
+  listApprovedTemplates(tenantId: number): Promise<ReplyTemplate[]>;
+}
+
+export interface ReplySourceOptions {
+  /** Hỏi trong nhóm: chỉ nhận tin của chính nhóm đó. */
+  scopeGroupId?: number;
+  /** Mã Zalo người hỏi — tin trong cuộc nhắn riêng chỉ nhận khi đó là cuộc của chính họ. */
+  askerUid?: string;
+  maskPersonal: boolean;
+  includeConfidential?: boolean;
+}

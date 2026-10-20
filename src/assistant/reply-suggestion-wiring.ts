@@ -1,12 +1,12 @@
-// mcp-guard: legacy(files) — kiểm tin gốc đọc được bằng visibility-guards; phase 7 (nguồn gợi ý trả lời)
-import { DataAccessError } from "../data-access/data-access-errors.js";
-import { assertMessageReadable } from "../data-access/visibility-guards.js";
 import { runSuggestRepliesTool } from "../reply-suggestions/reply-suggestion-tool.js";
-import { relaxConfidential } from "./infra/asker-access.js";
+import { filesMcpFor } from "./files-command-call.js";
+import { replySourcesMcpReader } from "./reply-sources-mcp-reader.js";
+import { replySourcePrecheckLegacy } from "./reply-suggestion-wiring-legacy.js";
 import type { ToolContext } from "./tools.js";
 
 // Nối công cụ `suggest_replies` (phase 10) vào trợ lý — chỉ tin riêng. Bản nháp đi thành từng tin Zalo riêng qua `followUps`;
-// bot KHÔNG gửi bản nháp cho ai khác. Phase 7 (họ `files` / nguồn gợi ý) sửa tệp này.
+// bot KHÔNG gửi bản nháp cho ai khác. Họ `files` bật: phần ĐỌC (tin gốc + ngữ cảnh + mẫu đã duyệt + số lượt trong giờ) qua công cụ lệnh `reply_sources`;
+// sinh bản nháp bằng AI là tác động ngoài nên ở lại phía trợ lý. Họ tắt: SQL cũ (`reply-suggestion-wiring-legacy.ts` + bản đọc SQL của dịch vụ).
 
 /** Lời nhắc bổ sung (ngoài SUGGEST_REPLIES_PROMPT của lõi N2): ép dùng công cụ, không tự viết nháp. */
 export const SUGGEST_REPLIES_MANDATORY_PROMPT = `
@@ -20,17 +20,26 @@ export const SUGGEST_REPLIES_MANDATORY_PROMPT = `
 export async function runSuggestRepliesInTurn(context: ToolContext, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   if (context.scopeGroupId !== undefined || !context.replySuggestion) return { error: "Gợi ý trả lời chỉ dùng được khi nhắn riêng cho bot." };
   if (context.fixedReply !== undefined) return { error: "Lượt này đã có câu trả lời dựng sẵn — không gọi thêm." };
-  // Tin gốc phải nằm trong phạm vi người hỏi (cuộc riêng của người khác / nhóm ngoài phạm vi = như không có); chặn Mật do bộ nạp tin lo
   const messageId = Number(args.message_id);
-  if (args.message_id !== undefined && args.message_id !== null && args.message_id !== "" && Number.isSafeInteger(messageId) && messageId > 0) {
-    try {
-      await assertMessageReadable(relaxConfidential(context.access), messageId);
-    } catch (error) {
-      if (error instanceof DataAccessError && error.code === "not_found") return { error: "Không tìm thấy tin này (hoặc đã bị thu hồi)." };
-      throw error;
+  const given = args.message_id !== undefined && args.message_id !== null && args.message_id !== "" && Number.isSafeInteger(messageId);
+  // Kiểm phạm vi tin gốc trước mọi bước khác chỉ khi id dương (id ≤ 0 để bộ nạp tin báo «không hợp lệ» như đường cũ)
+  const hasMessageId = given && messageId > 0;
+  const suggest = { ...context.replySuggestion, includeConfidential: context.access.includeConfidential };
+  const mcp = await filesMcpFor(context.mcp, "reply_sources");
+  if (mcp) {
+    const handle = replySourcesMcpReader(mcp, given ? messageId : undefined, suggest.maskPersonal);
+    // Tin gốc phải nằm trong phạm vi người hỏi: lõi (reply_sources) kiểm trước mọi bước khác, như đường cũ
+    if (hasMessageId) {
+      const bundle = await handle.fetch();
+      if ("error" in bundle) return { error: bundle.error };
+      if (bundle.precheckError) return { error: bundle.precheckError };
     }
+    suggest.reader = handle.reader;
+  } else if (hasMessageId) {
+    const refused = await replySourcePrecheckLegacy(context.access, messageId);
+    if (refused) return { error: refused };
   }
-  const outcome = await runSuggestRepliesTool({ ...context.replySuggestion, includeConfidential: context.access.includeConfidential }, args);
+  const outcome = await runSuggestRepliesTool(suggest, args);
   if (outcome.reply) {
     context.fixedReply = outcome.reply.header;
     context.followUps = outcome.reply.drafts;

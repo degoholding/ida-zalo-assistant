@@ -1,0 +1,204 @@
+// mcp-guard: legacy(tasks) — đường cũ của lệnh việc (gọi task-service / task-repository trực tiếp), dùng khi họ `tasks` tắt; gỡ ở phase 13
+import type { AssistantMcpTurn } from "../assistant/mcp-bridge/assistant-mcp-turn.js";
+import { askerSourceVisibility, type AskerAccess } from "../assistant/infra/asker-access.js";
+import { ContactKind, ContactRole, TaskSource, TaskStatus } from "../constants.js";
+import { findLatestRecapTaskIds } from "../meetings/meeting-recording-repository.js";
+import { isActiveRecipientUid } from "../recipients/recipient-repository.js";
+import { cleanPersonName, describeContactChoices, pickContactMatch, searchContactsByName } from "../sync/contact-search.js";
+import type { TaskCommand, TaskListScope } from "./task-command-parser.js";
+import { parseDueArgument } from "./task-due-parser.js";
+import { describeTask, describeTaskLine, formatDue } from "./task-format.js";
+import { canManageTask, canViewTask, canWorkOnTask, isTaskAssignee, isTaskAssigner, type TaskViewer } from "./task-permissions.js";
+import { findTask, isTaskVisible, listTasks, shortTaskCode, type TaskActor, type TaskParty, type TaskRow } from "./task-repository.js";
+import {
+  addTaskNote, cancelTask, confirmTask, createTask, finishTask, rejectTask, reopenTask, reassignTask, rescheduleTask, TaskActionError,
+  type TaskDeps,
+} from "./task-service.js";
+
+// Đường CŨ của lệnh việc gõ trên Zalo (task-command-parser.ts) — công cụ trợ lý cũ (task-tools-legacy.ts) cũng đi đúng đường này.
+
+export interface TaskCommandContext {
+  deps: TaskDeps;
+  /** kind = ContactKind — khách hàng không giao việc được */
+  contact: { id: number; uid: string; name: string; role: number; kind: number };
+  /** Cuộc đang nhắn + tin chứa lệnh (việc mới gắn vào đây — bot nhắc vào đúng nhóm này) */
+  threadId: number | null;
+  messageId: number | null;
+  /** Hỏi trong nhóm: id nhóm (chỉ thấy việc của nhóm) — null = tin riêng */
+  groupId: number | null;
+  /** Người có vai trò hoặc người nhận đang bật (hỏi DB một lần / lượt); tài khoản web đã tắt thì không */
+  isOverseer: () => Promise<boolean>;
+  /** Ngữ cảnh truy cập của người hỏi (phân giải lười) — lọc việc của người khác theo phạm vi nhóm + Mật. Không có = không lọc. */
+  access?: () => Promise<AskerAccess>;
+  /** Phiên MCP của lệnh (lười — cùng phiên «đồng ý / hủy»). Không có: họ `tasks` bật thì task-commands.ts tự mở phiên từ `access`; không `access` = đường cũ. */
+  mcp?: () => Promise<AssistantMcpTurn | undefined>;
+}
+
+export function buildTaskContext(deps: TaskDeps, input: Omit<TaskCommandContext, "deps" | "isOverseer">): TaskCommandContext {
+  let cached: Promise<boolean> | null = null;
+  const overseer = async () => {
+    if (input.access && (await input.access()).origin === "disabled_account") return false;
+    return input.contact.role !== ContactRole.None ? true : isActiveRecipientUid(deps.db, input.contact.uid);
+  };
+  return { deps, ...input, isOverseer: () => (cached ??= overseer()) };
+}
+
+/** Điều kiện nhóm nguồn khi «sếp» xem việc của người khác ở tin riêng (trong nhóm đã khóa theo nhóm; không có access = không lọc). */
+async function overseerVisibility(ctx: TaskCommandContext, viewer: TaskViewer) {
+  if (!ctx.access || !viewer.overseer || viewer.groupId !== null) return undefined;
+  return askerSourceVisibility(await ctx.access(), "t.source_thread_id", "g");
+}
+
+const LIST_LIMIT = 30;
+const NOT_FOUND = (id: number) => `Em không thấy việc V-${id} của anh/chị. Nhắn «việc» để xem danh sách.`;
+const NO_RIGHT = "Anh/chị không có quyền làm việc này — chỉ người giao việc hoặc quản lý.";
+
+/** Người phụ trách theo tên người gõ: một người rõ ràng → party; không rõ → câu trả lời cho người gõ. */
+export async function resolveAssignee(ctx: TaskCommandContext, rawName: string, retryHint: string): Promise<{ party: TaskParty } | { reply: string }> {
+  const name = cleanPersonName(rawName);
+  const matches = await searchContactsByName(ctx.deps.db, name, { groupId: ctx.groupId ?? ctx.threadId });
+  if (!matches.length) return { reply: `Em không tìm thấy ai tên «${name}» trong Danh bạ. Anh/chị nhắn lại «${retryHint}» với tên đầy đủ giúp em.` };
+  const picked = pickContactMatch(matches);
+  if (picked) return { party: { contactId: picked.id, uid: picked.uid, name: picked.name } };
+  return { reply: describeContactChoices(matches, name, retryHint) };
+}
+
+async function listText(ctx: TaskCommandContext, viewer: TaskViewer, scope: TaskListScope, now: Date): Promise<string> {
+  const inGroup = ctx.groupId !== null;
+  const everyone = viewer.overseer || inGroup;
+  const filter = {
+    statuses: scope === "proposed" ? [TaskStatus.Proposed] : [TaskStatus.Open],
+    threadId: ctx.groupId ?? undefined,
+    involvingUid: scope === "mine" || !everyone ? viewer.uid : undefined,
+    overdueAt: scope === "overdue" ? now : undefined,
+  };
+  // «Sếp» xem việc của mọi người ở tin riêng: bỏ việc nhóm Mật (trừ khi có quyền Mật) và việc ngoài phạm vi nhóm của tài khoản
+  const visibility = everyone && scope !== "mine" ? await overseerVisibility(ctx, viewer) : undefined;
+  const tasks = await listTasks(ctx.deps.db, { ...filter, visibility, limit: LIST_LIMIT });
+  const titles: Record<TaskListScope, string> = {
+    mine: "VIỆC CỦA ANH/CHỊ (đang phụ trách hoặc đã giao)", group: inGroup ? "VIỆC CỦA NHÓM" : "VIỆC ĐANG LÀM",
+    overdue: "VIỆC QUÁ HẠN", proposed: "VIỆC CHỜ XÁC NHẬN",
+  };
+  if (!tasks.length) return scope === "proposed" ? "Không có đề xuất nào chờ xác nhận." : "Không có việc nào.";
+  const code = shortTaskCode(tasks[0]);
+  const hint = scope === "proposed" ? `Nhắn «ok ${code}» để lưu, «bỏ ${code}» nếu không phải việc.` : `Nhắn «xong ${code}», «dời ${code} <hạn>», «${code}» để xem chi tiết.`;
+  const count = tasks.length >= LIST_LIMIT ? `${LIST_LIMIT}+, ${LIST_LIMIT} việc gần hạn nhất` : String(tasks.length);
+  return [`${titles[scope]} (${count})`, ...tasks.map((task) => describeTaskLine(task, now)), "", hint].join("\n");
+}
+
+/**
+ * «ok hết» / «lưu hết» / «đồng ý hết» / «bỏ hết» (phase 4, recap họp tự động): gộp xác nhận / bỏ các việc Proposed của
+ * ĐÚNG recap tự động GẦN NHẤT gửi vào cuộc đang hỏi (M3 review 10/10/2026: trước đây gộp theo cửa sổ 3 ngày + cùng
+ * nguồn Recap — có thể cướp luồng «recap tay» (save_recap_tasks, cũng dùng `TaskSource.Recap`) hoặc gộp nhầm đề xuất
+ * của MỘT cuộc họp khác). Không dùng cửa sổ ngày: việc quá hạn 2 ngày làm việc đã tự bỏ ở task-reminders.ts
+ * (`expireStaleProposals`) nên khỏi cần đồng bộ TTL ở đây — còn Proposed tức còn sống.
+ * Không có recap nào khớp (hoặc việc của nó không còn Proposed / không đủ quyền) → null, để AI trả lời như câu hỏi
+ * thường — luồng «recap tay» (mục 8 system prompt, hỏi rồi gọi save_recap_tasks) vẫn chạy được.
+ */
+async function runRecapBulkCommand(ctx: TaskCommandContext, viewer: TaskViewer, actor: TaskActor, confirm: boolean): Promise<string | null> {
+  // Tin riêng mà không rõ ai đang hỏi (contact.uid rỗng, vd lỗi đồng bộ danh bạ) — không có cách lọc đúng người, TỪ
+  // CHỐI thay vì bỏ qua bộ lọc người giao rồi gộp nhầm việc của toàn hệ thống.
+  if (ctx.groupId === null && !ctx.contact.uid) return null;
+  const destination = ctx.groupId !== null ? { targetThreadId: ctx.groupId } : { requesterUid: ctx.contact.uid };
+  const taskIds = await findLatestRecapTaskIds(ctx.deps.db, destination);
+  if (!taskIds?.length) return null;
+  const found = await Promise.all(taskIds.map((id) => findTask(ctx.deps.db, id)));
+  const tasks = found.filter((task): task is TaskRow => task !== null && task.status === TaskStatus.Proposed);
+  const allowed = tasks.filter((task) => canManageTask(viewer, task));
+  if (!allowed.length) return null;
+  const codes: string[] = [];
+  for (const task of allowed) {
+    try {
+      await (confirm ? confirmTask(ctx.deps, task, actor) : rejectTask(ctx.deps, task, actor));
+      codes.push(shortTaskCode(task));
+    } catch (error) {
+      // Việc vừa được người khác xác nhận / bỏ giữa chừng (vd «ok V-12» từng mã) — bỏ qua, không chặn các việc còn lại
+      if (!(error instanceof TaskActionError)) throw error;
+    }
+  }
+  if (!codes.length) return `Không còn đề xuất nào để ${confirm ? "lưu" : "bỏ"} (có thể vừa được xử lý).`;
+  return confirm
+    ? `Dạ đã lưu ${codes.length} việc vào checklist: ${codes.join(", ")}.`
+    : `Dạ đã bỏ ${codes.length} đề xuất: ${codes.join(", ")}.`;
+}
+
+export async function runTaskCommandLegacy(ctx: TaskCommandContext, command: TaskCommand, now: Date): Promise<string | null> {
+  const { deps, contact } = ctx;
+  const actor: TaskActor = { contactId: contact.id, uid: contact.uid, name: contact.name, via: "zalo" };
+  const viewer: TaskViewer = { uid: contact.uid, contactId: contact.id, overseer: await ctx.isOverseer(), groupId: ctx.groupId };
+  if (command.kind === "task_confirm_recap" || command.kind === "task_reject_recap") {
+    return runRecapBulkCommand(ctx, viewer, actor, command.kind === "task_confirm_recap");
+  }
+  if (command.kind === "task_list") return listText(ctx, viewer, command.scope, now);
+  if (command.kind === "task_create") {
+    // Cổng tin riêng cho lệnh việc qua với mọi người (để người phụ trách báo xong) — giao việc thì chỉ nhân sự / sếp
+    if (!viewer.overseer && contact.kind !== ContactKind.Staff) return "Chỉ nhân sự công ty mới giao việc qua bot được.";
+    const due = command.dueText ? parseDueArgument(command.dueText, now) : null;
+    if (command.dueText && !due) return `Em chưa hiểu hạn «${command.dueText}». Ghi hạn dạng «mai», «thứ 6», «20/10», «17h thứ 6» giúp em.`;
+    const person = await resolveAssignee(ctx, command.assigneeName, "giao <tên>: <việc> hạn <ngày>");
+    if ("reply" in person) return person.reply;
+    const task = (await createTask(deps, {
+      title: command.title, assignee: person.party, assigner: actor, source: command.source ?? TaskSource.Command, priority: command.priority,
+      sourceThreadId: ctx.threadId, sourceMessageId: ctx.messageId, due: due ? { at: due.at, hasTime: due.hasTime } : null, via: "zalo",
+    }))!;
+    const notified = person.party.uid !== contact.uid ? `; em đã báo ${person.party.name}` : "";
+    return `Dạ đã ghi ${shortTaskCode(task)}: ${task.title} — ${person.party.name} — hạn ${formatDue(task.due_at, task.due_has_time, now)}${notified}.` +
+      (due ? "" : ` Chưa có hạn: nhắn «dời ${shortTaskCode(task)} <hạn>» để đặt.`);
+  }
+
+  const task = await findTask(deps.db, command.taskId);
+  if (!task || !canViewTask(viewer, task)) return NOT_FOUND(command.taskId);
+  // Xem việc người khác chỉ nhờ vai trò «sếp» → cùng luật phạm vi / Mật với danh sách
+  if (!isTaskAssigner(viewer, task) && !isTaskAssignee(viewer, task) && !(await isTaskVisible(deps.db, task.id, await overseerVisibility(ctx, viewer)))) {
+    return NOT_FOUND(command.taskId);
+  }
+  const code = shortTaskCode(task);
+  try {
+    switch (command.kind) {
+      case "task_status":
+        return describeTask(task, now);
+      case "task_done":
+        if (!canWorkOnTask(viewer, task)) return "Chỉ người phụ trách, người giao hoặc quản lý mới báo xong được.";
+        await finishTask(deps, task, actor, command.note);
+        return `Dạ đã đánh xong ${code}${task.assigner.uid && task.assigner.uid !== contact.uid ? ` và báo ${task.assigner.name}` : ""}.`;
+      case "task_note":
+        if (!canWorkOnTask(viewer, task)) return "Chỉ người phụ trách, người giao hoặc quản lý mới ghi chú được.";
+        await addTaskNote(deps, task, actor, command.note);
+        return `Dạ em đã ghi chú vào ${code}.`;
+      case "task_reschedule": {
+        if (!canManageTask(viewer, task)) return NO_RIGHT;
+        const due = parseDueArgument(command.dueText, now);
+        if (!due) return `Em chưa hiểu hạn «${command.dueText}». Ghi hạn dạng «mai», «thứ 6», «20/10», «17h thứ 6» giúp em.`;
+        const updated = await rescheduleTask(deps, task, actor, due);
+        return `Dạ đã đổi hạn ${code} thành ${formatDue(updated.due_at, updated.due_has_time, now)}.`;
+      }
+      case "task_reassign": {
+        if (!canManageTask(viewer, task)) return NO_RIGHT;
+        const person = await resolveAssignee(ctx, command.assigneeName, `giao lại ${code} <tên>`);
+        if ("reply" in person) return person.reply;
+        await reassignTask(deps, task, actor, person.party);
+        return `Dạ đã giao lại ${code} cho ${person.party.name}.`;
+      }
+      case "task_cancel":
+        if (!canManageTask(viewer, task)) return NO_RIGHT;
+        await cancelTask(deps, task, actor, command.note);
+        return `Dạ đã hủy ${code}.`;
+      case "task_reopen":
+        if (!canManageTask(viewer, task)) return NO_RIGHT;
+        await reopenTask(deps, task, actor, command.note);
+        return `Dạ đã mở lại ${code}.`;
+      case "task_confirm": {
+        if (!canManageTask(viewer, task)) return NO_RIGHT;
+        const confirmed = await confirmTask(deps, task, actor);
+        return `Dạ đã lưu ${code} vào checklist${confirmed.assignee?.uid ? ` và báo ${confirmed.assignee.name}` : " (chưa có người phụ trách — nhắn «giao lại " + code + " <tên>»)"}.`;
+      }
+      case "task_reject":
+        if (!canManageTask(viewer, task)) return NO_RIGHT;
+        await rejectTask(deps, task, actor);
+        return `Dạ em đã bỏ đề xuất ${code}.`;
+    }
+  } catch (error) {
+    if (error instanceof TaskActionError) return error.message;
+    throw error;
+  }
+}

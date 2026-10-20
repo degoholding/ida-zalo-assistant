@@ -8,8 +8,8 @@ import { UNTRUSTED_NOTICE, type AnyToolDefinition } from "./tool-definition.js";
 import { runTool } from "./tool-runner.js";
 
 const NAMES = ["whoami", "describe_entities", "query_records", "search_messages", "get_thread_messages", "get_file_text", "metrics_summary"];
-// Công cụ của họ trợ lý mở thêm cho cổng ngoài (catalog/*-family-tools.ts, mặt mcp_http): họ reads (phase 6 plan trợ lý qua MCP)
-const FAMILY_HTTP_NAMES = ["find_people", "get_conversation_with_person"];
+// Công cụ của họ trợ lý mở thêm cho cổng ngoài (catalog/*-family-tools.ts, mặt mcp_http): họ reads (find_people, get_conversation_with_person), họ files (search_files)
+const FAMILY_HTTP_NAMES = ["find_people", "get_conversation_with_person", "search_files"];
 const toolNames = (ctx: ReturnType<typeof makeCtx>) => toolsFor(ctx).map((tool) => tool.name);
 const tool = (name: string): AnyToolDefinition => findTool(name)!;
 
@@ -26,10 +26,16 @@ test("danh mục có đúng 7 công cụ đọc, tên duy nhất, chỉ đọc, 
   }
 });
 
-test("ma trận available: Nhân viên không có metrics_summary; Quản lý / Quản trị có đủ 7", () => {
-  assert.deepEqual(toolNames(makeCtx(admin())), [...NAMES, ...FAMILY_HTTP_NAMES]);
-  assert.deepEqual(toolNames(makeCtx(manager())), [...NAMES, ...FAMILY_HTTP_NAMES]);
-  assert.deepEqual(toolNames(makeCtx(staff())), [...NAMES.filter((name) => name !== "metrics_summary"), ...FAMILY_HTTP_NAMES]);
+test("ma trận available: Nhân viên không có metrics_summary; Quản lý / Quản trị có đủ 7 (+ công cụ họ trợ lý mở cho cổng ngoài, không đếm tổng cứng)", () => {
+  // Assert theo TÊN (không theo tổng): mỗi phase họ trợ lý có thể thêm công cụ mcp_http mà không phải sửa ma trận này
+  const coreNames = (ctx: ReturnType<typeof makeCtx>) => toolNames(ctx).filter((name) => NAMES.includes(name));
+  const familyNames = (ctx: ReturnType<typeof makeCtx>) => toolNames(ctx).filter((name) => !NAMES.includes(name));
+  assert.deepEqual(coreNames(makeCtx(admin())), NAMES);
+  assert.deepEqual(coreNames(makeCtx(manager())), NAMES);
+  assert.deepEqual(coreNames(makeCtx(staff())), NAMES.filter((name) => name !== "metrics_summary"));
+  for (const ctx of [makeCtx(admin()), makeCtx(manager()), makeCtx(staff())]) {
+    for (const name of FAMILY_HTTP_NAMES) assert.ok(familyNames(ctx).includes(name), `thiếu ${name}`);
+  }
 });
 
 test("sơ đồ vào / ra của mọi công cụ đổi được sang JSON Schema (cổng MCP cần)", () => {

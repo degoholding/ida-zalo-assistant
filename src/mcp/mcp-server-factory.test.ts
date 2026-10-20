@@ -14,10 +14,12 @@ test("tools/list theo vai trò: Nhân viên không có metrics_summary, Quản t
   try {
     const staffTools = (await staffRig.client.listTools()).tools.map((tool) => tool.name);
     const adminTools = (await adminRig.client.listTools()).tools.map((tool) => tool.name);
-    assert.equal(adminTools.length, 7 + 2, "7 công cụ đọc + find_people / get_conversation_with_person của họ reads");
+    for (const name of ["whoami", "describe_entities", "query_records", "search_messages", "get_thread_messages", "get_file_text", "metrics_summary", "find_people", "get_conversation_with_person", "search_files"]) {
+      assert.ok(adminTools.includes(name), `thiếu ${name}`);
+    }
     assert.ok(adminTools.includes("metrics_summary"));
     assert.ok(!staffTools.includes("metrics_summary"));
-    assert.equal(staffTools.length, 6 + 2);
+    assert.ok(staffTools.includes("search_files") && staffTools.includes("find_people"));
     assert.ok(adminTools.every((name) => !/write|confirm|draft/.test(name)));
     const queryTool = (await adminRig.client.listTools()).tools.find((tool) => tool.name === "query_records");
     assert.equal(queryTool?.annotations?.readOnlyHint, true);

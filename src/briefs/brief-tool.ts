@@ -10,12 +10,7 @@ import { runBriefCommand, type BriefChatDeps } from "./brief-commands.js";
 const KINDS = new Set<BriefRequestKind>(["morning", "evening", "weekly", "monthly"]);
 const KIND_LABELS: Record<string, string> = { morning: "bản tin sáng", evening: "bản tin cuối ngày", weekly: "báo cáo tuần", monthly: "báo cáo tháng" };
 
-/** Luật hướng dẫn thêm vào system prompt khi người hỏi có công cụ này (người hỏi là người nhận, tin riêng). */
-export const BRIEF_TOOL_PROMPT = `
-
-BẢN TIN, BÁO CÁO (người hỏi là người nhận bản tin): câu đã khớp sẵn bot tự trả lời, không tới lượt bạn. Câu hỏi
-tương tự nhưng diễn đạt khác («cho anh bản tin của hôm nay», «anh muốn xem báo cáo tháng trước») → send_brief NGAY, rồi
-báo ngắn gọn 1 câu là đang gửi — KHÔNG đọc lại nội dung bản tin (bạn không có nội dung đó).`;
+export { BRIEF_TOOL_PROMPT } from "./brief-tool-prompt.js";
 
 export const SEND_BRIEF_DECLARATION: FunctionDeclaration = {
   name: "send_brief",

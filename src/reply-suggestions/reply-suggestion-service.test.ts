@@ -102,3 +102,26 @@ test("review phase 10: tin trong cuộc nhắn riêng của NGƯỜI KHÁC với
   const own = await suggestReplies(deps(ownDb, modelReturning(answer, calls)), { tenantId: 1, question: "giá", messageId: 9, askerUid: "uid-toi" });
   assert.ok("drafts" in own);
 });
+
+test("nguồn đọc tiêm (họ files qua MCP): dịch vụ không chạm DB; trần giờ / tin gốc / mẫu lấy từ reader", async () => {
+  const touched: string[] = [];
+  const noDb = { query: async () => { throw new Error("không được chạm DB"); } } as unknown as Db;
+  const template = {
+    id: 1, tenantId: 1, name: "Báo giá sản phẩm", situation: "Khách hỏi giá", keywords: ["giá", "báo giá"], body: "Dạ giá [giá] /bao, áp dụng đến [ngày].", tone: 1,
+    status: ReplyTemplateStatus.Approved, authorUserId: null, authorName: "", reviewerUserId: null, reviewerName: "", reviewNote: "", submittedAt: null, reviewedAt: null,
+    createdAt: new Date(0), updatedAt: new Date(0),
+  };
+  const source = { messageId: 9, groupName: "Nhóm ĐL", senderName: "anh Sáu", sentAt: new Date("2026-10-12T02:12:00Z"), text: "Flowertop giá sao em", context: [] };
+  const reader = {
+    hourlyCount: async () => { touched.push("hourly"); return 0; },
+    loadSource: async (id: number, options: { askerUid?: string }) => { touched.push(`source:${id}:${options.askerUid}`); return { source }; },
+    listApprovedTemplates: async () => { touched.push("templates"); return [template]; },
+  };
+  const out = await suggestReplies({ ...deps(noDb, modelReturning(answer)), reader }, { tenantId: 1, question: "gợi ý trả lời tin giá Flowertop", messageId: 9, askerContactId: 4, askerUid: "u-1" });
+  assert.ok("drafts" in out && out.templateId === 1);
+  assert.deepEqual(touched, ["hourly", "source:9:u-1", "templates"]);
+  const capped = await suggestReplies({ ...deps(noDb, modelReturning(answer)), reader: { ...reader, hourlyCount: async () => 30 } }, { tenantId: 1, question: "giá", askerContactId: 4 });
+  assert.ok("refusal" in capped && capped.refusal.includes("30"));
+  const failed = await suggestReplies({ ...deps(noDb, modelReturning(answer)), reader: { ...reader, loadSource: async () => ({ error: "Tin này thuộc nhóm Mật" }) } }, { tenantId: 1, question: "giá", messageId: 9 });
+  assert.ok("error" in failed && failed.error.includes("Mật"));
+});

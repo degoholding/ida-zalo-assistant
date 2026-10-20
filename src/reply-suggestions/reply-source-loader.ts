@@ -1,4 +1,4 @@
-// mcp-guard: legacy(files) — nạp tin nguồn gợi ý trả lời bằng SQL; phase 7
+// mcp-guard: legacy(files) — nạp tin nguồn gợi ý trả lời bằng SQL (đường hệ thống / họ `files` tắt; công cụ lệnh `reply_sources` của lõi tái dùng); phase 13 chuyển hẳn vào lõi
 import type { RowDataPacket } from "mysql2";
 import { ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";

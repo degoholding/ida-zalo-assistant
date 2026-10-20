@@ -1,26 +1,17 @@
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";
 import type { MeetingCreator } from "../assistant/meeting-tool.js";
-import { NOT_ALLOWED_REPLY, type SendChatContext } from "./send-command-chat.js";
+import { createPinDraftVia } from "./send-assisted-draft.js";
+import type { SendChatContext } from "./send-command-chat.js";
 import { MAX_PIN_CHARS, MAX_TARGETS } from "./send-command-limits.js";
+import { NOT_ALLOWED_REPLY } from "./send-command-replies.js";
 import type { ProposeSendOutcome } from "./send-command-tool.js";
 import { buildPinMeetingBody } from "./send-meeting-pick.js";
 import { parseMeetingStart, pickMeetingForTool } from "./send-meeting-tool-pick.js";
-import { createPinDraft } from "./send-pin-draft-service.js";
+export { PIN_TOOL_PROMPT } from "./send-tool-prompts.js";
 
 // Công cụ AI `propose_group_pin` — GHIM ghi chú lên NHÓM Zalo TỪ TIN RIÊNG. Cùng khuôn nhắc hẹn: chỉ tạo NHÁP, câu trả lời của lượt
 // là bản xem trước do MÁY CHỦ dựng (`fixedReply`), việc ghim thật chỉ xảy ra khi người dùng nhắn «đồng ý».
 // Nội dung ghim: nói về cuộc họp bot đã tạo → máy chủ dựng từ Calendar (như lời mời họp); ngoài ra mô hình soạn `content`.
-
-export const PIN_TOOL_PROMPT = `
-
-GHIM LÊN NHÓM TỪ TIN RIÊNG (người hỏi được phép ra lệnh gửi): khi người hỏi bảo GHIM một nội dung / cuộc họp lên một hay nhiều NHÓM Zalo
-(«ghim cuộc họp 15h của nhóm zalo bot», «okee ghim đi», «ghim lên nhóm Kho HN: thứ 6 nộp báo cáo»), gọi propose_group_pin. Chỉ ghim cho NHÓM.
-- groups: tên nhóm CHÉP NGUYÊN VĂN như người hỏi viết.
-- Ghim CUỘC HỌP bot đã tạo (kể cả vừa tạo ở lượt này hay lượt trước): để trống content; điền meeting_title / start_time (ISO 8601 +07:00)
-  chỉ khi người hỏi nói rõ cuộc nào. Hệ thống tự dựng nội dung ghim (tên, giờ, link Meet) từ cuộc họp — KHÔNG tự dán link, KHÔNG tạo họp mới.
-- Ghim nội dung khác: điền content, gọn, giữ ý người hỏi, tối đa ${MAX_PIN_CHARS} ký tự (hiện nguyên trong bản xem trước).
-- Công cụ chỉ tạo bản xem trước, KHÔNG ghim. Người dùng phải nhắn «đồng ý». Sau khi gọi, câu trả lời của bạn sẽ được thay bằng bản xem
-  trước của hệ thống; KHÔNG nói «đã ghim».`;
 
 export const PROPOSE_PIN_DECLARATION: FunctionDeclaration = {
   name: "propose_group_pin",
@@ -59,10 +50,8 @@ export async function runProposePinTool(
     if ("outcome" in picked) return picked.outcome;
     content = buildPinMeetingBody(picked.meeting);
   }
-  const result = await createPinDraft(chat.deps, {
-    requester: chat.requester, requesterContactId: chat.requesterContactId, question: chat.question, groupNames: groups, content,
-    sourceThreadId: chat.sourceThreadId, sourceMessageId: chat.sourceMessageId, botAccountId: chat.botAccountId,
-  }, now);
+  // Nội dung đã dựng xong ở đây (Calendar / mô hình soạn); bước ghi nháp qua công cụ lõi `send_pin_draft_create` khi họ `send` bật
+  const result = await createPinDraftVia(chat, { groups, content }, now);
   return {
     response: result.commandId
       ? { drafted: true, note: "Đã tạo nháp và gửi bản xem trước cho người dùng; họ nhắn «đồng ý» mới ghim. Không viết thêm gì, không nói đã ghim." }

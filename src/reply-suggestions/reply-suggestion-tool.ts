@@ -1,7 +1,10 @@
-// mcp-guard: legacy(files) — suggest_replies gọi reply-suggestion-service; phase 7
+// mcp-guard: legacy(files) — import reply-suggestion-service (tên dịch vụ miền); công cụ cho mô hình + phần sinh AI (tác động ngoài) ở lại, phần ĐỌC tiêm qua `SuggestDeps.reader`
 import type { FunctionDeclaration } from "../assistant/gemini-client.js";
 import { ReplyTone } from "../constants.js";
+import { SUGGEST_REPLIES_PROMPT } from "../data-access/catalog/files-family-instructions.js";
 import { suggestReplies, type SuggestDeps } from "./reply-suggestion-service.js";
+
+export { SUGGEST_REPLIES_PROMPT };
 
 // Công cụ AI `suggest_replies` (phase 10 — N2). Phase 3 gắn vào `runTool`: gọi `runSuggestRepliesTool`, nếu có `reply` thì đặt
 // `context.fixedReply = reply.header` và gửi từng `reply.drafts[i]` thành một tin riêng; chữ của mô hình chính bị bỏ.
@@ -24,10 +27,6 @@ export const SUGGEST_REPLIES_DECLARATION: FunctionDeclaration = {
   },
 };
 
-export const SUGGEST_REPLIES_PROMPT = `GỢI Ý TRẢ LỜI (suggest_replies): người hỏi xin bản nháp để trả lời khách / đại lý → tìm tin gốc bằng search_messages (nếu nhắc tới một tin), rồi gọi suggest_replies MỘT lần.
-- Hệ thống tự gửi bản nháp thành từng tin riêng; bạn KHÔNG tự soạn, KHÔNG viết lại, KHÔNG gửi gì thêm.
-- Bot không gửi bản nháp cho khách; người hỏi tự chép và gửi bằng Zalo của mình.
-- Công cụ báo lỗi / từ chối (không có mẫu đã duyệt, tin nhóm Mật…) → nói lại đúng lý do đó, không soạn thay.`;
 
 const TONE_ARGS: Record<string, ReplyTone> = { formal: ReplyTone.Formal, friendly: ReplyTone.Friendly, brief: ReplyTone.Brief };
 

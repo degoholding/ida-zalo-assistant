@@ -1,5 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { readAttachmentText } from "../assistant/file-reader.js";
+import { sqlAttachmentTextStore } from "../storage/attachment-text-sql-cache.js";
 import type { ModelClient } from "../assistant/gemini-client.js";
 import { maskSecrets } from "../assistant/key-chain-client.js";
 import type { AppConfig } from "../config.js";
@@ -123,7 +124,7 @@ export async function runImageAutoRead(
     let error: string;
     try {
       const result = await readAttachmentText({
-        db, storage, maxFileBytes: config.assistant.maxReadFileBytes, allowedExtensions: extensions,
+        db, store: sqlAttachmentTextStore(db), storage, maxFileBytes: config.assistant.maxReadFileBytes, allowedExtensions: extensions,
         // Mô hình thường (không phải bản nặng) — chép chữ ảnh chụp đủ tốt, rẻ hơn nhiều khi đọc mọi ảnh
         readDocument: (mime, data, instruction) => readDocument(mime, data, instruction),
       }, candidate.attachment_id);

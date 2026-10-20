@@ -1,20 +1,22 @@
-// mcp-guard: legacy(files) — read_link kiểm nguồn tin / tệp bằng SQL; phase 7 chuyển sang họ `files`
-import type { RowDataPacket } from "mysql2";
-import { threadVisibilitySql } from "../data-access/visibility-guards.js";
 import type { Db } from "../db/pool.js";
+import { callFilesCommand, filesMcpFor } from "./files-command-call.js";
 import type { AskerAccess } from "./infra/asker-access.js";
 import type { FunctionDeclaration } from "./gemini-client.js";
+import { linkFingerprint } from "./link-fingerprint.js";
 import { LinkReadError, type LinkContent } from "./link-reader.js";
+import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
+import { linkWasSharedLegacy } from "./read-link-tool-legacy.js";
 
 // Công cụ read_link (07/10/2026): đọc nội dung link người dùng gửi — Google Sheets / Docs / Slides / Drive (chia sẻ
 // «Bất kỳ ai có đường liên kết», không cần Google Cloud), trang web. Chống rò dữ liệu: chỉ đọc link ĐÃ CÓ trong tin nhắn
 // (của nhóm đang hỏi nếu hỏi trong nhóm) hoặc trong chính câu hỏi — mô hình bị tin nhắn «dụ» cũng không tự chế link
-// nhét dữ liệu nội bộ vào đường dẫn được.
+// nhét dữ liệu nội bộ vào đường dẫn được. Họ `files` bật: việc kiểm «link có trong tin người hỏi thấy được» là công cụ lệnh `link_shared_check` của lõi;
+// TẢI nội dung link là tác động ngoài nên luôn ở phía trợ lý. Họ tắt: kiểm bằng SQL cũ (`read-link-tool-legacy.ts`).
 
 export type ReadLink = (url: string) => Promise<LinkContent>;
+export { linkFingerprint };
 
 const MAX_RETURN_CHARS = 60_000;
-const LINK_LOOKBACK_DAYS = 60;
 
 export const READ_LINK_DECLARATION: FunctionDeclaration = {
   name: "read_link",
@@ -30,33 +32,21 @@ export const READ_LINK_DECLARATION: FunctionDeclaration = {
   },
 };
 
-/** Phần nhận dạng của link để so với tin nhắn: id tệp Google, hoặc máy + đường dẫn. Hàm thuần. */
-export function linkFingerprint(raw: string): string | null {
-  try {
-    const url = new URL(raw.trim());
-    const googleId = /\/d\/([A-Za-z0-9_-]{10,})/.exec(url.pathname)?.[1];
-    if (googleId && url.hostname.endsWith("google.com")) return googleId;
-    return `${url.hostname}${url.pathname.replace(/\/$/, "")}`;
-  } catch {
-    return null;
-  }
-}
+const NOT_SHARED = { error: "Link này không có trong tin nhắn — chỉ đọc link người dùng đã gửi (chép nguyên văn từ tin)." };
 
-async function linkWasShared(db: Db, access: AskerAccess, fingerprint: string, scopeGroupId: number | undefined): Promise<boolean> {
-  const escaped = fingerprint.replace(/[\\%_]/g, (char) => `\\${char}`);
-  // Link chỉ tính khi nằm trong tin của cuộc người hỏi THẤY ĐƯỢC (phạm vi + cuộc riêng của mình + Mật theo cờ) — không thì
-  // «đọc link» thành đường đọc nội dung cuộc riêng của người khác / nhóm Mật
-  const visible = threadVisibilitySql(access, "g");
-  const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT 1 FROM message m JOIN zalo_group g ON g.id = m.group_id
-     WHERE m.text LIKE ? AND m.sent_at > NOW() - INTERVAL ? DAY AND m.recalled_at IS NULL AND ${visible.sql} ${scopeGroupId ? "AND m.group_id = ?" : ""} LIMIT 1`,
-    [`%${escaped}%`, LINK_LOOKBACK_DAYS, ...visible.params, ...(scopeGroupId ? [scopeGroupId] : [])],
-  );
-  return rows.length > 0;
+/** Link có trong tin người hỏi thấy được không: qua MCP (`link_shared_check`) nếu họ `files` bật, không thì SQL cũ. Lỗi công cụ (vd lõi từ chối) → trả `{ error }`. */
+async function linkShared(
+  context: { db: Db; access: AskerAccess; scopeGroupId?: number; mcp?: AssistantMcpTurn }, url: string, fingerprint: string,
+): Promise<true | { error: string }> {
+  const mcp = await filesMcpFor(context.mcp, "link_shared_check");
+  if (!mcp) return await linkWasSharedLegacy(context.db, context.access, fingerprint, context.scopeGroupId) ? true : NOT_SHARED;
+  const result = await callFilesCommand(mcp, { filesToSend: [] }, "link_shared_check", { url });
+  if ("error" in result) return { error: String(result.error) };
+  return result.shared === true ? true : NOT_SHARED;
 }
 
 export async function runReadLink(
-  context: { db: Db; access: AskerAccess; readLink?: ReadLink; question?: string; scopeGroupId?: number },
+  context: { db: Db; access: AskerAccess; readLink?: ReadLink; question?: string; scopeGroupId?: number; mcp?: AssistantMcpTurn },
   args: Record<string, unknown>,
 ): Promise<{ response: Record<string, unknown>; content: LinkContent | null }> {
   if (!context.readLink) return { response: { error: "Bot chưa bật đọc link." }, content: null };
@@ -64,8 +54,9 @@ export async function runReadLink(
   const fingerprint = linkFingerprint(url);
   if (!fingerprint) return { response: { error: "Thiếu hoặc sai link — chép nguyên văn link trong tin nhắn." }, content: null };
   const inQuestion = Boolean(context.question?.includes(fingerprint));
-  if (!inQuestion && !(await linkWasShared(context.db, context.access, fingerprint, context.scopeGroupId))) {
-    return { response: { error: "Link này không có trong tin nhắn — chỉ đọc link người dùng đã gửi (chép nguyên văn từ tin)." }, content: null };
+  if (!inQuestion) {
+    const shared = await linkShared(context, url, fingerprint);
+    if (shared !== true) return { response: shared, content: null };
   }
   try {
     const content = await context.readLink(url);

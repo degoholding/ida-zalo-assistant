@@ -1,8 +1,8 @@
-// mcp-guard: legacy(files) — đọc / lưu chữ đã bóc của tệp bằng SQL; phase 7 chuyển sang họ `files`
-import type { RowDataPacket } from "mysql2";
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as XLSX from "xlsx";
 import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import { sqlAttachmentTextStore, type AttachmentTextStore } from "../storage/attachment-text-sql-cache.js";
 import type { FileStorage } from "../storage/file-storage.js";
 import { sniffImageType } from "../storage/image-type-sniff.js";
 import { readZipEntry } from "./zip-reader.js";
@@ -26,7 +26,10 @@ export interface ExtractedText {
 export type DocumentReader = (mime: string, data: Buffer, instruction: string) => Promise<{ text: string; inputTokens: number; outputTokens: number }>;
 
 export interface FileReaderDeps {
+  /** Dùng cho kho SQL mặc định; có `store` (hoặc đang trong `withAttachmentTextStore`) thì không dùng tới. */
   db: Db;
+  /** Kho chữ đã bóc: dòng tệp + cache. Bỏ trống = kho đang áp ở lượt trợ lý (`withAttachmentTextStore`), không có thì kho SQL của `db`. */
+  store?: AttachmentTextStore;
   storage: FileStorage;
   readDocument?: DocumentReader;
   maxFileBytes: number;
@@ -200,50 +203,54 @@ export interface ReadFileResult {
   outputTokens: number;
 }
 
+const storeScope = new AsyncLocalStorage<AttachmentTextStore>();
+
+/**
+ * Áp một kho chữ cho MỌI `readAttachmentText` chạy trong `run` (kể cả khi nơi gọi — vd closure `readFile` của assistant-service — không truyền `store`).
+ * Họ `files` dùng để đọc / ghi cache chữ đi qua công cụ MCP trong lượt trợ lý; đường hệ thống (ảnh tự đọc, worker) không bao giờ ở trong phạm vi này.
+ */
+export function withAttachmentTextStore<T>(store: AttachmentTextStore, run: () => Promise<T>): Promise<T> {
+  return storeScope.run(store, run);
+}
+
 /**
  * Chữ của một tệp trong kho: có sẵn trong attachment_text thì trả ngay; chưa thì bóc rồi cất.
  * Tệp quá `maxFileBytes` hoặc chưa tải về kho thì báo rõ (không ném lỗi — mô hình cần câu để nói lại với người hỏi).
  */
 export async function readAttachmentText(deps: FileReaderDeps, attachmentId: number): Promise<ReadFileResult | { error: string }> {
-  const [rows] = await deps.db.query<RowDataPacket[]>(
-    `SELECT a.id, a.file_name, a.file_ext, a.status, a.storage_key, a.stored_bytes,
-            t.method, t.summary, t.text, t.char_count
-     FROM attachment a LEFT JOIN attachment_text t ON t.attachment_id = a.id WHERE a.id = ?`, [attachmentId]);
-  const row = rows[0];
+  const store = deps.store ?? storeScope.getStore() ?? sqlAttachmentTextStore(deps.db);
+  const row = await store.load(attachmentId);
   if (!row) return { error: `Không có tệp #${attachmentId}` };
-  const fileName = String(row.file_name || `tep.${row.file_ext || "bin"}`);
+  const fileName = row.fileName || `tep.${row.fileExt || "bin"}`;
   // Kiểm quyền TRƯỚC cả chữ đã bóc sẵn — quản trị vừa bỏ một loại khỏi danh sách thì bot thôi đọc ngay
-  const ext = extensionOf(fileName, String(row.file_ext ?? ""));
+  const ext = extensionOf(fileName, row.fileExt);
   const access = classifyForReading(ext, deps.allowedExtensions);
   if (access.kind === "video") return { error: `Bot không đọc video (${fileName}).` };
   if (!access.allowed) {
     return { error: `Bot chưa được phép đọc tệp .${ext || "?"} (${fileName}) — quản trị bật ở Cài đặt → «Loại tệp bot được đọc». Đang cho đọc: ${deps.allowedExtensions!.join(", ")}.` };
   }
-  if (row.text !== null && row.text !== undefined) {
-    return { attachmentId, fileName, method: row.method, summary: String(row.summary), text: String(row.text), charCount: Number(row.char_count), cached: true, inputTokens: 0, outputTokens: 0 };
+  if (row.cached) {
+    return { attachmentId, fileName, method: row.cached.method, summary: row.cached.summary, text: row.cached.text, charCount: row.cached.charCount, cached: true, inputTokens: 0, outputTokens: 0 };
   }
-  if (row.status !== AttachmentStatus.Stored || !row.storage_key) return { error: `Tệp «${fileName}» chưa có trong kho (chưa tải về hoặc nhóm không bật lấy file)` };
-  if (Number(row.stored_bytes) > deps.maxFileBytes) {
-    return { error: `Tệp «${fileName}» nặng ${Math.round(Number(row.stored_bytes) / 1024 / 1024)} MB, quá mức ${Math.round(deps.maxFileBytes / 1024 / 1024)} MB bot được đọc` };
+  if (row.status !== AttachmentStatus.Stored || !row.storageKey) return { error: `Tệp «${fileName}» chưa có trong kho (chưa tải về hoặc nhóm không bật lấy file)` };
+  if (Number(row.storedBytes) > deps.maxFileBytes) {
+    return { error: `Tệp «${fileName}» nặng ${Math.round(Number(row.storedBytes) / 1024 / 1024)} MB, quá mức ${Math.round(deps.maxFileBytes / 1024 / 1024)} MB bot được đọc` };
   }
-  const stream = await deps.storage.read(String(row.storage_key));
+  const stream = await deps.storage.read(row.storageKey);
   const chunks: Buffer[] = [];
   for await (const chunk of stream) chunks.push(chunk as Buffer);
   const data = Buffer.concat(chunks);
   let extracted: ExtractedText;
   try {
-    extracted = await extract(deps, { file_name: fileName, file_ext: String(row.file_ext ?? ""), data });
+    extracted = await extract(deps, { file_name: fileName, file_ext: row.fileExt, data });
   } catch (error) {
     return { error: `Không đọc được «${fileName}»: ${error instanceof Error ? error.message : String(error)}` };
   }
   const text = extracted.text.slice(0, MAX_TEXT_CHARS);
-  await deps.db.query(
-    `INSERT INTO attachment_text (attachment_id, method, char_count, summary, text, input_tokens, output_tokens)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE method = VALUES(method), char_count = VALUES(char_count), summary = VALUES(summary), text = VALUES(text),
-       input_tokens = VALUES(input_tokens), output_tokens = VALUES(output_tokens), extracted_at = CURRENT_TIMESTAMP(3)`,
-    [attachmentId, extracted.method, text.length, extracted.summary.slice(0, 500), extracted.method === "unsupported" ? null : text,
-      extracted.inputTokens, extracted.outputTokens]);
+  await store.save(attachmentId, {
+    method: extracted.method, text: extracted.method === "unsupported" ? null : text, summary: extracted.summary,
+    inputTokens: extracted.inputTokens, outputTokens: extracted.outputTokens,
+  });
   if (extracted.method === "unsupported") {
     return { error: `Bot ${extracted.summary} (${fileName}). Đọc được: ${deps.allowedExtensions?.length ? deps.allowedExtensions.join(", ") : "xlsx, docx, pdf, txt, csv, ảnh, ghi âm (mp3, m4a…)"}.` };
   }
