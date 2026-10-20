@@ -37,13 +37,8 @@ export interface AlertRuntime {
   invalidate(): void;
 }
 
-/**
- * Ngữ cảnh của họ `alerts`: `DataAccessContext` + `alertRuntime`. Trường này CHỜ được thêm vào `DataAccessContext` (tệp dùng chung, ngoài quyền phase 10);
- * tới lúc đó đọc qua kiểu hẹp này. Thiếu `alertRuntime` ⇒ công cụ của họ tự ẩn và trợ lý chạy đường cũ.
- */
-export type AlertContext = DataAccessContext & { alertRuntime?: AlertRuntime };
-
-export const alertRuntimeOf = (ctx: DataAccessContext): AlertRuntime | undefined => (ctx as AlertContext).alertRuntime;
+/** Thiếu `alertRuntime` trên ngữ cảnh ⇒ công cụ của họ tự ẩn và trợ lý chạy đường cũ. */
+export const alertRuntimeOf = (ctx: DataAccessContext): AlertRuntime | undefined => ctx.alertRuntime;
 
 export const ALERT_ASKER_REQUIRED = "Công cụ cảnh báo chỉ dành cho quản lý / người nhận báo, trong tin riêng.";
 

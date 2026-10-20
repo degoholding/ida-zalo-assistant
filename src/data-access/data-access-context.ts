@@ -1,6 +1,7 @@
 import { McpCallSource } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import type { ContactActor } from "./actors/contact-actor.js";
+import type { AlertRuntime } from "./alerts/alert-asker-facts.js";
 import { can, canSeeConfidential, type Entity, type Principal } from "../auth/principal.js";
 
 // Ngữ cảnh một lời gọi vào lõi truy cập dữ liệu: AI là AI NÀO của ai, được thấy gì. Mọi hàm của lõi nhận ngữ cảnh này —
@@ -43,6 +44,8 @@ export interface DataAccessContext {
   requestDownload?: (attachmentIds: number[]) => void;
   /** Lưu cài đặt áp nóng (dịch vụ cài đặt) — chỉ ctx trợ lý có, HTTP không. Trả danh sách khóa đã đổi. */
   saveSettings?: (patch: Record<string, unknown>, actor: string) => Promise<string[]>;
+  /** Móc chạy của họ `alerts` (cài đặt đang hiệu lực + nạp lại người nhận / VIP) — chỉ ctx trợ lý của người dùng cảnh báo có; thiếu ⇒ công cụ họ `alerts` ẩn. */
+  alertRuntime?: AlertRuntime;
 }
 
 export interface DataAccessContextInput {
@@ -58,6 +61,7 @@ export interface DataAccessContextInput {
   wakeJobs?: () => void;
   contactActor?: ContactActor;
   saveSettings?: DataAccessContext["saveSettings"];
+  alertRuntime?: AlertRuntime;
 }
 
 /**
@@ -70,7 +74,7 @@ export function buildDataAccessContext(input: DataAccessContextInput): DataAcces
     includeConfidential: canSeeConfidential(input.principal), maskPersonal: input.maskPersonal,
     ownDirectThreadsOnly: input.ownDirectThreadsOnly === true, ownDirectUid: input.ownDirectUid ?? null,
     source: input.source, keyId: input.keyId ?? null, now: input.now ?? new Date(),
-    wakeJobs: input.wakeJobs, contactActor: input.contactActor, saveSettings: input.saveSettings,
+    wakeJobs: input.wakeJobs, contactActor: input.contactActor, saveSettings: input.saveSettings, alertRuntime: input.alertRuntime,
   };
 }
 

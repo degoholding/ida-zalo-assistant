@@ -7,7 +7,7 @@ import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import type { AttachmentTextRecord, AttachmentTextSave, AttachmentTextStore } from "../storage/attachment-text-sql-cache.js";
 import type { FileStorage } from "../storage/file-storage.js";
-import { audioMimeFor, classifyForReading, extensionOf, extractDocx, extractSheet, isRetryableFileSourceUrl, MAX_SHEET_ROWS, readAttachmentText, withAttachmentTextStore } from "./file-reader.js";
+import { audioMimeFor, classifyForReading, extensionOf, extractDocx, extractSheet, isRetryableFileSourceUrl, MAX_SHEET_ROWS, readAttachmentText } from "./file-reader.js";
 
 function docxOf(xml: string): Buffer {
   const name = Buffer.from("word/document.xml");
@@ -122,7 +122,7 @@ test("ảnh Zalo không tên (đuôi điền bù «jpg») nhưng ruột là PNG:
   assert.equal(inserts.length, 1);
 });
 
-// Phase 7 (họ files): kho chữ tiêm được — `readAttachmentText` không còn tự chạm SQL; trợ lý áp kho MCP cho cả lượt bằng `withAttachmentTextStore`
+// Phase 7 (họ files): kho chữ tiêm được — `readAttachmentText` không còn tự chạm SQL; trợ lý truyền kho MCP rõ ràng qua `context.readFile(id, store)`
 const noDb = { query: async () => { throw new Error("không được chạm DB khi đã có kho tiêm"); } } as unknown as Db;
 
 function memoryStore(record: AttachmentTextRecord | null) {
@@ -158,12 +158,4 @@ test("kho tiêm: tệp không có / chưa vào kho / đuôi bị chặn báo nh�
   const outcome = await readAttachmentText({ ...deps, store: unsupported.store, storage: { read: async () => Readable.from([Buffer.from("x")]) } as unknown as FileStorage }, 30);
   assert.match(String((outcome as { error: string }).error), /chưa đọc được đuôi \.bin/);
   assert.equal(unsupported.saved[0].data.text, null);
-});
-
-test("withAttachmentTextStore: kho áp cho cả lượt đè kho SQL mặc định; ngoài phạm vi thì quay lại SQL", async () => {
-  const scoped = memoryStore(csvRecord({ cached: { method: "text", summary: "csv", text: "từ kho MCP", charCount: 10 } }));
-  const deps = { db: noDb, storage: {} as FileStorage, maxFileBytes: 1024 };
-  const inside = await withAttachmentTextStore(scoped.store, () => readAttachmentText(deps, 30));
-  assert.ok(!("error" in inside) && inside.text === "từ kho MCP");
-  await assert.rejects(readAttachmentText(deps, 30), /không được chạm DB/);
 });

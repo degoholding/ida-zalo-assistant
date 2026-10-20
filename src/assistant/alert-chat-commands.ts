@@ -171,7 +171,16 @@ export const alertPendingProvider: PendingStoreProvider = {
     if (!asker || !deps) return null;
     const legacy = await alertPendingProviderLegacy.latest(input);
     const draft = await latestDraft(chat, deps);
-    return draft && (!legacy || draft.at >= legacy.at) ? draftStore(chat, deps, asker, draft) : legacy;
+    if (draft && (!legacy || draft.at >= legacy.at)) return draftStore(chat, deps, asker, draft);
+    if (!legacy || !draft) return legacy;
+    // Kho RAM mới hơn nhưng vẫn còn nháp DB: «hủy» phải bỏ CẢ HAI (như dropPendingChanges cũ), không để nháp DB sống lại ở «đồng ý» sau
+    return {
+      ...legacy,
+      async cancel() {
+        await withSession(chat, deps, TOOLS.drafts, (turn) => call(turn, "alert_config_cancel", {}));
+        return legacy.cancel();
+      },
+    };
   },
 };
 

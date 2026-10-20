@@ -33,7 +33,8 @@ import { ConcurrencyGate } from "../src/mcp/mcp-concurrency-gate.js";
 import { findContactByUid } from "../src/sync/contact-repository.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
-const NOW = new Date("2026-10-20T05:00:00Z");
+// Giờ thật (tròn phút): nháp hết hạn theo đồng hồ thật ở vài nhánh — giờ cứng sẽ thành «bom hẹn giờ» sau 10–15 phút
+const NOW = new Date(Math.floor(Date.now() / 60_000) * 60_000);
 const TABLES = ["mcp_call_log", "mcp_write_draft", "assistant_turn", "message_flag", "job", "recipient_vip", "recipient_group", "recipient", "attachment", "message",
   "group_member", "bot_group", "zalo_group", "contact_tag", "contact", "company", "session_event", "bot_account", "user_group_scope", "app_user", "audit_log"];
 

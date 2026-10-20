@@ -404,12 +404,8 @@ describe("họ tasks qua MCP (phase 9)", { skip: !databaseUrl && "chưa đặt T
     } finally {
       await turn.close();
     }
-    const readLogs = () => rows("SELECT tool, source, contact_id, key_id FROM mcp_call_log WHERE tool IN ('task_action', 'task_list_for_actor') ORDER BY id");
-    let logs = await readLogs();
-    for (let attempt = 0; attempt < 40 && logs.length < 2; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      logs = await readLogs();
-    }
+    // Wrapper đợi ghi nhật ký xong trước khi trả lời ⇒ đọc thẳng, thứ tự theo lời gọi (không đợi / không chạy đua)
+    const logs = await rows("SELECT tool, source, contact_id, key_id FROM mcp_call_log WHERE tool IN ('task_action', 'task_list_for_actor') ORDER BY id");
     assert.deepEqual(logs.map((row) => [row.tool, row.source]), [["task_action", 2], ["task_list_for_actor", 3]]);
     assert.ok(logs.every((row) => row.contact_id === personas.assigner.contactId && row.key_id === null));
     const external = new Set(toolsFor({ ...access, contactActor: undefined }, "mcp_http", ALL_TOOLS).map((tool) => tool.name));

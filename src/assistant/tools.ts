@@ -7,6 +7,7 @@ import type { RecapDriveRecording } from "./drive-recap-tool.js";
 import type { ReadLink } from "./read-link-tool.js";
 import type { MeetingCreator } from "./meeting-tool.js";
 import type { ReadFileResult } from "./file-reader.js";
+import type { AttachmentTextStore } from "../storage/attachment-text-sql-cache.js";
 import type { AskerAccess } from "./infra/asker-access.js";
 import { MAX_FILES_PER_TURN } from "./file-access-tools.js";
 import type { FunctionDeclaration, WebSearchResult } from "./gemini-client.js";
@@ -44,7 +45,8 @@ export interface ToolContext {
   searchWeb?: (query: string) => Promise<WebSearchResult>;
   usage?: { inputTokens: number; outputTokens: number };
   /** Đọc chữ của một tệp trong kho (file-reader). Không có = bot không có công cụ read_file. */
-  readFile?: (attachmentId: number) => Promise<ReadFileResult | { error: string }>;
+  /** `store` = kho chữ do nơi gọi chọn (họ `files` qua MCP); bỏ trống = kho SQL mặc định. */
+  readFile?: (attachmentId: number, store?: AttachmentTextStore) => Promise<ReadFileResult | { error: string }>;
   /** Tệp Skip/Failed/Pending còn link Zalo (`source_url`) — người hỏi CHỦ ĐỘNG muốn đọc (read_file) thì đưa lại hàng
    * tải rồi CHỜ ít lâu trong lượt hỏi này. Không có = không tự tải lại, báo luôn «chưa có trong kho» như trước. */
   requestFileDownload?: (attachmentId: number) => Promise<"stored" | "pending" | "failed">;

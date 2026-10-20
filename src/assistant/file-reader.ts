@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import * as XLSX from "xlsx";
 import { AttachmentStatus } from "../constants.js";
 import type { Db } from "../db/pool.js";
@@ -26,9 +25,9 @@ export interface ExtractedText {
 export type DocumentReader = (mime: string, data: Buffer, instruction: string) => Promise<{ text: string; inputTokens: number; outputTokens: number }>;
 
 export interface FileReaderDeps {
-  /** Dùng cho kho SQL mặc định; có `store` (hoặc đang trong `withAttachmentTextStore`) thì không dùng tới. */
+  /** Dùng cho kho SQL mặc định; có `store` thì không dùng tới. */
   db: Db;
-  /** Kho chữ đã bóc: dòng tệp + cache. Bỏ trống = kho đang áp ở lượt trợ lý (`withAttachmentTextStore`), không có thì kho SQL của `db`. */
+  /** Kho chữ đã bóc: dòng tệp + cache. Bỏ trống = kho SQL của `db`; lượt trợ lý có họ `files` truyền kho MCP rõ ràng. */
   store?: AttachmentTextStore;
   storage: FileStorage;
   readDocument?: DocumentReader;
@@ -203,22 +202,12 @@ export interface ReadFileResult {
   outputTokens: number;
 }
 
-const storeScope = new AsyncLocalStorage<AttachmentTextStore>();
-
-/**
- * Áp một kho chữ cho MỌI `readAttachmentText` chạy trong `run` (kể cả khi nơi gọi — vd closure `readFile` của assistant-service — không truyền `store`).
- * Họ `files` dùng để đọc / ghi cache chữ đi qua công cụ MCP trong lượt trợ lý; đường hệ thống (ảnh tự đọc, worker) không bao giờ ở trong phạm vi này.
- */
-export function withAttachmentTextStore<T>(store: AttachmentTextStore, run: () => Promise<T>): Promise<T> {
-  return storeScope.run(store, run);
-}
-
 /**
  * Chữ của một tệp trong kho: có sẵn trong attachment_text thì trả ngay; chưa thì bóc rồi cất.
  * Tệp quá `maxFileBytes` hoặc chưa tải về kho thì báo rõ (không ném lỗi — mô hình cần câu để nói lại với người hỏi).
  */
 export async function readAttachmentText(deps: FileReaderDeps, attachmentId: number): Promise<ReadFileResult | { error: string }> {
-  const store = deps.store ?? storeScope.getStore() ?? sqlAttachmentTextStore(deps.db);
+  const store = deps.store ?? sqlAttachmentTextStore(deps.db);
   const row = await store.load(attachmentId);
   if (!row) return { error: `Không có tệp #${attachmentId}` };
   const fileName = row.fileName || `tep.${row.fileExt || "bin"}`;

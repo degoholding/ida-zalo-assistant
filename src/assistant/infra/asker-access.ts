@@ -70,6 +70,8 @@ export interface ResolveAskerOptions {
   /** Móc áp cho ctx trợ lý: đánh thức việc nền sau ghi, lưu cài đặt áp nóng (phase 10). */
   wakeJobs?: () => void;
   saveSettings?: DataAccessContext["saveSettings"];
+  /** Móc họ `alerts` — chỉ đặt cho người dùng cảnh báo (tin riêng, `resolveAlertAsker` khác null). */
+  alertRuntime?: DataAccessContext["alertRuntime"];
   /** Tắt dòng log «lượt hỏi» (lần dò chỉ để kiểm cổng, không phải lượt hỏi thật). */
   quiet?: boolean;
 }
@@ -201,7 +203,7 @@ export async function resolveAskerAccess(db: Db, contact: AskerContact, options:
   const access = buildDataAccessContext({
     db, principal, allowWrite: false, maskPersonal: options.maskPersonal, source: McpCallSource.Assistant, now: options.now,
     ownDirectThreadsOnly: true, ownDirectUid: options.webViewer ? null : contact.zalo_uid,
-    wakeJobs: options.wakeJobs, saveSettings: options.saveSettings,
+    wakeJobs: options.wakeJobs, saveSettings: options.saveSettings, alertRuntime: options.alertRuntime,
     contactActor: askerContactActor(db, contact, origin, options.groupScopeId, options.turn),
   });
   if (!options.quiet) log.info(`lượt hỏi: người hỏi #${contact.id} · nguồn ${origin}${principal.userId ? ` · tài khoản #${principal.userId}` : ""} · Mật ${access.includeConfidential ? "bật" : "tắt"}`);

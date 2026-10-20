@@ -1,5 +1,4 @@
-import { BRIEF_TOOL_PROMPT } from "../../briefs/brief-tool-prompt.js";
-import { MEETING_ANNOUNCE_TOOL_PROMPT, PIN_TOOL_PROMPT, REMINDER_TOOL_PROMPT, SEND_TOOL_PROMPT } from "../../send-commands/send-tool-prompts.js";
+import { REMINDER_TOOL_PROMPT, SEND_TOOL_PROMPT } from "../../send-commands/send-tool-prompts.js";
 import { BRIEF_CHECK_TOOLS } from "../send/brief-request-check-tool.js";
 import { SEND_CONTEXT_TOOLS } from "../send/send-context-tool.js";
 import { SEND_DRAFT_TOOLS } from "../send/send-draft-tools.js";
@@ -13,11 +12,11 @@ import type { FamilyCatalog } from "./family-catalog.js";
 // - Ngoài MCP (O6): gửi Zalo thật (việc nền), Google Calendar / Meet (`propose_group_pin`, `propose_meeting_announcement` chọn cuộc họp ở phía trợ lý rồi ghi nháp qua
 //   `send_pin_draft_create` / `send_draft_create`), điểm tin AI + PDF / Excel của bản tin (`send_brief`).
 // `actions` rỗng: nháp gửi có kho + `confirm` riêng (`send_draft_confirm`), không đi qua `confirm_draft` của kho `mcp_write_draft`.
-// Lời nhắc: gồm cả lời nhắc của ba công cụ vẫn ở phía trợ lý (ghim, lời mời họp, `send_brief`) — lời nhắc cũ của họ bị bộ chuyển gỡ khi họ có công cụ trên danh sách
-// (legacy-family-prompts.ts), nên phải mang đủ để mô hình không mất hướng dẫn công cụ còn khai báo cũ.
+// Lời nhắc: CHỈ hai công cụ lên máy chủ (gửi tin, nhắc hẹn). Lời nhắc ghim / lời mời họp / `send_brief` (công cụ còn chạy phía trợ lý) do system prompt thêm
+// theo điều kiện từng công cụ — `legacy-family-prompts.ts` (send) gỡ đúng hai lời nhắc này nên không mất, không trùng.
 export const sendFamilyCatalog: FamilyCatalog = {
   family: "send",
   tools: [...SEND_DRAFT_TOOLS, ...SEND_CONTEXT_TOOLS, ...SEND_LIFECYCLE_TOOLS, ...BRIEF_CHECK_TOOLS],
   actions: [],
-  instructions: [SEND_TOOL_PROMPT, REMINDER_TOOL_PROMPT, PIN_TOOL_PROMPT, MEETING_ANNOUNCE_TOOL_PROMPT, BRIEF_TOOL_PROMPT].map((prompt) => prompt.trim()).join("\n\n"),
+  instructions: [SEND_TOOL_PROMPT, REMINDER_TOOL_PROMPT].map((prompt) => prompt.trim()).join("\n\n"),
 };

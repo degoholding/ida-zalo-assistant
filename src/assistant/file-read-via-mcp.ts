@@ -1,13 +1,12 @@
 import { AttachmentTextDeniedError } from "../storage/attachment-text-sql-cache.js";
 import { mcpAttachmentTextStore, recordFromPrepare } from "./attachment-text-mcp-cache.js";
 import { callFilesCommand } from "./files-command-call.js";
-import { withAttachmentTextStore } from "./file-reader.js";
 import { NOT_STORED_ERROR_PATTERN, shapeReadFileResult } from "./file-tool-shared.js";
 import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
 import type { ToolContext } from "./tools.js";
 
 // `read_file` khi họ `files` bật: kiểm quyền + lấy chữ cache qua công cụ lệnh `file_read_prepare`; chưa có chữ thì tải kho + AI bóc (TÁC ĐỘNG NGOÀI — vẫn ở phía trợ lý, qua
-// `context.readFile` = `readAttachmentText`) và cache ghi qua `file_text_store` (kho chữ MCP áp bằng `withAttachmentTextStore`). Câu trả lời / lỗi cho mô hình y đường cũ.
+// `context.readFile` = `readAttachmentText`) và cache ghi qua `file_text_store` (kho chữ MCP truyền thẳng cho `context.readFile`). Câu trả lời / lỗi cho mô hình y đường cũ.
 
 export async function readFileViaMcp(mcp: AssistantMcpTurn, context: ToolContext, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   if (!context.readFile) return { error: "Bot chưa bật đọc tệp" };
@@ -20,7 +19,7 @@ export async function readFileViaMcp(mcp: AssistantMcpTurn, context: ToolContext
   const store = mcpAttachmentTextStore(call, recordFromPrepare(prepared));
   const read = async () => {
     try {
-      return await withAttachmentTextStore(store, () => context.readFile!(attachmentId));
+      return await context.readFile!(attachmentId, store);
     } catch (error) {
       if (error instanceof AttachmentTextDeniedError) return { error: error.message };
       throw error;

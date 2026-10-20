@@ -1,10 +1,7 @@
-import { BRIEF_TOOL_PROMPT } from "../../briefs/brief-tool.js";
 import type { AssistantFamily } from "../../data-access/tool-definition.js";
 import { QUERY_METRICS_PROMPT } from "../../metrics/metric-query-tool.js";
 import { SUGGEST_REPLIES_PROMPT } from "../../reply-suggestions/reply-suggestion-tool.js";
-import { MEETING_ANNOUNCE_TOOL_PROMPT } from "../../send-commands/send-meeting-announcement-tool.js";
 import { SEND_TOOL_PROMPT } from "../../send-commands/send-command-tool.js";
-import { PIN_TOOL_PROMPT } from "../../send-commands/send-pin-tool.js";
 import { REMINDER_TOOL_PROMPT } from "../../send-commands/send-reminder-tool.js";
 import { TASK_TOOLS_PROMPT } from "../../tasks/task-tools.js";
 import { TICKET_TOOLS_PROMPT } from "../../tickets/ticket-tools.js";
@@ -23,5 +20,6 @@ export const LEGACY_FAMILY_PROMPTS: Readonly<Record<AssistantFamily, readonly st
   tasks: [TASK_TOOLS_PROMPT],
   alerts: [ALERT_TOOLS_PROMPT],
   metrics: [QUERY_METRICS_PROMPT],
-  send: [SEND_TOOL_PROMPT, REMINDER_TOOL_PROMPT, PIN_TOOL_PROMPT, MEETING_ANNOUNCE_TOOL_PROMPT, BRIEF_TOOL_PROMPT],
+  // Ghim / lời mời họp / send_brief còn chạy phía trợ lý: lời nhắc của chúng ở lại system prompt (thêm theo điều kiện từng công cụ)
+  send: [SEND_TOOL_PROMPT, REMINDER_TOOL_PROMPT],
 };

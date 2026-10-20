@@ -98,7 +98,7 @@ describe("họ files: đường cũ = đường MCP trên MySQL thật", { skip:
     await turn.model();
     const base = (): ToolContext => ({
       db, askerUid: uid, access, filesToSend: [], now: NOW, scopeGroupId: options.groupScopeId, question: "đọc link giúp",
-      readFile: (id) => readAttachmentText({ db, storage, maxFileBytes: 5 * 1024 * 1024 }, id),
+      readFile: (id, store) => readAttachmentText({ db, storage, maxFileBytes: 5 * 1024 * 1024, store }, id),
       readLink: async () => ({ how: "web", text: "NỘI DUNG LINK", inputTokens: 0, outputTokens: 0 }) as never,
       replySuggestion: options.groupScopeId === undefined ? { db, model: draftModel(), usage: { inputTokens: 0, outputTokens: 0 }, maskPersonal: options.maskPersonal ?? false, now: NOW,
         tenantId: 1, askerContactId: contact.id, askerUid: uid } : undefined,
@@ -225,7 +225,7 @@ describe("họ files: đường cũ = đường MCP trên MySQL thật", { skip:
     assert.deepEqual(rig.mcp.filesToSend, [ids.fileG1, ids.fileG2, ids.fileM]);
   });
 
-  /** Nhật ký gọi ghi KHÔNG chặn lời gọi (xong sau) — chờ ghi xong rồi mới đọc. */
+  /** Wrapper đợi ghi nhật ký xong trước khi trả lời; chờ ngắn chỉ để chắc chắn. */
   async function callLog(): Promise<{ tool: string; source: number; status: number }[]> {
     await new Promise((resolve) => setTimeout(resolve, 150));
     const [rows] = await db.query<RowDataPacket[]>("SELECT tool, source, status FROM mcp_call_log ORDER BY id");

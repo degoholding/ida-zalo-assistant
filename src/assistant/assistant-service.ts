@@ -29,7 +29,7 @@ import { applyMcpTurnPrompt, applyMcpTurnTools, loadMcpTurnTools } from "./mcp-b
 import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, runTool, type ToolContext } from "./tools.js";
 import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
 import { maskPersonalDataDeep } from "../privacy/personal-data.js";
-import { ALERT_TOOL_DECLARATIONS, ALERT_TOOLS_PROMPT, resolveAlertAsker, type AlertToolsDeps } from "./alert-tools.js";
+import { alertRuntimeFromDeps, alertToolDeclarations, ALERT_TOOLS_PROMPT, resolveAlertAsker, type AlertAsker, type AlertToolsDeps } from "./alert-tools.js";
 import { parseChatCommand, runChatCommand } from "./chat-commands.js";
 import { buildTicketContext } from "../tickets/ticket-commands.js";
 import { TICKET_TOOL_DECLARATIONS, TICKET_TOOLS_PROMPT } from "../tickets/ticket-tools.js";
@@ -166,6 +166,16 @@ export class AssistantService {
    * đi vào mô hình — nơi gọi dùng để nhắn «em nhận được rồi» nếu câu trả lời lâu.
    */
   async answer(request: AssistantRequest, hooks: { onAccepted?: () => void } = {}): Promise<AssistantReply> {
+    // Phiên MCP của lệnh dùng chung cả lượt (ngữ cảnh lệnh gửi mở nó ở MỌI tin riêng): đóng ở cuối MỌI đường thoát, không để rò
+    const commandSession: { turn?: AssistantMcpTurn } = {};
+    try {
+      return await this.answerTurn(request, hooks, commandSession);
+    } finally {
+      await commandSession.turn?.close();
+    }
+  }
+
+  private async answerTurn(request: AssistantRequest, hooks: { onAccepted?: () => void }, commandSession: { turn?: AssistantMcpTurn }): Promise<AssistantReply> {
     const started = Date.now();
     const now = this.clock();
 
@@ -176,16 +186,21 @@ export class AssistantService {
     let accessPromise: Promise<AskerAccess> | null = null;
     const turn = { threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId };
     const groupId = request.groupScope?.groupId;
-    const accessOnce = () => (accessPromise ??= request.access
+    // Người nhận cảnh báo (asker.recipientId) dùng chung cho công cụ cảnh báo, lệnh bản tin và móc `alertRuntime` của ctx — dựng MỘT lần mỗi lượt
+    // khi một trong hai bật (một bot có thể bật bản tin mà chưa bật cảnh báo qua chat); hỏi trong nhóm không có
+    let askerPromise: Promise<AlertAsker | null> | null = null;
+    const askerOnce = () => (askerPromise ??= !request.groupScope && (this.options.alertTools || this.options.briefs)
+      ? resolveAlertAsker(this.db, request.contact) : Promise.resolve(null));
+    // Móc họ `alerts` của ctx: chỉ khi bot có công cụ cảnh báo VÀ người hỏi là người dùng cảnh báo (không thì công cụ họ không lên ⇒ đường cũ)
+    const alertRuntimeOnce = async () => (this.options.alertTools && await askerOnce() ? alertRuntimeFromDeps(this.options.alertTools) : undefined);
+    const accessOnce = () => (accessPromise ??= (async () => {
+      const hooks = { wakeJobs: tickets?.wakeJobs, saveSettings: this.options.alertTools?.saveSettings, alertRuntime: await alertRuntimeOnce() };
       // Phân giải sẵn ở nơi gọi (cổng nhóm Mật): chỉ thêm cuộc + tin của lượt vào chủ thể liên hệ (và móc nền)
-      ? Promise.resolve({ ...request.access, now, wakeJobs: tickets?.wakeJobs, saveSettings: this.options.alertTools?.saveSettings,
-        contactActor: askerContactActor(this.db, request.contact, request.access.origin, groupId, turn) })
-      : resolveAskerAccess(this.db, request.contact, {
-        groupScopeId: groupId, maskPersonal: Boolean(this.options.privacy?.maskPersonalData), now, webViewer: request.webViewer,
-        turn, wakeJobs: tickets?.wakeJobs, saveSettings: this.options.alertTools?.saveSettings }));
-    // Phiên MCP của lệnh gõ (mặt `assistant_command`): mở lười khi lệnh cần (đồng ý / hủy nháp ghi, lệnh ticket / việc / số liệu của họ đã bật); đóng ngay sau lệnh
-    let commandTurn: AssistantMcpTurn | undefined;
-    const commandMcp = async () => (commandTurn ??= openMcpTurn(await accessOnce(), resolveAssistantMcpBridge(this.options.mcpBridge), { wakeJobs: tickets?.wakeJobs, requestDownload: tickets?.requestDownload }));
+      if (request.access) return { ...request.access, now, ...hooks, contactActor: askerContactActor(this.db, request.contact, request.access.origin, groupId, turn) };
+      return resolveAskerAccess(this.db, request.contact, { groupScopeId: groupId, maskPersonal: Boolean(this.options.privacy?.maskPersonalData), now, webViewer: request.webViewer, turn, ...hooks });
+    })());
+    // Phiên MCP của lệnh gõ (mặt `assistant_command`): mở lười khi lệnh cần (đồng ý / hủy nháp ghi, lệnh ticket / việc / số liệu / gửi / bản tin của họ đã bật); `answer()` đóng ở cuối mọi đường thoát
+    const commandMcp = async () => (commandSession.turn ??= openMcpTurn(await accessOnce(), resolveAssistantMcpBridge(this.options.mcpBridge), { wakeJobs: tickets?.wakeJobs, requestDownload: tickets?.requestDownload }));
     const ticket = tickets ? buildTicketContext(tickets, {
       contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role },
       threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
@@ -194,27 +209,22 @@ export class AssistantService {
     // Việc (checklist, phase 7) đi cùng ticket: cùng hàng đợi báo tin
     const task = tickets ? buildTaskContext({ db: this.db, wakeJobs: tickets.wakeJobs }, {
       contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role, kind: request.contact.kind },
-      threadId: request.threadId, messageId: request.questionMessageId, groupId: request.groupScope?.groupId ?? null, access: accessOnce,
+      threadId: request.threadId, messageId: request.questionMessageId, groupId: request.groupScope?.groupId ?? null, access: accessOnce, mcp: commandMcp,
     }) : undefined;
+    // Tra bản tin (lệnh gõ + công cụ send_brief) đi qua phiên lệnh dùng chung của lượt khi họ `send` bật
+    const briefDeps: BriefChatDeps | undefined = this.options.briefs ? { ...this.options.briefs, mcp: commandMcp, access: accessOnce } : undefined;
     // Lệnh gửi tin chỉ ở tin riêng Zalo thật; câu trả lời của lệnh gõ đã nằm trong runChatCommand
     const send = !request.groupScope && this.options.sendCommands
-      ? await buildSendChatContext(this.options.sendCommands, request) : null;
+      ? await buildSendChatContext(this.options.sendCommands, { ...request, askerAccess: accessOnce, commandMcp }) : null;
     const command = parseChatCommand(request.question);
     if (command) {
       const alertTools = this.options.alertTools;
-      const brief = this.options.briefs;
-      // Người nhận cảnh báo (asker.recipientId) dùng chung cho cả công cụ cảnh báo lẫn lệnh bản tin — dựng asker khi
-      // một trong hai bật, không chỉ khi có alertTools (một bot có thể bật bản tin mà chưa bật cảnh báo qua chat)
-      const asker = !request.groupScope && (alertTools || brief) ? await resolveAlertAsker(this.db, request.contact) : null;
+      const brief = briefDeps;
+      const asker = await askerOnce();
       const contact = request.contact;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
-      let text: string | null;
-      try {
-        text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce, mcp: commandMcp, wakeJobs: tickets?.wakeJobs }, command);
-      } finally {
-        await commandTurn?.close();
-      }
+      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce, mcp: commandMcp, wakeJobs: tickets?.wakeJobs }, command);
       if (text !== null) {
         await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: "code" in command && command.code ? { ...command, code: "[đã ẩn]" } : command }], model: "lệnh" });
         return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };
@@ -271,8 +281,8 @@ export class AssistantService {
         : undefined,
       searchWeb: this.buildWebSearch(),
       readFile: storage
-        ? (attachmentId) => readAttachmentText({ db: this.db, storage, readDocument, maxFileBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024,
-          allowedExtensions: this.options.readableFileTypes, heavyExtract: this.options.heavyExtract }, attachmentId)
+        ? (attachmentId, store) => readAttachmentText({ db: this.db, storage, readDocument, maxFileBytes: this.options.maxReadFileBytes ?? 5 * 1024 * 1024,
+          allowedExtensions: this.options.readableFileTypes, heavyExtract: this.options.heavyExtract, store }, attachmentId)
         : undefined,
       requestFileDownload: this.options.requestFileDownload,
       markHeavy: () => { heavy = true; },
@@ -311,16 +321,16 @@ export class AssistantService {
     }
     // Công cụ cảnh báo + công cụ bản tin (send_brief): chỉ tin riêng, người hỏi có vai trò hoặc là người nhận — một
     // lượt resolveAlertAsker dùng chung cho cả hai (asker.recipientId quyết định có công cụ send_brief hay không)
-    const asker = !scope && (this.options.alertTools || this.options.briefs) ? await resolveAlertAsker(this.db, request.contact) : null;
+    const asker = await askerOnce();
     const alertAsker = this.options.alertTools ? asker : null;
     if (alertAsker) {
       context.alertTools = this.options.alertTools;
       context.alertAsker = alertAsker;
       context.turnStartedAt = Date.now();
     }
-    const briefAsker = this.options.briefs && asker?.recipientId ? asker : null;
+    const briefAsker = briefDeps && asker?.recipientId ? asker : null;
     if (briefAsker) {
-      context.brief = this.options.briefs;
+      context.brief = briefDeps;
       context.briefAsker = briefAsker;
     }
     // Công cụ đề xuất gửi tin: tin riêng Zalo thật + người hỏi đủ quyền (quyền kiểm lại ở createDraft)
@@ -351,7 +361,7 @@ export class AssistantService {
       ...(scope?.actions ? GROUP_ACTION_DECLARATIONS : []),
       ...(this.options.meetingScheduler?.connected ? [CREATE_MEETING_DECLARATION, ...MEETING_MANAGE_DECLARATIONS] : []),
       ...(onDemandRecapAvailable ? [RECAP_DRIVE_RECORDING_DECLARATION] : []),
-      ...(alertAsker ? ALERT_TOOL_DECLARATIONS : []),
+      ...(alertAsker ? alertToolDeclarations(Boolean(mcpTools?.names.has("propose_alert_change"))) : []),
       ...(ticket ? TICKET_TOOL_DECLARATIONS : []),
       ...(task ? TASK_TOOL_DECLARATIONS : []),
       ...(briefAsker ? [SEND_BRIEF_DECLARATION] : []),

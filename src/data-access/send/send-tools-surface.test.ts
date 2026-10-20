@@ -36,9 +36,8 @@ test("available: không chủ thể liên hệ → ẩn hết; có đăng ký nh
   assert.equal(byName("propose_send_message").available({ contactActor: { ...actor, groupId: 5 } } as DataAccessContext), false, "hỏi trong nhóm thì ẩn");
 });
 
-test("lời nhắc của họ mang đủ năm lời nhắc cũ (bộ chuyển gỡ lời nhắc cũ khi họ có công cụ trên danh sách)", () => {
-  for (const marker of ["propose_send_message", "propose_group_reminder", "propose_group_pin", "propose_meeting_announcement", "send_brief"]) {
-    assert.ok(sendFamilyCatalog.instructions.includes(marker), marker);
-  }
+test("lời nhắc của họ chỉ mang hai lời nhắc của công cụ lên máy chủ (gửi, nhắc hẹn); ghim / lời mời họp / bản tin ở lại system prompt", () => {
+  for (const marker of ["propose_send_message", "propose_group_reminder"]) assert.ok(sendFamilyCatalog.instructions.includes(marker), marker);
+  for (const marker of ["propose_group_pin", "propose_meeting_announcement", "send_brief"]) assert.ok(!sendFamilyCatalog.instructions.includes(marker), marker);
   assert.deepEqual(sendFamilyCatalog.actions, []);
 });

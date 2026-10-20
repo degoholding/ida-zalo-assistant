@@ -39,7 +39,8 @@ import { isTicketVisible, overseerPart } from "../src/tickets/ticket-visibility.
 import { contactScopeSql } from "../src/web/api/scope.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
-const NOW = new Date("2026-10-20T05:00:00Z");
+// Giờ thật (tròn phút): nháp hết hạn theo đồng hồ thật ở vài nhánh — giờ cứng sẽ thành «bom hẹn giờ» sau 10–15 phút
+const NOW = new Date(Math.floor(Date.now() / 60_000) * 60_000);
 const TABLES = ["mcp_call_log", "mcp_write_draft", "assistant_turn", "ticket_event", "ticket_attachment", "ticket_handler", "ticket", "job", "message",
   "group_member", "bot_group", "zalo_group", "contact_tag", "contact", "company", "session_event", "bot_account", "user_group_scope", "app_user", "recipient_group",
   "recipient"];
@@ -140,15 +141,17 @@ describe("chủ thể liên hệ Zalo (phase 5)", { skip: !databaseUrl && "chưa
   });
 
   test("trần nháp mở tính theo (liên hệ, nguồn): hai liên hệ không tài khoản không chặn nhau", async () => {
+    // Nháp chèn sẵn tạo từ 5 phút trước: chỉ chiếm trần 20 nháp MỞ, không tính vào nhịp 10 đề xuất / phút
+    const OLD_DRAFT_AT = new Date(NOW.getTime() - 5 * 60_000);
     const a = await insertContact("u-a", "A");
     const b = await insertContact("u-b", "B");
     const tool = proposeTool(eraseAction({ ...demoAction } as unknown as WriteAction<{ title: string }>));
-    for (let i = 0; i < 10; i++) await db.query("INSERT INTO mcp_write_draft (user_id, contact_id, source, tool, target_entity, payload_json, payload_hash, code_hash, expires_at) VALUES (NULL, ?, 2, 't', 'task', '{}', ?, ?, ?)",
-      [a, `h${i}`, `c${i}`, new Date(NOW.getTime() + 60_000)]);
+    for (let i = 0; i < 10; i++) await db.query("INSERT INTO mcp_write_draft (user_id, contact_id, source, tool, target_entity, payload_json, payload_hash, code_hash, expires_at, created_at) VALUES (NULL, ?, 2, 't', 'task', '{}', ?, ?, ?, ?)",
+      [a, `h${i}`, `c${i}`, new Date(NOW.getTime() + 60_000), OLD_DRAFT_AT]);
     const blocked = await runTool(tool, assistantCtx(a, "u-a"), { title: "x" });
     assert.equal(blocked.isError, false, "10 nháp mở chưa chạm trần 20");
-    for (let i = 10; i < 20; i++) await db.query("INSERT INTO mcp_write_draft (user_id, contact_id, source, tool, target_entity, payload_json, payload_hash, code_hash, expires_at) VALUES (NULL, ?, 2, 't', 'task', '{}', ?, ?, ?)",
-      [a, `h${i}`, `c${i}`, new Date(NOW.getTime() + 60_000)]);
+    for (let i = 10; i < 20; i++) await db.query("INSERT INTO mcp_write_draft (user_id, contact_id, source, tool, target_entity, payload_json, payload_hash, code_hash, expires_at, created_at) VALUES (NULL, ?, 2, 't', 'task', '{}', ?, ?, ?, ?)",
+      [a, `h${i}`, `c${i}`, new Date(NOW.getTime() + 60_000), OLD_DRAFT_AT]);
     assert.equal((await runTool(tool, assistantCtx(a, "u-a"), { title: "y" })).isError && "rate_limited", "rate_limited");
     assert.equal((await runTool(tool, assistantCtx(b, "u-b"), { title: "z" })).isError, false);
   });

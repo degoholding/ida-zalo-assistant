@@ -217,7 +217,9 @@ describe("họ send qua MCP (phase 12)", { skip: !databaseUrl && "chưa đặt T
     }
     await assert.rejects(turn.callTool("assistant_model", "send_draft_confirm", { command_id: 1 }));
     await assert.rejects(turn.callTool("assistant_model", "send_draft_create", { question: "x", target_names: [], schedule_text: "", body: "", with_recent_files: false }));
-    assert.ok(model.instructions.includes("propose_send_message") && model.instructions.includes("send_brief"));
+    // Chỉ hai công cụ lên máy chủ mang lời nhắc; ghim / lời mời họp / send_brief ở lại system prompt theo điều kiện từng công cụ
+    assert.ok(model.instructions.includes("propose_send_message") && model.instructions.includes("propose_group_reminder"));
+    assert.ok(!model.instructions.includes("send_brief") && !model.instructions.includes("propose_group_pin"));
     const external = new Set(toolsFor(access, "mcp_http", ALL_TOOLS).map((tool) => tool.name));
     for (const name of ["propose_send_message", "propose_group_reminder", ...SEND_TOOL_NAMES]) assert.ok(!external.has(name), `cổng ngoài lộ ${name}`);
     const bare = new Set(toolsFor({ ...access, contactActor: undefined }, "assistant_model", ALL_TOOLS).map((tool) => tool.name));

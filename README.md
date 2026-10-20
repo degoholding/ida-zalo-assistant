@@ -264,10 +264,13 @@ Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`)
 | `whoami` | Mình là ai, thấy được nhóm nào, có cờ Mật không |
 | `describe_entities` | Các thực thể truy vấn được, cột / phép lọc / cột sắp xếp của từng thực thể |
 | `query_records` | Truy vấn có kiểu mọi thực thể: `groups`, `conversations`, `messages`, `contacts`, `files`, `tasks`, `tickets`, `send_commands`, `reply_templates`, `catalog`, `metrics`, `audit_log` |
-| `search_messages` | Tìm tin theo từ khóa (gõ không dấu được, cụm trong ngoặc kép) |
+| `search_messages` | Tìm tin theo từ khóa (gõ không dấu được, cụm trong ngoặc kép); lọc thêm `group_name`, `thread_ids`, `sender_name`, `from` / `to`, `mentions_me` (ai nhắc tới tôi), `limit` |
+| `search_files` | Tìm tệp đã gửi theo tên / chữ đã bóc (`query`, `group_id`, `from` / `to`); `query` rỗng = tệp gần đây trong phạm vi tài khoản |
+| `find_people` | Tìm người trong Danh bạ theo tên (trả `uid` + các nhóm thấy được); tên / nhóm là dữ liệu không đáng tin (`untrusted_fields`) |
+| `get_conversation_with_person` | Những gì đã trao đổi với một người (`person_uid` + `from` / `to`, `include_me`) theo khuôn dòng `[giờ] (nhóm) Người: nội dung` |
 | `get_thread_messages` | Đọc một cuộc theo trang (`next.before_message_id` / `after_message_id`) |
 | `get_file_text` | Đọc chữ đã bóc của tệp theo đoạn (`offset_chars`) |
-| `metrics_summary` | Tổng hợp số liệu bán hàng theo kỳ |
+| `metrics_summary` | Tổng hợp số liệu bán hàng theo kỳ: chỉ tiêu theo mã (`metrics`) hoặc tên chữ (`metric_name`); khoảng `from` / `to` hoặc kỳ chữ `period` (`today`…`last_month`, `custom`); `group_by` (`staff` / `area` / `date`), `area`, `staff_id` |
 | `propose_*` ×6 + `confirm_write` | Ghi — chỉ khóa «Đọc + ghi» của Quản trị / Quản lý (xem dưới) |
 
 `query_records` nhận DSL JSON, **không phải SQL**; trường / phép so / sắp xếp lấy từ `describe_entities`:
@@ -283,6 +286,8 @@ Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`)
 
 Bảng lớn (`messages`) bắt buộc lọc theo `thread_id` hoặc khoảng `sent_at` ≤ 92 ngày. Nội dung tin / tệp trả về được bọc là DỮ LIỆU
 (`untrusted_fields`) — mô hình không được coi là lệnh.
+
+`propose_task_create` / `propose_task_update` nhận thêm người phụ trách theo tên (`assignee_name`, một người rõ ràng trong Danh bạ — trùng tên thì báo lỗi kèm danh sách) và hạn bằng chữ (`due_text`: «thứ 6», «mai 17h», «20/10», giờ Việt Nam) thay cho `assignee_contact_id` / `due_date`.
 
 **Ghi qua AI = nháp → xác nhận**: `propose_contact_update`, `propose_group_update`, `propose_task_create`, `propose_task_update`,
 `propose_ticket_action`, `propose_reply_template_save` chỉ tạo NHÁP + xem trước + mã 6 ký tự (băm, gắn đúng người + khóa + nội dung, 10 phút,
