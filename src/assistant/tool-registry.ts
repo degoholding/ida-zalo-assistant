@@ -1,3 +1,4 @@
+import { mcpExecutorFor } from "./mcp-bridge/mcp-tool-router.js";
 import { askerContactScope } from "./asker-access.js";
 import { runListContacts } from "./contact-directory-tool.js";
 import { coreToolOptions, findAssistantCoreTool, runCoreTool } from "./core-tool-adapter.js";
@@ -146,4 +147,9 @@ const TOOL_REGISTRY: ReadonlyMap<string, Executor> = new Map<string, Executor>([
 
 export function findExecutor(name: string): Executor | undefined {
   return TOOL_REGISTRY.get(name);
+}
+
+/** Bộ định tuyến của lượt: công cụ thuộc họ đã chuyển sang MCP (phiên mô hình liệt kê) → `tools/call`; không thì executor cũ ở trên. */
+export function resolveExecutor(context: ToolContext, name: string): Executor | undefined {
+  return mcpExecutorFor(context, name) ?? findExecutor(name);
 }

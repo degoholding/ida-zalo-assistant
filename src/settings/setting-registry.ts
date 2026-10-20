@@ -218,6 +218,12 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     applyTo: (config, value) => { config.assistant.coreQueryTools = value === true; },
   },
   {
+    key: "assistant_mcp_families", group: "assistant", label: "Trợ lý: họ công cụ chạy qua MCP", type: "string", secret: false,
+    help: "Họ công cụ của trợ lý đi qua máy chủ MCP trong tiến trình (cùng lõi, cùng nhật ký mcp_call_log): core, drafts, reads, files, tickets, tasks, alerts, metrics, send — ngăn bằng dấu phẩy, hoặc «all». Để trống = đường cũ như trước (an toàn, mặc định). Họ chưa có công cụ MCP thì bật cũng không đổi gì; lỗi thì để trống để lùi ngay.",
+    envName: null, defaultValue: "", allowEmpty: true, maxLength: 120,
+    applyTo: (config, value) => { config.assistant.mcpFamilies = typeof value === "string" ? value : ""; },
+  },
+  {
     key: "assistant_concurrency", group: "assistant", label: "Số câu trả lời chạy cùng lúc", type: "int", secret: false,
     help: "Nhiều người cùng hỏi thì bot trả lời song song tối đa bấy nhiêu câu, câu dư xếp hàng (vẫn được trả lời, chỉ chờ lâu hơn). Cao quá dễ chạm giới hạn của hãng AI.",
     envName: "ASSISTANT_CONCURRENCY", defaultValue: 6, min: 1, max: 30,

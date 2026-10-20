@@ -16,6 +16,7 @@ import { cancelLatestDraft, confirmDraft } from "../send-commands/send-command-a
 import { GROUP_NOT_ALLOWED_REPLY, NOT_ALLOWED_REPLY, runSendChatCommand, type SendChatContext } from "../send-commands/send-command-chat.js";
 import { SEND_HELP } from "../send-commands/send-command-help.js";
 import { REPLY_METRIC_HELP } from "./reply-metric-help.js";
+import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
 import { parseWriteCodeCommand, pendingWriteDrafts, runWriteConfirm } from "./write-confirm-chat.js";
 import { findLatestLiveDraft } from "../send-commands/send-command-lifecycle-queries.js";
 import { CONFIRM_TTL_MS } from "../send-commands/send-command-limits.js";
@@ -152,6 +153,8 @@ export interface ChatCommandContext {
   access?: () => Promise<AskerAccess>;
   /** Đánh thức bộ chạy việc nền sau khi ghi (nháp ghi dữ liệu do trợ lý đề xuất báo Zalo qua hàng đợi). */
   wakeJobs?: () => void;
+  /** Phiên MCP của lệnh (lười) cho «đồng ý» / «hủy» nháp ghi — xem write-confirm-chat.ts. */
+  mcp?: () => Promise<AssistantMcpTurn | undefined>;
 }
 
 const CONFIRM_HINT = "Anh/chị nhắn «đồng ý» để lưu (trong 15 phút), «hủy» để bỏ.";
@@ -332,7 +335,7 @@ export async function runChatCommand(ctx: ChatCommandContext, command: ChatComma
     if (command.code !== undefined) {
       // «đồng ý <mã>»: mã của nháp ghi; không có nháp nào đang mở thì coi là câu thường
       if (!access || !writes.length) return null;
-      return runWriteConfirm({ kind: command.kind, code: command.code, access, drafts: writes, now: ctx.now, wakeJobs: ctx.wakeJobs });
+      return runWriteConfirm({ kind: command.kind, code: command.code, access, drafts: writes, now: ctx.now, wakeJobs: ctx.wakeJobs, mcp: ctx.mcp });
     }
     const send = ctx.send;
     const draft = send ? await findLatestLiveDraft(send.deps.db, send.uid, ctx.now) : null;
@@ -343,7 +346,7 @@ export async function runChatCommand(ctx: ChatCommandContext, command: ChatComma
       asker && deps && change ? { store: "alert" as const, at: change.createdAt } : null,
       writes.length ? { store: "write" as const, at: writes[0].createdAt.getTime() } : null,
     ].filter((item) => item !== null).sort((a, b) => b.at - a.at)[0]?.store;
-    if (live === "write" && access) return runWriteConfirm({ kind: command.kind, access, drafts: writes, now: ctx.now, wakeJobs: ctx.wakeJobs });
+    if (live === "write" && access) return runWriteConfirm({ kind: command.kind, access, drafts: writes, now: ctx.now, wakeJobs: ctx.wakeJobs, mcp: ctx.mcp });
     if (live === "send" && send && draft) {
       if (command.kind === "cancel") return (await cancelLatestDraft(send.deps, send.uid, send.name, ctx.now)).reply;
       return send.requester ? (await confirmDraft(send.deps, send.requester, draft.id, ctx.now)).reply : NOT_ALLOWED_REPLY;

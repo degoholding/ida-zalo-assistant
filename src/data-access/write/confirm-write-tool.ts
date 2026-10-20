@@ -46,7 +46,7 @@ export async function executeOpenDraft(ctx: DataAccessContext, actions: Readonly
   if (!(await claimDraft(ctx.db, draft.id, ctx.now))) throw new DataAccessError("invalid_code", INVALID_CODE);
   await saveDraftResult(ctx.db, draft.id, { status: DraftOutcome.Attempted });
   // Nhật ký thao tác (audit_log.actor) mang tên người thật + cổng gọi
-  const actor = { ...principal, fullName: `${principal.fullName} · ${ctx.source === McpCallSource.Assistant ? "Trợ lý" : "MCP"}` };
+  const actor = { ...principal, fullName: `${principal.fullName} · ${ctx.source === McpCallSource.Http ? "MCP" : "Trợ lý"}` };
   try {
     const done = await guardWrite(() => currentPrincipal.run(actor, () => action.execute(ctx, parsed.data, state)));
     await saveDraftResult(ctx.db, draft.id, { status: DraftOutcome.Done, entity: done.entity, id: done.id, changed: done.changed });

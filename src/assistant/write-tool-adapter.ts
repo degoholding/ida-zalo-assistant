@@ -1,5 +1,6 @@
 import { findTool } from "../data-access/read-tool-catalog.js";
 import type { AnyToolDefinition } from "../data-access/tool-definition.js";
+import { formatDraftPreviewReply } from "../data-access/write/draft-preview-reply.js";
 import { roleMayWriteViaAi } from "../data-access/write/write-action.js";
 import type { AskerAccess } from "./asker-access.js";
 import { runCoreTool, toFunctionDeclaration } from "./core-tool-adapter.js";
@@ -36,14 +37,7 @@ export function writeToolDeclarations(access: AskerAccess, scopeGroupId: number 
   });
 }
 
-/** Câu bot gửi khi vừa tạo nháp: bản xem trước nguyên văn + mã + cách xác nhận. */
-export function formatDraftPreviewReply(preview: string, code: string): string {
-  return [
-    `Em sẽ ghi: ${preview}`,
-    `Mã xác nhận: ${code} (hiệu lực 10 phút).`,
-    "Anh/chị nhắn «đồng ý» để lưu, «hủy» để bỏ. Nếu đang có nhiều nháp chờ thì nhắn «đồng ý " + code + "» hoặc «hủy " + code + "».",
-  ].join("\n");
-}
+export { formatDraftPreviewReply };
 
 export interface WriteToolOutcome {
   /** Kết quả đưa lại cho mô hình (đã bỏ mã xác nhận). */

@@ -21,6 +21,8 @@ export interface DataAccessContext {
    */
   ownDirectThreadsOnly?: boolean;
   ownDirectUid?: string | null;
+  /** Hỏi trong nhóm (trợ lý): id nhóm — mọi thành viên đọc câu trả lời nên công cụ chỉ cho thực thể gắn nhóm (xem catalog/group-scope-guard.ts). */
+  groupScopeId?: number;
   source: McpCallSource;
   /** Khóa MCP đang gọi (null = trợ lý trong app) — cổng ghi vào mcp_call_log. */
   keyId: number | null;

@@ -5,10 +5,11 @@
 //  2. Hỏi TRONG NHÓM (mọi thành viên đọc câu trả lời): chỉ các thực thể gắn nhóm (tin, tệp, nhóm). Số liệu / Danh bạ / ticket… không
 //     gắn nhóm nên principal thu hẹp về một nhóm vẫn không đủ — cắt ở danh sách thực thể + kiểm lúc chạy.
 
+import { GROUP_SCOPE_ENTITIES } from "../data-access/catalog/group-scope-guard.js";
+
 type Json = Record<string, unknown>;
 
-/** Thực thể được đọc khi hỏi trong nhóm — đều lọc theo nhóm của principal (đã thu hẹp về nhóm đang hỏi). */
-export const GROUP_SCOPE_ENTITIES: readonly string[] = ["groups", "messages", "files"];
+export { GROUP_SCOPE_ENTITIES };
 
 const isObject = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
 

@@ -5,7 +5,7 @@ export const MCP_ACCESS_LEVEL = { read: 1, readWrite: 2 } as const
 export const MCP_CALL_STATUS = { ok: 0, denied: 1, invalid: 2, error: 3, rateLimited: 4 } as const
 
 /** Cổng gọi — khớp `McpCallSource` ở `src/constants.ts`. */
-export const MCP_CALL_SOURCE = { http: 1, assistant: 2 } as const
+export const MCP_CALL_SOURCE = { http: 1, assistant: 2, assistantCommand: 3 } as const
 
 export const MCP_ACCESS_LEVEL_OPTIONS = [
   { value: MCP_ACCESS_LEVEL.read, label: 'Chỉ đọc' },

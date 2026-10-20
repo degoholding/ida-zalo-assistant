@@ -7,6 +7,8 @@ import { cancelDraft, findOpenDraft, listOpenDrafts, type DraftBinding, type Dra
 import { WRITE_ACTIONS } from "../data-access/write/write-tool-catalog.js";
 import { logMcpCall } from "../mcp/mcp-call-log.js";
 import type { AskerAccess } from "./asker-access.js";
+import { draftCommandSession, runDraftCommandViaMcp } from "./mcp-bridge/draft-confirm-via-mcp.js";
+import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
 import { assistantWriteAccess } from "./write-tool-adapter.js";
 
 // D1 (chủ chốt 17/10/2026): xác nhận ghi ở trợ lý làm y như lệnh gửi («đồng ý G-12»). MÁY CHỦ gửi bản xem trước + mã (không phải mô hình),
@@ -47,6 +49,8 @@ export interface WriteConfirmInput {
   drafts: DraftRecord[];
   now: Date;
   wakeJobs?: () => void;
+  /** Phiên MCP của lệnh (lười): họ `drafts` bật thì «đồng ý» / «hủy» đi qua `confirm_draft` / `cancel_draft`; không có = đường cũ. */
+  mcp?: () => Promise<AssistantMcpTurn | undefined>;
 }
 
 async function logOutcome(access: AskerAccess, tool: string, status: McpCallStatus, errorCode?: string): Promise<void> {
@@ -62,6 +66,11 @@ export async function runWriteConfirm(input: WriteConfirmInput): Promise<string>
   const { access, drafts, now } = input;
   const writable = assistantWriteAccess(access, undefined);
   if (!writable) return "Tài khoản này không ghi dữ liệu qua trợ lý được.";
+  const turn = await draftCommandSession(await input.mcp?.());
+  if (turn) {
+    if (input.code) return runDraftCommandViaMcp(turn, input.kind, { code: input.code });
+    if (drafts.length === 1) return runDraftCommandViaMcp(turn, input.kind, { draftId: drafts[0].id });
+  }
   let draft: DraftRecord | null = null;
   if (input.code) {
     draft = await findOpenDraft(access.db, bindingOf(writable), input.code, now);

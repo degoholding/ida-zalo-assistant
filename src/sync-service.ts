@@ -1,3 +1,5 @@
+import { parseMcpFamilies } from "./assistant/mcp-bridge/assistant-mcp-families.js";
+import { ConcurrencyGate } from "./mcp/mcp-concurrency-gate.js";
 import type { RowDataPacket } from "mysql2";
 import { AssistantService } from "./assistant/assistant-service.js";
 import type { AiKeyStore } from "./assistant/ai-key-store.js";
@@ -101,6 +103,8 @@ export class SyncService {
    * `buildAssistant()` (gọi ngay sau) dùng được; cùng một cái với `AlertService`, dựng lại khi cài đặt lịch đổi. */
   private readonly getCalendar: () => WorkCalendar;
   private currentAssistant: AssistantService | null;
+  /** Cổng đồng thời RIÊNG của trợ lý qua MCP — giữ qua các lần dựng lại trợ lý (đổi cài đặt) để chỗ đang chạy không bị đếm lại. */
+  private readonly assistantMcpGate: ConcurrencyGate;
   private readonly runners = new Map<number, AccountRunner>();
 
   constructor(
@@ -122,6 +126,7 @@ export class SyncService {
     };
     this.botHalt = new BotHaltControl(db, config, settings);
     this.getCalendar = workCalendarFrom(config);
+    this.assistantMcpGate = new ConcurrencyGate(config.assistant.mcpMaxConcurrent, config.assistant.mcpQueueWaitMs);
     this.currentAssistant = this.buildAssistant();
     this.jobs = new JobRunner({
       db, role: "app", concurrency: config.assistant.concurrency,
@@ -354,6 +359,8 @@ export class SyncService {
     const meetingScheduler = new MeetingScheduler(() => this.config.google);
     const options = {
       storage: this.storage, maxReadFileBytes, readableFileTypes, showTokenUsage, coreQueryTools,
+      // Họ đọc LẠI cài đặt mỗi lượt (config sống) — đổi `assistant_mcp_families` có hiệu lực ở lượt kế tiếp
+      mcpBridge: { families: () => parseMcpFamilies(this.config.assistant.mcpFamilies), gate: this.assistantMcpGate },
       requestFileDownload: (attachmentId: number) => requestAndAwaitDownload(this.db, this.downloader, attachmentId),
       meetingRecapOnDemand: {
         isAvailable: () => Boolean(this.config.meetingRecap.folderId) && hasDriveScope(this.config.google.calendarAccount),

@@ -3,6 +3,7 @@ import type { DataAccessContext } from "./data-access-context.js";
 import { DataAccessError, toErrorPayload, type DataAccessErrorCode } from "./data-access-errors.js";
 import { MASK_NOTICE, buildToolText } from "./result-envelope.js";
 import type { AnyToolDefinition } from "./tool-definition.js";
+import type { TurnEffects } from "./turn-effects.js";
 
 // Chạy MỘT lời gọi công cụ cho mọi cổng: kiểm `available`, kiểm đầu vào bằng zod, chạy, che dữ liệu cá nhân (một chỗ cho cả
 // bảy công cụ), dựng khối chữ. Lỗi nghiệp vụ trả về `isError: true` — không ném; lỗi hệ thống (DB sập…) ném tiếp để cổng ghi `Error`.
@@ -16,6 +17,8 @@ export interface ToolResult {
   resultChars: number;
   entity?: string;
   errorCode?: DataAccessErrorCode;
+  /** Tác động của lượt trợ lý (chỉ khi công cụ khai); cổng MCP ngoài không bao giờ chuyển đi. */
+  effects?: TurnEffects;
 }
 
 function failure(error: DataAccessError): ToolResult {
@@ -43,7 +46,7 @@ export async function runTool(tool: AnyToolDefinition, ctx: DataAccessContext, r
       summary = maskPersonalDataDeep(summary);
     }
     const text = buildToolText(summary, structured);
-    return { isError: false, structured, text, rowCount: outcome.rowCount, resultChars: text.length, entity: outcome.entity };
+    return { isError: false, structured, text, rowCount: outcome.rowCount, resultChars: text.length, entity: outcome.entity, effects: outcome.effects };
   } catch (error) {
     if (error instanceof DataAccessError) return failure(error);
     throw error;

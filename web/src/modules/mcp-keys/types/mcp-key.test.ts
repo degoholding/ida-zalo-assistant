@@ -7,6 +7,6 @@ describe('mcp key code mapping', () => {
     // Chép tay — lệch một số là khóa «chỉ đọc» hiện thành «đọc + ghi»
     expect(MCP_ACCESS_LEVEL).toEqual({ read: 1, readWrite: 2 })
     expect(MCP_CALL_STATUS).toEqual({ ok: 0, denied: 1, invalid: 2, error: 3, rateLimited: 4 })
-    expect(MCP_CALL_SOURCE).toEqual({ http: 1, assistant: 2 })
+    expect(MCP_CALL_SOURCE).toEqual({ http: 1, assistant: 2, assistantCommand: 3 })
   })
 })

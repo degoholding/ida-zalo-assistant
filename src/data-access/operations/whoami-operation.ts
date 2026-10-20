@@ -40,7 +40,7 @@ export const whoamiTool: ToolDefinition<z.infer<typeof inputSchema>, WhoamiOutpu
       mask_personal: ctx.maskPersonal,
       can_view_audit: principal.canViewAudit === true || principal.role === UserRole.Admin,
       entities: readableEntities(ctx).map((def) => def.name),
-      via: ctx.source === McpCallSource.Assistant ? "assistant" : "mcp",
+      via: ctx.source === McpCallSource.Http ? "mcp" : "assistant",
       notices: [],
     };
     const where = scope.all_groups ? "mọi nhóm" : `${scope.group_count} nhóm được gán`;

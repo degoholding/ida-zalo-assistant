@@ -10,7 +10,8 @@ import type { ReadFileResult } from "./file-reader.js";
 import type { AskerAccess } from "./asker-access.js";
 import { MAX_FILES_PER_TURN } from "./file-access-tools.js";
 import type { FunctionDeclaration, WebSearchResult } from "./gemini-client.js";
-import { findExecutor } from "./tool-registry.js";
+import { resolveExecutor } from "./tool-registry.js";
+import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
 import type { AlertAsker, AlertToolsDeps } from "./alert-tools.js";
 import { TICKET_TOOL_NAMES } from "../tickets/ticket-tools.js";
 import type { TicketCommandContext } from "../tickets/ticket-commands.js";
@@ -93,6 +94,8 @@ export interface ToolContext {
   actionNotes?: string[];
   /** Gợi ý trả lời (phase 10, công cụ suggest_replies) — chỉ gắn ở tin riêng. Không có = công cụ báo không dùng được. */
   replySuggestion?: SuggestToolContext;
+  /** Phiên MCP của lượt (chỉ có khi `assistant_mcp_families` bật ít nhất một họ) — bộ định tuyến + executor họ tự rẽ nhánh bằng `mcp.familyEnabled`. */
+  mcp?: AssistantMcpTurn;
   /** Các tin gửi riêng SAU `fixedReply` (mỗi bản nháp trả lời một tin, chép là gửi được) — nơi gọi gửi lần lượt. */
   followUps?: string[];
 }
@@ -200,7 +203,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
 
 export async function runTool(context: ToolContext, name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Bảng `Map` (tool-registry.ts): tên như `constructor` / `__proto__` không rơi vào prototype (M6 review)
-  const executor = findExecutor(name);
+  const executor = resolveExecutor(context, name);
   if (!executor) return { error: `Không có công cụ ${name}` };
   if (context.scopeGroupId && !GROUP_SCOPE_TOOL_NAMES.has(name)) return { error: "Hỏi trong nhóm chỉ dùng được dữ liệu của nhóm này." };
   try {

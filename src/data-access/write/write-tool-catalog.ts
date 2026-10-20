@@ -1,3 +1,4 @@
+import { FAMILY_ACTIONS } from "../catalog/family-catalogs.js";
 import type { AnyToolDefinition } from "../tool-definition.js";
 import { confirmWriteTool } from "./confirm-write-tool.js";
 import { contactUpdateAction } from "./contact-write-tools.js";
@@ -16,8 +17,8 @@ const ACTIONS = [
   eraseAction(contactUpdateAction), eraseAction(groupUpdateAction), eraseAction(replyTemplateSaveAction),
 ];
 
-/** Tên `propose_*` → thao tác (Map, không tra prototype). */
-export const WRITE_ACTIONS: ReadonlyMap<string, AnyWriteAction> = new Map(ACTIONS.map((action) => [action.tool, action]));
+/** Tên `propose_*` → thao tác (Map, không tra prototype). Gồm cả thao tác của các họ trợ lý để xác nhận nháp tra được; công cụ `propose_*` của họ nằm ở danh mục họ. */
+export const WRITE_ACTIONS: ReadonlyMap<string, AnyWriteAction> = new Map([...ACTIONS, ...FAMILY_ACTIONS].map((action) => [action.tool, action]));
 
 export const CONFIRM_WRITE_TOOL_NAME = "confirm_write";
 

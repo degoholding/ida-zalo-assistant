@@ -7,9 +7,11 @@ import { createLogger, describeError } from "../logger.js";
 import type { ConcurrencyGate } from "./mcp-concurrency-gate.js";
 import type { McpCallLogEntry } from "./mcp-call-log.js";
 import type { McpRateLimiter } from "./mcp-rate-limiter.js";
-import { INTERNAL_ERROR_RESULT, rateLimitedResult, serverBusyResult, statusOf, toCallToolResult, type McpToolResult } from "./mcp-tool-result.js";
+import { internalErrorResult, rateLimitedResult, serverBusyResult, statusOf, toCallToolResult, type McpToolResult } from "./mcp-tool-result.js";
 
 // Bọc MỘT công cụ lõi thành hàm xử lý của `registerTool`: giới hạn nhịp → chạy dưới danh tính người gọi → đổi kết quả → ghi mcp_call_log.
+// Dùng chung cho cổng /mcp (source Http, nhãn «· MCP», limiter theo khóa) và máy chủ trong tiến trình của trợ lý (source Assistant /
+// AssistantCommand, nhãn «· Trợ lý», không limiter theo khóa, cổng đồng thời RIÊNG).
 
 const log = createLogger("mcp");
 
@@ -21,42 +23,55 @@ export interface ToolWrapperDeps {
   logCall: (entry: McpCallLogEntry) => Promise<void>;
 }
 
-export function wrapTool(tool: AnyToolDefinition, ctx: DataAccessContext, clientIp: string, deps: ToolWrapperDeps) {
+export interface ToolWrapperOptions {
+  /** Cột mcp_call_log.source. `Http` = cổng ngoài: kết quả không có `_meta`; nguồn khác = mặt trợ lý (có `_meta` lỗi / tác động). */
+  source: McpCallSource;
+  /** Hậu tố tên người ở audit_log: "MCP" hoặc "Trợ lý". */
+  actorSuffix: "MCP" | "Trợ lý";
+  clientIp: string | null;
+  /** Nhịp theo khóa (chỉ cổng ngoài có `ctx.keyId`). null / thiếu = không giới hạn nhịp ở đây (trợ lý đã có trần giờ / ngày của lượt). */
+  limiter?: McpRateLimiter | null;
+  gate: ConcurrencyGate;
+  logCall: ToolWrapperDeps["logCall"];
+}
+
+export function wrapTool(tool: AnyToolDefinition, ctx: DataAccessContext, opts: ToolWrapperOptions) {
   const { principal } = ctx;
+  const rich = opts.source !== McpCallSource.Http;
   const record = (entry: Pick<McpCallLogEntry, "args" | "status" | "durationMs"> & Partial<McpCallLogEntry>): void => {
-    deps.logCall({
-      userId: principal.userId, tenantId: principal.tenantId, keyId: ctx.keyId, source: McpCallSource.Http, tool: tool.name,
-      rowCount: 0, resultChars: 0, clientIp, ...entry,
+    opts.logCall({
+      userId: principal.userId, tenantId: principal.tenantId, keyId: ctx.keyId, source: opts.source, tool: tool.name,
+      rowCount: 0, resultChars: 0, clientIp: opts.clientIp, ...entry,
     }).catch((error) => log.error(`ghi nhật ký gọi ${tool.name}: ${describeError(error)}`));
   };
 
   return async (args: unknown): Promise<McpToolResult> => {
     const startedAt = performance.now();
-    const slot = ctx.keyId === null ? null : deps.limiter.take(ctx.keyId);
+    const slot = ctx.keyId === null || !opts.limiter ? null : opts.limiter.take(ctx.keyId);
     if (slot && !slot.ok) {
       record({ args, status: McpCallStatus.RateLimited, errorCode: "rate_limited", durationMs: performance.now() - startedAt });
       return rateLimitedResult(slot.retryAfterSeconds, slot.reason);
     }
     // Xếp hàng chờ chỗ chạy toàn cục; hết hạn chờ thì báo bận (mô hình thử lại sau) thay vì dồn thêm tải lên DB
-    const turn = await deps.gate.acquire();
+    const turn = await opts.gate.acquire();
     if (!turn.ok) {
       if (slot?.ok) slot.release();
       record({ args, status: McpCallStatus.RateLimited, errorCode: "server_busy", durationMs: performance.now() - startedAt });
-      return serverBusyResult();
+      return serverBusyResult(rich);
     }
     try {
-      // Nhật ký ghi (audit_log) lấy tên người từ đây — gắn «· MCP» để phân biệt với thao tác trên web
-      const actor = { ...principal, fullName: `${principal.fullName} · MCP` };
+      // Nhật ký ghi (audit_log) lấy tên người từ đây — gắn «· MCP» / «· Trợ lý» để phân biệt với thao tác trên web
+      const actor = { ...principal, fullName: `${principal.fullName} · ${opts.actorSuffix}` };
       const result = await currentPrincipal.run(actor, () => runTool(tool, ctx, args));
       record({
         args, status: statusOf(result), entity: result.entity, rowCount: result.rowCount, resultChars: result.resultChars,
         errorCode: result.errorCode, durationMs: performance.now() - startedAt,
       });
-      return toCallToolResult(result);
+      return toCallToolResult(result, rich);
     } catch (error) {
       log.error(`công cụ ${tool.name} lỗi hệ thống: ${describeError(error)}`);
       record({ args, status: McpCallStatus.Error, errorCode: "internal", durationMs: performance.now() - startedAt });
-      return INTERNAL_ERROR_RESULT;
+      return internalErrorResult(rich);
     } finally {
       turn.release();
       if (slot?.ok) slot.release();

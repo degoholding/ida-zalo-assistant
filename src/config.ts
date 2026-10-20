@@ -90,6 +90,11 @@ export interface AppConfig {
     showTokenUsage: boolean;
     /** Trợ lý có query_records / describe_entities (công cụ lõi truy cập dữ liệu, phase 7). */
     coreQueryTools: boolean;
+    /** Họ công cụ trợ lý đi qua MCP trong tiến trình («core,reads,…» / «all»; rỗng = đường cũ). Cài đặt `assistant_mcp_families`. */
+    mcpFamilies: string;
+    /** Cổng đồng thời RIÊNG cho lời gọi công cụ của trợ lý qua MCP (không chiếm chỗ của MCP ngoài) + thời gian chờ chỗ. */
+    mcpMaxConcurrent: number;
+    mcpQueueWaitMs: number;
   };
   /** Lịch làm việc (giờ VN) — chuỗi như nhập trên màn Cài đặt; dựng lịch bằng buildWorkCalendar. */
   calendar: { workHours: string; workDays: string[]; quietHours: string; holidays: string };
@@ -246,6 +251,9 @@ export function loadConfig(): AppConfig {
       groupReplyAnyone: true,
       showTokenUsage: false,
       coreQueryTools: true,
+      mcpFamilies: "",
+      mcpMaxConcurrent: Math.max(1, readInt("ASSISTANT_MCP_MAX_CONCURRENT", 5)),
+      mcpQueueWaitMs: Math.max(0, readInt("ASSISTANT_MCP_QUEUE_WAIT_MS", 20_000)),
       readableFileTypes: ["pdf", "docx", "xlsx", "xls", "csv", "txt", "md", "jpg", "jpeg", "png", "webp", "mp3", "m4a", "wav", "aac"],
       autoReadImages: true,
     },

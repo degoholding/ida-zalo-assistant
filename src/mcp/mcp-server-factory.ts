@@ -1,11 +1,11 @@
-import { McpServer, fromJsonSchema, type AuthInfo } from "@modelcontextprotocol/server";
-import { z } from "zod/v4";
+import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import { McpAccessLevel, McpCallSource } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { buildDataAccessContext } from "../data-access/data-access-context.js";
 import { toolsFor } from "../data-access/read-tool-catalog.js";
 import type { McpAccess } from "./mcp-bearer-auth.js";
-import { wrapTool, type ToolWrapperDeps } from "./mcp-tool-wrapper.js";
+import { registerTools } from "./mcp-tool-registration.js";
+import type { ToolWrapperDeps } from "./mcp-tool-wrapper.js";
 
 // Dựng một McpServer MỖI request, chỉ đăng ký công cụ khóa này dùng được → `tools/list` khác nhau theo vai trò / khóa mà không cần phiên.
 
@@ -27,16 +27,6 @@ export interface McpServerFactoryDeps extends ToolWrapperDeps {
   maskPersonalData: boolean;
   /** Đánh thức bộ chạy việc nền sau khi ghi (báo Zalo). */
   wakeJobs?: () => void;
-}
-
-/**
- * Sơ đồ đầu vào chỉ để QUẢNG CÁO (`tools/list`): SDK luôn chuyển nguyên đầu vào cho hàm xử lý, `runTool` mới là nơi kiểm bằng zod.
- * Nếu để SDK tự kiểm thì đầu vào sai bị SDK trả lỗi trước — không có dòng mcp_call_log, không tính nhịp.
- */
-function advertiseOnly(schema: z.ZodType) {
-  return fromJsonSchema(z.toJSONSchema(schema, { io: "input" }) as Parameters<typeof fromJsonSchema>[0],
-    // `as never`: kiểu JsonSchemaValidator<T> của SDK là generic theo T mà ta cố ý không dùng (không kiểm, chỉ chuyển tiếp)
-    { getValidator: (() => (input: unknown) => ({ valid: true, data: input, errorMessage: undefined })) as never });
 }
 
 const ACCESS_KEY = "access";
@@ -67,11 +57,8 @@ export function buildMcpServer(authInfo: AuthInfo | undefined, deps: McpServerFa
   });
   const server = new McpServer({ name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
     { maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS, instructions: ctx.allowWrite ? SERVER_INSTRUCTIONS + WRITE_INSTRUCTIONS : SERVER_INSTRUCTIONS });
-  for (const tool of toolsFor(ctx)) {
-    server.registerTool(tool.name, {
-      title: tool.title, description: tool.description, inputSchema: advertiseOnly(tool.input(ctx)), outputSchema: tool.output,
-      annotations: tool.annotations,
-    }, wrapTool(tool, ctx, access.clientIp, deps));
-  }
+  registerTools(server, toolsFor(ctx, "mcp_http"), ctx, "mcp_http", {
+    source: McpCallSource.Http, actorSuffix: "MCP", clientIp: access.clientIp, limiter: deps.limiter, gate: deps.gate, logCall: deps.logCall,
+  });
   return server;
 }

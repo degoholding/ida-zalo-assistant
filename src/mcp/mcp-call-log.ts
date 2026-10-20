@@ -48,8 +48,11 @@ export function previewArgs(args: unknown): string {
  * Mã xác nhận ghi (confirm_write) là bí mật dùng một lần: không để lọt vào nhật ký — kể cả dạng băm (không gian 32^6 dò ngược được) lẫn bản
  * xem trước. Thay bằng chữ cố định trước khi băm / cắt.
  */
+/** Công cụ nhận mã xác nhận: cổng ngoài `confirm_write` + lệnh «đồng ý / hủy» của trợ lý (mặt command). */
+const CODE_BEARING_TOOLS: ReadonlySet<string> = new Set(["confirm_write", "confirm_draft", "cancel_draft"]);
+
 export function redactCodes(tool: string, args: unknown): unknown {
-  if (tool !== "confirm_write" || !args || typeof args !== "object") return args;
+  if (!CODE_BEARING_TOOLS.has(tool) || !args || typeof args !== "object") return args;
   return { ...(args as Record<string, unknown>), code: "[đã ẩn]" };
 }
 

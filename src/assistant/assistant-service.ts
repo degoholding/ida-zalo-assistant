@@ -21,6 +21,11 @@ import { RECAP_DRIVE_RECORDING_DECLARATION } from "./drive-recap-tool.js";
 import type { OndemandDestination, OndemandRecapOutcome } from "../meetings/meeting-recap-ondemand.js";
 import { EXPORT_REPORT_DECLARATION } from "./export-report-tool.js";
 import { buildCoreQueryTools } from "./core-tools-wiring.js";
+import { coreToolOptions } from "./core-tool-adapter.js";
+import { resolveAssistantMcpBridge, type AssistantMcpBridge } from "./mcp-bridge/assistant-mcp-bridge-config.js";
+import type { AssistantMcpTurn } from "./mcp-bridge/assistant-mcp-turn.js";
+import { openMcpTurn } from "./mcp-bridge/open-mcp-turn.js";
+import { applyMcpTurnPrompt, applyMcpTurnTools, loadMcpTurnTools } from "./mcp-bridge/turn-tool-declarations.js";
 import { GROUP_SCOPE_TOOL_NAMES, READ_FILE_DECLARATION, TOOL_DECLARATIONS, WEB_SEARCH_DECLARATION, formatVn, formatVnDay, runTool, type ToolContext } from "./tools.js";
 import { AGRO_TECHNICAL_PROMPT, isAgroTechnicalQuestion } from "../privacy/agro-technical.js";
 import { maskPersonalDataDeep } from "../privacy/personal-data.js";
@@ -72,6 +77,8 @@ export interface AssistantOptions {
   meetingScheduler?: MeetingCreator;
   /** Cài đặt «assistant_core_query_tools»: trợ lý có query_records / describe_entities (công cụ lõi, phase 7). */
   coreQueryTools?: boolean;
+  /** Cầu nối MCP trong tiến trình (họ bật + cổng riêng); bỏ trống = không họ nào đi qua MCP. */
+  mcpBridge?: AssistantMcpBridge;
   /** Gắn dòng đo token dưới mỗi câu trả lời (cài đặt «Hiện số token dưới câu trả lời»). */
   showTokenUsage?: boolean;
   /** Đuôi tệp được đọc (cài đặt «Loại tệp bot được đọc»); bỏ trống = mọi loại. */
@@ -295,7 +302,15 @@ export class AssistantService {
       const contact = request.contact;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
-      const text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce, wakeJobs: tickets?.wakeJobs }, command);
+      // Phiên MCP của lệnh gõ (mặt `assistant_command`): chỉ mở khi lệnh «đồng ý / hủy» nháp ghi cần và họ `drafts` bật; đóng ngay sau lệnh
+      let commandTurn: AssistantMcpTurn | undefined;
+      const commandMcp = async () => (commandTurn ??= openMcpTurn(await accessOnce(), resolveAssistantMcpBridge(this.options.mcpBridge), { wakeJobs: tickets?.wakeJobs }));
+      let text: string | null;
+      try {
+        text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce, mcp: commandMcp, wakeJobs: tickets?.wakeJobs }, command);
+      } finally {
+        await commandTurn?.close();
+      }
       if (text !== null) {
         await this.logTurn(request, AssistantTurnStatus.Answered, { started, answer: text, toolCalls: [{ name: "chat_command", args: "code" in command && command.code ? { ...command, code: "[đã ẩn]" } : command }], model: "lệnh" });
         return { text, attachmentIds: [], status: AssistantTurnStatus.Answered };
@@ -392,6 +407,10 @@ export class AssistantService {
       question: request.question,
       coreQueryTools: coreTools.declarations.length > 0,
     };
+    // Phiên MCP của lượt (undefined khi không họ nào bật ⇒ hành vi y nguyên); mở lười ở `loadMcpTurnTools`, đóng ở `finally`
+    const mcpTurn = openMcpTurn(access, resolveAssistantMcpBridge(this.options.mcpBridge), {
+      groupScopeId: request.groupScope?.groupId, coreQueryTools: Boolean(this.options.coreQueryTools), wakeJobs: tickets?.wakeJobs });
+    context.mcp = mcpTurn;
     context.meetings = this.options.meetingScheduler;
     context.ticket = ticket;
     context.task = task;
@@ -437,7 +456,8 @@ export class AssistantService {
         tenantId: 1, askerContactId: request.contact.id, askerUid: request.contact.zalo_uid,
       };
     }
-    const tools = [
+    const mcpTools = await loadMcpTurnTools(mcpTurn, coreToolOptions(scope?.groupId));
+    const tools = applyMcpTurnTools([
       ...TOOL_DECLARATIONS,
       ...coreTools.declarations,
       LIST_CONTACTS_DECLARATION,
@@ -456,15 +476,15 @@ export class AssistantService {
       ...(sendAsker ? [PROPOSE_SEND_DECLARATION, PROPOSE_REMINDER_DECLARATION, PROPOSE_PIN_DECLARATION] : []),
       ...(announceAsker ? [PROPOSE_MEETING_ANNOUNCEMENT_DECLARATION] : []),
       ...(scope ? [] : [SUGGEST_REPLIES_DECLARATION, QUERY_METRICS_DECLARATION]),
-    ].filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
+    ], mcpTools).filter((tool) => !scope || GROUP_SCOPE_TOOL_NAMES.has(tool.name));
     // Trong nhóm: tin trước đó là của nhiều người, không phải hội thoại user/model — đưa vài tin gần nhất của nhóm
     // thành một khối ngữ cảnh trong lượt hỏi (hỏi nối tiếp «chi tiết báo cáo đó» mới hiểu)
-    const system = buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
+    const system = applyMcpTurnPrompt(buildSystemPrompt(request.contact, now) + (scope ? groupScopePrompt(scope.groupName, await loadGroupMemberNames(this.db, scope.groupId)) : "")
       + (reportTurn ? REPORT_PLAYBOOK_PROMPT : "") + coreTools.prompt + (agroTechnical ? AGRO_TECHNICAL_PROMPT : "") + (alertAsker ? ALERT_TOOLS_PROMPT : "") + (ticket ? TICKET_TOOLS_PROMPT : "")
       + (task ? TASK_TOOLS_PROMPT : "") + (briefAsker ? BRIEF_TOOL_PROMPT : "") + (sendAsker ? SEND_TOOL_PROMPT + REMINDER_TOOL_PROMPT + PIN_TOOL_PROMPT : "")
       + (announceAsker ? MEETING_ANNOUNCE_TOOL_PROMPT : "")
       + (scope ? "" : `\n\n${SUGGEST_REPLIES_PROMPT}${SUGGEST_REPLIES_MANDATORY_PROMPT}\n\n${QUERY_METRICS_PROMPT}`)
-      + buildNoFakeActionPrompt({ inGroup: Boolean(scope), canProposeReminder: Boolean(sendAsker), canAnnounceMeeting: announceAsker, canProposePin: Boolean(sendAsker) });
+      + buildNoFakeActionPrompt({ inGroup: Boolean(scope), canProposeReminder: Boolean(sendAsker), canAnnounceMeeting: announceAsker, canProposePin: Boolean(sendAsker) }), mcpTools);
     const maxRounds = reportTurn ? REPORT_MAX_TOOL_ROUNDS : MAX_TOOL_ROUNDS;
     const contents = scope ? [] : mask(await loadHistory(this.db, request.threadId, request.questionMessageId, request.contact.zalo_uid));
     // Câu hỏi của chính người hỏi giữ nguyên (họ có thể đang hỏi đúng một số điện thoại); ngữ cảnh nhóm kèm theo thì che
@@ -537,6 +557,8 @@ export class AssistantService {
         error: error instanceof Error ? error.message : String(error),
       });
       return { text: FAILURE_TEXT, attachmentIds: [], status: AssistantTurnStatus.Failed };
+    } finally {
+      await mcpTurn?.close();
     }
   }
 

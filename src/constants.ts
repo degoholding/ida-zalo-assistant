@@ -448,6 +448,8 @@ export enum McpCallStatus {
 export enum McpCallSource {
   // Máy chủ MCP /mcp (Claude, Codex, client SDK)
   Http = 1,
-  // Trợ lý trong app (Gemini / OpenAI)
+  // Trợ lý trong app (Gemini / OpenAI): công cụ do MÔ HÌNH gọi
   Assistant = 2,
+  // Trợ lý trong app: lệnh người dùng gõ (chạy ngay, mô hình không thấy mặt này)
+  AssistantCommand = 3,
 }
