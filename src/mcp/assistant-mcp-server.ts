@@ -29,9 +29,13 @@ export interface AssistantMcpServerDeps {
   familyCatalogs?: readonly FamilyCatalog[];
 }
 
-/** ctx của máy chủ: cùng người hỏi, khác `source` theo mặt (mô hình = 2, lệnh gõ = 3) và không bao giờ có khóa MCP. */
+/**
+ * ctx của máy chủ: cùng người hỏi, khác `source` theo mặt (mô hình = 2, lệnh gõ = 3) và không bao giờ có khóa MCP.
+ * Mặt lệnh gõ: kết quả đi thẳng tới NGƯỜI dùng (không qua mô hình) nên KHÔNG che dữ liệu cá nhân — đúng như đường cũ; mặt mô hình giữ cờ che.
+ */
 export function assistantSurfaceContext(access: DataAccessContext, surface: AssistantSurface): DataAccessContext {
-  return { ...access, keyId: null, source: surface === "assistant_command" ? McpCallSource.AssistantCommand : McpCallSource.Assistant };
+  const command = surface === "assistant_command";
+  return { ...access, keyId: null, source: command ? McpCallSource.AssistantCommand : McpCallSource.Assistant, maskPersonal: command ? false : access.maskPersonal };
 }
 
 /** Công cụ của mặt này thuộc họ đang bật (công cụ không khai họ không bao giờ lên mặt trợ lý) và người hỏi dùng được. */

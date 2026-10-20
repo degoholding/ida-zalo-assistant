@@ -11,6 +11,8 @@ export interface OpenMcpTurnOptions {
   coreQueryTools?: boolean;
   /** Đánh thức bộ chạy việc nền sau khi ghi (báo Zalo). */
   wakeJobs?: () => void;
+  /** Đưa tệp «Bỏ qua» về hàng tải nền (ảnh vừa gửi của ticket do mô hình tạo) — xem `DataAccessContext.requestDownload`. */
+  requestDownload?: (attachmentIds: number[]) => void;
 }
 
 /**
@@ -24,6 +26,7 @@ export function openMcpTurn(access: AskerAccess, bridge: AssistantMcpBridge | nu
   const families = new Set(enabled);
   if (options.coreQueryTools === false) families.delete("core");
   if (families.size === 0) return undefined;
-  const ctx = { ...(assistantWriteAccess(access, options.groupScopeId) ?? access), groupScopeId: options.groupScopeId, wakeJobs: options.wakeJobs ?? access.wakeJobs };
+  const ctx = { ...(assistantWriteAccess(access, options.groupScopeId) ?? access), groupScopeId: options.groupScopeId, wakeJobs: options.wakeJobs ?? access.wakeJobs,
+    requestDownload: options.requestDownload ?? access.requestDownload };
   return new AssistantMcpTurn(ctx, families, { gate: bridge.gate, logCall: (entry) => logMcpCall(access.db, entry), families });
 }

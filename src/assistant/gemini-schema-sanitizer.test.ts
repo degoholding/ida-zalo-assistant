@@ -60,14 +60,18 @@ test("const becomes a one-value enum; required names not in properties are prune
   assert.deepEqual(result, { type: "object", properties: { kind: { enum: ["alpha"], type: "string" } }, required: ["kind"] });
 });
 
-test("rejects schemas Gemini cannot take: $ref, allOf, empty root object, array without items, root not object", () => {
+test("rejects schemas Gemini cannot take: $ref, allOf, root object without properties, array without items, root not object", () => {
   for (const bad of [
     { type: "object", properties: { a: { $ref: "#/$defs/x" } } },
     { type: "object", properties: { a: { allOf: [{ type: "string" }] } } },
-    { type: "object", properties: {} },
+    { type: "object" },
     { type: "object", properties: { a: { type: "array" } } },
     { type: "string" },
     { type: "object", properties: { a: { type: "weird" } } },
   ]) assert.throws(() => sanitizeForGemini(bad), SchemaSanitizeError, JSON.stringify(bad));
   assert.throws(() => sanitizeForGemini(null), SchemaSanitizeError);
+});
+
+test("root object with EMPTY properties (parameterless tool) is kept as the legacy declaration shape", () => {
+  assert.deepEqual(sanitizeForGemini({ type: "object", properties: {}, additionalProperties: false, $schema: "x" }), { type: "object", properties: {} });
 });

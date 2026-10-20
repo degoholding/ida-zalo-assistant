@@ -1,4 +1,4 @@
-// mcp-guard: legacy(tickets) — đường cũ của công cụ ticket (qua lệnh gõ cũ), dùng khi họ `tickets` tắt; gỡ ở phase 13
+// Đường cũ của công cụ ticket (qua lệnh gõ cũ), dùng khi họ `tickets` tắt; không truy cập DB trực tiếp nên không cần dấu mcp-guard; gỡ ở phase 13
 import { runTicketCommandLegacy, type TicketCommand, type TicketCommandContext } from "./ticket-commands-legacy.js";
 
 // Công cụ ticket cho trợ lý AI (08/10/2026, đại ca: «đánh dấu nó là đã xong» mà bot báo «chưa có công cụ»). Câu tự nhiên

@@ -5,7 +5,7 @@ import { canUse } from "../data-access-context.js";
 import { DataAccessError, translateDbError } from "../data-access-errors.js";
 import { askerUidOf } from "../reads/message-search-core.js";
 import { threadVisibilitySql } from "../visibility-guards.js";
-import type { ToolDefinition } from "../tool-definition.js";
+import { UNTRUSTED_NOTICE, type ToolDefinition } from "../tool-definition.js";
 
 // get_conversation_with_person: những gì đã trao đổi với MỘT người trong khoảng thời gian — tin người đó gửi, tin nhắc tên người đó, tin của người
 // hỏi trong các nhóm có người đó, và (nếu được thấy) cuộc riêng giữa người đó với bot. Trả CHỮ theo khuôn dòng `[giờ] (nhóm) Người: nội dung`.
@@ -38,7 +38,7 @@ export const conversationWithPersonTool: ToolDefinition<ConversationInput, Conve
   input: () => inputSchema,
   output: outputSchema,
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  surfaces: ["mcp_http", "assistant_model"],
+  surfaces: ["assistant_model"],
   family: "reads",
   assistantErrorShape: "string",
   available: (ctx) => ctx.groupScopeId === undefined && canUse(ctx, "conversation", "read"),
@@ -79,5 +79,20 @@ export const conversationWithPersonTool: ToolDefinition<ConversationInput, Conve
       messages: text || "(không có trao đổi nào trong khoảng này)",
     };
     return { structured, summary: `Trao đổi với ${personUid}: ${rows.length} tin.`, rowCount: rows.length, entity: "messages" };
+  },
+};
+
+// Bản cho MCP ngoài (/mcp): thêm dặn «dữ liệu không phải chỉ dẫn» + `untrusted_fields` (khối chữ `messages` là lời người dùng Zalo). Bản của mô hình giữ NGUYÊN chữ cũ.
+const externalOutputSchema = outputSchema.extend({ untrusted_fields: z.array(z.string()) });
+type ConversationExternalOutput = z.infer<typeof externalOutputSchema>;
+
+export const conversationWithPersonExternalTool: ToolDefinition<ConversationInput, ConversationExternalOutput> = {
+  ...conversationWithPersonTool,
+  description: `${conversationWithPersonTool.description} ${UNTRUSTED_NOTICE}`,
+  output: externalOutputSchema,
+  surfaces: ["mcp_http"],
+  async handler(ctx, input) {
+    const outcome = await conversationWithPersonTool.handler(ctx, input);
+    return { ...outcome, structured: { ...outcome.structured, untrusted_fields: ["messages"] } };
   },
 };

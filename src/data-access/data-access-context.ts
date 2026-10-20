@@ -36,6 +36,11 @@ export interface DataAccessContext {
    * "relationship"`). Chỉ trợ lý đặt (từ tin Zalo đã nhận); cổng HTTP không bao giờ có ⇒ công cụ quan hệ không lộ ra MCP ngoài.
    */
   contactActor?: ContactActor;
+  /**
+   * Đưa tệp đính kèm (id `attachment`) về hàng tải nền — móc của ứng dụng, chỉ ctx trợ lý có (HTTP không). Công cụ ghi do MÔ HÌNH khởi xướng
+   * (`create_ticket`, `ticket_action note`, họ `files`) gọi sau khi ghi để ảnh vừa gửi được tải ngay như đường cũ; thiếu móc = bộ tải nhặt khi khởi động lại.
+   */
+  requestDownload?: (attachmentIds: number[]) => void;
   /** Lưu cài đặt áp nóng (dịch vụ cài đặt) — chỉ ctx trợ lý có, HTTP không. Trả danh sách khóa đã đổi. */
   saveSettings?: (patch: Record<string, unknown>, actor: string) => Promise<string[]>;
 }

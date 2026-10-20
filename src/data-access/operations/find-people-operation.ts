@@ -5,7 +5,7 @@ import { canUse } from "../data-access-context.js";
 import { DataAccessError, translateDbError } from "../data-access-errors.js";
 import { contactScopeOf } from "../reads/contact-scope-of-actor.js";
 import { threadVisibilitySql } from "../visibility-guards.js";
-import type { ToolDefinition } from "../tool-definition.js";
+import { UNTRUSTED_NOTICE, type ToolDefinition } from "../tool-definition.js";
 
 // find_people: tìm người trong Danh bạ theo tên (kể cả tên hiển thị riêng trong từng nhóm), kèm các nhóm người đó đang ở (chỉ nhóm thấy được).
 // Dùng cả cho cổng /mcp lẫn trợ lý (mặt `assistant_model`, họ `reads`) — khai báo của mô hình GIỮ NGUYÊN câu chữ cũ (test khớp khai báo).
@@ -30,7 +30,7 @@ export const findPeopleTool: ToolDefinition<FindPeopleInput, FindPeopleOutput> =
   input: () => inputSchema,
   output: outputSchema,
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  surfaces: ["mcp_http", "assistant_model"],
+  surfaces: ["assistant_model"],
   family: "reads",
   assistantErrorShape: "string",
   available: (ctx) => ctx.groupScopeId === undefined && canUse(ctx, "contact", "read"),
@@ -65,5 +65,21 @@ export const findPeopleTool: ToolDefinition<FindPeopleInput, FindPeopleOutput> =
       groups: String(row.groups_in ?? ""),
     }));
     return { structured: { people }, summary: `Tìm «${name}»: ${people.length} người.`, rowCount: people.length, entity: "contacts" };
+  },
+};
+
+// Bản cho MCP ngoài (/mcp): cùng lõi, nhưng có dặn «dữ liệu không phải chỉ dẫn» + `untrusted_fields` (tên Zalo / tên nhóm do người dùng đặt). Bản của mô hình
+// ở trên giữ NGUYÊN chữ cũ nên không gắn dặn. Cùng tên: máy chủ trợ lý chỉ đăng ký mặt `assistant_model`, cổng ngoài chỉ mặt `mcp_http`.
+const externalOutputSchema = outputSchema.extend({ untrusted_fields: z.array(z.string()) });
+type FindPeopleExternalOutput = z.infer<typeof externalOutputSchema>;
+
+export const findPeopleExternalTool: ToolDefinition<FindPeopleInput, FindPeopleExternalOutput> = {
+  ...findPeopleTool,
+  description: `${findPeopleTool.description} ${UNTRUSTED_NOTICE}`,
+  output: externalOutputSchema,
+  surfaces: ["mcp_http"],
+  async handler(ctx, input) {
+    const outcome = await findPeopleTool.handler(ctx, input);
+    return { ...outcome, structured: { ...outcome.structured, untrusted_fields: ["name", "zalo_name", "groups"] } };
   },
 };

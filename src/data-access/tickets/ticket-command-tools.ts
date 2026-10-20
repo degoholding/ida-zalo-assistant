@@ -5,7 +5,7 @@ import { eraseTool, type AnyToolDefinition, type ToolDefinition } from "../tool-
 import type { DataAccessContext } from "../data-access-context.js";
 import { DataAccessError } from "../data-access-errors.js";
 import { describeTicket } from "../../tickets/ticket-service.js";
-import { actReply, createdReply, failureReply } from "../../tickets/ticket-command-replies.js";
+import { actReply, createdReply, failureReply, listingReply } from "../../tickets/ticket-command-replies.js";
 import { TICKET_TOOL_DECLARATIONS } from "../../tickets/ticket-tools.js";
 import { listTicketsForActor, loadTicketForActor } from "./ticket-actor-rules.js";
 import { ticketOutcomeOf, ticketRelationshipCreate, ticketRelationshipUpdate, type TicketWriteOutcome } from "./ticket-relationship-write-actions.js";
@@ -13,8 +13,8 @@ import { ticketOutcomeOf, ticketRelationshipCreate, ticketRelationshipUpdate, ty
 // Công cụ của họ `tickets`. Mặt `assistant_command` (lệnh gõ — mô hình không thấy): trả KẾT QUẢ CÓ CẤU TRÚC, lớp lệnh (src/tickets/ticket-commands.ts)
 // dựng câu. Mặt `assistant_model` (tên + khai báo giữ nguyên): cùng lõi nhưng trả `{ result: "<câu>" }` y như công cụ cũ — lỗi quyền / trạng thái
 // cũng là câu trả lời, không phải lỗi công cụ. Mọi ghi chạy NGAY (BC1 bỏ); danh tính từ `ctx.contactActor`, không từ tham số.
-// `list_tickets` (không tham số) CHƯA lên mặt mô hình: bộ làm sạch sơ đồ của cầu nối (`sanitizeForGemini`) từ chối OBJECT rỗng nên khai báo bị bỏ và
-// mô hình mất công cụ; nó giữ đường cũ (ticket-tools-legacy.ts) cho tới khi cầu nối cho phép sơ đồ rỗng — phần lõi (`listTicketsForActor`) đã sẵn.
+// `list_tickets` (không tham số) có trên mặt mô hình: cầu nối nhận sơ đồ gốc `properties` rỗng (đúng dạng khai báo cũ). Ảnh vừa gửi của `create_ticket` /
+// `ticket_action note` được đưa về hàng tải qua `ctx.requestDownload` (móc của ứng dụng; lệnh gõ thì lớp lệnh tự gọi từ `download_ids`).
 
 const createWrite = eraseAction(ticketRelationshipCreate);
 const updateWrite = eraseAction(ticketRelationshipUpdate);
@@ -116,6 +116,20 @@ function asReply(error: unknown, ticketId: number | null): { result: string } {
   throw error;
 }
 
+const modelListTickets: ToolDefinition<Record<string, never>, z.infer<typeof resultOutput>> = {
+  ...modelBase, name: "list_tickets", title: "Danh sách ticket", description: declaration("list_tickets"),
+  input: () => emptyInput as unknown as z.ZodType<Record<string, never>>, output: resultOutput, annotations: READ,
+  async handler(ctx): Outcome<z.infer<typeof resultOutput>> {
+    const listing = await listTicketsForActor(ctx);
+    return asOutcome({ result: listingReply(listing) }, `${listing.lines.length} ticket`, listing.lines.length);
+  },
+};
+
+/** Ảnh «Bỏ qua» / lỗi của ticket vừa ghi → hàng tải (như `deps.requestDownload` của đường cũ); thiếu móc thì bộ tải nhặt khi khởi động lại. */
+const queueDownloads = (ctx: DataAccessContext, outcome: TicketWriteOutcome): void => {
+  if (outcome.download_ids.length) ctx.requestDownload?.(outcome.download_ids);
+};
+
 const modelCreateTicket: ToolDefinition<{ text: string }, z.infer<typeof resultOutput>> = {
   ...modelBase, name: "create_ticket", title: "Tạo ticket", description: declaration("create_ticket"),
   input: () => z.object({ text: z.string() }), output: resultOutput, annotations: WRITE,
@@ -123,6 +137,7 @@ const modelCreateTicket: ToolDefinition<{ text: string }, z.infer<typeof resultO
     const text = input.text.trim();
     if (text.length < 3) throw new DataAccessError("invalid_value", "Thiếu nội dung ticket — hỏi lại người hỏi muốn báo gì.");
     const outcome = await runWrite(ctx, createWrite, { text: text.slice(0, 3000) });
+    queueDownloads(ctx, outcome);
     return asOutcome({ result: createdReply(outcome as Extract<TicketWriteOutcome, { outcome: "created" }>) }, `Đã ghi nhận ticket ${outcome.code}`);
   },
 };
@@ -143,6 +158,7 @@ const modelTicketAction: ToolDefinition<z.infer<typeof modelActInput>, z.infer<t
     try {
       if (input.action === "status") return asOutcome({ result: (await describeOne(ctx, input.ticket_id)).description }, `Ticket T-${input.ticket_id}`);
       const outcome = await runWrite(ctx, updateWrite, { ticket_id: input.ticket_id, action: input.action, note });
+      queueDownloads(ctx, outcome);
       return asOutcome({ result: actReply(outcome as Parameters<typeof actReply>[0]) }, `Ticket ${outcome.code}: ${outcome.outcome}`);
     } catch (error) {
       return asOutcome(asReply(error, input.ticket_id), `Ticket T-${input.ticket_id}: không thực hiện được`, 0);
@@ -151,6 +167,6 @@ const modelTicketAction: ToolDefinition<z.infer<typeof modelActInput>, z.infer<t
 };
 
 export const TICKET_FAMILY_TOOLS: readonly AnyToolDefinition[] = [
-  eraseTool(modelTicketAction), eraseTool(modelCreateTicket),
+  eraseTool(modelListTickets), eraseTool(modelTicketAction), eraseTool(modelCreateTicket),
   eraseTool(listForActor), eraseTool(getTicket), eraseTool(createCommand), eraseTool(actCommand),
 ];

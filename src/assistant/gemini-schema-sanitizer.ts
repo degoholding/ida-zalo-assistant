@@ -77,11 +77,14 @@ function sanitizeNode(node: unknown): Json {
   return out;
 }
 
-/** Sơ đồ gốc phải là object có ít nhất một thuộc tính (Gemini từ chối OBJECT rỗng). Lỗi → `SchemaSanitizeError`. */
+/**
+ * Sơ đồ gốc phải là object có khối `properties`. Công cụ KHÔNG tham số (vd `list_tickets`) có `properties` rỗng — đúng dạng khai báo cũ
+ * `{ type: "object", properties: {} }` mà Gemini / OpenAI vẫn nhận; thiếu hẳn `properties` thì vẫn bị từ chối. Lỗi → `SchemaSanitizeError`.
+ */
 export function sanitizeForGemini(schema: unknown): Json {
   const result = sanitizeNode(schema);
-  if (result.type !== "object" || !isObject(result.properties) || !Object.keys(result.properties).length) {
-    throw new SchemaSanitizeError("sơ đồ gốc phải là object có thuộc tính");
+  if (result.type !== "object" || !isObject(result.properties)) {
+    throw new SchemaSanitizeError("sơ đồ gốc phải là object có khối properties");
   }
   return result;
 }

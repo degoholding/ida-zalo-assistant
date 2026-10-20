@@ -183,10 +183,13 @@ export class AssistantService {
       : resolveAskerAccess(this.db, request.contact, {
         groupScopeId: groupId, maskPersonal: Boolean(this.options.privacy?.maskPersonalData), now, webViewer: request.webViewer,
         turn, wakeJobs: tickets?.wakeJobs, saveSettings: this.options.alertTools?.saveSettings }));
+    // Phiên MCP của lệnh gõ (mặt `assistant_command`): mở lười khi lệnh cần (đồng ý / hủy nháp ghi, lệnh ticket / việc / số liệu của họ đã bật); đóng ngay sau lệnh
+    let commandTurn: AssistantMcpTurn | undefined;
+    const commandMcp = async () => (commandTurn ??= openMcpTurn(await accessOnce(), resolveAssistantMcpBridge(this.options.mcpBridge), { wakeJobs: tickets?.wakeJobs, requestDownload: tickets?.requestDownload }));
     const ticket = tickets ? buildTicketContext(tickets, {
       contact: { id: request.contact.id, uid: request.contact.zalo_uid, name: request.contact.display_name || request.contact.zalo_name || request.contact.zalo_uid, role: request.contact.role },
       threadId: request.threadId, messageId: request.questionMessageId, botAccountId: request.botAccountId,
-      scopeGroupId: request.groupScope?.groupId, access: accessOnce,
+      scopeGroupId: request.groupScope?.groupId, access: accessOnce, mcp: commandMcp,
     }) : undefined;
     // Việc (checklist, phase 7) đi cùng ticket: cùng hàng đợi báo tin
     const task = tickets ? buildTaskContext({ db: this.db, wakeJobs: tickets.wakeJobs }, {
@@ -206,9 +209,6 @@ export class AssistantService {
       const contact = request.contact;
       // Tin riêng của người chưa có vai trò / không là người nhận: cổng tin riêng chỉ cho qua lệnh ticket + «hướng dẫn»
       const ticketOnly = !request.groupScope && !asker && contact.role === ContactRole.None;
-      // Phiên MCP của lệnh gõ (mặt `assistant_command`): chỉ mở khi lệnh «đồng ý / hủy» nháp ghi cần và họ `drafts` bật; đóng ngay sau lệnh
-      let commandTurn: AssistantMcpTurn | undefined;
-      const commandMcp = async () => (commandTurn ??= openMcpTurn(await accessOnce(), resolveAssistantMcpBridge(this.options.mcpBridge), { wakeJobs: tickets?.wakeJobs }));
       let text: string | null;
       try {
         text = await runChatCommand({ db: this.db, alertTools, asker, inGroup: Boolean(request.groupScope), now, ticket, task, brief, ticketOnly, send: send ?? undefined, access: accessOnce, mcp: commandMcp, wakeJobs: tickets?.wakeJobs }, command);
@@ -291,7 +291,7 @@ export class AssistantService {
     };
     // Phiên MCP của lượt (undefined khi không họ nào bật ⇒ hành vi y nguyên); mở lười ở `loadMcpTurnTools`, đóng ở `finally`
     const mcpTurn = openMcpTurn(access, resolveAssistantMcpBridge(this.options.mcpBridge), {
-      groupScopeId: request.groupScope?.groupId, coreQueryTools: Boolean(this.options.coreQueryTools), wakeJobs: tickets?.wakeJobs });
+      groupScopeId: request.groupScope?.groupId, coreQueryTools: Boolean(this.options.coreQueryTools), wakeJobs: tickets?.wakeJobs, requestDownload: tickets?.requestDownload });
     context.mcp = mcpTurn;
     context.meetings = this.options.meetingScheduler;
     context.ticket = ticket;

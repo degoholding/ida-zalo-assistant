@@ -325,6 +325,93 @@ describe("họ tickets qua MCP (phase 8)", { skip: !databaseUrl && "chưa đặt
     for (const name of [...TICKET_TOOL_NAMES, "ticket_list_for_actor", "ticket_get", "ticket_create", "ticket_act"]) assert.ok(!external.has(name), `cổng ngoài lộ ${name}`);
   });
 
+  // ------------------------------------------------------------------ Tích hợp sau đợt 1 (assistant-service)
+  async function serviceTurn(families: string, persona: Persona, question: string, script: Parts[], downloads: number[] = []) {
+    const model = new ScriptedModel(script);
+    const service = new AssistantService(db, model, "gia-lap", { maxPerHour: 100, dailyTokenCap: 10_000_000 }, () => NOW,
+      { tickets: { db, wakeJobs: () => undefined, requestDownload: (ids) => { downloads.push(...ids); } }, mcpBridge: { families: () => parseMcpFamilies(families), gate: bridgeGate } });
+    const contact = (await findContactByUid(db, persona.uid))!;
+    const reply = await service.answer({ botAccountId: 1, contact, threadId: dmThread, questionMessageId: null, question });
+    return { reply, model };
+  }
+  const waitForLogs = async (sql: string, min: number) => {
+    let logs = await rows(sql);
+    for (let attempt = 0; attempt < 40 && logs.length < min; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      logs = await rows(sql);
+    }
+    return logs;
+  };
+
+  test("lệnh gõ «ticket» qua AssistantService thật: họ tickets bật ⇒ mcp_call_log nguồn 3 (ticket_list_for_actor); họ tắt ⇒ không dòng nào, cùng câu trả lời", async () => {
+    await seedOneTicket();
+    const replies: (string | null)[] = [];
+    for (const families of ["", "tickets"]) {
+      await db.query("DELETE FROM mcp_call_log");
+      const { reply, model } = await serviceTurn(families, personas.requester, "ticket", []);
+      assert.equal(model.requests.length, 0, "lệnh gõ không qua mô hình");
+      replies.push(reply.text);
+      const logs = await waitForLogs("SELECT tool, source, contact_id FROM mcp_call_log", families ? 1 : 0);
+      if (families) assert.deepEqual(logs.map((row) => [row.tool, row.source, row.contact_id]), [["ticket_list_for_actor", 3, personas.requester.contactId]]);
+      else assert.equal(logs.length, 0);
+    }
+    assert.match(String(replies[1]), /T-0001/);
+    assert.equal(replies[1], replies[0]);
+  });
+
+  test("create_ticket do MÔ HÌNH khởi xướng: ảnh «Bỏ qua» vừa gửi được đưa về hàng tải qua ctx.requestDownload (như đường cũ); ticket_action note cũng vậy", async () => {
+    for (const families of ["", "tickets"]) {
+      await seedOneTicket(personas.requester.uid);
+      await db.query("DELETE FROM attachment"); await db.query("DELETE FROM message"); await db.query("DELETE FROM ticket_attachment");
+      const messageId = await insertId("INSERT INTO message (group_id, zalo_msg_id, kind, sender_uid, sender_name, sent_at, text) VALUES (?, ?, 2, ?, 'Lan', ?, NULL)",
+        [dmThread, `m-${families || "old"}`, personas.requester.uid, new Date(NOW.getTime() - 60_000)]);
+      const attachmentId = await insertId("INSERT INTO attachment (message_id, group_id, file_name, file_ext, source_url, status) VALUES (?, ?, '', 'jpg', 'https://p', ?)", [messageId, dmThread, AttachmentStatus.Skipped]);
+      const downloads: number[] = [];
+      await serviceTurn(families, personas.requester, "báo giúp máy in hỏng", [[{ functionCall: { name: "create_ticket", args: { text: "máy in hỏng ở kho" } } }], [{ text: "xong" }]], downloads);
+      assert.deepEqual(downloads, [attachmentId], `${families || "cũ"}: create_ticket phải đưa ảnh về hàng tải`);
+      assert.equal((await rows("SELECT status FROM attachment WHERE id = ?", [attachmentId]))[0].status, AttachmentStatus.Pending);
+
+      // Bổ sung ghi chú vào ticket cũ + ảnh mới
+      await db.query("DELETE FROM ticket_attachment");
+      await db.query("UPDATE attachment SET status = ?", [AttachmentStatus.Skipped]);
+      downloads.length = 0;
+      await serviceTurn(families, personas.requester, "bổ sung", [[{ functionCall: { name: "ticket_action", args: { ticket_id: 1, action: "note", note: "kèm ảnh" } } }], [{ text: "xong" }]], downloads);
+      assert.deepEqual(downloads, [attachmentId], `${families || "cũ"}: ticket_action note phải đưa ảnh về hàng tải`);
+    }
+  });
+
+  test("che dữ liệu cá nhân: mặt lệnh gõ (trả thẳng người dùng) KHÔNG che như đường cũ, mặt mô hình vẫn che", async () => {
+    await seedOneTicket(personas.handler.uid);
+    await db.query("UPDATE ticket SET title = 'gọi khách 0912345678 gấp'");
+    const contact = (await findContactByUid(db, personas.handler.uid))!;
+    const access = await resolveAskerAccess(db, contact, { maskPersonal: true, now: NOW, turn: { threadId: dmThread, messageId: null, botAccountId: 1 } });
+    assert.equal(access.maskPersonal, true);
+    const turn = openMcpTurn(access, bridge, { wakeJobs: () => undefined })!;
+    try {
+      const forUser = await turn.callTool("assistant_command", "ticket_get", { ticket_id: 1 });
+      assert.match(JSON.stringify(forUser.structuredContent), /0912345678/, "lệnh gõ không được che");
+      const forModel = await turn.callTool("assistant_model", "ticket_action", { ticket_id: 1, action: "status" });
+      assert.doesNotMatch(JSON.stringify(forModel.structuredContent), /0912345678/, "mô hình phải thấy bản đã che");
+    } finally {
+      await turn.close();
+    }
+  });
+
+  test("list_tickets (không tham số) đi qua MCP ở mặt mô hình, kết quả bằng đường cũ", async () => {
+    await seedOneTicket(personas.requester.uid);
+    const results: unknown[] = [];
+    for (const families of ["", "tickets"]) {
+      const before = bridgeGate.acquires;
+      const { reply, model } = await serviceTurn(families, personas.requester, "tôi có ticket nào?", [[{ functionCall: { name: "list_tickets", args: {} } }], [{ text: "ok" }]]);
+      const response = model.requests.at(-1)!.contents.flatMap((content) => content.parts).flatMap((part) => (part.functionResponse ? [part.functionResponse.response] : []));
+      results.push(response);
+      assert.equal(reply.text, "ok");
+      if (families) assert.ok(bridgeGate.acquires > before, "list_tickets phải là tools/call thật");
+    }
+    assert.deepEqual(results[1], results[0]);
+    assert.match(JSON.stringify(results[1]), /T-0001/);
+  });
+
   test("bot không cấu hình ticket (ngữ cảnh không có wakeJobs): mô hình không thấy công cụ ticket, như đường cũ", async () => {
     const turn = openMcpTurn(await accessFor(personas.handler, "dm"), bridge, {})!;
     try {

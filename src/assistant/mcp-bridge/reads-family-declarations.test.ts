@@ -3,7 +3,9 @@ import { test } from "node:test";
 import { McpCallSource } from "../../constants.js";
 import { buildDataAccessContext } from "../../data-access/data-access-context.js";
 import { admin, fakeDb, manager, NOW } from "../../data-access/data-access-test-support.js";
+import { UNTRUSTED_NOTICE } from "../../data-access/tool-definition.js";
 import { toolsFor } from "../../data-access/read-tool-catalog.js";
+import type { z } from "zod/v4";
 import type { Principal } from "../../auth/principal.js";
 import { ConcurrencyGate } from "../../mcp/mcp-concurrency-gate.js";
 import { LIST_CONTACTS_DECLARATION } from "../contact-directory-tool.js";
@@ -76,6 +78,26 @@ test("cổng /mcp ngoài: có find_people / get_conversation_with_person mới, 
   assert.ok(names.includes("find_people") && names.includes("get_conversation_with_person"));
   assert.ok(!names.includes("list_groups") && !names.includes("list_contacts") && !names.includes("get_group_messages") && !names.includes("group_context"));
   assert.equal(names.filter((name) => name === "search_messages").length, 1, "chỉ bản search_messages của cổng ngoài");
+});
+
+test("cổng /mcp ngoài: find_people / get_conversation_with_person có dặn dữ liệu không đáng tin + untrusted_fields; bản mô hình giữ chữ cũ", async () => {
+  const external = toolsFor(buildDataAccessContext({ db: fakeDb().db, principal: admin(), maskPersonal: false, source: McpCallSource.Http, now: NOW }), "mcp_http");
+  for (const [name, field] of [["find_people", "groups"], ["get_conversation_with_person", "messages"]]) {
+    const tool = external.find((item) => item.name === name)!;
+    assert.ok(tool.description.includes(UNTRUSTED_NOTICE), `${name}: thiếu UNTRUSTED_NOTICE ở cổng ngoài`);
+    assert.ok(Object.keys((tool.output as unknown as z.ZodObject).shape).includes("untrusted_fields"), `${name}: output thiếu untrusted_fields`);
+    assert.ok(field);
+  }
+  const turn = rig(manager());
+  try {
+    const mcp = (await loadMcpTurnTools(turn, {}))!;
+    for (const name of ["find_people", "get_conversation_with_person"]) {
+      assert.ok(!mcp.declarations.find((tool) => tool.name === name)!.description.includes(UNTRUSTED_NOTICE), `${name}: mô hình phải giữ chữ cũ`);
+    }
+    assert.equal(turn.errorShapeOf("find_people"), "string", "tra cứu theo tên lấy bản mô hình");
+  } finally {
+    await turn.close();
+  }
 });
 
 test("bật che: tìm dãy ≥ 9 số bị từ chối invalid_value TRƯỚC khi chạm DB (BC2); thiếu query báo lỗi chữ như cũ", async () => {

@@ -14,7 +14,7 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
 const SCAN_DIRS = ["src/assistant"];
 const EXEMPT_DIRS = ["src/assistant/mcp-bridge/"];
 const SCAN_FILES = [
-  "src/tickets/ticket-tools.ts", "src/tickets/ticket-commands.ts", "src/tasks/task-tools.ts", "src/tasks/task-commands.ts",
+  "src/tickets/ticket-tools.ts", "src/tickets/ticket-commands.ts", "src/tickets/ticket-commands-legacy.ts", "src/tickets/ticket-tools-legacy.ts", "src/tasks/task-tools.ts", "src/tasks/task-commands.ts",
   "src/metrics/metric-query-tool.ts", "src/send-commands/send-command-tool.ts", "src/send-commands/send-reminder-tool.ts",
   "src/send-commands/send-pin-tool.ts", "src/send-commands/send-meeting-announcement-tool.ts", "src/send-commands/send-command-chat.ts",
   "src/send-commands/send-command-context.ts", "src/briefs/brief-tool.ts", "src/briefs/brief-commands.ts",
@@ -77,6 +77,16 @@ function listScannedFiles(): string[] {
     }
   };
   SCAN_DIRS.forEach(walk);
+  // Mọi tệp đường cũ (`*-legacy.ts`) hoặc đã mang dấu mcp-guard ở bất kỳ đâu trong src/ cũng bị quét — thêm tệp legacy mới không cần nhớ sửa danh sách
+  const walkAll = (dir: string) => {
+    for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walkAll(rel);
+      else if (rel.endsWith(".ts") && !rel.endsWith(".test.ts")
+        && (rel.endsWith("-legacy.ts") || MARKER.test(fs.readFileSync(path.join(ROOT, rel), "utf8").split("\n").slice(0, 5).join("\n")))) files.add(rel);
+    }
+  };
+  walkAll("src");
   return [...files].sort();
 }
 
