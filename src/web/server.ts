@@ -8,6 +8,7 @@ import { QrLoginManager } from "./qr-login.js";
 import { serveSpa, SPA_BASE } from "./spa-static.js";
 import { pipeStreamToResponse } from "./pipe-stream-to-response.js";
 import { createMcpGateway, MCP_PATH } from "../mcp/mcp-http-handler.js";
+import { serveLegalPage } from "./legal-pages.js";
 
 // Máy chủ web: giao diện quản trị `web/` (React, khung ERP v2) dưới /app + lớp API JSON /api + ảnh đại diện.
 // Giao diện HTML cũ đã gỡ 01/10/2026 — mọi màn nằm trong /app.
@@ -83,6 +84,8 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
       if (!mcpGateway) throw new HttpError(404, "Không có trang này");
       return mcpGateway.handle(request, response, clientKey);
     }
+    // Trang công khai cho màn đồng ý OAuth của Google (27/10/2026) — không cần đăng nhập
+    if (serveLegalPage(path, method, response)) return;
     const token = parseCookies(request.headers.cookie)[SESSION_COOKIE];
 
     if (serveSpa(config.web.spaDistDir, path, response)) return;

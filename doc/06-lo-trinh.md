@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.6 · 12/10/2026 (phase 10: gợi ý trả lời N2 + khung số liệu N3 + danh mục + ghim từ tin riêng) · bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
+> Bản 1.7 · 27/10/2026 (phase 12 MCP + tài khoản chỉ thu thập + đọc ảnh bắt tin khẩn + vá bảo mật 15–20/10; máy chủ dời VPS 2; soát chạy thật) · bản 1.6 · 12/10/2026 (phase 10: gợi ý trả lời N2 + khung số liệu N3 + danh mục + ghim từ tin riêng) · bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -27,10 +27,16 @@
 | **8** | N6 — Bản tin và báo cáo | **Xong** 09/10 | 6 / 7 |
 | **9** | N7 — Gửi tin theo lệnh | **Xong** 12/10 (phần GĐ1: lệnh gửi + tắt khẩn + nhắc hẹn + ghim từ tin riêng) | 6 / 6 |
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 4 / 9 |
+| **12** | Cổng MCP, trợ lý đi qua MCP, tài khoản chỉ thu thập (làm thêm 15–20/10) | **Xong** 20/10 (cổng `/mcp` cho ứng dụng ngoài chưa bật trên máy chủ) | 7 / 8 |
+| **13** | Kho dữ liệu đủ + cổng MCP cho sếp IDA tự lấy báo cáo | Chưa — kế hoạch 27/10, chờ đại ca duyệt | 0 / 6 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
 08/10; tìm tin (phase 6) và checklist công việc (phase 7) xong 09/10; bản tin sáng / tối và báo cáo tuần / tháng (phase 8) xong 09/10; gửi tin theo lệnh (phase 9 GĐ1) xong 12/10 — hàng loạt lớn giai đoạn 2.
+
+**Soát 27/10:** máy chủ chạy đúng bản mới nhất (`96bd0ce`, migration 044), phiên Zalo bot «thaotho» còn sống (đại ca
+nhắn thử OK), sao lưu chạy mỗi đêm. Bot mới chỉ ở các nhóm / chat THỬ nội bộ — chưa vào nhóm thật của IDA, chưa khai người
+nhận nào, nên cảnh báo / bản tin / checklist chưa chạy trên dữ liệu thật.
 
 Đối chiếu 27 câu của IDA (mục 9): **11 Đạt · 12 Một phần · 4 Chưa** sau phase 7 (báo cáo ngày 07/10 ghi 3 Đạt vì chấm
 câu 2 «Đạt»; bản này hạ xuống «Một phần» vì chưa đo tải và chi phí ở 100 nhóm).
@@ -398,6 +404,49 @@ Plan: `plans/261012-1420-phase-10-reply-suggestions-and-metrics/` · kịch bả
 | Kho tài liệu kỹ thuật đã duyệt; câu kỹ thuật → «[cần kỹ thuật xác nhận]» | 13 | Chờ IDA (bộ tài liệu) |
 | Ghim lên nhóm từ tin riêng (cuộc họp / nội dung) | — | Xong 12/10 |
 
+### Phase 12 — Cổng MCP, trợ lý đi qua MCP, tài khoản chỉ thu thập (Xong 20/10, làm thêm)
+
+Làm thêm ngoài 27 câu của IDA: cho phép công cụ AI ngoài (Claude Code, Codex…) đọc dữ liệu bot theo đúng quyền của
+người dùng web, và gom mọi đường đọc / ghi dữ liệu của trợ lý về MỘT lõi để phân quyền ở một chỗ.
+
+| Việc | Trạng thái |
+|---|---|
+| Đọc ảnh gửi trong nhóm để bắt tin khẩn; ảnh Zalo không tên không còn bị lưu `.bin` | Xong 15/10 |
+| Vá bảo mật: chặn SSRF + tràn bộ nhớ khi tải tệp / đọc link; chống sập tiến trình khi DB / luồng tệp lỗi; ô soạn tin không gửi trùng | Xong 17/10 |
+| Máy chủ MCP chỉ đọc theo tài khoản web; màn **Khóa MCP** (mỗi người tự tạo / xem / thu hồi khóa) | Xong 17/10 |
+| Trợ lý phân quyền theo tài khoản web của người hỏi; cờ nhóm Mật áp cả đường MCP; lịch sử thao tác | Xong 17/10 |
+| Ghi dữ liệu qua AI theo kiểu nháp → người xác nhận | Xong 17/10 |
+| Loại tài khoản bot **Chỉ thu thập** (Normal): chỉ lưu tin / thành viên / tệp, không bao giờ gửi gì lên Zalo; nhóm không có bot Trợ lý thành «Chỉ lưu» | Xong 17/10 |
+| Trợ lý gọi lõi dữ liệu qua MCP ngay trong tiến trình (mọi họ công cụ: đọc, ticket, số liệu, tệp, việc, cảnh báo, lệnh gửi); che dãy từ 9 chữ số | Xong 20/10 (máy chủ đang bật `assistant_mcp_families = all`) |
+| Bật cổng `/mcp` cho ứng dụng ngoài trên máy chủ (`MCP_ENABLED` + `MCP_ALLOWED_HOSTS`) | Chưa — chờ quyết có cho ai dùng |
+
+Chốt 27/10 (đại ca): gắn tài khoản Zalo CÁ NHÂN dạng Chỉ thu thập để nghe thêm nhóm, bot Trợ lý vẫn là tài khoản trả lời.
+Mặc định ĐỌC HẾT (nhóm lẫn tin nhắn 1-1), quản trị tự tắt từng nhóm / từng cuộc chat. Nhóm chỉ có tài khoản nghe thì CHỈ LƯU:
+không cảnh báo, không bản tin, không bắt việc (giữ đúng luật Chỉ lưu của 17/10). Menu web gom nhóm + chấm trạng thái Google /
+phiên Zalo; bỏ dấu ngoặc kép góc trên giao diện. Agent 2 / Agent 3 làm, A1 gộp.
+
+**Để phase sau:** nhóm chỉ có tài khoản nghe vẫn được theo dõi — bot Trợ lý nhắn RIÊNG cho người nhận (cảnh báo khẩn, mục trong
+bản tin), không nói gì vào nhóm.
+
+### Phase 13 — Kho dữ liệu đủ + cổng MCP cho sếp IDA (Chưa, kế hoạch 27/10)
+
+Định hướng đại ca 27/10: trước mắt bot **lưu đủ dữ liệu** (tin nhắn, tệp, tệp / link chia sẻ, hình ảnh) để IDA quản lý dữ liệu
+của chính mình. Sau đó hai đường song song: **(a)** nhân viên vẫn tự nhắn và chăm sóc khách như cũ — bot không chen vào;
+**(b)** một **cổng MCP giống ERP** để sếp gắn vào ứng dụng AI (Claude, ChatGPT…) và tự hỏi / tổng hợp báo cáo theo ý mình.
+Quyền dùng MCP: **chỉ các sếp IDA** (vai trò Quản lý trên web bot). Nối tiếp phase 12: lõi MCP + màn Khóa MCP đã có, còn bật
+ra ngoài, siết quyền và bổ sung dữ liệu.
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 13.1 | Soát độ đủ của kho: tỷ lệ tệp / ảnh tải lỗi hoặc quá hạn link, nhóm chưa bật Lấy file; mặc định Lấy file = bật (khớp luật đọc hết); báo cáo đủ / thiếu trên màn Tệp | Chưa |
+| 13.2 | Lưu **link chia sẻ** trong tin (Drive / Sheets / Docs / web): bảng riêng (link, loại, tiêu đề, người gửi, nhóm, giờ); tùy chọn chụp nội dung lúc tin tới cho tệp Google được chia sẻ cho tài khoản dịch vụ | Chưa |
+| 13.3 | Bật cổng `/mcp` trên máy chủ (`MCP_ENABLED`, `MCP_ALLOWED_HOSTS=botida.degoholding.vn`); chỉ vai trò Quản lý được tạo khóa MCP; nhóm Mật không đi ra MCP; nhật ký từng lượt gọi | Chưa |
+| 13.4 | Bộ công cụ báo cáo qua MCP: đã có tìm tin, tin theo nhóm / theo người, tệp, việc, ticket, số liệu, danh bạ, nhóm; thêm tổng hợp theo kỳ (nhóm × ngày, người × ngày) và xuất Excel / PDF trả link | Chưa |
+| 13.5 | Kết nối cho sếp: hướng dẫn Claude Desktop / Claude Code bằng khóa MCP; nếu cần ChatGPT / claude.ai thì làm OAuth như cổng MCP của ERP | Chưa |
+| 13.6 | Đo tải + chi phí khi sếp hỏi qua MCP (trần lượt / phút đã có), che SĐT / STK / CCCD trong kết quả trả ra | Chưa |
+
+Phụ thuộc: app Google «ERP Tro ly AI» chuyển In production (27/10) để kết nối Drive không hết hạn 7 ngày.
+
 ## 9. Đối chiếu 27 câu IDA
 
 | Câu | Nội dung | Phase | Trạng thái |
@@ -435,9 +484,11 @@ Plan: `plans/261012-1420-phase-10-reply-suggestions-and-metrics/` · kịch bả
 | Việc | Trạng thái |
 |---|---|
 | Bot chạy trên VPS 1 (chung ERP), tên miền botida.degoholding.vn qua Cloudflare | Xong 07/10 (tạm) |
-| VPS riêng cho bot (đề xuất 4 lõi CPU, 8 GB RAM, 100 GB SSD) | Đang làm — đại ca đang mua |
+| VPS riêng cho bot (đề xuất 4 lõi CPU, 8 GB RAM, 100 GB SSD) | Một phần — 13/10 dời sang VPS 2 (AZDIGI 4 lõi / 8 GB / 55 GB), máy này chạy chung dev ERP + dịch vụ AI; ổ còn 19 GB (27/10) |
 | Tệp lên R2 (bucket `bot-tro-ly-ida`, token «ERP-doc-file-app-cu» được cấp đọc + ghi 08/10) | Xong 08/10 |
-| Chuyển bot sang VPS riêng (database + tệp + phiên Zalo) | Chưa |
+| Chuyển bot sang VPS riêng (database + tệp + phiên Zalo) | Xong 13/10 sang VPS 2 (chưa phải máy riêng của IDA) |
+| Khóa AI (27/10): Gemini trực tiếp → modelapi gemini (khóa mới, trạm đang lỗi 500 mọi mô hình) → modelapi deepseek-v4.1-flash (chạy lại bình thường, lỗi 400 ngày 20/10 là trạm chập chờn) | Chạy — nên đưa khóa deepseek lên trên khóa modelapi gemini tới khi trạm sửa |
+| Kết nối Google (tạo họp, theo dõi ghi âm trên Drive) — app Google đang ở chế độ thử nên 7 ngày phải kết nối lại | Hết hạn 27/10 — quản trị bấm «Kết nối Google» ở Cài đặt |
 | Mỗi bot thêm một tài khoản Zalo dự phòng trong cùng các nhóm | Chưa |
 | Bật Cloudflare Access chắn trang quản trị | Chưa |
 | Migration 030–032 (phase 10): mẫu tin, nguồn số liệu, danh mục NV/ĐL | Xong 12/10 |
@@ -456,4 +507,4 @@ khoảng 1,5–7 triệu tin (2–7 GB database); ảnh / tệp giữ 6 tháng k
 | IDA | Link các bảng Google Drive thật (bản chép đang lỗi #REF!), chia sẻ quyền xem cho tài khoản dịch vụ của bot |
 | IDA | 30–50 tin báo cáo thật kèm số đúng (bộ đo «trích đúng ≥ 95%») |
 | IDA | Danh sách VIP; danh mục nhân viên và đại lý; file KPI; bộ tài liệu kỹ thuật và nhãn sản phẩm; form báo cáo tuần / tháng |
-| Đại ca | Đổi khóa modelapi (đã lộ trong chat); nạp tiền khóa Gemini; bật Cloudflare Access; VPS riêng |
+| Đại ca | Đưa bot vào nhóm thật của IDA + khai 3 người nhận; kết nối lại Google; bật Cloudflare Access; VPS riêng |
