@@ -11,7 +11,7 @@ const RULES: Rule[] = [
   ["WRITE", /^\/api\/groups\/\d+$/, "group", "write"],
   // Lấy tin cũ (17/10/2026): Quản trị + Quản lý; phạm vi nhóm kiểm trong handler (assertThreadVisible)
   ["WRITE", /^\/api\/groups\/\d+\/backfill$/, "group", "write"],
-  ["GET", /^\/api\/(conversations|lookups\/threads|events)(\/|$)/, "conversation", "read"],
+  ["GET", /^\/api\/(conversations|lookups\/threads|lookups\/bot-accounts|events)(\/|$)/, "conversation", "read"],
   // Tìm tin (phase 6): cùng quyền xem hội thoại; phạm vi nhóm áp trong API
   ["GET", /^\/api\/messages\/search$/, "conversation", "read"],
   ["WRITE", /^\/api\/conversations\/\d+\/(messages|attachments)$/, "conversation", "write"],

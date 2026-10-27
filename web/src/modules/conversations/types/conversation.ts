@@ -1,5 +1,14 @@
 import type { Contact } from '@/shared/contact-card/contact-constants'
 
+/** Tài khoản Zalo (bot) của một cuộc — nhóm có thể nhiều tài khoản, cuộc riêng một. 27/10/2026. */
+export interface ThreadAccount {
+  id: number
+  name: string
+  kind: number
+  /** "Trợ lý" / "Chỉ thu thập" — máy chủ ghi sẵn. */
+  kind_label: string
+}
+
 /** Một cuộc trò chuyện trong cột trái — `GET /api/conversations`. */
 export interface Thread {
   id: number
@@ -15,6 +24,8 @@ export interface Thread {
   last_sender: string | null
   last_from_bot: boolean
   avatar_url: string | null
+  /** Tài khoản Zalo của cuộc (Trợ lý trước). Máy chủ cũ chưa trả thì vắng. */
+  accounts?: ThreadAccount[]
   /**
    * Cuộc riêng 1-1 (27/10/2026, API của Agent 2): bot có lưu tin / lấy file của cuộc này không. Nhóm thì cờ nằm ở `group`.
    * Tùy chọn: máy chủ chưa có bản API mới thì không trả (khi đó công tắc không hiện).

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ChatMessage, MessagesPage, ThreadDetail } from '../types/conversation'
+import type { ChatMessage, MessagesPage, Thread, ThreadAccount, ThreadDetail } from '../types/conversation'
 import { ConversationPage } from './conversation-page'
 
 const apiGet = vi.fn()
@@ -44,6 +44,14 @@ function LocationProbe() {
   return <output aria-label="url">{`${location.pathname}${location.search}`}</output>
 }
 
+const ACCOUNTS: ThreadAccount[] = [
+  { id: 1, name: 'Lạc Lạc', kind: 0, kind_label: 'Trợ lý' },
+  { id: 2, name: 'Bot kho', kind: 1, kind_label: 'Chỉ thu thập' },
+]
+let listItems: Thread[] = []
+let detailAccounts: ThreadAccount[] | undefined
+const listCalls: Record<string, unknown>[] = []
+
 function renderAt(url: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchInterval: false } } })
   render(
@@ -60,8 +68,12 @@ function renderAt(url: string) {
 /** Máy chủ giả: trả theo đường + tham số; `pages` = trang tin theo khóa tham số. */
 function serve(pages: Record<string, MessagesPage | Error>) {
   apiGet.mockImplementation(async (url: string, config?: { params?: Record<string, unknown> }) => {
-    if (url === '/api/conversations') return { items: [], total: 0, page: 1, page_size: 200 }
-    if (url === '/api/conversations/5') return THREAD
+    if (url === '/api/conversations') {
+      listCalls.push(config?.params ?? {})
+      return { items: listItems, total: listItems.length, page: 1, page_size: 200 }
+    }
+    if (url === '/api/lookups/bot-accounts') return ACCOUNTS
+    if (url === '/api/conversations/5') return { ...THREAD, accounts: detailAccounts }
     if (url === '/api/conversations/5/messages') {
       const key = JSON.stringify(config?.params ?? {})
       const page = pages[key]
@@ -75,7 +87,12 @@ function serve(pages: Record<string, MessagesPage | Error>) {
 
 beforeAll(() => vi.stubGlobal('EventSource', FakeEventSource))
 afterAll(() => vi.unstubAllGlobals())
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  listItems = []
+  detailAccounts = undefined
+  listCalls.length = 0
+})
 
 describe('ConversationPage ?msg=', () => {
   it('loads the page around the linked message, highlights it, and pages newer / older by message id', async () => {
@@ -134,5 +151,26 @@ describe('ConversationPage ?msg=', () => {
     renderAt(`/conversations/5?msg=${raw}`)
     expect(await screen.findByText('tin mới nhất')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Về tin mới nhất/ })).toBeNull()
+  })
+})
+
+describe('ConversationPage lọc + nhãn theo tài khoản Zalo', () => {
+  it('reads ?acc= into account_id__in, tags each thread with the first account + "+n", and lists every account in the profile', async () => {
+    listItems = [{ ...THREAD, id: 5, accounts: ACCOUNTS }]
+    detailAccounts = ACCOUNTS
+    serve({ '{}': { items: [makeMessage(1, 'xin chào')], older_cursor: null, newer_cursor: null } })
+    renderAt('/conversations/5?acc=2,1')
+    await waitFor(() => expect(listCalls.some((params) => params.account_id__in === '2,1')).toBe(true))
+    const tag = await screen.findByText('Lạc Lạc +1')
+    expect(tag.getAttribute('title')).toBe('Lạc Lạc (Trợ lý), Bot kho (Chỉ thu thập)')
+    expect(await screen.findByText('Tài khoản Zalo')).toBeTruthy()
+    expect(screen.getAllByText('Chỉ thu thập').length).toBeGreaterThan(0)
+  })
+
+  it('sends no account filter by default (all accounts)', async () => {
+    serve({ '{}': { items: [], older_cursor: null, newer_cursor: null } })
+    renderAt('/conversations/5')
+    await waitFor(() => expect(listCalls.length).toBeGreaterThan(0))
+    expect(listCalls.every((params) => params.account_id__in === undefined)).toBe(true)
   })
 })

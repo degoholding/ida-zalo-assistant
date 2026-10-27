@@ -4,6 +4,7 @@ import { ConversationType } from "../../constants.js";
 import { listCompanies } from "../../sync/company-repository.js";
 import { sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
+import { listAccountOptions } from "./conversation-accounts.js";
 
 // Danh sách ngắn cho ô chọn / bộ lọc. Không phân trang — các bảng này nhỏ (vài chục dòng).
 
@@ -27,6 +28,10 @@ export const lookupRoutes: ApiRoute[] = [
       `SELECT id, COALESCE(NULLIF(label, ''), name) AS name FROM zalo_group WHERE thread_type = ${ConversationType.Group}
        ${scope ? `AND ${scope.sql}` : ""} ORDER BY name`, scope?.params ?? []);
     sendOk(response, rows);
+  }],
+  // Ô lọc Tài khoản ở màn Hội thoại (27/10/2026): id, tên, loại — không lộ uid / phiên; quyền như xem hội thoại
+  ["GET", /^\/api\/lookups\/bot-accounts$/, async ({ response, service }) => {
+    sendOk(response, await listAccountOptions(service.db));
   }],
   // Mọi cuộc (nhóm + riêng) — bộ lọc màn Tệp
   ["GET", /^\/api\/lookups\/threads$/, async ({ response, service, principal }) => {

@@ -12,7 +12,8 @@ import { ChatTimeline } from '../components/chat-timeline'
 import { ConversationProfilePanel } from '../components/conversation-profile-panel'
 import { MessageComposer } from '../components/message-composer'
 import { ThreadList, THREAD_TYPE_ALL } from '../components/thread-list'
-import { flattenMessagePages, useMessages, useThread, useThreads } from '../hooks/use-conversations'
+import { flattenMessagePages, useAccountOptions, useMessages, useThread, useThreads } from '../hooks/use-conversations'
+import { parseAccountFilter } from '../utils/account-tag'
 import { useLiveEvents } from '../hooks/use-live-events'
 
 /**
@@ -26,10 +27,18 @@ export function ConversationPage() {
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const debouncedQuery = useDebouncedValue(query, 300)
   const typeFilter = Number(searchParams.get('type') ?? THREAD_TYPE_ALL)
+  // `?acc=3,5` — lọc theo tài khoản Zalo, nằm ở URL để gửi link được; rỗng = tất cả
+  const accParam = searchParams.get('acc')
+  const accountFilter = useMemo(() => parseAccountFilter(accParam), [accParam])
+  const accountOptions = useAccountOptions()
 
   const listParams = useMemo(
-    () => ({ q: debouncedQuery || undefined, thread_type: typeFilter >= 0 ? typeFilter : undefined }),
-    [debouncedQuery, typeFilter],
+    () => ({
+      q: debouncedQuery || undefined,
+      thread_type: typeFilter >= 0 ? typeFilter : undefined,
+      account_id__in: accountFilter.length ? accountFilter.join(',') : undefined,
+    }),
+    [debouncedQuery, typeFilter, accountFilter],
   )
   useLiveEvents()
   const threads = useThreads(listParams)
@@ -49,6 +58,13 @@ export function ConversationPage() {
     const next = new URLSearchParams(searchParams)
     if (value === THREAD_TYPE_ALL) next.delete('type')
     else next.set('type', String(value))
+    setSearchParams(next, { replace: true })
+  }
+
+  const handleAccountFilterChange = (ids: number[]) => {
+    const next = new URLSearchParams(searchParams)
+    if (ids.length) next.set('acc', ids.join(','))
+    else next.delete('acc')
     setSearchParams(next, { replace: true })
   }
 
@@ -72,6 +88,9 @@ export function ConversationPage() {
         onQueryChange={setQuery}
         typeFilter={typeFilter}
         onTypeFilterChange={handleTypeFilterChange}
+        accountOptions={accountOptions.data ?? []}
+        accountFilter={accountFilter}
+        onAccountFilterChange={handleAccountFilterChange}
         isLoading={threads.isLoading}
       />
       <section className="flex min-w-0 flex-1 flex-col">

@@ -10,7 +10,8 @@ import { Button } from '@/shared/ui/button'
 import { Pill } from '@/shared/ui/pill'
 import { Separator } from '@/shared/ui/separator'
 import { formatDateTime } from '@/shared/utils/format-date'
-import type { ThreadDetail } from '../types/conversation'
+import type { ThreadAccount, ThreadDetail } from '../types/conversation'
+import { ASSISTANT_ACCOUNT_KIND } from '../utils/account-tag'
 import { DirectCaptureToggles } from './direct-capture-toggles'
 
 function PanelHeader({ name, avatarUrl, shape, sub, detailTo }: { name: string; avatarUrl: string | null; shape: 'circle' | 'rounded'; sub: string; detailTo: string }) {
@@ -26,6 +27,25 @@ function PanelHeader({ name, avatarUrl, shape, sub, detailTo }: { name: string; 
         </Link>
       </Button>
     </div>
+  )
+}
+
+/** Tài khoản Zalo của cuộc, ghi ĐỦ (cột trái chỉ ghi gọn tên đầu + "+n") — 27/10/2026. */
+function ThreadAccounts({ accounts }: { accounts: ThreadAccount[] | undefined }) {
+  if (!accounts) return null
+  return (
+    <>
+      <dt className="text-muted-foreground">Tài khoản Zalo</dt>
+      <dd className="flex flex-col items-end gap-0.5 text-right">
+        {accounts.length === 0 && <span className="text-muted-foreground">Không còn bot nào</span>}
+        {accounts.map((account) => (
+          <span key={account.id} className="flex items-center gap-1.5">
+            <span className="truncate">{account.name}</span>
+            <Pill tone={account.kind === ASSISTANT_ACCOUNT_KIND ? 'done' : 'neutral'}>{account.kind_label}</Pill>
+          </span>
+        ))}
+      </dd>
+    </>
   )
 }
 
@@ -49,6 +69,7 @@ export function ConversationProfilePanel({ thread }: { thread: ThreadDetail }) {
           <dd className="text-right">{formatDateTime(contact.last_dm_at) || '—'}</dd>
           <dt className="text-muted-foreground">Ở nhóm</dt>
           <dd className="text-right">{contact.group_count} nhóm</dd>
+          <ThreadAccounts accounts={thread.accounts} />
         </dl>
         <DirectCaptureToggles thread={thread} />
         <Separator />
@@ -76,6 +97,7 @@ export function ConversationProfilePanel({ thread }: { thread: ThreadDetail }) {
         <dd className="text-right">{group.company_name ?? 'Chưa gán'}</dd>
         <dt className="text-muted-foreground">Lưu tin</dt>
         <dd className="text-right">{group.retention_days} ngày</dd>
+        <ThreadAccounts accounts={thread.accounts} />
       </dl>
       <Separator />
       <div className="px-4 pt-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Thành viên ({activeMembers.length})</div>

@@ -1,6 +1,6 @@
 import { apiGet, apiPatch, apiPost, httpClient, type SuccessEnvelope } from '@/core/api'
 import type { PaginatedResult } from '@/shared/types/api'
-import type { MessagesCursor, MessagesPage, Thread, ThreadCapturePatch, ThreadDetail } from '../types/conversation'
+import type { MessagesCursor, MessagesPage, Thread, ThreadAccount, ThreadCapturePatch, ThreadDetail } from '../types/conversation'
 
 export const CONVERSATIONS_API_PATH = '/api/conversations'
 
@@ -10,6 +10,8 @@ const THREAD_LIST_SIZE = 200
 export interface ThreadListParams {
   q?: string
   thread_type?: number
+  /** Lọc theo tài khoản Zalo: "3,5" (một hoặc nhiều id) — nhóm có bot còn ở, cuộc riêng của bot đó. */
+  account_id__in?: string
 }
 
 /** Đổi mốc trang sang tham số máy chủ — chỉ gửi một tham số (máy chủ ưu tiên around → after_id → before_id). */
@@ -23,6 +25,8 @@ export function toMessagesParams(cursor: MessagesCursor): Record<string, number>
 export const conversationApi = {
   list: (params: ThreadListParams) =>
     apiGet<PaginatedResult<Thread>>(CONVERSATIONS_API_PATH, { params: { ...params, page_size: THREAD_LIST_SIZE } }),
+  /** Ô lọc Tài khoản: mọi tài khoản bot (id, tên, loại) — quyền như xem hội thoại. */
+  accountOptions: () => apiGet<ThreadAccount[]>('/api/lookups/bot-accounts'),
   thread: (id: number) => apiGet<ThreadDetail>(`${CONVERSATIONS_API_PATH}/${id}`),
   /** Cuộc riêng 1-1: bật / tắt Đọc tin, Lấy file (chỉ quản trị). Chỉ gửi trường đổi. */
   updateCapture: (id: number, patch: ThreadCapturePatch) => apiPatch<ThreadDetail>(`${CONVERSATIONS_API_PATH}/${id}`, patch),
