@@ -3,7 +3,7 @@ import { maskPersonalDataDeep } from "../privacy/personal-data.js";
 import type { DataAccessContext } from "./data-access-context.js";
 import { DataAccessError, toErrorPayload, type DataAccessErrorCode } from "./data-access-errors.js";
 import { MASK_NOTICE, buildToolText } from "./result-envelope.js";
-import type { AnyToolDefinition } from "./tool-definition.js";
+import type { AnyToolDefinition, ToolMediaBlock } from "./tool-definition.js";
 import type { TurnEffects } from "./turn-effects.js";
 
 // Chạy MỘT lời gọi công cụ cho mọi cổng: kiểm `available`, kiểm đầu vào bằng zod, chạy, che dữ liệu cá nhân (một chỗ cho cả
@@ -20,6 +20,8 @@ export interface ToolResult {
   errorCode?: DataAccessErrorCode;
   /** Tác động của lượt trợ lý (chỉ khi công cụ khai); cổng MCP ngoài không bao giờ chuyển đi. */
   effects?: TurnEffects;
+  /** Ảnh / tệp gốc trả kèm (ToolOutcome.media). */
+  media?: ToolMediaBlock[];
 }
 
 /**
@@ -64,7 +66,11 @@ export async function runTool(tool: AnyToolDefinition, ctx: DataAccessContext, r
       summary = maskPersonalDataDeep(summary);
     }
     const text = buildToolText(summary, structured);
-    return { isError: false, structured, text, rowCount: outcome.rowCount, resultChars: text.length, entity: outcome.entity, effects: outcome.effects };
+    const mediaChars = (outcome.media ?? []).reduce((sum, block) => sum + (block.type === "image" ? block.data.length : block.resource.blob.length), 0);
+    return {
+      isError: false, structured, text, rowCount: outcome.rowCount, resultChars: text.length + mediaChars, entity: outcome.entity, effects: outcome.effects,
+      ...(outcome.media?.length ? { media: outcome.media } : {}),
+    };
   } catch (error) {
     if (error instanceof DataAccessError) return failure(error, external);
     throw error;

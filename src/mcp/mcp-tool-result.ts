@@ -1,4 +1,5 @@
 import { McpCallStatus } from "../constants.js";
+import type { ToolMediaBlock } from "../data-access/tool-definition.js";
 import type { ToolResult } from "../data-access/tool-runner.js";
 import { ERROR_META_KEY, TURN_META_KEY } from "./mcp-meta-keys.js";
 
@@ -6,7 +7,7 @@ import { ERROR_META_KEY, TURN_META_KEY } from "./mcp-meta-keys.js";
 
 export interface McpToolResult {
   [key: string]: unknown;
-  content: { type: "text"; text: string }[];
+  content: ({ type: "text"; text: string } | ToolMediaBlock)[];
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
   /** Chỉ ở mặt trợ lý (`rich`): mã lỗi có cấu trúc + tác động của lượt. Cổng ngoài không bao giờ có `_meta`. */
@@ -31,7 +32,7 @@ export function toCallToolResult(result: ToolResult, rich = false): McpToolResul
   }
   const structured = result.structured;
   return {
-    content: [{ type: "text", text: result.text }],
+    content: [{ type: "text", text: result.text }, ...(result.media ?? [])],
     ...(structured && typeof structured === "object" && !Array.isArray(structured) ? { structuredContent: structured as Record<string, unknown> } : {}),
     ...(rich && result.effects ? { _meta: { [TURN_META_KEY]: result.effects } } : {}),
   };

@@ -1,6 +1,7 @@
 import { FAMILY_TOOLS } from "./catalog/family-catalogs.js";
 import type { DataAccessContext } from "./data-access-context.js";
 import { describeEntitiesTool } from "./operations/describe-entities-operation.js";
+import { fileGetTool } from "./operations/file-get-operation.js";
 import { fileTextTool } from "./operations/file-text-operation.js";
 import { metricsSummaryTool } from "./operations/metrics-summary-operation.js";
 import { queryRecordsTool } from "./operations/query-records-operation.js";
@@ -13,7 +14,7 @@ import { DEFAULT_TOOL_SURFACES, eraseTool, type AnyToolDefinition, type ToolDefi
 // Danh mục công cụ: ĐỌC (phase 2) + GHI nháp → xác nhận (phase 8, `write/`). Cổng MCP và bộ chuyển trợ lý đều lấy từ đây.
 
 export const READ_TOOLS: readonly AnyToolDefinition[] = [
-  whoamiTool, describeEntitiesTool, queryRecordsTool, searchMessagesTool, threadMessagesTool, fileTextTool, metricsSummaryTool,
+  whoamiTool, describeEntitiesTool, queryRecordsTool, searchMessagesTool, threadMessagesTool, fileTextTool, fileGetTool, metricsSummaryTool,
 ].map((tool) => eraseTool(tool as ToolDefinition<never, never>));
 
 /** Mọi công cụ (đọc + ghi + công cụ của các họ trợ lý); công cụ ghi tự ẩn khi `ctx.allowWrite` tắt. */

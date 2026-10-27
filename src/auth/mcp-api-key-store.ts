@@ -1,5 +1,5 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { McpAccessLevel, UserRole } from "../constants.js";
+import { McpAccessLevel, McpKeyKind, UserRole } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { generateMcpKey, parseMcpKey } from "./mcp-api-key-format.js";
 import { loadUserPrincipal, type Principal } from "./principal.js";
@@ -32,6 +32,14 @@ export interface VerifiedMcpKey {
   /** Uid Zalo của danh bạ gắn với chủ khóa (`app_user.contact_id`) — cuộc nhắn riêng DUY NHẤT khóa này được đọc; null = không có, và luôn null khi khóa không có cờ «đọc nhóm Mật». */
   ownDirectUid: string | null;
 }
+
+/** Ai được dùng cổng MCP (khóa dán tay lẫn OAuth): chỉ Quản trị / Quản lý — đại ca chốt 27/10/2026 «chỉ sếp IDA dùng». Nhân viên
+ *  không tạo được khóa, không cấp được quyền OAuth, và khóa cũ của người bị hạ xuống Nhân viên thôi hiệu lực ngay (verifyMcpKey). */
+export function canUseMcp(role: UserRole): boolean {
+  return role === UserRole.Admin || role === UserRole.Manager;
+}
+
+export const MCP_ROLE_DENIED_TEXT = "Chỉ Quản trị / Quản lý được dùng cổng MCP";
 
 /** Mức tối đa một vai trò được cấp cho khóa: chỉ Quản trị / Quản lý được đọc + ghi. */
 export function maxAccessLevelForRole(role: UserRole): McpAccessLevel {
@@ -79,9 +87,11 @@ export async function createMcpKey(db: Db, input: CreateMcpKeyInput): Promise<{ 
   if (input.accessLevel !== McpAccessLevel.Read && input.accessLevel !== McpAccessLevel.ReadWrite) throw new McpKeyValidationError("Mức quyền khóa không hợp lệ");
   const owner = await loadUserPrincipal(db, input.userId);
   if (!owner) throw new McpKeyValidationError("Người dùng không tồn tại hoặc đã bị tắt");
+  if (!canUseMcp(owner.role)) throw new McpKeyValidationError(MCP_ROLE_DENIED_TEXT);
   if (input.accessLevel > maxAccessLevelForRole(owner.role)) throw new McpKeyValidationError("Vai trò của người này chỉ được tạo khóa chỉ đọc");
   const [active] = await db.query<RowDataPacket[]>(
-    "SELECT COUNT(*) AS total FROM mcp_api_key WHERE user_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW(3))", [input.userId]);
+    `SELECT COUNT(*) AS total FROM mcp_api_key WHERE user_id = ? AND kind = ${McpKeyKind.Manual} AND revoked_at IS NULL
+     AND (expires_at IS NULL OR expires_at > NOW(3))`, [input.userId]);
   if (Number(active[0]?.total) >= MAX_ACTIVE_KEYS_PER_USER) throw new McpKeyValidationError(`Đã đủ ${MAX_ACTIVE_KEYS_PER_USER} khóa đang dùng — thu hồi bớt rồi tạo lại`);
 
   for (let attempt = 0; attempt < PREFIX_RETRIES; attempt++) {
@@ -106,11 +116,25 @@ export async function verifyMcpKey(db: Db, token: string): Promise<VerifiedMcpKe
   if (!parsed) return null;
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${KEY_COLUMNS} FROM mcp_api_key
-     WHERE token_hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW(3))`, [parsed.tokenHash]);
-  if (!rows[0]) return null;
-  const key = toKeyInfo(rows[0]);
+     WHERE token_hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW(3))
+       AND (access_expires_at IS NULL OR access_expires_at > NOW(3))`, [parsed.tokenHash]);
+  return rows[0] ? verifiedFromRow(db, rows[0]) : null;
+}
+
+/**
+ * Khóa (theo id) còn sống → chủ khóa + quyền như lúc gọi /mcp. Dùng cho link tải tệp ký sẵn (/mcp-files): lúc tải dựng lại quyền
+ * để kiểm lại phạm vi nhóm / Mật của tệp (review 27/10). KHÔNG xét hạn mã truy cập ngắn của OAuth — link có hạn riêng 5 phút.
+ */
+export async function loadMcpKeyAccess(db: Db, keyId: number): Promise<VerifiedMcpKey | null> {
+  const [rows] = await db.query<RowDataPacket[]>(
+    `SELECT ${KEY_COLUMNS} FROM mcp_api_key WHERE id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW(3))`, [keyId]);
+  return rows[0] ? verifiedFromRow(db, rows[0]) : null;
+}
+
+async function verifiedFromRow(db: Db, row: RowDataPacket): Promise<VerifiedMcpKey | null> {
+  const key = toKeyInfo(row);
   const owner = await loadUserPrincipal(db, key.userId);
-  if (!owner) return null;
+  if (!owner || !canUseMcp(owner.role)) return null;
   const principal: Principal = { ...owner, canViewConfidential: owner.canViewConfidential === true && key.includeConfidential };
   const [contactRows] = await db.query<RowDataPacket[]>(
     "SELECT c.zalo_uid FROM app_user u JOIN contact c ON c.id = u.contact_id WHERE u.id = ?", [key.userId]);

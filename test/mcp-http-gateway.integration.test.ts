@@ -123,22 +123,23 @@ describe("cổng /mcp đầu-cuối (MySQL + HTTP thật)", { skip: !databaseUrl
     };
     assert.deepEqual(await find(await newKey("quanly", McpAccessLevel.Read, true)), [groups.thuong, groups.mat].sort());
     assert.deepEqual(await find(await newKey("quanly", McpAccessLevel.Read, false)), [groups.thuong]);
+    await db.query("UPDATE app_user SET role = ? WHERE id = ?", [UserRole.Manager, ids.nhanvien]);
     assert.deepEqual(await find(await newKey("nhanvien", McpAccessLevel.Read, true)), [groups.thuong], "người dùng không có cờ Mật, khóa có cờ cũng không đủ");
   });
 
-  test("Nhân viên: khóa đọc+ghi bị chặn trần về chỉ đọc (không thấy công cụ ghi)", async () => {
+  test("người bị hạ xuống Nhân viên: khóa cũ thôi hiệu lực ngay (27/10: chỉ Quản trị / Quản lý dùng MCP); Nhân viên không tạo được khóa", async () => {
     await db.query("UPDATE app_user SET role = ? WHERE id = ?", [UserRole.Manager, ids.nhanvien]);
     const token = await newKey("nhanvien", McpAccessLevel.ReadWrite);
+    assert.equal((await rawPost(token)).status, 200);
     await db.query("UPDATE app_user SET role = ? WHERE id = ?", [UserRole.Staff, ids.nhanvien]);
-    const client = await connect(token);
-    try {
-      assert.ok((await toolNames(client)).every((name) => !/^propose_|^confirm_write$/.test(name)));
-    } finally { await client.close(); }
+    assert.equal((await rawPost(token)).status, 401);
+    await assert.rejects(newKey("nhanvien"), /Quản trị \/ Quản lý/);
   });
 
   test("khóa thu hồi / hết hạn / chủ bị tắt / không có khóa → 401; Origin lạ → 403", async () => {
     const revoked = await newKey("quanly");
     const expired = await newKey("quanly");
+    await db.query("UPDATE app_user SET role = ? WHERE id = ?", [UserRole.Manager, ids.nhanvien]);
     const ownerOff = await newKey("nhanvien");
     const good = await newKey("quanly");
     assert.equal((await rawPost(good)).status, 200);

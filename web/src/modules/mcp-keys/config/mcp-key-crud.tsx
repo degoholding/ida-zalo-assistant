@@ -14,6 +14,7 @@ import { MCP_KEY_SCOPE_PARAM, McpKeyScopeToggle } from '../components/mcp-key-sc
 import { McpKeyStatusBadge } from '../components/mcp-key-status-badge'
 import {
   getMcpAccessLevelLabel,
+  getMcpKeyKindLabel,
   MCP_ACCESS_LEVEL_OPTIONS,
   MCP_KEY_STATUS_OPTIONS,
   type McpKeyDetail,
@@ -24,6 +25,7 @@ const muted = (text: string) => <span className="text-muted-foreground">{text}</
 /** Cột Khóa MCP — `key` cột sắp xếp PHẢI trùng `sorts` của `MCP_KEY_LIST_SPEC` (`src/web/api/mcp-keys-api.ts`). */
 export const MCP_KEY_COLUMNS: DataTableColumn<McpKeyDetail>[] = [
   { key: 'name', header: 'Tên khóa', width: 220, hideable: false, defaultPinned: true, sortable: true, cell: (row) => <span className="font-semibold text-navy">{row.name}</span> },
+  { key: 'kind', header: 'Loại', width: 130, cell: (row) => getMcpKeyKindLabel(row.kind) },
   { key: 'prefix', header: 'Tiền tố', width: 110, cell: (row) => <span className="font-mono text-xs">{row.prefix}</span> },
   { key: 'access_level', header: 'Mức quyền', width: 110, cell: (row) => getMcpAccessLevelLabel(row.access_level) || '—' },
   {

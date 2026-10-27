@@ -19,6 +19,8 @@ export interface McpAccess {
   clientIp: string;
   /** Xem `VerifiedMcpKey.ownDirectUid`. */
   ownDirectUid: string | null;
+  /** Gốc công khai của bot (MCP_PUBLIC_URL, hoặc Host loopback ở máy dev) để ký link tải tệp; null = không ký được. */
+  publicBase?: string | null;
 }
 
 export type AuthOutcome = { ok: true; access: McpAccess } | { ok: false; status: 401 | 429; message: string };

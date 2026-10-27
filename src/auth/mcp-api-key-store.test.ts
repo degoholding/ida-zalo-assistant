@@ -58,8 +58,8 @@ function verifyLevel(keyLevel: McpAccessLevel, role: UserRole) {
   return verifyMcpKey(db, token);
 }
 
-test("verifyMcpKey: khóa đọc+ghi của người đã bị hạ xuống Nhân viên → chỉ đọc; Quản lý / Quản trị giữ đọc+ghi; khóa chỉ đọc không được nâng", async () => {
-  assert.equal((await verifyLevel(McpAccessLevel.ReadWrite, UserRole.Staff))?.key.accessLevel, McpAccessLevel.Read);
+test("verifyMcpKey: người bị hạ xuống Nhân viên thì khóa thôi hiệu lực (27/10: chỉ Quản trị / Quản lý dùng MCP); Quản lý / Quản trị giữ đọc+ghi; khóa chỉ đọc không được nâng", async () => {
+  assert.equal(await verifyLevel(McpAccessLevel.ReadWrite, UserRole.Staff), null);
   assert.equal((await verifyLevel(McpAccessLevel.ReadWrite, UserRole.Manager))?.key.accessLevel, McpAccessLevel.ReadWrite);
   assert.equal((await verifyLevel(McpAccessLevel.ReadWrite, UserRole.Admin))?.key.accessLevel, McpAccessLevel.ReadWrite);
   assert.equal((await verifyLevel(McpAccessLevel.Read, UserRole.Admin))?.key.accessLevel, McpAccessLevel.Read);

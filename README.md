@@ -238,9 +238,21 @@ quyết, không do mô hình. Mã: `src/mcp/` (cổng, khóa, nhịp, nhật ký
 | `MCP_RATE_LIMIT_PER_MINUTE` (60), `MCP_MAX_CONCURRENT_PER_KEY` (4) | Nhịp lời gọi một khóa; vượt thì công cụ trả `rate_limited` + số giây chờ |
 | `MCP_MAX_CONCURRENT` (3), `MCP_QUEUE_WAIT_MS` (5000) | Trần lời gọi chạy cùng lúc của cả hệ thống (pool MySQL dùng chung với đồng bộ Zalo); đầy quá hạn chờ thì `server_busy` |
 | `MCP_BAD_KEY_LIMIT_PER_MINUTE` (20) | Một IP sai khóa quá ngần này lần / phút bị chặn tạm (429) |
+| `MCP_PUBLIC_URL` | Gốc công khai cho OAuth (prod `https://botida.degoholding.vn`). Trống = OAuth chỉ chạy ở máy local |
+| `MCP_FILE_RAW` (true) | `get_file` được trả tệp gốc (ảnh / PDF / link tải) — ngoại lệ của che dữ liệu cá nhân (tệp gốc không che được); false = chỉ trả chữ đã bóc |
 
-**Khóa**: mỗi người tự tạo ở màn web **Khóa MCP** (`/app/mcp-keys`): đặt tên, mức «Chỉ đọc» / «Đọc + ghi» (không vượt vai
-trò: Nhân viên chỉ đọc), số ngày hiệu lực, cờ «đọc nhóm Mật». **Khóa thô (`idamcp_…`) chỉ hiện MỘT lần** lúc tạo — mất thì
+**Ai dùng** (đại ca chốt 27/10/2026): chỉ **Quản trị / Quản lý** (`canUseMcp` ở `src/auth/mcp-api-key-store.ts`). Nhân viên không thấy
+màn Khóa MCP, không tạo khóa, không cấp quyền OAuth; người bị hạ xuống Nhân viên thì khóa / kết nối cũ thôi hiệu lực ngay.
+
+**OAuth** (27/10/2026, `src/mcp/oauth/`, migration 045): claude.ai, ChatGPT, Connectors của Claude Desktop nối bằng địa chỉ
+`https://botida.degoholding.vn/mcp` rồi đăng nhập — không dán khóa. Theo đặc tả MCP 2025-06-18: 401 của `/mcp` có
+`resource_metadata` → `/.well-known/oauth-protected-resource` → `/.well-known/oauth-authorization-server` → tự đăng ký
+`POST /oauth/register` → `GET /oauth/authorize` chuyển sang màn đồng ý `/oauth/consent` (HTML phía máy chủ; bấm Cho phép cần phiên
+web — cookie SameSite=Strict đi theo form POST của chính trang) → `POST /oauth/token` (PKCE S256 bắt buộc) → mã truy cập 1 giờ +
+mã làm mới xoay vòng, kết nối sống 90 ngày. Mỗi lần Cho phép = một dòng `mcp_api_key` loại OAuth (`kind = 1`): cùng mức quyền, cùng
+nhật ký, hiện ở màn Khóa MCP với loại *Kết nối OAuth*, thu hồi là cắt ngay. Hướng dẫn cho người dùng: `doc/12-huong-dan-noi-ung-dung-ai.md`.
+
+**Khóa**: Quản trị / Quản lý tự tạo ở màn web **Khóa MCP** (`/app/mcp-keys`): đặt tên, mức «Chỉ đọc» / «Đọc + ghi», số ngày hiệu lực, cờ «đọc nhóm Mật». **Khóa thô (`idamcp_…`) chỉ hiện MỘT lần** lúc tạo — mất thì
 tạo khóa mới; máy chủ chỉ lưu băm SHA-256. Tối đa 10 khóa đang dùng / người; thu hồi ở cùng màn (Quản trị thấy và thu hồi khóa
 của mọi người; xem 50 lời gọi gần nhất của khóa). Không có giao diện (máy chủ mới dựng): `npm run cli -- mcp-key create <tên đăng nhập|email> "<tên khóa>" [read|write] [--days N] [--confidential]`,
 `mcp-key list [<người dùng>]`, `mcp-key revoke <id>`. Khóa hết hạn / thu hồi / chủ khóa bị tắt → 401.
@@ -277,6 +289,7 @@ Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`)
 | `get_conversation_with_person` | Những gì đã trao đổi với một người (`person_uid` + `from` / `to`, `include_me`) theo khuôn dòng `[giờ] (nhóm) Người: nội dung` |
 | `get_thread_messages` | Đọc một cuộc theo trang (`next.before_message_id` / `after_message_id`) |
 | `get_file_text` | Đọc chữ đã bóc của tệp theo đoạn (`offset_chars`) |
+| `get_file` | Tệp cho AI ngoài tự đọc (27/10/2026): xlsx / docx / csv / txt bóc chữ tại chỗ (đã che dữ liệu cá nhân; cất `attachment_text` khi chưa có). Tệp GỐC khi `MCP_FILE_RAW=true` (mặc định BẬT, đại ca chốt 27/10 — NGOẠI LỆ của che dữ liệu cá nhân, chỉ Quản trị / Quản lý dùng MCP): ảnh = khối image (≤ 3 MB), PDF = embedded resource (≤ 5 MB), lớn hơn = link `/mcp-files/<id>` ký HMAC hạn 5 phút (lúc tải kiểm lại khóa + phạm vi + Mật). Tắt thì ảnh / PDF trả chữ đã bóc sẵn nếu có. Ghi âm / video báo không đọc được. Trần 20 tệp / 40 MB mỗi khóa mỗi phút |
 | `metrics_summary` | Tổng hợp số liệu bán hàng theo kỳ: chỉ tiêu theo mã (`metrics`) hoặc tên chữ (`metric_name`); khoảng `from` / `to` hoặc kỳ chữ `period` (`today`…`last_month`, `custom`); `group_by` (`staff` / `area` / `date`), `area`, `staff_id` |
 | `propose_*` ×6 + `confirm_write` | Ghi — chỉ khóa «Đọc + ghi» của Quản trị / Quản lý (xem dưới) |
 

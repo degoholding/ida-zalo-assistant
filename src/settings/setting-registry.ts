@@ -287,8 +287,8 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
   },
   {
     key: "default_group_capture_files", group: "sync", label: "Nhóm mới: lấy tệp", type: "bool", secret: false,
-    help: "Nhóm bot vừa vào có tự bật «Lấy tệp» không. Áp dụng cho nhóm mới từ lúc lưu.",
-    envName: "DEFAULT_GROUP_CAPTURE_FILES", defaultValue: false,
+    help: "Nhóm bot vừa vào có tự bật «Lấy tệp» không (mặc định bật từ 27/10/2026). Áp dụng cho nhóm mới từ lúc lưu; nhóm đã có giữ nguyên.",
+    envName: "DEFAULT_GROUP_CAPTURE_FILES", defaultValue: true,
     applyTo: (config, value) => { config.defaultGroupCaptureFiles = value === true; },
   },
   {

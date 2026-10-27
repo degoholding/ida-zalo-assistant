@@ -46,6 +46,17 @@ export interface DataAccessContext {
   saveSettings?: (patch: Record<string, unknown>, actor: string) => Promise<string[]>;
   /** Móc chạy của họ `alerts` (cài đặt đang hiệu lực + nạp lại người nhận / VIP) — chỉ ctx trợ lý của người dùng cảnh báo có; thiếu ⇒ công cụ họ `alerts` ẩn. */
   alertRuntime?: AlertRuntime;
+  /** Đọc tệp gốc trong kho + ký link tải ngắn hạn — chỉ cổng HTTP có (27/10/2026, công cụ `get_file`); thiếu ⇒ `get_file` ẩn. */
+  fileAccess?: FileAccess;
+}
+
+export interface FileAccess {
+  /** Được trả TỆP GỐC (ảnh / pdf / link tải) — công tắc MCP_FILE_RAW, mặc định bật (ngoại lệ của che dữ liệu cá nhân, đại ca chốt 27/10). */
+  rawAllowed: boolean;
+  /** Đọc cả tệp (đã cất) vào bộ nhớ; quá `maxBytes` thì ném. */
+  read(storageKey: string, maxBytes: number): Promise<Buffer>;
+  /** Link tải ký sẵn hạn ngắn cho tệp `attachmentId`; null = máy chủ chưa khai gốc công khai (MCP_PUBLIC_URL). */
+  signLink(attachmentId: number): string | null;
 }
 
 export interface DataAccessContextInput {
@@ -62,6 +73,7 @@ export interface DataAccessContextInput {
   contactActor?: ContactActor;
   saveSettings?: DataAccessContext["saveSettings"];
   alertRuntime?: AlertRuntime;
+  fileAccess?: FileAccess;
 }
 
 /**
@@ -75,6 +87,7 @@ export function buildDataAccessContext(input: DataAccessContextInput): DataAcces
     ownDirectThreadsOnly: input.ownDirectThreadsOnly === true, ownDirectUid: input.ownDirectUid ?? null,
     source: input.source, keyId: input.keyId ?? null, now: input.now ?? new Date(),
     wakeJobs: input.wakeJobs, contactActor: input.contactActor, saveSettings: input.saveSettings, alertRuntime: input.alertRuntime,
+    fileAccess: input.fileAccess,
   };
 }
 

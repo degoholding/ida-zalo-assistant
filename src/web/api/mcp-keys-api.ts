@@ -40,12 +40,12 @@ export const MCP_KEY_LIST_SPEC: ListSpec = {
 };
 
 const KEY_FROM = "FROM mcp_api_key k JOIN app_user u ON u.id = k.user_id";
-const KEY_COLUMNS = `k.id, k.user_id, k.name, k.prefix, k.access_level, k.include_confidential, k.expires_at, k.last_used_at, k.last_used_ip,
+const KEY_COLUMNS = `k.id, k.user_id, k.kind, k.name, k.prefix, k.access_level, k.include_confidential, k.expires_at, k.last_used_at, k.last_used_ip,
   k.revoked_at, k.created_at, COALESCE(NULLIF(u.full_name, ''), u.username, u.email) AS owner_name, ${STATUS_SQL} AS status`;
 
 function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
   return rows.map((row) => ({
-    ...row, access_level: Number(row.access_level), include_confidential: Boolean(row.include_confidential), owner_name: row.owner_name ?? "",
+    ...row, kind: Number(row.kind ?? 0), access_level: Number(row.access_level), include_confidential: Boolean(row.include_confidential), owner_name: row.owner_name ?? "",
   }));
 }
 

@@ -1,6 +1,13 @@
 /** Mức quyền của khóa MCP — khớp `McpAccessLevel` ở `src/constants.ts`; đổi bên đó thì sửa tay bên này. */
 export const MCP_ACCESS_LEVEL = { read: 1, readWrite: 2 } as const
 
+/** Loại khóa — khớp `McpKeyKind` ở `src/constants.ts`: khóa dán tay hoặc kết nối OAuth (claude.ai / ChatGPT bấm Cho phép). */
+export const MCP_KEY_KIND = { manual: 0, oauth: 1 } as const
+
+export function getMcpKeyKindLabel(kind: number): string {
+  return kind === MCP_KEY_KIND.oauth ? 'Kết nối OAuth' : 'Khóa dán tay'
+}
+
 /** Kết quả một lời gọi công cụ — khớp `McpCallStatus` ở `src/constants.ts`. */
 export const MCP_CALL_STATUS = { ok: 0, denied: 1, invalid: 2, error: 3, rateLimited: 4 } as const
 
@@ -46,6 +53,8 @@ export function getMcpCallStatusLabel(status: number): string {
 export interface McpKey {
   [key: string]: unknown
   id: number
+  /** MCP_KEY_KIND */
+  kind: number
   user_id: number
   name: string
   prefix: string

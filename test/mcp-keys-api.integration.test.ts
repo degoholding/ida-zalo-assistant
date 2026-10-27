@@ -60,50 +60,54 @@ describe("màn Khóa MCP", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
     await addUser("quantri", UserRole.Admin);
     await addUser("quanly", UserRole.Manager);
     await addUser("nhanvien", UserRole.Staff);
-    await addUser("nhanvienmat", UserRole.Staff, true);
+    // 27/10/2026: chỉ Quản trị / Quản lý dùng cổng MCP — chủ khóa trong các bài dưới là Quản lý
+    await addUser("quanlyb", UserRole.Manager);
+    await addUser("quanlymat", UserRole.Manager, true);
   });
 
   test("create returns the raw token once; list and detail never contain it or the hash", async () => {
-    const created = await call("POST", "/api/mcp-keys", "nhanvien", { name: "Claude máy tôi", access_level: 1, expires_in_days: 30 });
+    const created = await call("POST", "/api/mcp-keys", "quanlyb", { name: "Claude máy tôi", access_level: 1, expires_in_days: 30 });
     assert.equal(created.status, 201, created.raw);
     const token: string = created.body.data.token;
     assert.match(token, /^idamcp_/);
     assert.equal(created.body.data.key.status, "active");
     for (const path of ["/api/mcp-keys", `/api/mcp-keys/${created.body.data.key.id}`]) {
-      const read = await call("GET", path, "nhanvien");
+      const read = await call("GET", path, "quanlyb");
       assert.equal(read.status, 200);
       assert.ok(!read.raw.includes(token), "khóa thô lọt vào phản hồi đọc");
       assert.ok(!/token_hash/.test(read.raw));
     }
     assert.ok(await verifyMcpKey(db, token));
     const [audit] = await db.query<RowDataPacket[]>("SELECT action, actor FROM audit_log WHERE entity = 'mcp_key'");
-    assert.deepEqual(audit.map((row) => [row.action, row.actor]), [["create", "nhanvien"]]);
+    assert.deepEqual(audit.map((row) => [row.action, row.actor]), [["create", "quanlyb"]]);
   });
 
-  test("a user cannot exceed the role level or request confidential without the flag", async () => {
-    assert.equal((await call("POST", "/api/mcp-keys", "nhanvien", { name: "k", access_level: 2 })).status, 403);
-    assert.equal((await call("POST", "/api/mcp-keys", "nhanvien", { name: "k", access_level: 1, include_confidential: true })).status, 422);
+  test("staff cannot use the MCP key screen at all; a manager cannot request confidential without the flag", async () => {
+    assert.equal((await call("POST", "/api/mcp-keys", "nhanvien", { name: "k", access_level: 1 })).status, 403);
+    assert.equal((await call("GET", "/api/mcp-keys", "nhanvien")).status, 403);
+    assert.equal((await call("GET", "/api/mcp-keys/options", "nhanvien")).status, 403);
+    assert.equal((await call("POST", "/api/mcp-keys", "quanlyb", { name: "k", access_level: 1, include_confidential: true })).status, 422);
     assert.equal((await call("POST", "/api/mcp-keys", "quanly", { name: "k", access_level: 2 })).status, 201);
-    const mat = await call("POST", "/api/mcp-keys", "nhanvienmat", { name: "k", access_level: 1, include_confidential: true });
+    const mat = await call("POST", "/api/mcp-keys", "quanlymat", { name: "k", access_level: 1, include_confidential: true });
     assert.equal(mat.status, 201, mat.raw);
     assert.equal(mat.body.data.key.include_confidential, true);
-    const options = await call("GET", "/api/mcp-keys/options", "nhanvien");
-    assert.deepEqual([options.body.data.max_access_level, options.body.data.can_include_confidential], [1, false]);
-    assert.equal((await call("GET", "/api/mcp-keys/options", "nhanvienmat")).body.data.can_include_confidential, true);
+    const options = await call("GET", "/api/mcp-keys/options", "quanlyb");
+    assert.deepEqual([options.body.data.max_access_level, options.body.data.can_include_confidential], [2, false]);
+    assert.equal((await call("GET", "/api/mcp-keys/options", "quanlymat")).body.data.can_include_confidential, true);
   });
 
   test("only 10 active keys per user", async () => {
-    for (let i = 0; i < 10; i++) assert.equal((await call("POST", "/api/mcp-keys", "nhanvien", { name: `k${i}`, access_level: 1 })).status, 201);
-    const extra = await call("POST", "/api/mcp-keys", "nhanvien", { name: "k10", access_level: 1 });
+    for (let i = 0; i < 10; i++) assert.equal((await call("POST", "/api/mcp-keys", "quanlyb", { name: `k${i}`, access_level: 1 })).status, 201);
+    const extra = await call("POST", "/api/mcp-keys", "quanlyb", { name: "k10", access_level: 1 });
     assert.equal(extra.status, 422);
     assert.match(extra.body.error.message, /10 khóa/);
   });
 
   test("row scope: others' keys are 404 and cannot be revoked; admin sees all with scope=all and can revoke", async () => {
-    const mine = (await call("POST", "/api/mcp-keys", "nhanvien", { name: "của nhân viên", access_level: 1 })).body.data;
+    const mine = (await call("POST", "/api/mcp-keys", "quanlyb", { name: "của quản lý B", access_level: 1 })).body.data;
     await call("POST", "/api/mcp-keys", "quanly", { name: "của quản lý", access_level: 1 });
-    const list = await call("GET", "/api/mcp-keys?scope=all", "nhanvien");
-    assert.deepEqual(list.body.data.items.map((item: { name: string }) => item.name), ["của nhân viên"]);
+    const list = await call("GET", "/api/mcp-keys?scope=all", "quanlyb");
+    assert.deepEqual(list.body.data.items.map((item: { name: string }) => item.name), ["của quản lý B"]);
     assert.equal((await call("GET", `/api/mcp-keys/${mine.key.id}`, "quanly")).status, 404);
     assert.equal((await call("POST", `/api/mcp-keys/${mine.key.id}/revoke`, "quanly")).status, 404);
     assert.ok(await verifyMcpKey(db, mine.token), "khóa vẫn sống sau lần thu hồi trái phép");
@@ -111,7 +115,7 @@ describe("màn Khóa MCP", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
     assert.equal((await call("GET", "/api/mcp-keys", "quantri")).body.data.total, 0);
     const all = await call("GET", "/api/mcp-keys?scope=all", "quantri");
     assert.equal(all.body.data.total, 2);
-    assert.deepEqual(new Set(all.body.data.items.map((item: { owner_name: string }) => item.owner_name)), new Set(["nhanvien", "quanly"]));
+    assert.deepEqual(new Set(all.body.data.items.map((item: { owner_name: string }) => item.owner_name)), new Set(["quanlyb", "quanly"]));
     assert.equal((await call("GET", `/api/mcp-keys/${mine.key.id}`, "quantri")).status, 200);
     const revoked = await call("POST", `/api/mcp-keys/${mine.key.id}/revoke`, "quantri");
     assert.equal(revoked.status, 200);
@@ -120,23 +124,23 @@ describe("màn Khóa MCP", { skip: !databaseUrl && "chưa đặt TEST_DATABASE_U
   });
 
   test("revoke is idempotent, audited once, and status filter works", async () => {
-    const created = (await call("POST", "/api/mcp-keys", "nhanvien", { name: "để thu hồi", access_level: 1 })).body.data;
-    await call("POST", "/api/mcp-keys", "nhanvien", { name: "còn dùng", access_level: 1 });
-    assert.equal((await call("POST", `/api/mcp-keys/${created.key.id}/revoke`, "nhanvien")).status, 200);
-    assert.equal((await call("POST", `/api/mcp-keys/${created.key.id}/revoke`, "nhanvien")).status, 200);
+    const created = (await call("POST", "/api/mcp-keys", "quanlyb", { name: "để thu hồi", access_level: 1 })).body.data;
+    await call("POST", "/api/mcp-keys", "quanlyb", { name: "còn dùng", access_level: 1 });
+    assert.equal((await call("POST", `/api/mcp-keys/${created.key.id}/revoke`, "quanlyb")).status, 200);
+    assert.equal((await call("POST", `/api/mcp-keys/${created.key.id}/revoke`, "quanlyb")).status, 200);
     const [audit] = await db.query<RowDataPacket[]>("SELECT action FROM audit_log WHERE entity = 'mcp_key' AND action = 'revoke'");
     assert.equal(audit.length, 1);
-    const active = await call("GET", "/api/mcp-keys?status=active", "nhanvien");
+    const active = await call("GET", "/api/mcp-keys?status=active", "quanlyb");
     assert.deepEqual(active.body.data.items.map((item: { name: string }) => item.name), ["còn dùng"]);
-    const revokedOnly = await call("GET", "/api/mcp-keys?status=revoked", "nhanvien");
+    const revokedOnly = await call("GET", "/api/mcp-keys?status=revoked", "quanlyb");
     assert.deepEqual(revokedOnly.body.data.items.map((item: { name: string }) => item.name), ["để thu hồi"]);
   });
 
   test("detail lists the latest calls of the key", async () => {
-    const created = (await call("POST", "/api/mcp-keys", "nhanvien", { name: "k", access_level: 1 })).body.data;
+    const created = (await call("POST", "/api/mcp-keys", "quanlyb", { name: "k", access_level: 1 })).body.data;
     await db.query("INSERT INTO mcp_call_log (user_id, key_id, source, tool, entity, args_hash, status, row_count) VALUES (?, ?, 1, 'query_records', 'ticket', ?, 0, 3)",
-      [ids.nhanvien, created.key.id, "a".repeat(64)]);
-    const detail = await call("GET", `/api/mcp-keys/${created.key.id}`, "nhanvien");
+      [ids.quanlyb, created.key.id, "a".repeat(64)]);
+    const detail = await call("GET", `/api/mcp-keys/${created.key.id}`, "quanlyb");
     assert.deepEqual(detail.body.data.recent_calls.map((row: { tool: string; row_count: number }) => [row.tool, row.row_count]), [["query_records", 3]]);
     assert.ok(!/args_hash|args_preview/.test(detail.raw));
   });

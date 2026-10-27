@@ -56,6 +56,11 @@ export interface AppConfig {
     queueWaitMs: number;
     /** Số lần sai khóa tối đa mỗi phút của MỘT IP, quá thì chặn tạm (429). */
     badKeyLimitPerMinute: number;
+    /** Gốc công khai của bot (vd https://botida.degoholding.vn) — issuer của OAuth cho claude.ai / ChatGPT. Trống = OAuth chỉ chạy ở máy local. */
+    publicUrl: string;
+    /** get_file trả TỆP GỐC (ảnh / pdf / link tải) cho AI ngoài — NGOẠI LỆ của che dữ liệu cá nhân (tệp gốc không che được), chỉ cho
+     *  Quản trị / Quản lý (người duy nhất dùng được MCP). Đại ca chốt 27/10/2026: mặc định BẬT. */
+    fileRaw: boolean;
   };
   defaultDirectRead: boolean;
   /** Số tin gần nhất xin Zalo khi lấy tin cũ của một nhóm. */
@@ -201,7 +206,8 @@ export function loadConfig(): AppConfig {
     },
     // Mặc định KHÔNG đọc nhóm mới: ai cũng thêm được bot vào nhóm bất kỳ
     defaultGroupRead: readBool("DEFAULT_GROUP_READ", false),
-    defaultGroupCaptureFiles: readBool("DEFAULT_GROUP_CAPTURE_FILES", false),
+    // Lấy file mặc định BẬT (27/10/2026, lộ trình 13.1: lưu đủ dữ liệu) — nhóm đã có giữ nguyên cờ của nó
+    defaultGroupCaptureFiles: readBool("DEFAULT_GROUP_CAPTURE_FILES", true),
     maxFileBytes: readInt("MAX_FILE_MB", 100) * 1024 * 1024,
     downloadConcurrency: readInt("DOWNLOAD_CONCURRENCY", 3),
     heartbeatSeconds: readInt("HEARTBEAT_SECONDS", 60),
@@ -225,6 +231,8 @@ export function loadConfig(): AppConfig {
       maxConcurrent: Math.max(1, readInt("MCP_MAX_CONCURRENT", 3)),
       queueWaitMs: Math.max(0, readInt("MCP_QUEUE_WAIT_MS", 5000)),
       badKeyLimitPerMinute: Math.max(1, readInt("MCP_BAD_KEY_LIMIT_PER_MINUTE", 20)),
+      publicUrl: (process.env.MCP_PUBLIC_URL ?? "").trim().replace(/\/+$/, ""),
+      fileRaw: readBool("MCP_FILE_RAW", true),
     },
     // Người ta chủ động nhắn riêng cho bot nên mặc định LƯU (khác nhóm: mặc định không đọc)
     defaultDirectRead: readBool("DEFAULT_DM_READ", true),

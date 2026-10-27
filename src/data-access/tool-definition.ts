@@ -28,8 +28,15 @@ export const DEFAULT_TOOL_SURFACES: readonly ToolSurface[] = ["mcp_http"];
 export const ASSISTANT_FAMILIES = ["core", "drafts", "reads", "files", "tickets", "tasks", "alerts", "metrics", "send"] as const;
 export type AssistantFamily = (typeof ASSISTANT_FAMILIES)[number];
 
+/** Khối nhị phân đi kèm kết quả công cụ (chỉ cổng ngoài `mcp_http`): ảnh, hoặc tệp nhúng (pdf…) dạng embedded resource. */
+export type ToolMediaBlock =
+  | { type: "image"; data: string; mimeType: string }
+  | { type: "resource"; resource: { uri: string; mimeType: string; blob: string } };
+
 export interface ToolOutcome<O> {
   structured: O;
+  /** Ảnh / tệp gốc trả kèm (base64) — `get_file` (27/10/2026). Không đi qua che dữ liệu cá nhân (nhị phân). */
+  media?: ToolMediaBlock[];
   /** Một dòng tóm tắt cho khối chữ (`content`). */
   summary: string;
   /** Số dòng / bản ghi trả về — cổng ghi vào mcp_call_log. */

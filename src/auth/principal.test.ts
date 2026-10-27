@@ -110,10 +110,10 @@ test("canSeeConfidential: chỉ khi cờ bật, KHÔNG tự cho quản trị", (
   assert.equal(canSeeConfidential({ ...user(UserRole.Staff), canViewConfidential: true }), true);
 });
 
-test("mcp_key: mọi vai trò xem / sửa / tạo; luật đường /api/mcp-keys khớp", () => {
+test("mcp_key: Quản trị / Quản lý xem / sửa / tạo, Nhân viên không (27/10/2026); luật đường /api/mcp-keys khớp", () => {
   for (const role of [UserRole.Admin, UserRole.Manager, UserRole.Staff]) {
     const principal = user(role);
-    for (const action of ["read", "write", "create"] as const) assert.equal(can(principal, "mcp_key", action), true, `${role} ${action}`);
+    for (const action of ["read", "write", "create"] as const) assert.equal(can(principal, "mcp_key", action), role !== UserRole.Staff, `${role} ${action}`);
     assert.equal(can(principal, "mcp_key", "approve"), role === UserRole.Admin);
   }
   assert.deepEqual(requiredPermission("GET", "/api/mcp-keys"), { entity: "mcp_key", action: "read" });

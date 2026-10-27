@@ -33,7 +33,9 @@ test("không có Authorization → 401 + WWW-Authenticate", async () => {
   await withGateway(async (url) => {
     const response = await post(url);
     assert.equal(response.status, 401);
-    assert.equal(response.headers.get("www-authenticate"), 'Bearer realm="bot-tro-ly"');
+    // Có resource_metadata (RFC 9728) để claude.ai / ChatGPT tự tìm đường đăng nhập OAuth; chưa khai MCP_PUBLIC_URL thì máy local dùng Host
+    assert.equal(response.headers.get("www-authenticate"),
+      `Bearer realm="bot-tro-ly", resource_metadata="${new URL(url).origin}/.well-known/oauth-protected-resource"`);
   });
 });
 

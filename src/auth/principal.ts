@@ -45,8 +45,9 @@ export function permissionsFor(role: UserRole): PermissionMap {
     // (CREATABLE) chỉ để nút «Thêm nguồn số liệu» của khung CRUD hiện cho quản trị.
     if (entity === "reply_template") return [entity, { read: true, write: true, create: true, export: false, approve: role === UserRole.Manager }];
     if (entity === "metric") return [entity, role === UserRole.Manager ? { ...NONE, read: true, export: true } : NONE];
-    // Khóa MCP: mọi vai trò quản lý khóa CỦA MÌNH (phạm vi dòng kiểm trong API; quản trị thấy hết)
-    if (entity === "mcp_key") return [entity, { read: true, write: true, create: true, export: false, approve: false }];
+    // Khóa MCP: Quản lý quản lý khóa / kết nối OAuth CỦA MÌNH (phạm vi dòng kiểm trong API; quản trị thấy hết). Nhân viên không
+    // dùng cổng MCP (đại ca chốt 27/10/2026 «chỉ sếp IDA dùng», cùng luật `canUseMcp` ở kho khóa).
+    if (entity === "mcp_key") return [entity, role === UserRole.Manager ? { read: true, write: true, create: true, export: false, approve: false } : NONE];
     if (entity === "catalog") return [entity, role === UserRole.Manager ? { ...NONE, read: true } : NONE];
     const adminOnly = ["bot_account", "setting", "user", "recipient", "audit"].includes(entity);
     if (adminOnly) return [entity, NONE];

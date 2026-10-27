@@ -9,6 +9,8 @@ import { serveSpa, SPA_BASE } from "./spa-static.js";
 import { pipeStreamToResponse } from "./pipe-stream-to-response.js";
 import { createMcpGateway, MCP_PATH } from "../mcp/mcp-http-handler.js";
 import { serveLegalPage } from "./legal-pages.js";
+import { createMcpOAuthRoutes } from "../mcp/oauth/mcp-oauth-http.js";
+import { serveMcpFileLink } from "../mcp/mcp-file-links.js";
 
 // Máy chủ web: giao diện quản trị `web/` (React, khung ERP v2) dưới /app + lớp API JSON /api + ảnh đại diện.
 // Giao diện HTML cũ đã gỡ 01/10/2026 — mọi màn nằm trong /app.
@@ -68,7 +70,9 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
   const sessions = new SessionStore(db);
   const qrLogins = new QrLoginManager(service);
   // Cổng MCP chỉ dựng khi MCP_ENABLED=true; tắt thì /mcp trả 404 như không tồn tại
-  const mcpGateway = config.mcp.enabled ? createMcpGateway(db, config, { wakeJobs: () => service.jobs.wake() }) : null;
+  const mcpGateway = config.mcp.enabled ? createMcpGateway(db, config, { wakeJobs: () => service.jobs.wake(), storage }) : null;
+  // OAuth cho cổng MCP (claude.ai / ChatGPT nối không cần dán khóa) — cùng công tắc MCP_ENABLED
+  const mcpOAuth = config.mcp.enabled ? createMcpOAuthRoutes({ db, config, sessions }) : null;
   const cookieFlags = `HttpOnly; SameSite=Strict; Path=/${config.web.cookieSecure ? "; Secure" : ""}`;
 
   async function handle(request: http.IncomingMessage, response: http.ServerResponse): Promise<void> {
@@ -84,9 +88,13 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
       if (!mcpGateway) throw new HttpError(404, "Không có trang này");
       return mcpGateway.handle(request, response, clientKey);
     }
+    // Link tải tệp gốc ký sẵn hạn ngắn của công cụ MCP get_file (27/10/2026) — chữ ký thay cho phiên đăng nhập
+    if (mcpGateway && config.mcp.fileRaw
+      && await serveMcpFileLink({ db, storage, secret: config.sessionEncryptionKey, maskPersonalData: config.privacy.maskPersonalData }, path, url, method, response)) return;
     // Trang công khai cho màn đồng ý OAuth của Google (27/10/2026) — không cần đăng nhập
     if (serveLegalPage(path, method, response)) return;
     const token = parseCookies(request.headers.cookie)[SESSION_COOKIE];
+    if (mcpOAuth && await mcpOAuth.handle(request, response, path, url, { token, clientKey })) return;
 
     if (serveSpa(config.web.spaDistDir, path, response)) return;
 

@@ -1,6 +1,11 @@
 import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import { McpAccessLevel, McpCallSource } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import type { FileAccess } from "../data-access/data-access-context.js";
+import type { FileStorage } from "../storage/file-storage.js";
+import type { Readable } from "node:stream";
+import { DataAccessError } from "../data-access/data-access-errors.js";
+import { signFileLink } from "./mcp-file-links.js";
 import { buildDataAccessContext } from "../data-access/data-access-context.js";
 import { toolsFor } from "../data-access/read-tool-catalog.js";
 import type { McpAccess } from "./mcp-bearer-auth.js";
@@ -27,6 +32,38 @@ export interface McpServerFactoryDeps extends ToolWrapperDeps {
   maskPersonalData: boolean;
   /** Đánh thức bộ chạy việc nền sau khi ghi (báo Zalo). */
   wakeJobs?: () => void;
+  /** Kho tệp + khóa ký link tải — có thì bật công cụ `get_file` (27/10/2026). */
+  storage?: FileStorage;
+  fileLinkSecret?: string;
+  /** MCP_FILE_RAW — xem FileAccess.rawAllowed. */
+  fileRaw?: boolean;
+}
+
+/** Đọc cả luồng vào bộ nhớ; quá `maxBytes` thì HỦY luồng (đóng kết nối R2) và báo lỗi nghiệp vụ, không nuốt hết tệp khổng lồ. */
+async function readAll(stream: Readable, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of stream) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+    size += buffer.length;
+    if (size > maxBytes) {
+      stream.destroy();
+      throw new DataAccessError("invalid_value", `Tệp lớn hơn trần ${Math.round(maxBytes / 1024 / 1024)} MB — tải ở trang quản trị bot.`);
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
+function fileAccessFor(deps: McpServerFactoryDeps, access: McpAccess): FileAccess | undefined {
+  const { storage, fileLinkSecret } = deps;
+  if (!storage || !fileLinkSecret) return undefined;
+  const rawAllowed = deps.fileRaw === true;
+  return {
+    rawAllowed,
+    read: async (storageKey, maxBytes) => readAll(await storage.read(storageKey), maxBytes),
+    signLink: (attachmentId) => (rawAllowed && access.publicBase ? signFileLink(access.publicBase, attachmentId, access.keyId, fileLinkSecret) : null),
+  };
 }
 
 const ACCESS_KEY = "access";
@@ -53,7 +90,7 @@ export function buildMcpServer(authInfo: AuthInfo | undefined, deps: McpServerFa
     maskPersonal: deps.maskPersonalData, source: McpCallSource.Http, keyId: access.keyId,
     // Chốt 17/10/2026: qua MCP ai cũng chỉ đọc cuộc nhắn riêng CỦA MÌNH với bot (kể cả quản trị) — câu bot trả lời trong cuộc
     // riêng có thể chứa nội dung nhóm Mật, không được lọt sang người khác (H2 review phase 2).
-    ownDirectThreadsOnly: true, ownDirectUid: access.ownDirectUid, wakeJobs: deps.wakeJobs,
+    ownDirectThreadsOnly: true, ownDirectUid: access.ownDirectUid, wakeJobs: deps.wakeJobs, fileAccess: fileAccessFor(deps, access),
   });
   const server = new McpServer({ name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
     { maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS, instructions: ctx.allowWrite ? SERVER_INSTRUCTIONS + WRITE_INSTRUCTIONS : SERVER_INSTRUCTIONS });

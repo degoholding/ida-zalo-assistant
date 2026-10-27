@@ -21,6 +21,11 @@ export function McpClientConfigSnippets({ origin, token }: { origin: string; tok
       <p className="text-sm text-muted-foreground">
         Địa chỉ cổng MCP: <span className="font-mono text-foreground">{snippets.url}</span>
       </p>
+      <p className="text-sm text-muted-foreground">
+        claude.ai, ChatGPT và mục Connectors của Claude Desktop không cần khóa này: dán địa chỉ trên vào phần thêm kết nối, đăng nhập
+        trang quản trị bot rồi bấm <span className="font-semibold text-foreground">Cho phép</span>. Kết nối hiện ở danh sách với loại
+        Kết nối OAuth.
+      </p>
       <Snippet title="Claude Code" code={snippets.claudeCode} label="lệnh Claude Code" />
       <Snippet title="Codex (config.toml)" code={snippets.codex} label="cấu hình Codex" />
       <Snippet title="Claude Desktop / client MCP khác (JSON)" code={snippets.genericJson} label="cấu hình JSON" />

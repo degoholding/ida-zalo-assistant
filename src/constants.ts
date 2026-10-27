@@ -437,6 +437,14 @@ export enum McpAccessLevel {
   ReadWrite = 2,
 }
 
+/** Loại khóa MCP (cột mcp_api_key.kind, migration 045). Giao diện chép sang web/src/modules/mcp-keys/types. */
+export enum McpKeyKind {
+  // Khóa dán tay tạo ở màn «Khóa MCP»
+  Manual = 0,
+  // Kết nối OAuth (claude.ai / ChatGPT / Claude Desktop bấm «Cho phép»)
+  OAuth = 1,
+}
+
 /** Kết quả một lời gọi công cụ (cột mcp_call_log.status). */
 export enum McpCallStatus {
   Ok = 0,

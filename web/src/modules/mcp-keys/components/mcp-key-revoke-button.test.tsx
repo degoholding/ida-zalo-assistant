@@ -18,7 +18,7 @@ vi.mock('@/core/auth/auth-store', () => ({
 }))
 
 const makeKey = (overrides: Partial<McpKeyDetail> = {}): McpKeyDetail => ({
-  id: 5, user_id: 1, name: 'Claude máy tôi', prefix: 'ab12cd34', access_level: 1, include_confidential: false, expires_at: null,
+  id: 5, kind: 0, user_id: 1, name: 'Claude máy tôi', prefix: 'ab12cd34', access_level: 1, include_confidential: false, expires_at: null,
   last_used_at: null, last_used_ip: null, revoked_at: null, created_at: '2026-10-17T00:00:00Z', owner_name: 'A', status: 'active', ...overrides,
 })
 
