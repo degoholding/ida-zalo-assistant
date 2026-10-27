@@ -77,7 +77,7 @@ export async function getFile(db: Db, id: number): Promise<Record<string, unknow
 }
 
 export const fileRoutes: ApiRoute[] = [
-  // Chữ đã bóc của tệp — màn Tệp xem; chưa có thì 404 để giao diện mời bấm «Đọc»
+  // Chữ đã bóc của tệp — màn Tệp xem; chưa có thì 404 để giao diện mời bấm "Đọc"
   ["GET", /^\/api\/files\/(\d+)\/text$/, async ({ principal, response, match, service }) => {
     await assertFileVisible(service.db, principal, parseId(match[1]));
     const [rows] = await service.db.query<RowDataPacket[]>(
@@ -85,7 +85,7 @@ export const fileRoutes: ApiRoute[] = [
     if (!rows[0] || rows[0].text === null) throw new ApiError(404, "not_found", "Tệp này chưa được đọc");
     sendOk(response, rows[0]);
   }],
-  // Bóc chữ ngay (quản trị bấm «Đọc» ở màn Tệp) — cùng bộ đọc với bot, kết quả cất chung
+  // Bóc chữ ngay (quản trị bấm "Đọc" ở màn Tệp) — cùng bộ đọc với bot, kết quả cất chung
   ["POST", /^\/api\/files\/(\d+)\/extract$/, async ({ principal, response, match, service }) => {
     await assertFileVisible(service.db, principal, parseId(match[1]));
     const id = parseId(match[1]);
@@ -122,7 +122,7 @@ export const fileRoutes: ApiRoute[] = [
       "Content-Disposition": buildContentDisposition(fileName, inline),
     });
   }],
-  // Đánh dấu «giữ tệp gốc»: không xóa khi hết hạn giữ tệp của nhóm (IDA câu 20) — vẫn theo hạn của tin
+  // Đánh dấu "giữ tệp gốc": không xóa khi hết hạn giữ tệp của nhóm (IDA câu 20) — vẫn theo hạn của tin
   ["PATCH", /^\/api\/files\/(\d+)$/, async ({ principal, request, response, match, service }) => {
     await assertFileVisible(service.db, principal, parseId(match[1]));
     const id = parseId(match[1]);

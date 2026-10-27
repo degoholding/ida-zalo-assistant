@@ -12,7 +12,7 @@ describe('AccountKindBadge', () => {
     expect(screen.getByText('Chỉ thu thập dữ liệu')).toBeInTheDocument()
   })
 
-  it('labels an assistant account as «Trợ lý»', () => {
+  it('labels an assistant account as "Trợ lý"', () => {
     render(<AccountKindBadge account={account(BOT_ACCOUNT_KIND.assistant)} />)
     expect(screen.getByText('Trợ lý')).toBeInTheDocument()
   })

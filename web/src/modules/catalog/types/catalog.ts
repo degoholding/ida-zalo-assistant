@@ -14,7 +14,7 @@ export const CATALOG_MATCH_STATUS_OPTIONS = [
   { value: CATALOG_MATCH_STATUS.matched, label: 'Đã khớp' },
   { value: CATALOG_MATCH_STATUS.suggested, label: 'Gợi ý, chờ xác nhận' },
   { value: CATALOG_MATCH_STATUS.confirmed, label: 'Đã xác nhận' },
-  //  Quản trị đã «Bỏ gắn» — khớp lại / nạp tệp không tự gắn nữa, chỉ gắn khi chọn tay (hoặc tệp đổi SĐT)
+  //  Quản trị đã "Bỏ gắn" — khớp lại / nạp tệp không tự gắn nữa, chỉ gắn khi chọn tay (hoặc tệp đổi SĐT)
   { value: CATALOG_MATCH_STATUS.unlinked, label: 'Đã bỏ gắn' },
 ]
 

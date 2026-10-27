@@ -80,7 +80,7 @@ export async function getConversation(db: Db, id: number): Promise<Record<string
          WHERE bg.group_id = ? AND bg.left_at IS NULL AND b.is_active = 1 AND b.kind = ${BotAccountKind.Assistant} ORDER BY b.id LIMIT 1`,
     [rows[0].thread_type === ConversationType.Direct ? rows[0].owner_bot_id : id]);
   const botName = botRows[0] ? String(botRows[0].name) : null;
-  // «Chỉ lưu»: không có bot Trợ lý → ô soạn tắt, báo «Bot này chỉ thu thập dữ liệu, không gửi được» (xem collect-only-send-guard.ts)
+  // "Chỉ lưu": không có bot Trợ lý → ô soạn tắt, báo "Bot này chỉ thu thập dữ liệu, không gửi được" (xem collect-only-send-guard.ts)
   const collectOnly = await isCollectOnlyThread(db, id);
   Object.assign(thread, { collect_only: collectOnly });
   if (rows[0].thread_type === ConversationType.Direct) {
@@ -114,7 +114,7 @@ async function findAnchor(db: Db, threadId: number, messageId: number): Promise<
 
 /**
  * Tối đa `limit` tin cũ hơn (hoặc mới hơn) tin mốc, cùng mili giây thì so id — hai tin trùng giờ không bị sót ở ranh
- * trang. Lấy dư một dòng để biết CHẮC còn tin nữa không (không đoán theo «đủ trang»). Trả xếp tăng dần theo giờ gửi.
+ * trang. Lấy dư một dòng để biết CHẮC còn tin nữa không (không đoán theo "đủ trang"). Trả xếp tăng dần theo giờ gửi.
  */
 async function loadBeside(db: Db, threadId: number, anchor: RowDataPacket | null, side: "older" | "newer", limit: number, inclusive = false) {
   const older = side === "older";
@@ -136,7 +136,7 @@ async function loadBeside(db: Db, threadId: number, anchor: RowDataPacket | null
  * `older_cursor` (còn tin cũ hơn → `before_id=`) và `newer_cursor` (còn tin mới hơn → `after_id=`). Null = hết phía đó.
  *   - không gì: trang mới nhất (không có `newer_cursor`).
  *   - `before_id=<id tin>`: trang cũ hơn tin đó (cuộn lên).
- *   - `around=<id tin>`: nửa trang trước (kể cả tin đó) + nửa trang sau — mở cuộc đúng chỗ tin đó (màn Tệp «Xem trong hội thoại»).
+ *   - `around=<id tin>`: nửa trang trước (kể cả tin đó) + nửa trang sau — mở cuộc đúng chỗ tin đó (màn Tệp "Xem trong hội thoại").
  *   - `after_id=<id tin>`: trang mới hơn tin đó (cuộn xuống khi đang xem quanh một tin cũ). Trang này LUÔN kèm
  *     `older_cursor` (tin cũ nhất của trang): giao diện nạp lại chuỗi trang từ trang mới nhất rồi lần ngược về trước.
  *   - `before=<ms>`: kiểu cũ theo mốc giờ, còn nhận cho tương thích.
@@ -207,7 +207,7 @@ export async function listMessages(db: Db, threadId: number, params: URLSearchPa
 
 const MAX_TEXT_LENGTH = 10_000;
 
-/** Thông tin một lần quản trị gửi từ web — để ghi một dòng vào nhật ký «Gửi tin» (đã gửi / lỗi). */
+/** Thông tin một lần quản trị gửi từ web — để ghi một dòng vào nhật ký "Gửi tin" (đã gửi / lỗi). */
 interface WebSendLog {
   db: Db;
   principal: Principal;
@@ -217,8 +217,8 @@ interface WebSendLog {
 }
 
 /**
- * Lỗi gửi (Zalo từ chối…) → 502 kèm câu dễ hiểu; lỗi «không có cuộc» → 404; bot tắt khẩn → 409. Gửi xong (hay lỗi) thì ghi
- * nhật ký «Gửi tin» — `recordWebSend` không bao giờ ném nên không làm hỏng câu trả lời API. Bot tắt = chưa gửi gì → không ghi.
+ * Lỗi gửi (Zalo từ chối…) → 502 kèm câu dễ hiểu; lỗi "không có cuộc" → 404; bot tắt khẩn → 409. Gửi xong (hay lỗi) thì ghi
+ * nhật ký "Gửi tin" — `recordWebSend` không bao giờ ném nên không làm hỏng câu trả lời API. Bot tắt = chưa gửi gì → không ghi.
  */
 async function translateSendError<T>(work: () => Promise<T>, log: WebSendLog): Promise<T> {
   const record = (ok: boolean, error?: string) => recordWebSend(log.db, {

@@ -40,6 +40,58 @@ export interface GoogleAccountLink {
    * (10/10/2026) không có trường này — coi như chưa có quyền Drive (`hasDriveScope`).
    */
   granted_scopes?: string[];
+  /** Lúc kết nối (ISO). Thêm 27/10/2026 để tính hạn 7 ngày của app ở chế độ Testing; kết nối cũ không có → hạn chưa rõ. */
+  connected_at?: string;
+}
+
+/** App Google ở chế độ Testing: refresh token sống 7 ngày kể từ lúc đồng ý. */
+export const TESTING_TOKEN_LIFETIME_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface GoogleLinkExpiry {
+  /** ISO; null = không biết lúc kết nối (kết nối trước 27/10/2026). */
+  expires_at: string | null;
+  /** Số ngày còn lại (lẻ, có thể âm); null khi không biết. */
+  days_left: number | null;
+  /** Đã quá hạn theo ngày. */
+  expired: boolean;
+}
+
+/** Hạn của kết nối theo lúc đồng ý — thuần tính toán để chấm trạng thái trên menu (27/10/2026). */
+export function googleLinkExpiry(connectedAt: string | undefined | null, now: number = Date.now()): GoogleLinkExpiry {
+  const at = connectedAt ? Date.parse(connectedAt) : Number.NaN;
+  if (!Number.isFinite(at)) return { expires_at: null, days_left: null, expired: false };
+  const expiresAt = at + TESTING_TOKEN_LIFETIME_DAYS * DAY_MS;
+  return { expires_at: new Date(expiresAt).toISOString(), days_left: (expiresAt - now) / DAY_MS, expired: expiresAt <= now };
+}
+
+export type GoogleLinkHealth = "ok" | "expiring" | "expired" | "disconnected";
+
+/**
+ * Tình trạng kết nối cho chấm trạng thái ở menu (27/10/2026). `testing` = app Google ở chế độ Testing (hạn 7 ngày):
+ * tính hạn + "expiring" khi còn dưới 1 ngày. App In production (`testing` false) thì token không hết hạn theo ngày —
+ * bỏ hạn, chỉ "expired" khi Google từ chối refresh token. Chưa kết nối = "disconnected".
+ */
+export function assessGoogleLink(input: {
+  connected: boolean; connectedAt: string | null | undefined; testing: boolean; refused: boolean; now?: number;
+}): GoogleLinkExpiry & { health: GoogleLinkHealth } {
+  if (!input.connected) return { expires_at: null, days_left: null, expired: false, health: "disconnected" };
+  const expiry = input.testing ? googleLinkExpiry(input.connectedAt, input.now) : { expires_at: null, days_left: null, expired: false };
+  const expired = expiry.expired || input.refused;
+  const health: GoogleLinkHealth = expired ? "expired" : expiry.days_left !== null && expiry.days_left < 1 ? "expiring" : "ok";
+  return { ...expiry, expired, health };
+}
+
+/**
+ * Lần làm mới access token gần nhất bị Google từ chối (invalid_grant = token bị thu hồi / hết 7 ngày). Ghi trong bộ nhớ
+ * tiến trình để chấm trạng thái đỏ ngay cả khi chưa tới ngày hết hạn tính toán; kết nối lại / ngắt thì xóa.
+ */
+let refreshFailure: { at: string; message: string } | null = null;
+export function getGoogleRefreshFailure(): { at: string; message: string } | null {
+  return refreshFailure;
+}
+export function clearGoogleRefreshFailure(): void {
+  refreshFailure = null;
 }
 
 /** Đã kết nối Google VÀ đã tick quyền đọc Drive lúc đồng ý (không chỉ cấu hình Client ID / secret). */
@@ -133,12 +185,22 @@ export class GoogleUserAuth {
 
   async getAccessToken(): Promise<string> {
     if (this.cached && this.now() < this.cached.expiresAt - TOKEN_REFRESH_MARGIN_MS) return this.cached.value;
-    const json = await postToken(new URLSearchParams({
-      client_id: this.client.client_id, client_secret: this.client.client_secret,
-      refresh_token: this.account.refresh_token, grant_type: "refresh_token",
-    }), this.fetcher);
+    let json: Record<string, unknown>;
+    try {
+      json = await postToken(new URLSearchParams({
+        client_id: this.client.client_id, client_secret: this.client.client_secret,
+        refresh_token: this.account.refresh_token, grant_type: "refresh_token",
+      }), this.fetcher);
+    } catch (error) {
+      // Chỉ ghi khi Google từ chối token (thu hồi / hết hạn); lỗi mạng không phải lỗi kết nối
+      if (error instanceof GoogleSheetsError && error.message === RECONNECT_TEXT) {
+        refreshFailure = { at: new Date(this.now()).toISOString(), message: error.message };
+      }
+      throw error;
+    }
     const token = typeof json.access_token === "string" ? json.access_token : "";
     if (!token) throw new GoogleSheetsError(RECONNECT_TEXT);
+    refreshFailure = null;
     this.cached = { value: token, expiresAt: this.now() + (Number(json.expires_in) || 3600) * 1000 };
     return token;
   }

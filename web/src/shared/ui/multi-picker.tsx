@@ -57,7 +57,7 @@ interface MultiPickerProps<Id extends MultiPickerId = MultiPickerId> {
    */
   hideChips?: boolean
   /**
-   * Khung chọn nói TÊN mục đầu kèm đuôi «+n», và bỏ hẳn dải chip (bao-CR-423).
+   * Khung chọn nói TÊN mục đầu kèm đuôi "+n", và bỏ hẳn dải chip (bao-CR-423).
    *
    * Dành cho ô lọc trên thanh công cụ: ở đó ô cao đúng một hàng và đứng cạnh bốn
    * năm ô khác, nên chip bên dưới đẩy cả bảng xuống còn "Đã chọn 1" thì kém hẳn
@@ -66,9 +66,9 @@ interface MultiPickerProps<Id extends MultiPickerId = MultiPickerId> {
    */
   summaryInTrigger?: boolean
   /**
-   * Bỏ hàng «Chọn tất cả» trên đầu danh sách.
+   * Bỏ hàng "Chọn tất cả" trên đầu danh sách.
    *
-   * ⚠️ Dùng khi «chọn hết» là một thao tác gần như luôn SAI, không phải khi
+   * ⚠️ Dùng khi "chọn hết" là một thao tác gần như luôn SAI, không phải khi
    * danh sách dài. Ví dụ ô *Hồ sơ tiên quyết*: chọn mọi tờ trong kho làm tiên
    * quyết cho một tờ thì tờ đó khóa gần như vĩnh viễn, mà nút lại nằm đúng chỗ
    * dễ bấm nhầm nhất — ngay trên mục đầu tiên.
@@ -80,10 +80,10 @@ interface MultiPickerProps<Id extends MultiPickerId = MultiPickerId> {
 const MAX_VISIBLE = 50
 
 /**
- * Số chip bày ra trước khi gộp lại; muốn xem hết thì bấm «Xem thêm».
+ * Số chip bày ra trước khi gộp lại; muốn xem hết thì bấm "Xem thêm".
  *
  * Khách báo 25/08/2026: sổ văn bản chọn ~200 người xem, mỗi người một chip nên
- * dải chip cao hơn cả màn hình — ô «Người quản lý» ngay dưới bị đẩy đi mất,
+ * dải chip cao hơn cả màn hình — ô "Người quản lý" ngay dưới bị đẩy đi mất,
  * người dùng tưởng form hỏng. Mười chip là đủ nhận ra "đang chọn những ai" mà
  * vẫn gọn trong hai hàng (khách chốt con số này).
  */

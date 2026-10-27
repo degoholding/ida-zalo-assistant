@@ -9,7 +9,7 @@ import { MetricTabsBar } from '../components/metric-tabs-bar'
 import { metricValueCrudConfig } from '../config/metric-value-crud'
 import { resolveMetricTab, type MetricTabKey } from '../utils/metric-tabs'
 
-/** Màn «Số liệu» (Quản trị + Quản lý): tab Tổng hợp / Chi tiết / Chưa báo. Tab «Chi tiết» là `CrudListPage` thật (lọc ngày, cờ, sắp xếp). */
+/** Màn "Số liệu" (Quản trị + Quản lý): tab Tổng hợp / Chi tiết / Chưa báo. Tab "Chi tiết" là `CrudListPage` thật (lọc ngày, cờ, sắp xếp). */
 export function MetricsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = resolveMetricTab(searchParams.get('tab'))

@@ -1,5 +1,5 @@
 /**
- * Khóa của tab «Thông tin» — tab luôn có, do `CrudDetailPage` tự dựng chứ không
+ * Khóa của tab "Thông tin" — tab luôn có, do `CrudDetailPage` tự dựng chứ không
  * khai trong `CrudConfig.tabs`. Cũng là giá trị mặc định nên nó **không ghi vào
  * URL** (`useUrlParamState` xóa param khi trùng mặc định), giữ link sạch.
  */

@@ -29,11 +29,11 @@ export interface Recipient {
 export interface RecipientDetail extends Recipient {
   group_ids: number[]
   vip_contact_ids: number[]
-  /** Người VIP kèm tên — ô «Người VIP» của biểu mẫu giữ chính mảng này. */
+  /** Người VIP kèm tên — ô "Người VIP" của biểu mẫu giữ chính mảng này. */
   vips: ContactRef[]
 }
 
-/** Mục của ô chọn «Tài khoản web» — rút từ `GET /api/users`. */
+/** Mục của ô chọn "Tài khoản web" — rút từ `GET /api/users`. */
 export interface RecipientUserOption {
   id: number
   email: string

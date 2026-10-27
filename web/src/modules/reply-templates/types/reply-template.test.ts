@@ -11,7 +11,7 @@ import {
 
 describe('reply template code mapping', () => {
   it('mirrors the server enums in src/constants.ts', () => {
-    // Chép tay — lệch một số là lọc «Chờ duyệt» ra «Đã duyệt»
+    // Chép tay — lệch một số là lọc "Chờ duyệt" ra "Đã duyệt"
     expect(REPLY_TEMPLATE_STATUS).toEqual({ draft: 1, pendingReview: 2, approved: 3, returned: 4, archived: 5 })
     expect(REPLY_TONE).toEqual({ formal: 1, friendly: 2, brief: 3 })
   })

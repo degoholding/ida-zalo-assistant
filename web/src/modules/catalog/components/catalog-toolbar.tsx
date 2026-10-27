@@ -7,7 +7,7 @@ import { catalogApi } from '../api/catalog-api'
 import { useRematchCatalog } from '../hooks/use-catalog-mutations'
 import { CatalogImportDialog } from './catalog-import-dialog'
 
-/** Thanh công cụ màn danh mục: «Tải mẫu Excel» ai xem cũng bấm được; «Nạp danh mục» và «Khớp lại» chỉ người có quyền ghi (quản trị). */
+/** Thanh công cụ màn danh mục: "Tải mẫu Excel" ai xem cũng bấm được; "Nạp danh mục" và "Khớp lại" chỉ người có quyền ghi (quản trị). */
 export function CatalogToolbar() {
   const { can } = usePermission()
   const [importOpen, setImportOpen] = useState(false)

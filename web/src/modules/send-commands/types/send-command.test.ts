@@ -17,7 +17,7 @@ import {
 
 describe('send command code mapping', () => {
   it('mirrors the server enums in src/constants.ts', () => {
-    // Chép tay — lệch một số là lọc «Đang hẹn» ra «Đang gửi»
+    // Chép tay — lệch một số là lọc "Đang hẹn" ra "Đang gửi"
     expect(SEND_COMMAND_SOURCE).toEqual({ zalo: 1, web: 2 })
     expect(SEND_COMMAND_STATUS).toEqual({ draft: 1, scheduled: 2, sending: 3, done: 4, cancelled: 5, expired: 6 })
     expect(SEND_ACTION_KIND).toEqual({ message: 1, reminder: 2, pin: 3 })

@@ -20,7 +20,7 @@ import { OnOffPill } from '../components/on-off-pill'
 import type { GroupDetail } from '../types/group'
 import { getGroupName } from '../utils/format-group'
 
-/** Giải thích nhãn «Chỉ lưu»: nhóm không có bot Trợ lý nào. */
+/** Giải thích nhãn "Chỉ lưu": nhóm không có bot Trợ lý nào. */
 const COLLECT_ONLY_HINT = 'Chỉ có bot thu thập dữ liệu trong nhóm: tin được lưu, nhưng không cảnh báo, bắt việc, đọc ảnh hay đưa vào bản tin tự động'
 
 const RETENTION_MIN = 1
@@ -110,7 +110,7 @@ const GROUP_FILTER_FIELDS: FilterFieldDefinition[] = [
 export const groupCrudConfig: CrudConfig<GroupDetail> = {
   entity: 'group',
   title: 'Nhóm',
-  description: 'Nhóm Zalo mà tài khoản bot đang ở. Nhóm mới mặc định KHÔNG đọc, chưa gán công ty, loại «Khách hàng». Loại nhóm quyết định thành viên là khách hàng hay nhân sự trong Danh bạ.',
+  description: 'Nhóm Zalo mà tài khoản bot đang ở. Nhóm mới mặc định KHÔNG đọc, chưa gán công ty, loại "Khách hàng". Loại nhóm quyết định thành viên là khách hàng hay nhân sự trong Danh bạ.',
   unitLabel: 'nhóm',
   apiPath: GROUPS_API_PATH,
   emptyMessage: 'Chưa có nhóm nào — thêm tài khoản bot vào nhóm Zalo, nhóm sẽ hiện ở đây.',
@@ -129,7 +129,7 @@ export const groupCrudConfig: CrudConfig<GroupDetail> = {
   detailRoute: (id) => appRoutes.groups.detail(id),
   getItemName: (group) => getGroupName(group),
   formSections: {
-    'Đọc và lưu': 'Bật «Đọc tin» thì bot mới lưu tin của nhóm; «Lấy file» thì tải cả tệp / ảnh về kho.',
+    'Đọc và lưu': 'Bật "Đọc tin" thì bot mới lưu tin của nhóm; "Lấy file" thì tải cả tệp / ảnh về kho.',
   },
   formFields: [
     { name: 'label', label: 'Tên gọi', type: 'text', placeholder: 'Tên ngắn dễ nhớ, vd Kinh tế 52', hint: 'Hiện thay tên Zalo của nhóm ở mọi màn. Tối đa 100 ký tự.' },

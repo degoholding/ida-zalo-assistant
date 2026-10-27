@@ -26,7 +26,7 @@ interface AiKeyListCardProps {
   onUpdate: (id: number, body: AiKeyPatch) => void
   onMoveUp: (id: number) => void
   onRemove: (id: number) => void
-  /** Mốc «hôm nay» khi hiện «lỗi lúc hh:mm» — bài kiểm truyền ngày cố định. */
+  /** Mốc "hôm nay" khi hiện "lỗi lúc hh:mm" — bài kiểm truyền ngày cố định. */
   now?: Date
 }
 
@@ -42,8 +42,8 @@ function ModelSuggestions({ id, provider }: { id: string; provider: AiKeyProvide
 }
 
 /**
- * Thẻ «Khóa AI» (07/10/2026, theo khuôn thẻ Khóa AI của ERP DEGO — ai-CR-101/108): danh sách khóa có thứ tự 1, 2, 3…;
- * thêm khóa ba bước trên một hàng (Hãng → Địa chỉ trạm / Lấy khóa → Dán khóa); mô hình + trần lượt gập vào «Tùy chọn».
+ * Thẻ "Khóa AI" (07/10/2026, theo khuôn thẻ Khóa AI của ERP DEGO — ai-CR-101/108): danh sách khóa có thứ tự 1, 2, 3…;
+ * thêm khóa ba bước trên một hàng (Hãng → Địa chỉ trạm / Lấy khóa → Dán khóa); mô hình + trần lượt gập vào "Tùy chọn".
  * Khóa thô chỉ đi VÀO (ô password, xóa trắng sau khi lưu); màn hình chỉ thấy 4 ký tự cuối.
  */
 export function AiKeyListCard({ items, isLoading, canWrite, saving, onAdd, onUpdate, onMoveUp, onRemove, now }: AiKeyListCardProps) {
@@ -92,7 +92,7 @@ export function AiKeyListCard({ items, isLoading, canWrite, saving, onAdd, onUpd
     const ok = await confirm({
       title: 'Gỡ khóa AI',
       message: `Gỡ khóa số ${item.position} — ${item.provider_label} ${item.key_tail}? Bot sẽ không dùng khóa này nữa.${
-        last ? ' Đây là khóa cuối cùng: gỡ xong bot quay về cài đặt cũ ở tab «Trợ lý AI».' : ''
+        last ? ' Đây là khóa cuối cùng: gỡ xong bot quay về cài đặt cũ ở tab "Trợ lý AI".' : ''
       }`,
       confirmLabel: 'Gỡ khóa',
     })
@@ -114,7 +114,7 @@ export function AiKeyListCard({ items, isLoading, canWrite, saving, onAdd, onUpd
         {isLoading && <Skeleton className="h-10 w-full" />}
         {!isLoading && items.length === 0 && (
           <p className="rounded-md border border-dashed p-3 text-muted-foreground">
-            Chưa có khóa nào — bot đang chạy bằng cài đặt cũ ở tab «Trợ lý AI». Thêm khóa bên dưới là bot chuyển sang dùng
+            Chưa có khóa nào — bot đang chạy bằng cài đặt cũ ở tab "Trợ lý AI". Thêm khóa bên dưới là bot chuyển sang dùng
             danh sách này.
           </p>
         )}
@@ -142,7 +142,7 @@ export function AiKeyListCard({ items, isLoading, canWrite, saving, onAdd, onUpd
                           <Badge
                             variant="outline"
                             className="ml-2 border-warning/40 bg-warning/10 text-warning"
-                            title="Tick hãng này ở tab «Trợ lý AI» › «An toàn dữ liệu» › «Hãng AI được phép dùng» để bot dùng lại khóa"
+                            title="Tick hãng này ở tab 'Trợ lý AI' › 'An toàn dữ liệu' › 'Hãng AI được phép dùng' để bot dùng lại khóa"
                           >
                             <ShieldOff />
                             Hãng chưa được phép — bot bỏ qua

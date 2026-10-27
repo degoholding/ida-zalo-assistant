@@ -27,7 +27,7 @@ export function isSameDay(a: string, b: string): boolean {
   return dayKey(a) === dayKey(b)
 }
 
-/** Hai tin cùng người, cách nhau dưới 5 phút thì gộp thành một «đợt». */
+/** Hai tin cùng người, cách nhau dưới 5 phút thì gộp thành một "đợt". */
 export const RUN_GAP_MS = 5 * 60_000
 
 export function isSameRun(previous: { sender_uid: string; sent_at: string } | null, current: { sender_uid: string; sent_at: string }): boolean {

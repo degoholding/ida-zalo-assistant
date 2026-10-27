@@ -35,7 +35,7 @@ export function getGroupKindTone(groupKind: number): StatusTone {
   return groupKind === GROUP_KIND.internal ? 'done' : 'progress'
 }
 
-/** Tách «vip, đại lý; miền Nam» thành thẻ, bỏ trùng — máy chủ còn làm sạch lần nữa, đây chỉ để gửi mảng gọn. */
+/** Tách "vip, đại lý; miền Nam" thành thẻ, bỏ trùng — máy chủ còn làm sạch lần nữa, đây chỉ để gửi mảng gọn. */
 export function splitTags(raw: string): string[] {
   return [...new Set(raw.split(/[,;\n]/).map((tag) => tag.trim()).filter(Boolean))]
 }

@@ -38,7 +38,7 @@ export interface ContactAssistantTurn {
   output_tokens: number
 }
 
-/** Loại dòng danh mục NV / ĐL — khớp `CatalogKind` ở `src/constants.ts`; dùng cho bộ lọc «Loại danh mục». */
+/** Loại dòng danh mục NV / ĐL — khớp `CatalogKind` ở `src/constants.ts`; dùng cho bộ lọc "Loại danh mục". */
 export const CONTACT_CATALOG_KIND_OPTIONS = [
   { value: 1, label: 'Nhân viên' },
   { value: 2, label: 'Đại lý' },

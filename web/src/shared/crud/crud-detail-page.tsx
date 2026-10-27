@@ -56,11 +56,11 @@ export function CrudDetailPage<T extends CrudRecord>({
   const isCreate = !id
 
   const { data: item, isLoading, isError } = useCrudDetail<T>(config.apiPath, id)
-  //  Quyền theo VAI TRÒ rồi tới quyền theo DÒNG (`canEditRow`) — dòng không sửa được thì khóa ô + ẩn «Lưu».
+  //  Quyền theo VAI TRÒ rồi tới quyền theo DÒNG (`canEditRow`) — dòng không sửa được thì khóa ô + ẩn "Lưu".
   const rowEditable = isCreate || !item || !config.canEditRow || config.canEditRow(item)
   const canSave = can(config.entity, isCreate ? 'create' : 'write') && rowEditable
 
-  //  Tín hiệu «trang đã cuộn» cho các dải ghim nằm SÂU bên trong (thanh công cụ
+  //  Tín hiệu "trang đã cuộn" cho các dải ghim nằm SÂU bên trong (thanh công cụ
   //  của bảng trong tab — do `DataTable` vẽ, tầng này không với tới bằng prop).
   //  Bóng đổ của chúng đọc `group-data-[scrolled]`; xem `list-sticky.ts`.
   //
@@ -72,8 +72,8 @@ export function CrudDetailPage<T extends CrudRecord>({
   const scrolled = useScrolled(stickyRef, { nodeKey: isCreate || Boolean(item) })
 
   //  ⚠️ **TAB ĐANG MỞ NẰM Ở URL, không nằm trong state của Radix.** Bấm một
-  //  dòng trong tab con là RỜI TRANG (vd tab «Người đang giữ» của Chức vụ dẫn
-  //  sang hồ sơ nhân sự); bấm Lùi mà tab nhảy về «Thông tin» thì người dùng
+  //  dòng trong tab con là RỜI TRANG (vd tab "Người đang giữ" của Chức vụ dẫn
+  //  sang hồ sơ nhân sự); bấm Lùi mà tab nhảy về "Thông tin" thì người dùng
   //  phải mở lại tab, cuộn lại, lọc lại — mỗi lần xem một người là một vòng như
   //  vậy. Cùng khuôn với màn Hồ sơ nhân sự (`?tab=`, duoc-CR-315), và kèm theo
   //  thì gửi link thẳng vào một tab được.
@@ -146,12 +146,12 @@ export function CrudDetailPage<T extends CrudRecord>({
       : String(item.name || item.code || item[idKey] || config.title))
 
   //  ⚠️ THẺ DANH TÍNH dùng tên TRẦN, không dùng `getItemName`. Hai chỗ hỏi hai
-  //  câu khác nhau, và `getItemName` khai ra để trả lời câu thứ hai: *«Xóa bản
-  //  ghi nào?»* — ở đó cái mã đính kèm là thứ phân biệt tuyệt đối, đáng có.
+  //  câu khác nhau, và `getItemName` khai ra để trả lời câu thứ hai: *"Xóa bản
+  //  ghi nào?"* — ở đó cái mã đính kèm là thứ phân biệt tuyệt đối, đáng có.
   //  Thẻ danh tính thì đã bày chính cái mã ấy thành một huy hiệu ngay bên dưới
   //  tiêu đề, nên in lần nữa trong ngoặc là nói hai lần cùng một điều. Trên màn
-  //  390px điều đó thành lỗi thấy được: tiêu đề bị cắt giữa chừng — «Trưởng
-  //  phòng Thu mua (Demo) (tru…» — tức phần bị hy sinh lại chính là phần trùng.
+  //  390px điều đó thành lỗi thấy được: tiêu đề bị cắt giữa chừng — "Trưởng
+  //  phòng Thu mua (Demo) (tru…" — tức phần bị hy sinh lại chính là phần trùng.
   //  Thẻ ở khổ điện thoại (`mobileCard` của các config) vốn đã dùng tên trần;
   //  đây là chỗ duy nhất còn lệch.
   const cardTitle = item && String(item.name || item.title || itemName)
@@ -227,7 +227,7 @@ export function CrudDetailPage<T extends CrudRecord>({
             errors={errors}
             watch={watch}
             sectionHints={config.formSections}
-            //  `readonlyOnEdit` chỉ khóa lúc SỬA — ô «Mã loại nghỉ» phải nhập
+            //  `readonlyOnEdit` chỉ khóa lúc SỬA — ô "Mã loại nghỉ" phải nhập
             //  được đúng một lần, chính là lần tạo này.
             isReadonly={(field) => !canSave || (!isCreate && Boolean(field.readonlyOnEdit))}
           />
@@ -257,9 +257,9 @@ export function CrudDetailPage<T extends CrudRecord>({
            của `PageContainer` — dính mà còn hai mép hở thì nhìn ra ngay là vá. */}
       <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-4 flex flex-wrap items-center justify-between gap-3 border-b bg-canvas px-4 py-3 lg:-mx-6 lg:-mt-6 lg:px-6">
         {/*  `-ml-2` kéo chữ về sát mép: nút `ghost` có phần đệm ngang riêng nên
-             không có nó thì dòng «Danh sách …» thụt vào so với mọi thẻ bên dưới.
+             không có nó thì dòng "Danh sách …" thụt vào so với mọi thẻ bên dưới.
 
-             ⚠️ Tên danh mục THÔI HIỆN ở khổ điện thoại. «Danh sách phòng họp»
+             ⚠️ Tên danh mục THÔI HIỆN ở khổ điện thoại. "Danh sách phòng họp"
              đo được **186px trên 390px** — gần một nửa hàng — trong khi hàng này
              còn phải chứa nút Lưu và nút Xóa; ba thứ chen nhau còn 24px khe.
              Giấu đi không mất nghĩa: mũi tên đã nói đây là đường lùi, và dòng
@@ -307,7 +307,7 @@ export function CrudDetailPage<T extends CrudRecord>({
         </div>
       </div>
 
-      {/*  `group` + `data-scrolled` là đường dẫn tín hiệu «đã cuộn» xuống dải
+      {/*  `group` + `data-scrolled` là đường dẫn tín hiệu "đã cuộn" xuống dải
            ghim bên trong tab. Dựng sẵn cho mọi trang chi tiết CRUD — tab nào
            không ghim gì thì đây chỉ là một khối `space-y-6` như cũ.
 
@@ -332,7 +332,7 @@ export function CrudDetailPage<T extends CrudRecord>({
         ) : (
           <PageHeader
             title={`Thêm ${config.unitLabel}`}
-            description={config.description ?? `Điền thông tin rồi bấm «Tạo ${config.unitLabel}».`}
+            description={config.description ?? `Điền thông tin rồi bấm "Tạo ${config.unitLabel}".`}
           />
         )}
 

@@ -1,7 +1,7 @@
 import { Pill } from '@/shared/ui/pill'
 import { BOT_ACCOUNT_KIND, type BotAccount } from '../types/account'
 
-/** Loại tài khoản: «Trợ lý» (như thường) hay «Chỉ thu thập dữ liệu» (không gửi / tác động gì lên Zalo). */
+/** Loại tài khoản: "Trợ lý" (như thường) hay "Chỉ thu thập dữ liệu" (không gửi / tác động gì lên Zalo). */
 export function AccountKindBadge({ account }: { account: BotAccount }) {
   const collectOnly = account.kind === BOT_ACCOUNT_KIND.normal
   return (

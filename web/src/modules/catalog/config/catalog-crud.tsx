@@ -17,7 +17,7 @@ import {
   type CatalogEntryDetail,
 } from '../types/catalog'
 
-/** Cột «Danh mục NV / ĐL» — `key` cột sắp xếp PHẢI trùng `sorts` của `CATALOG_LIST_SPEC` (`src/web/api/catalog-api.ts`). */
+/** Cột "Danh mục NV / ĐL" — `key` cột sắp xếp PHẢI trùng `sorts` của `CATALOG_LIST_SPEC` (`src/web/api/catalog-api.ts`). */
 export const CATALOG_COLUMNS: DataTableColumn<CatalogEntry>[] = [
   { key: 'kind', header: 'Loại', width: 110, sortable: true, cell: (entry) => <Pill>{getCatalogKindLabel(entry.kind) || '—'}</Pill> },
   { key: 'code', header: 'Mã', width: 110, sortable: true, hideable: false, cell: (entry) => <span className="font-mono">{entry.code}</span> },
@@ -58,7 +58,7 @@ export const catalogCrudConfig: CrudConfig<CatalogEntryDetail> = {
     'Danh mục nhân viên và đại lý nạp từ Excel — nguồn của khu vực, vùng sales, người phụ trách hiện ở Danh bạ. Tải mẫu, điền, nạp lại bao nhiêu lần cũng được; chỗ khớp Danh bạ không chắc thì quản trị bấm chọn.',
   unitLabel: 'mục danh mục',
   apiPath: CATALOG_API_PATH,
-  emptyMessage: 'Chưa có danh mục — bấm «Tải mẫu Excel», điền rồi «Nạp danh mục».',
+  emptyMessage: 'Chưa có danh mục — bấm "Tải mẫu Excel", điền rồi "Nạp danh mục".',
   storageKey: 'catalog.list',
   searchParam: 'q',
   searchPlaceholder: 'Tìm mã, tên, SĐT',

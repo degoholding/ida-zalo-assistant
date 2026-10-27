@@ -21,7 +21,7 @@ export interface FileRecord {
   file_name: string
   file_ext: string
   status: number
-  /** Đánh dấu «giữ tệp gốc»: không xóa khi hết hạn giữ tệp của nhóm. */
+  /** Đánh dấu "giữ tệp gốc": không xóa khi hết hạn giữ tệp của nhóm. */
   keep_file: boolean
   stored_bytes: number | null
   declared_size: number | null
@@ -44,7 +44,7 @@ export interface FileRecord {
   can_retry: boolean
   /** Số ký tự đã bóc; null = chưa đọc. */
   text_chars: number | null
-  /** Tóm tắt ngắn của chữ đã bóc (vd «bảng 3 trang tính»); null = chưa đọc. */
+  /** Tóm tắt ngắn của chữ đã bóc (vd "bảng 3 trang tính"); null = chưa đọc. */
   text_summary?: string | null
 }
 

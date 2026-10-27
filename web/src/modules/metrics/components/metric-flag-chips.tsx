@@ -8,7 +8,7 @@ const FLAG_TONE: Record<number, 'danger' | 'pending' | 'returned' | 'handoff'> =
   [METRIC_FLAG.unknownStaff]: 'handoff',
 }
 
-/** Các cờ đang bật của một dòng số liệu, mỗi cờ một nhãn; không cờ thì «—». */
+/** Các cờ đang bật của một dòng số liệu, mỗi cờ một nhãn; không cờ thì "—". */
 export function MetricFlagChips({ flags }: { flags: number }) {
   const active = METRIC_FLAG_OPTIONS.filter((option) => (flags & option.value) !== 0)
   if (active.length === 0) return <span className="text-muted-foreground">—</span>

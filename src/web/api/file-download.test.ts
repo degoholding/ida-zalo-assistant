@@ -4,7 +4,7 @@ import { MessageKind } from "../../constants.js";
 import { buildContentDisposition, describeFileDownload } from "./file-download.js";
 
 describe("tên + kiểu khi tải tệp trong kho", () => {
-  // Lỗi 08/10/2026: ảnh chat.photo (không tên, không đuôi) tải về thành «8-tep.bin», ?inline=1 không vẽ được ảnh
+  // Lỗi 08/10/2026: ảnh chat.photo (không tên, không đuôi) tải về thành "8-tep.bin", ?inline=1 không vẽ được ảnh
   test("a chat.photo without name or extension downloads as a jpg image, not 8-tep.bin", () => {
     const info = describeFileDownload({ id: 8, fileName: "", fileExt: "", messageKind: MessageKind.Image, storageKey: "g1/2026-10/8-tep.bin" });
     assert.equal(info.fileName, "anh-8.jpg");

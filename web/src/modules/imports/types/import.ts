@@ -12,7 +12,7 @@ export interface ImportSummary {
   groups: { zalo_group_id: string; name: string; imported: number }[]
 }
 
-/** `GET /api/imports/zalo-web/targets` — nhóm bot đang đọc, bookmarklet «tất cả nhóm» ghé lần lượt. */
+/** `GET /api/imports/zalo-web/targets` — nhóm bot đang đọc, bookmarklet "tất cả nhóm" ghé lần lượt. */
 export interface ExportTarget {
   /** Mã nhóm Zalo, không có tiền tố "g". */
   id: string

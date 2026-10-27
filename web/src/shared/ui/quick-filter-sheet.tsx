@@ -12,7 +12,7 @@ export interface QuickFilterSheetProps {
   children: ReactNode
   /**
    * Nút bấm rút còn BIỂU TƯỢNG — dùng khi thanh công cụ phải gói ô tìm và mấy
-   * nút vào **một hàng** ở khổ điện thoại, chỗ mà 48px của chữ «Bộ lọc» là phần
+   * nút vào **một hàng** ở khổ điện thoại, chỗ mà 48px của chữ "Bộ lọc" là phần
    * chênh giữa vừa và không vừa.
    *
    * ⚠️ Vẫn **giữ viền** (`variant="outline"`) chứ không để nền chìm: nó đứng
@@ -31,8 +31,8 @@ export interface QuickFilterSheetProps {
    * gõ xong ba điều kiện, bấm nút duy nhất trong tầm mắt, tờ trượt đóng lại và
    * danh sách không đổi gì — nhìn ra y như hệ thống nuốt mất thao tác.
    *
-   * Bỏ trống thì nút chỉ đóng tờ trượt và mang chữ «Xong»: những ô lọc nhanh ăn
-   * ngay lúc chọn nên không có gì để «áp dụng».
+   * Bỏ trống thì nút chỉ đóng tờ trượt và mang chữ "Xong": những ô lọc nhanh ăn
+   * ngay lúc chọn nên không có gì để "áp dụng".
    */
   onApply?: () => void
 }
@@ -46,7 +46,7 @@ export interface QuickFilterSheetProps {
  * còn một dòng, và lúc mở ra thì mỗi ô có trọn bề ngang màn hình.
  *
  * ⚠️ **Ô trong tờ trượt phải có NHÃN** — bọc bằng `QuickFilterField`. Trên thanh
- * công cụ, ô chọn tự giải nghĩa bằng giá trị đang chọn («Tất cả loại nghỉ»);
+ * công cụ, ô chọn tự giải nghĩa bằng giá trị đang chọn ("Tất cả loại nghỉ");
  * xếp dọc ba bốn ô như vậy trong một tờ trắng thì thành một danh sách chữ trôi
  * nổi, người đọc không biết ô nào lọc cái gì cho tới khi bấm thử.
  */
@@ -107,8 +107,8 @@ export function QuickFilterSheet({
 
         <div className="space-y-4 overflow-y-auto px-4 py-4">{children}</div>
 
-        {/*  Hai nút CÙNG HÀNG, «Xóa lọc» chỉ hiện khi có gì để xóa. Bản cũ để
-             «Xóa lọc» tận trên tiêu đề — xa nút chính, và ở đúng vùng ngón tay
+        {/*  Hai nút CÙNG HÀNG, "Xóa lọc" chỉ hiện khi có gì để xóa. Bản cũ để
+             "Xóa lọc" tận trên tiêu đề — xa nút chính, và ở đúng vùng ngón tay
              không với tới. */}
         <div className="flex gap-2 border-t px-4 py-3">
           {onClearAll && activeCount > 0 && (

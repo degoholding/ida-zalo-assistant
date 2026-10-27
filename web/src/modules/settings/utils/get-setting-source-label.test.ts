@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getSettingSourceLabel } from './get-setting-source-label'
 
 describe('getSettingSourceLabel', () => {
-  it('nguồn "web" hiện đúng nhãn «đặt trên web» và cờ isWeb', () => {
+  it('nguồn "web" hiện đúng nhãn "đặt trên web" và cờ isWeb', () => {
     const label = getSettingSourceLabel({ source: 'web', env_value: null, default_value: 30, type: 'int' })
     expect(label).toEqual({ text: 'đặt trên web', isWeb: true })
   })

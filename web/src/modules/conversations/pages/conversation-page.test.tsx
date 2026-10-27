@@ -108,7 +108,7 @@ describe('ConversationPage ?msg=', () => {
     }
   })
 
-  it('«Về tin mới nhất» drops ?msg and loads the latest page', async () => {
+  it('"Về tin mới nhất" drops ?msg and loads the latest page', async () => {
     serve({
       '{"around":77}': { items: [makeMessage(77, 'tin được trỏ')], older_cursor: null, newer_cursor: 77 },
       '{}': { items: [makeMessage(99, 'tin mới nhất')], older_cursor: null, newer_cursor: null },

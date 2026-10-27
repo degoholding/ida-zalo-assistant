@@ -1,6 +1,6 @@
 const HALT_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 
-/** `14:30 12/10` theo giờ Việt Nam — mốc bot bị tắt. Rỗng / không đọc được thì trả chuỗi rỗng (dải đỏ bỏ cụm «từ …»). */
+/** `14:30 12/10` theo giờ Việt Nam — mốc bot bị tắt. Rỗng / không đọc được thì trả chuỗi rỗng (dải đỏ bỏ cụm "từ …"). */
 export function formatHaltSince(value: string | null | undefined): string {
   if (!value) return ''
   const date = new Date(value)

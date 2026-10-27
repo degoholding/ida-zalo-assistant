@@ -30,7 +30,7 @@ function describeLastRun(item: ScheduleStatus): string {
 }
 
 /**
- * Thẻ CHỈ ĐỌC «Việc chạy theo lịch» dưới tab Vận hành: sao lưu, dọn tệp, bản tin… chạy lúc nào, lượt gần nhất xong hay lỗi.
+ * Thẻ CHỈ ĐỌC "Việc chạy theo lịch" dưới tab Vận hành: sao lưu, dọn tệp, bản tin… chạy lúc nào, lượt gần nhất xong hay lỗi.
  * Tự nạp lại mỗi phút (`useSchedules`) — không có nút sửa, lịch khai trong mã máy chủ.
  */
 export function ScheduleStatusCard() {

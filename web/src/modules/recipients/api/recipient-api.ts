@@ -10,7 +10,7 @@ const USER_OPTIONS_PAGE_SIZE = 200
 export const recipientApi = {
   /**
    * Gửi thử một tin vào chat riêng của người nhận với bot. Lấy cả phong bì vì câu cần báo lại cho quản trị
-   * («Đã xếp tin thử vào hàng gửi…») nằm ở `message`, còn `data` rỗng.
+   * ("Đã xếp tin thử vào hàng gửi…") nằm ở `message`, còn `data` rỗng.
    */
   sendTest: async (id: number) => {
     const res = await httpClient.post<SuccessEnvelope<null>>(`${RECIPIENTS_API_PATH}/${id}/test`)

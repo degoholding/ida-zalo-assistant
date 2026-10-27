@@ -39,9 +39,9 @@ export function CrudRecordCard({ title, subtitle, chips = [] }: CrudRecordCardPr
               //  ⚠️ Huy hiệu `ok` ở đây là `secondary` (nền nhạt), KHÁC thẻ danh
               //  tính của trang chi tiết (nền primary đặc). Trang chi tiết có
               //  ĐÚNG MỘT bản ghi nên nền đặc là điểm nhấn; danh sách có hai chục
-              //  thẻ mà thẻ nào cũng «Đang dùng» — hai chục mảng xanh đặc xếp
+              //  thẻ mà thẻ nào cũng "Đang dùng" — hai chục mảng xanh đặc xếp
               //  dọc thì trạng thái BÌNH THƯỜNG lại là thứ hét to nhất màn hình,
-              //  trong khi thứ cần nhặt ra là dòng «Ngừng / Ẩn».
+              //  trong khi thứ cần nhặt ra là dòng "Ngừng / Ẩn".
               <Badge
                 key={chip.text}
                 variant={chip.tone === 'ok' ? 'secondary' : 'outline'}

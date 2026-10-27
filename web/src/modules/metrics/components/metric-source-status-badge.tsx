@@ -9,7 +9,7 @@ const STATUS_TONE: Record<number, StatusTone> = {
   [METRIC_SOURCE_STATUS.mappingError]: 'returned',
 }
 
-/** Tình trạng lượt đọc gần nhất; nguồn đã tắt thì hiện «Đã tắt» đè lên (bot không đọc nữa). */
+/** Tình trạng lượt đọc gần nhất; nguồn đã tắt thì hiện "Đã tắt" đè lên (bot không đọc nữa). */
 export function MetricSourceStatusBadge({ status, isActive }: { status: number; isActive: boolean }) {
   if (!isActive) return <Pill tone="neutral">Đã tắt</Pill>
   const label = getMetricSourceStatusLabel(status)

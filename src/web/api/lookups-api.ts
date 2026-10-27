@@ -7,7 +7,7 @@ import type { ApiRoute } from "./api-route.js";
 
 // Danh sách ngắn cho ô chọn / bộ lọc. Không phân trang — các bảng này nhỏ (vài chục dòng).
 
-/** Mục «chưa gán» cho ô chọn công ty của biểu mẫu — ô chọn không biểu diễn được null nên dùng id 0. */
+/** Mục "chưa gán" cho ô chọn công ty của biểu mẫu — ô chọn không biểu diễn được null nên dùng id 0. */
 export const NO_COMPANY_OPTION = { id: 0, code: "", name: "— Chưa gán —", is_active: true };
 
 export const lookupRoutes: ApiRoute[] = [
@@ -15,7 +15,7 @@ export const lookupRoutes: ApiRoute[] = [
     const [rows] = await service.db.query<RowDataPacket[]>("SELECT DISTINCT tag FROM contact_tag ORDER BY tag LIMIT 500");
     sendOk(response, rows.map((row) => String(row.tag)));
   }],
-  // ?with_none=1 → thêm mục «Chưa gán» ở đầu (cho ô chọn của biểu mẫu); ?active=1 → chỉ công ty đang dùng
+  // ?with_none=1 → thêm mục "Chưa gán" ở đầu (cho ô chọn của biểu mẫu); ?active=1 → chỉ công ty đang dùng
   ["GET", /^\/api\/lookups\/companies$/, async ({ response, url, service }) => {
     const companies = (await listCompanies(service.db, url.searchParams.get("active") === "1"))
       .map((company) => ({ id: company.id, code: company.code, name: company.name, is_active: Boolean(company.is_active) }));

@@ -22,7 +22,7 @@ interface GoogleCalendarConnectPanelProps {
 }
 
 /**
- * Phần cuối thẻ «Google Calendar & Meet»: trạng thái kết nối + nút «Kết nối Google» + Redirect URI + hướng dẫn (OAuth
+ * Phần cuối thẻ "Google Calendar & Meet": trạng thái kết nối + nút "Kết nối Google" + Redirect URI + hướng dẫn (OAuth
  * người dùng) — trợ lý dùng để tạo cuộc họp có Meet. Hai ô Client ID / Client secret nằm ngay phía trên trong cùng thẻ.
  */
 export function GoogleCalendarConnectPanel({ disabled }: GoogleCalendarConnectPanelProps) {

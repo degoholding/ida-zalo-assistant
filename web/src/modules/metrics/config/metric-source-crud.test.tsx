@@ -21,7 +21,7 @@ describe('metricSourceCrudConfig — contract with the server list spec', () => 
     const mapping = (metricSourceCrudConfig.formFields as { name: string; defaultValue?: { metrics: unknown[] } }[]).find((f) => f.name === 'mapping')
     expect(mapping?.defaultValue?.metrics).toHaveLength(1)
   })
-  it('routes: detail under /metric-sources, create route is a static sibling wired into the CRUD «Thêm» button', () => {
+  it('routes: detail under /metric-sources, create route is a static sibling wired into the CRUD "Thêm" button', () => {
     expect(metricSourceCrudConfig.detailRoute?.(7)).toBe('/metric-sources/7')
     expect(METRIC_SOURCE_CREATE_ROUTE).toBe('/metric-sources/new')
     expect(metricSourceCrudConfig.createRoute).toBe(METRIC_SOURCE_CREATE_ROUTE)

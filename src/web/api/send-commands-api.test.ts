@@ -17,7 +17,7 @@ test("buildVnDayCondition: lấy trọn ngày theo giờ Việt Nam, rác / thi�
   assert.equal(buildVnDayCondition("c.created_at", "isnull", ["1"]), null);
 });
 
-test("ListSpec: mọi bộ lọc / cột sắp xếp / ô tìm màn «Gửi tin» dùng đều đã khai", () => {
+test("ListSpec: mọi bộ lọc / cột sắp xếp / ô tìm màn 'Gửi tin' dùng đều đã khai", () => {
   for (const key of ["status", "source", "requester_uid", "created_at", "scheduled_at"]) assert.ok(SEND_COMMAND_LIST_SPEC.fields[key], key);
   for (const key of ["created_at", "scheduled_at"]) assert.ok(SEND_COMMAND_LIST_SPEC.sorts[key], key);
   assert.deepEqual(SEND_COMMAND_LIST_SPEC.search?.columns, ["c.requester_name", "c.body"]);

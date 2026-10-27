@@ -14,7 +14,7 @@ interface ReplyTemplateReturnDialogProps {
   onSubmit: (note: string) => void
 }
 
-/** Hộp thoại «Trả lại»: ghi chú BẮT BUỘC (5-500 ký tự, khớp luật máy chủ) để người soạn biết sửa gì. */
+/** Hộp thoại "Trả lại": ghi chú BẮT BUỘC (5-500 ký tự, khớp luật máy chủ) để người soạn biết sửa gì. */
 export function ReplyTemplateReturnDialog({ open, onOpenChange, pending, onSubmit }: ReplyTemplateReturnDialogProps) {
   const [note, setNote] = useState('')
   const trimmed = note.trim()

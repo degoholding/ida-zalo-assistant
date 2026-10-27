@@ -82,7 +82,7 @@ describe('FileRowActions', () => {
     expect(toastSuccess).not.toHaveBeenCalled()
   })
 
-  it('offers only «Xem chữ» on an expired file whose text survived — no download, no keep toggle', () => {
+  it('offers only "Xem chữ" on an expired file whose text survived — no download, no keep toggle', () => {
     renderActions(makeFile({ status: FILE_STATUS.expired, download_url: null }))
 
     expect(screen.getByRole('button', { name: /Xem chữ/ })).toBeInTheDocument()

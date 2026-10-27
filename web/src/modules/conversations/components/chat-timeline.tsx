@@ -9,7 +9,7 @@ import { MessageBubble } from './message-bubble'
 
 /** Tin được trỏ tới (`?msg=`) sáng lên ngần này rồi tắt. */
 const HIGHLIGHT_MS = 2500
-/** Cách đáy dưới ngần này px coi như «đang ở cuối» — tin mới tới thì bám theo xuống. */
+/** Cách đáy dưới ngần này px coi như "đang ở cuối" — tin mới tới thì bám theo xuống. */
 const NEAR_BOTTOM_PX = 80
 
 interface ChatTimelineProps {
@@ -31,8 +31,8 @@ interface ChatTimelineProps {
 
 /**
  * Dòng tin xếp theo giờ gửi, ngăn ngày, gộp đợt. Mở cuộc thì cuộn xuống cuối — hoặc tới đúng tin `focusMessageId`
- * (làm sáng một lúc). «Xem tin cũ hơn» giữ nguyên vị trí đang đọc (bù chiều cao phần vừa chèn lên trên); «Xem tin mới
- * hơn» nối xuống dưới, không nhảy.
+ * (làm sáng một lúc). "Xem tin cũ hơn" giữ nguyên vị trí đang đọc (bù chiều cao phần vừa chèn lên trên); "Xem tin mới
+ * hơn" nối xuống dưới, không nhảy.
  */
 export function ChatTimeline({
   threadId, messages, isGroup, hasOlder, isLoadingOlder, onLoadOlder, hasNewer = false, isLoadingNewer = false, onLoadNewer, onJumpToLatest,

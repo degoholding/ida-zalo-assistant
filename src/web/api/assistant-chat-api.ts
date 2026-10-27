@@ -10,7 +10,7 @@ import { ApiError, readJson, sendOk } from "./api-http.js";
 import { recordAudit } from "./audit-log.js";
 import type { ApiRoute } from "./api-route.js";
 
-// Khung «Hỏi trợ lý» trên web: quản trị hỏi trợ lý AI dưới tên một người có vai trò, không cần Zalo. Đi đúng
+// Khung "Hỏi trợ lý" trên web: quản trị hỏi trợ lý AI dưới tên một người có vai trò, không cần Zalo. Đi đúng
 // đường AssistantService như tin Zalo thật (cùng cài đặt, công cụ, giới hạn, nhật ký assistant_turn). Mỗi người
 // hỏi một cuộc riêng mã `web-<uid>` để trợ lý đọc lại câu trước — cuộc này không gửi ra Zalo được (sync-service).
 
@@ -51,7 +51,7 @@ async function loadAsker(db: Db, rawContactId: unknown): Promise<ContactRow> {
   return contact;
 }
 
-/** Cuộc «Hỏi trợ lý» của một người (tạo nếu chưa có), gắn tài khoản bot đầu tiên — nhật ký assistant_turn cần bot. */
+/** Cuộc "Hỏi trợ lý" của một người (tạo nếu chưa có), gắn tài khoản bot đầu tiên — nhật ký assistant_turn cần bot. */
 async function ensureWebThread(db: Db, contact: ContactRow): Promise<{ thread: GroupRow; botAccountId: number }> {
   // Giữ cuộc ổn định: đã có cuộc web-<uid> thuộc một bot Trợ lý thì dùng lại bot đó (không nhảy sang bot khác khi bot #1 đổi sang Normal)
   const [existing] = await db.query<RowDataPacket[]>(
@@ -110,7 +110,7 @@ export const assistantChatRoutes: ApiRoute[] = [
 
     const questionMessageId = await recordOutgoingMessage(db, thread, asker, messageId("q"), question, { source: "web" });
     // Mô phỏng người được chọn: nhóm Mật cần CẢ cờ của người đó LẪN cờ của quản trị đang hỏi; không đọc cuộc riêng của người được chọn.
-    // Mỗi lượt hỏi ghi một dòng nhật ký (người đang đăng nhập là «actor»).
+    // Mỗi lượt hỏi ghi một dòng nhật ký (người đang đăng nhập là "actor").
     await recordAudit(db, { entity: "contact", entityId: contact.id, action: "assistant_ask", message: `Hỏi trợ lý thay ${asker.name}` });
     const reply = await assistant.answer({
       botAccountId, contact, threadId: thread.id, questionMessageId, question, webViewer: { canViewConfidential: canSeeConfidential(principal) },

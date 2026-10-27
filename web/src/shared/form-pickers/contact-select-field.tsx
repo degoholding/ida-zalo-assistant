@@ -29,7 +29,7 @@ export function ContactSelectField({ control, name, label, disabled, required, h
   const { field, fieldState } = useController({
     control,
     name,
-    //  Cùng câu với ô bắt buộc của `CrudField`. Kiểm `> 0` chứ không `required`: «chưa chọn» là số 0, không rỗng.
+    //  Cùng câu với ô bắt buộc của `CrudField`. Kiểm `> 0` chứ không `required`: "chưa chọn" là số 0, không rỗng.
     rules: required ? { validate: (value) => Number(value) > 0 || `${label} là bắt buộc` } : undefined,
   })
   const selectedId = Number(field.value) || 0

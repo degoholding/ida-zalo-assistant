@@ -32,7 +32,7 @@ export interface SettingsSection {
   title: string
   description: string
   icon: LucideIcon
-  /** Khóa cài đặt theo thứ tự hiện. Khóa máy chủ có mà không khai ở đây rơi vào thẻ «Khác». */
+  /** Khóa cài đặt theo thứ tự hiện. Khóa máy chủ có mà không khai ở đây rơi vào thẻ "Khác". */
   keys: string[]
 }
 
@@ -131,7 +131,7 @@ export const GOOGLE_SECTIONS: SettingsSection[] = [
   {
     id: 'login',
     title: 'Đăng nhập Google',
-    description: 'Client ID của OAuth client (loại Web) để hiện nút «Đăng nhập bằng Google» ở màn đăng nhập. Để trống = chỉ đăng nhập bằng tài khoản + mật khẩu.',
+    description: 'Client ID của OAuth client (loại Web) để hiện nút "Đăng nhập bằng Google" ở màn đăng nhập. Để trống = chỉ đăng nhập bằng tài khoản + mật khẩu.',
     icon: LogIn,
     keys: ['google_login_client_id'],
   },
@@ -145,7 +145,7 @@ export const GOOGLE_SECTIONS: SettingsSection[] = [
   {
     id: 'calendar',
     title: 'Google Calendar & Meet — tạo cuộc họp',
-    description: 'Chép Client ID + Client secret của OAuth client rồi bấm «Kết nối Google».',
+    description: 'Chép Client ID + Client secret của OAuth client rồi bấm "Kết nối Google".',
     icon: CalendarClock,
     keys: ['google_oauth_client_id', 'google_oauth_client_secret'],
   },
@@ -153,7 +153,7 @@ export const GOOGLE_SECTIONS: SettingsSection[] = [
     id: 'recap',
     title: 'Recap họp tự động (Drive)',
     description:
-      'Đọc ghi âm qua CHÍNH Gmail đã «Kết nối Google» ở trên (không phải service account) — cần kết nối lại và tick thêm quyền Drive (chỉ xem).',
+      'Đọc ghi âm qua CHÍNH Gmail đã "Kết nối Google" ở trên (không phải service account) — cần kết nối lại và tick thêm quyền Drive (chỉ xem).',
     icon: Mic,
     keys: ['meeting_auto_recap_enabled', 'google_drive_recording_folder', 'meeting_auto_recap_max_mb'],
   },
@@ -171,7 +171,7 @@ export const OPERATIONS_SECTIONS: SettingsSection[] = [
     id: 'alerts',
     title: 'Cảnh báo tin nhắn',
     description:
-      'Bot tự đọc tin trong nhóm, báo KHẨN / VIP cho người nhận qua Zalo. Từ khóa có dấu khớp đúng dấu, đúng nguyên chữ; từ «nghiêm» (la, liền, ngay) chỉ tính khi AI xác nhận.',
+      'Bot tự đọc tin trong nhóm, báo KHẨN / VIP cho người nhận qua Zalo. Từ khóa có dấu khớp đúng dấu, đúng nguyên chữ; từ "nghiêm" (la, liền, ngay) chỉ tính khi AI xác nhận.',
     icon: BellRing,
     keys: ['alert_enabled', 'alert_urgent_keywords', 'alert_important_keywords', 'alert_strict_keywords', 'alert_ai_enabled'],
   },

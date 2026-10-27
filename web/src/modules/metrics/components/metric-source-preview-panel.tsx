@@ -23,7 +23,7 @@ function ColumnCheckList({ mapping, preview }: { mapping: MetricMapping; preview
         <li key={`${check.role}-${check.spec}`} className="flex items-center gap-2">
           {check.found ? <CircleCheck className="size-4 text-success" /> : <CircleX className="size-4 text-destructive" />}
           <span className="font-medium">{check.role}</span>
-          <span className="text-muted-foreground">→ «{check.spec}»</span>
+          <span className="text-muted-foreground">→ "{check.spec}"</span>
           {!check.found && <span className="text-destructive">không thấy</span>}
         </li>
       ))}
@@ -70,9 +70,9 @@ interface MetricSourcePreviewPanelProps {
   control: Control<CrudRecord>
 }
 
-/** Khung «Kiểm tra đọc thử»: đọc bảng bằng cấu hình ĐANG GÕ (chưa lưu), cho thấy tiêu đề thật, cột khớp ✓ / ✗, 10 dòng đầu và cảnh báo. */
+/** Khung "Kiểm tra đọc thử": đọc bảng bằng cấu hình ĐANG GÕ (chưa lưu), cho thấy tiêu đề thật, cột khớp ✓ / ✗, 10 dòng đầu và cảnh báo. */
 export function MetricSourcePreviewPanel({ control }: MetricSourcePreviewPanelProps) {
-  // Đang SỬA nguồn đã lưu (route `:id`) thì gửi kèm id để máy chủ ghi dòng «Lịch sử thao tác»; trang thêm mới không có
+  // Đang SỬA nguồn đã lưu (route `:id`) thì gửi kèm id để máy chủ ghi dòng "Lịch sử thao tác"; trang thêm mới không có
   const sourceId = Number(useParams().id) || undefined
   const values = useWatch({ control })
   const mutation = useMetricSourcePreview()

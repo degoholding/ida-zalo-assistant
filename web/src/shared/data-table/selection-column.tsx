@@ -14,7 +14,7 @@ export interface SelectionColumnOptions<T> {
 }
 
 /**
- * Cột «Chọn» (tick nhiều dòng cho thao tác HÀNG LOẠT) — dùng chung cho mọi
+ * Cột "Chọn" (tick nhiều dòng cho thao tác HÀNG LOẠT) — dùng chung cho mọi
  * `DataTable`, tách khỏi nơi dùng đầu tiên (`folder-document-columns.tsx`,
  * phase 05) để màn Văn bản (phase 06, `outgoing-documents-tab.tsx`) dùng lại
  * đúng một bản thay vì chép JSX checkbox lần hai.

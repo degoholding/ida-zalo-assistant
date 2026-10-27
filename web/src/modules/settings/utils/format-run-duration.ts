@@ -1,6 +1,6 @@
 /**
  * Thời gian chạy của một lượt: `350 ms` · `4,2 giây` · `3 phút 5 giây` · `1 giờ 2 phút`.
- * Số âm / không phải số (dữ liệu hỏng) trả rỗng để ô hiện trống thay vì «-5 ms».
+ * Số âm / không phải số (dữ liệu hỏng) trả rỗng để ô hiện trống thay vì "-5 ms".
  */
 export function formatRunDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return ''

@@ -9,7 +9,7 @@ describe('formatTaskDue', () => {
   })
 
   it('shows only the date when the due date has no time component', () => {
-    //  00:00 giờ VN ngày 19/10/2026 lưu dưới UTC là 17:00 ngày 18/10 — đúng luật «hạn chỉ ngày» của máy chủ
+    //  00:00 giờ VN ngày 19/10/2026 lưu dưới UTC là 17:00 ngày 18/10 — đúng luật "hạn chỉ ngày" của máy chủ
     expect(formatTaskDue('2026-10-18T17:00:00.000Z', false)).toBe('19/10/2026')
   })
 

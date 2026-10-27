@@ -74,25 +74,25 @@ beforeEach(() => {
 })
 
 describe('recipient detail actions', () => {
-  it('offers «Gửi thử» to someone who may edit recipients', () => {
+  it('offers "Gửi thử" to someone who may edit recipients', () => {
     permissions = { recipient: { read: true, write: true } }
     render(withQueryClient(recipientCrudConfig.detailActions?.(makeRecipient())))
     expect(screen.getByRole('button', { name: 'Gửi thử' })).toBeInTheDocument()
   })
 
-  it('hides «Gửi thử» from a read-only viewer — the server would answer 403', () => {
+  it('hides "Gửi thử" from a read-only viewer — the server would answer 403', () => {
     permissions = { recipient: { read: true, write: false } }
     render(withQueryClient(recipientCrudConfig.detailActions?.(makeRecipient())))
     expect(screen.queryByRole('button', { name: 'Gửi thử' })).toBeNull()
   })
 
-  it('offers «Gửi thử bản tin» alongside «Gửi thử» to someone who may edit recipients', () => {
+  it('offers "Gửi thử bản tin" alongside "Gửi thử" to someone who may edit recipients', () => {
     permissions = { recipient: { read: true, write: true } }
     render(withQueryClient(recipientCrudConfig.detailActions?.(makeRecipient())))
     expect(screen.getByRole('button', { name: 'Gửi thử bản tin' })).toBeInTheDocument()
   })
 
-  it('hides «Gửi thử bản tin» from a read-only viewer — the server would answer 403', () => {
+  it('hides "Gửi thử bản tin" from a read-only viewer — the server would answer 403', () => {
     permissions = { recipient: { read: true, write: false } }
     render(withQueryClient(recipientCrudConfig.detailActions?.(makeRecipient())))
     expect(screen.queryByRole('button', { name: 'Gửi thử bản tin' })).toBeNull()
@@ -118,7 +118,7 @@ describe('recipient form', () => {
     })
   })
 
-  it('hides the watched-group picker when «watch every group» is on', async () => {
+  it('hides the watched-group picker when "watch every group" is on', async () => {
     render(withQueryClient(<Harness item={makeRecipient({ all_groups: true })} />))
     expect(screen.queryByText('Nhóm theo dõi')).toBeNull()
 

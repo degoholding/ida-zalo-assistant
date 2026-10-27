@@ -9,7 +9,7 @@ export interface MessageSearchRecord {
   sender_name: string
   sent_at: string
   kind: number
-  /** Đoạn trích quanh chỗ khớp (máy chủ cắt sẵn, «…» ở chỗ bị cắt). */
+  /** Đoạn trích quanh chỗ khớp (máy chủ cắt sẵn, "…" ở chỗ bị cắt). */
   snippet: string
 }
 

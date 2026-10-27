@@ -41,7 +41,7 @@ export function SecretSettingField({ setting, control, disabled, onDelete, delet
   }
 
   const showSummary = !editing && setting.is_set
-  // «Xóa» = xóa giá trị đặt trên web; khóa đang lấy từ .env thì xóa ở đây không có tác dụng
+  // "Xóa" = xóa giá trị đặt trên web; khóa đang lấy từ .env thì xóa ở đây không có tác dụng
   const isWeb = setting.source === 'web'
 
   return (

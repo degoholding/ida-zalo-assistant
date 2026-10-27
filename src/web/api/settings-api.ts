@@ -30,9 +30,9 @@ function buildSheetsTarget(service: SyncService): { client: GoogleSheetsClient; 
   return { client: new GoogleSheetsClient(parseServiceAccount(account)), spreadsheetId: parseSpreadsheetId(url) };
 }
 
-/** Thư mục đọc qua Gmail đã «Kết nối Google» (xem `src/google/drive-client.ts`) — thiếu kết nối / link thì 422, không gọi mạng. */
+/** Thư mục đọc qua Gmail đã "Kết nối Google" (xem `src/google/drive-client.ts`) — thiếu kết nối / link thì 422, không gọi mạng. */
 function buildDriveTarget(service: SyncService): DriveClient {
-  if (!service.config.google.calendarAccount) throw new ApiError(422, "validation_error", "Chưa kết nối Google — bấm «Kết nối Google» ở mục Calendar & Meet trước");
+  if (!service.config.google.calendarAccount) throw new ApiError(422, "validation_error", "Chưa kết nối Google — bấm 'Kết nối Google' ở mục Calendar & Meet trước");
   if (!service.config.meetingRecap.folderId) throw new ApiError(422, "validation_error", "Chưa có link thư mục ghi âm");
   return new DriveClient(() => service.config.google, service.config.meetingRecap.folderId);
 }
@@ -83,9 +83,9 @@ export const settingRoutes: ApiRoute[] = [
       const files = await client.listNewFiles(since);
       const audioCount = files.filter((file) => isAudioFile(file)).length;
       await recordAudit(service.db, {
-        entity: "setting", entityId: SETTINGS_ENTITY_ID, action: "test_connection", message: `Kiểm tra thư mục Drive: thành công («${folder.name}»)`,
+        entity: "setting", entityId: SETTINGS_ENTITY_ID, action: "test_connection", message: `Kiểm tra thư mục Drive: thành công ("${folder.name}")`,
       });
-      sendOk(response, { ok: true, folder_name: folder.name, audio_files_7d: audioCount }, `Thấy thư mục «${folder.name}», ${audioCount} ghi âm trong 7 ngày`);
+      sendOk(response, { ok: true, folder_name: folder.name, audio_files_7d: audioCount }, `Thấy thư mục "${folder.name}", ${audioCount} ghi âm trong 7 ngày`);
     } catch (error) {
       if (!(error instanceof GoogleSheetsError)) throw error;
       await recordAudit(service.db, {
@@ -104,6 +104,6 @@ export const settingRoutes: ApiRoute[] = [
       service.applySettings([key]);
       await recordAudit(service.db, { entity: "setting", entityId: SETTINGS_ENTITY_ID, action: "reset", changedFields: [definition.label] });
     }
-    sendOk(response, service.settings.describe(), existed ? `Đã khôi phục «${definition.label}»` : "Không có gì thay đổi");
+    sendOk(response, service.settings.describe(), existed ? `Đã khôi phục "${definition.label}"` : "Không có gì thay đổi");
   }],
 ];

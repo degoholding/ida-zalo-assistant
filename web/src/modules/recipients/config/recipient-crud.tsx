@@ -100,7 +100,7 @@ export const recipientCrudConfig: CrudConfig<RecipientDetail> = {
     'Ai nhận cảnh báo tin khẩn, việc đến hạn và bản tin sáng / cuối ngày. Bot nhắn riêng cho từng người trên Zalo, theo thứ tự ưu tiên.',
   unitLabel: 'người nhận',
   apiPath: RECIPIENTS_API_PATH,
-  emptyMessage: 'Chưa có người nhận nào — bấm «Thêm người nhận», chọn người trên Zalo sẽ nhận cảnh báo và bản tin.',
+  emptyMessage: 'Chưa có người nhận nào — bấm "Thêm người nhận", chọn người trên Zalo sẽ nhận cảnh báo và bản tin.',
   storageKey: 'recipients.list',
   searchParam: 'q',
   searchPlaceholder: 'Tìm tên, chức danh',

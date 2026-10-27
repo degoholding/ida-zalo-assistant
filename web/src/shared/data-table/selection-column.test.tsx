@@ -73,7 +73,7 @@ describe('createSelectionColumn — ô tick từng dòng', () => {
     const onToggleRow = vi.fn()
     const onRowClick = vi.fn()
     const column = makeColumn({ onToggleRow, getRowLabel: (r) => r.name })
-    //  Mô phỏng `onRowClick` của `DataTable` thật — cột «Chọn» phải chặn nổi
+    //  Mô phỏng `onRowClick` của `DataTable` thật — cột "Chọn" phải chặn nổi
     //  bọt lên đây, không thì tick một dòng lại mở luôn trang chi tiết.
     render(<div onClick={onRowClick}>{column.cell(row)}</div>)
     await user.click(screen.getByRole('checkbox', { name: 'Chọn Quy chế văn bản' }))

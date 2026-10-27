@@ -2,7 +2,7 @@ import { MessageKind } from "../../constants.js";
 import { sanitizeFileName } from "../../sync/attachment-downloader.js";
 
 // Tên tệp + kiểu nội dung khi tải một tệp trong kho về trình duyệt. Không suy từ khóa lưu trữ nữa: ảnh `chat.photo` không
-// có tên / đuôi nên khóa thành «8-tep.bin» → tải về ra tệp .bin, `?inline=1` không vẽ được ảnh (lỗi 08/10/2026).
+// có tên / đuôi nên khóa thành "8-tep.bin" → tải về ra tệp .bin, `?inline=1` không vẽ được ảnh (lỗi 08/10/2026).
 
 /** Chỉ các kiểu ảnh này được hiện thẳng (inline) — không có svg: máy chủ bật nosniff, svg chạy được mã. */
 const IMAGE_TYPES: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
@@ -50,7 +50,7 @@ export function describeFileDownload(source: FileDownloadSource): FileDownloadIn
     || (keyExt && keyExt !== "bin" ? keyExt : "")
     || "bin";
   const fallbackBase = DEFAULT_BASE_NAME[kind] ?? "tep";
-  // Tên tự sinh «tep.bin» của bộ tải không phải tên thật — bỏ, dùng tên theo loại tin
+  // Tên tự sinh "tep.bin" của bộ tải không phải tên thật — bỏ, dùng tên theo loại tin
   const keyBase = keyName.replace(EXTENSION_PATTERN, "");
   const base = (ownName || (keyBase && keyBase !== "tep" ? keyBase : `${fallbackBase}-${source.id}`)).replace(EXTENSION_PATTERN, "")
     || `${fallbackBase}-${source.id}`;

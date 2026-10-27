@@ -94,7 +94,7 @@ interface MessageBubbleProps {
   lastOfRun: boolean
 }
 
-/** Tin hệ thống («Duy đã thêm Hân vào nhóm»): một dòng chữ nhỏ giữa khung chat như Zalo, không bong bóng. */
+/** Tin hệ thống ("Duy đã thêm Hân vào nhóm"): một dòng chữ nhỏ giữa khung chat như Zalo, không bong bóng. */
 function SystemNotice({ message }: { message: ChatMessage }) {
   return (
     <div className="flex justify-center py-1">

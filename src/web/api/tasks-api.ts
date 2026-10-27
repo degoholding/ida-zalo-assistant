@@ -23,7 +23,7 @@ const DAY_MS = 86_400_000;
 
 // ===== Lọc danh sách =====
 
-/** «Quá hạn»: đang làm + đã qua mốc hết hạn (giờ nếu có, hết ngày nếu chỉ có ngày) — khớp `isTaskOverdue`. */
+/** "Quá hạn": đang làm + đã qua mốc hết hạn (giờ nếu có, hết ngày nếu chỉ có ngày) — khớp `isTaskOverdue`. */
 const OVERDUE_SQL = "t.status = ? AND t.due_at IS NOT NULL AND IF(t.due_has_time = 1, t.due_at, t.due_at + INTERVAL 1 DAY) <= ?";
 const MISSING_ASSIGNEE_SQL = "t.assignee_contact_id IS NULL AND (t.assignee_uid IS NULL OR t.assignee_uid = '') AND (t.assignee_name IS NULL OR t.assignee_name = '')";
 const MISSING_DUE_SQL = "t.due_at IS NULL";
@@ -40,7 +40,7 @@ function buildFlagCondition(sql: string, operator: Operator, values: string[]): 
   return { sql: want ? `(${sql})` : `NOT (${sql})`, params: [] };
 }
 
-/** «Quá hạn» cần so với GIỜ HIỆN TẠI + trạng thái Đang làm nên có tham số riêng, không dùng chung `buildFlagCondition`. */
+/** "Quá hạn" cần so với GIỜ HIỆN TẠI + trạng thái Đang làm nên có tham số riêng, không dùng chung `buildFlagCondition`. */
 function buildOverdueCondition(operator: Operator, values: string[]): SqlPart | null {
   if (operator !== "eq" && operator !== "ne") return null;
   const truthy = isTruthyFilterValue(values[0]);
@@ -50,7 +50,7 @@ function buildOverdueCondition(operator: Operator, values: string[]): SqlPart | 
 }
 
 /**
- * Lọc «Hạn» theo NGÀY (giờ Việt Nam) trên cột DATETIME(3) — cùng khuôn với `buildSentAtCondition` của
+ * Lọc "Hạn" theo NGÀY (giờ Việt Nam) trên cột DATETIME(3) — cùng khuôn với `buildSentAtCondition` của
  * `message-search-api.ts` (cột khác, logic giống), chỉ đổi cột sang `t.due_at`. Tái dùng `parseVnDayStart`
  * (hàm thuần, đã có sẵn) thay vì tự viết lại cách đọc ngày ô chọn.
  */
@@ -157,7 +157,7 @@ function buildTaskDeps(service: { db: Db; jobs: { wake: () => void } }): TaskDep
 // ===== Input từ web =====
 
 /** `due_date` 'YYYY-MM-DD' + `due_time` 'HH:mm' (cả hai tùy chọn) → mốc giờ VN. Tái dùng `parseDueArgument`
- *  (src/tasks/task-due-parser.ts) cho đúng luật «hạn chỉ ngày = 00:00 giờ VN» thay vì tự viết lại. */
+ *  (src/tasks/task-due-parser.ts) cho đúng luật "hạn chỉ ngày = 00:00 giờ VN" thay vì tự viết lại. */
 export function parseTaskDueInput(rawDate: unknown, rawTime: unknown, now = new Date()): TaskDue | null {
   const dateStr = typeof rawDate === "string" ? rawDate.trim() : "";
   const timeStr = typeof rawTime === "string" ? rawTime.trim() : "";

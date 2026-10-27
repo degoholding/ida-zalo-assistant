@@ -90,7 +90,7 @@ export function isTaskOpen(status: number): boolean {
 export interface Task {
   [key: string]: unknown
   id: number
-  /** Mã hiển thị, vd «V-0012». */
+  /** Mã hiển thị, vd "V-0012". */
   code: string
   status: number
   priority: number
@@ -100,7 +100,7 @@ export interface Task {
   assigner_name: string
   source: number
   source_thread_id: number | null
-  /** Tên nhóm, hoặc «Tin riêng»; rỗng khi không gắn nhóm nào. */
+  /** Tên nhóm, hoặc "Tin riêng"; rỗng khi không gắn nhóm nào. */
   source_thread_name: string
   due_at: string | null
   due_has_time: boolean

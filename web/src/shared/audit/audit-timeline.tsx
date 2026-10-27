@@ -36,7 +36,7 @@ interface AuditTimelineProps {
   /** Bố cục gọn dành cho trang chứng từ xếp các khối full-width. */
   dense?: boolean
   /**
-   * Tùy chọn: hành động gắn vào MỘT dòng nhật ký (vd nút «Hoàn tác»). Trả về
+   * Tùy chọn: hành động gắn vào MỘT dòng nhật ký (vd nút "Hoàn tác"). Trả về
    * `null` cho dòng không có hành động. Mặc định không có — timeline chỉ đọc.
    */
   renderEntryAction?: (log: AuditLogEntry) => ReactNode
@@ -60,8 +60,8 @@ export function AuditTimeline({
 }: AuditTimelineProps) {
   const [visible, setVisible] = useState(PAGE_STEP)
   const { can } = usePermission()
-  //  Quyền xem lịch sử là quyền CẤP ĐƯỢC (quản trị, hoặc người được bật «Xem lịch sử thao tác»): không có quyền thì
-  //  khỏi gọi API và khỏi hiện khối này — trước đây 403 bị nuốt thành «Chưa có thao tác nào», nghe như bản ghi chưa ai đụng tới.
+  //  Quyền xem lịch sử là quyền CẤP ĐƯỢC (quản trị, hoặc người được bật "Xem lịch sử thao tác"): không có quyền thì
+  //  khỏi gọi API và khỏi hiện khối này — trước đây 403 bị nuốt thành "Chưa có thao tác nào", nghe như bản ghi chưa ai đụng tới.
   const canReadAudit = can('audit', 'read')
   const { data: logs, isLoading, error } = useAuditLogs(entity, entityId, canReadAudit)
 
@@ -126,7 +126,7 @@ export function AuditTimeline({
                           <>
                             <span aria-hidden>·</span>
                             {/*
-                              Dòng này chỉ kể «ai làm gì»; lượt gọi bên kia mới có
+                              Dòng này chỉ kể "ai làm gì"; lượt gọi bên kia mới có
                               giá trị TRƯỚC/SAU, thân yêu cầu, IP và thiết bị. Nối
                               bằng `request_id` chứ không bằng thời điểm — hai
                               thao tác trong cùng một giây là chuyện thường.
@@ -188,7 +188,7 @@ export function AuditTimeline({
   )
 }
 
-/** Lỗi tải lịch sử → câu nói rõ nguyên nhân (không nhầm với «chưa có thao tác»). */
+/** Lỗi tải lịch sử → câu nói rõ nguyên nhân (không nhầm với "chưa có thao tác"). */
 function describeAuditError(error: unknown): string {
   const status = (error as AxiosError | undefined)?.response?.status
   if (status === 403) return 'Bạn không có quyền xem lịch sử thao tác.'

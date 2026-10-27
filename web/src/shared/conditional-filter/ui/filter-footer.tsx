@@ -9,7 +9,7 @@ export interface FilterFooterProps {
    * Bày cặp nút **Xóa hết / Áp dụng**.
    *
    * Tắt khi bộ lọc được nhúng vào một khung ĐÃ CÓ nút chính của nó — tờ trượt
-   * lọc ở khổ điện thoại. Hai nút «Áp dụng» chồng nhau trong một tấm thì người
+   * lọc ở khổ điện thoại. Hai nút "Áp dụng" chồng nhau trong một tấm thì người
    * dùng phải đoán cái nào ăn, và đoán sai thì điều kiện vừa gõ mất trắng.
    */
   actions?: boolean

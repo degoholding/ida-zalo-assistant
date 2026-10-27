@@ -124,7 +124,7 @@ export function toApiPayload(
     } else if (field.type === 'number' && field.nullWhenEmpty && (raw === '' || raw === null)) {
       //  bao-CR-502: ô số KHAI `nullWhenEmpty` mà đang trống — kể cả khi bản ghi đọc về là `null`
       //  và người dùng không đụng tới — phải gửi lại `null`. Trước đây `null` rơi xuống nhánh dưới,
-      //  `Number(null)` = 0, và «Năm bắt đầu cấm» (backend chặn 1900–2100) trả 422: MỌI hóa chất
+      //  `Number(null)` = 0, và "Năm bắt đầu cấm" (backend chặn 1900–2100) trả 422: MỌI hóa chất
       //  không có năm cấm đều không sửa được, từ bao-CR-470. Ô không khai giữ nguyên hành vi cũ.
       payload = setPath(payload, field.name, null)
     } else if (field.type === 'number' && raw !== '') {
@@ -134,12 +134,12 @@ export function toApiPayload(
       //
       //  `DatePicker` không có cách nào khác để nói "chưa chọn": nó luôn giữ
       //  `''`. Mà `''` không phải một ngày, nên schema nào khai `date | None`
-      //  đều trả **422** kèm câu *«input is too short»* — người dùng bấm Lưu mà
+      //  đều trả **422** kèm câu *"input is too short"* — người dùng bấm Lưu mà
       //  không lưu được, cho một ô họ CỐ Ý bỏ trống.
       //
       //  ⚠️ **KHÔNG áp cho mọi ô ngày.** Thử rồi: các danh mục cũ khai ngày là
       //  `str = ""` ở backend (tức không kiểm gì cả, đúng thứ duoc-CR-316 dựng
-      //  ra để chặn), và chúng trả 422 «Input should be a valid string» khi nhận
+      //  ra để chặn), và chúng trả 422 "Input should be a valid string" khi nhận
       //  `null` — đổi mặc định là làm vỡ màn *Hợp đồng* với *Phân loại VTBB*
       //  đang chạy thật. Nên cờ này phải do từng ô tự khai.
       payload = setPath(payload, field.name, null)

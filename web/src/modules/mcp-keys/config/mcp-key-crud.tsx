@@ -50,7 +50,7 @@ export const MCP_KEY_COLUMNS: DataTableColumn<McpKeyDetail>[] = [
       ),
   },
   { key: 'status', header: 'Trạng thái', width: 120, cell: (row) => <McpKeyStatusBadge status={row.status} /> },
-  // Chủ khóa: với người thường luôn là chính mình, nên ẩn mặc định; quản trị bật «Tất cả người dùng» thì mở cột này ra
+  // Chủ khóa: với người thường luôn là chính mình, nên ẩn mặc định; quản trị bật "Tất cả người dùng" thì mở cột này ra
   { key: 'owner_name', header: 'Chủ khóa', width: 170, defaultHidden: true, cell: (row) => row.owner_name || '—' },
   { key: 'created_at', header: 'Tạo lúc', width: 150, sortable: true, defaultHidden: true, cell: (row) => muted(formatDateTime(row.created_at)) },
 ]
@@ -68,7 +68,7 @@ export const mcpKeyCrudConfig: CrudConfig<McpKeyDetail> = {
     'Khóa để AI ngoài (Claude, Codex…) đọc dữ liệu bot qua cổng MCP, với đúng quyền tài khoản của anh/chị. Khóa chỉ hiện một lần lúc tạo.',
   unitLabel: 'khóa MCP',
   apiPath: MCP_KEYS_API_PATH,
-  emptyMessage: 'Chưa có khóa nào — bấm «Thêm khóa MCP» để tạo khóa cho Claude / Codex.',
+  emptyMessage: 'Chưa có khóa nào — bấm "Thêm khóa MCP" để tạo khóa cho Claude / Codex.',
   storageKey: 'mcp-keys.list',
   searchParam: 'q',
   searchPlaceholder: 'Tìm tên, tiền tố',

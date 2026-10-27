@@ -20,7 +20,7 @@ describe('buildRecipientPayload', () => {
     expect(buildRecipientPayload({ vips }).vip_contact_ids).toEqual([4])
   })
 
-  it('trims brief times but keeps an empty time as «off»', () => {
+  it('trims brief times but keeps an empty time as "off"', () => {
     const result = buildRecipientPayload({ morning_brief_at: ' 07:30 ', evening_brief_at: '' })
     expect(result.morning_brief_at).toBe('07:30')
     expect(result.evening_brief_at).toBe('')

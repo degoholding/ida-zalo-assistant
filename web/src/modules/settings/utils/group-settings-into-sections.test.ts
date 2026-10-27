@@ -10,7 +10,7 @@ const setting = (key: string): SettingView => ({
 })
 
 describe('groupSettingsIntoSections', () => {
-  it('xếp khóa theo thứ tự khai báo, bỏ thẻ rỗng, gom khóa lạ vào «Khác»', () => {
+  it('xếp khóa theo thứ tự khai báo, bỏ thẻ rỗng, gom khóa lạ vào "Khác"', () => {
     const sections = [
       { id: 'a', title: 'A', description: '', icon: KeyRound, keys: ['k2', 'k1'] },
       { id: 'empty', title: 'Rỗng', description: '', icon: KeyRound, keys: ['missing'] },

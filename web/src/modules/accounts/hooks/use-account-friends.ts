@@ -11,7 +11,7 @@ export function useFriendOverview(accountId: number) {
   return useQuery({ queryKey: queryKeys.accounts.friends(accountId), queryFn: () => accountApi.friends(accountId) })
 }
 
-/** «Làm mới»: hỏi lại Zalo ngay rồi thay danh sách. */
+/** "Làm mới": hỏi lại Zalo ngay rồi thay danh sách. */
 export function useRefreshFriends(accountId: number) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -21,7 +21,7 @@ export function useRefreshFriends(accountId: number) {
   })
 }
 
-/** Tra số điện thoại — chỉ chạy khi đã bấm «Tìm» (`phone` khác null). Không thử lại: tra dồn dập dễ bị Zalo chặn. */
+/** Tra số điện thoại — chỉ chạy khi đã bấm "Tìm" (`phone` khác null). Không thử lại: tra dồn dập dễ bị Zalo chặn. */
 export function useFriendSearch(accountId: number, phone: string | null) {
   return useQuery({
     queryKey: queryKeys.accounts.friendSearch(accountId, phone ?? ''),

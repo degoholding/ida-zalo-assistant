@@ -13,8 +13,8 @@ interface AssistantSettingsTabProps {
 }
 
 /**
- * Tab «Trợ lý AI». Đã có khóa ở tab «Khóa AI» thì các ô AI cách cũ (nhà cung cấp, khóa, mô hình Gemini / OpenAI) KHÔNG còn
- * tác dụng — gập vào mục «Nâng cao (cách cũ)» kèm câu giải thích, thay vì bày 10 ô khiến quản trị tưởng phải điền.
+ * Tab "Trợ lý AI". Đã có khóa ở tab "Khóa AI" thì các ô AI cách cũ (nhà cung cấp, khóa, mô hình Gemini / OpenAI) KHÔNG còn
+ * tác dụng — gập vào mục "Nâng cao (cách cũ)" kèm câu giải thích, thay vì bày 10 ô khiến quản trị tưởng phải điền.
  */
 export function AssistantSettingsTab({ settings, disabled }: AssistantSettingsTabProps) {
   const aiKeys = useAiKeys()
@@ -28,7 +28,7 @@ export function AssistantSettingsTab({ settings, disabled }: AssistantSettingsTa
       <div className="space-y-4">
         <p className="flex items-start gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
           <KeyRound className="mt-0.5 size-4 shrink-0" />
-          Dễ hơn: thêm khóa ở tab «Khóa AI» — xếp thứ tự khóa, khóa hỏng thì bot tự chuyển khóa kế. Có khóa ở đó thì các ô
+          Dễ hơn: thêm khóa ở tab "Khóa AI" — xếp thứ tự khóa, khóa hỏng thì bot tự chuyển khóa kế. Có khóa ở đó thì các ô
           nhà cung cấp / khóa / mô hình dưới đây thôi dùng.
         </p>
         <SettingsSectionsForm settings={settings} sections={ASSISTANT_SECTIONS} disabled={disabled} />
@@ -48,8 +48,8 @@ export function AssistantSettingsTab({ settings, disabled }: AssistantSettingsTa
           <div className="space-y-4 border-t px-4 py-3">
             <p className="flex items-start gap-2 text-sm text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0" />
-              Bot đang dùng danh sách ở tab «Khóa AI», nên các ô dưới đây không có tác dụng. Chúng chỉ được dùng lại khi tab
-              «Khóa AI» không còn khóa nào. Giữ lại để cấu hình .env cũ không vỡ.
+              Bot đang dùng danh sách ở tab "Khóa AI", nên các ô dưới đây không có tác dụng. Chúng chỉ được dùng lại khi tab
+              "Khóa AI" không còn khóa nào. Giữ lại để cấu hình .env cũ không vỡ.
             </p>
             <SettingsSectionsForm settings={legacy} sections={ASSISTANT_SECTIONS} disabled={disabled} />
           </div>

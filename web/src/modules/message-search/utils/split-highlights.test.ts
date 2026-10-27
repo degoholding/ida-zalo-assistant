@@ -13,7 +13,7 @@ describe('splitHighlights', () => {
   })
 
   it('treats a quoted phrase as one term and ignores boolean operator characters', () => {
-    // Cụm trong ngoặc kép tô liền một khối (cả khoảng trắng bên trong); «-» / «*» không làm hỏng từ «thép»
+    // Cụm trong ngoặc kép tô liền một khối (cả khoảng trắng bên trong); "-" / "*" không làm hỏng từ "thép"
     expect(marked('ký hợp đồng thép hôm nay', '"hợp đồng" -thép*')).toEqual(['hợp đồng', 'thép'])
   })
 

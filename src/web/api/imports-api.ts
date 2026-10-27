@@ -179,7 +179,7 @@ export async function importZaloWebExport(db: Db, file: ExportFile, onQueueAttac
   const summary: ImportSummary = { total: messages.length, imported: 0, duplicates: 0, enriched: 0, skipped_direct: 0, skipped_unknown_group: 0, skipped_group_not_read: 0, oldest: null, newest: null, groups: [] };
   const perGroup = new Map<string, { name: string; imported: number }>();
   const unknown = new Set<string>();
-  // Cũ trước mới sau — bộ đếm «tin gần nhất» và Danh bạ ghi đúng thứ tự
+  // Cũ trước mới sau — bộ đếm "tin gần nhất" và Danh bạ ghi đúng thứ tự
   const fallbackMs = Date.parse(file.exported_at ?? "") || Date.now();
   const ordered = messages.map((raw) => toIncoming(raw, fallbackMs)).filter((item): item is IncomingGroupMessage => item !== null).sort((a, b) => a.sentAtMs - b.sentAtMs);
   summary.skipped_direct = messages.length - ordered.length;
@@ -230,7 +230,7 @@ export async function importZaloWebExport(db: Db, file: ExportFile, onQueueAttac
 }
 
 export const importRoutes: ApiRoute[] = [
-  // Nhóm bot đang đọc tin — nhúng vào nút «Xuất tất cả nhóm của bot» để bookmarklet chỉ ghé đúng các nhóm này
+  // Nhóm bot đang đọc tin — nhúng vào nút "Xuất tất cả nhóm của bot" để bookmarklet chỉ ghé đúng các nhóm này
   ["GET", /^\/api\/imports\/zalo-web\/targets$/, async ({ response, service }) => {
     const [rows] = await service.db.query<RowDataPacket[]>(
       `SELECT zalo_group_id AS id, COALESCE(NULLIF(label, ''), name) AS name FROM zalo_group

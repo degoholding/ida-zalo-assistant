@@ -60,7 +60,7 @@ test("Nhân viên được cấp cờ: không thấy Danh mục / nguồn số l
   assert.equal(placeholders(part.sql), part.params.length);
 });
 
-test("người «mọi nhóm» không bị khoanh nhóm nhưng vẫn bị giới hạn theo loại bản ghi", () => {
+test("người 'mọi nhóm' không bị khoanh nhóm nhưng vẫn bị giới hạn theo loại bản ghi", () => {
   const part = auditScopeSql(staffAllGroups, true)!;
   assert.doesNotMatch(part.sql, /entity_id IN \(\?\)/);
   assert.ok(!entitiesOf(part).includes("user"));

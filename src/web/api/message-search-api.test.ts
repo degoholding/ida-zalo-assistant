@@ -11,8 +11,8 @@ test("parseVnDayStart: ngày ô chọn = 00:00 giờ Việt Nam; chuỗi có gi�
   assert.equal(parseVnDayStart("không phải ngày"), null);
 });
 
-// Review 09/10/2026: «đúng ngày» so thẳng với cột DATETIME(3) gần như không bao giờ khớp; «≤ ngày» cắt mất cả ngày đó
-test("buildSentAtCondition: «đúng ngày» / «≤ ngày» / «> ngày» / «trong khoảng» lấy trọn ngày theo giờ Việt Nam", () => {
+// Review 09/10/2026: "đúng ngày" so thẳng với cột DATETIME(3) gần như không bao giờ khớp; "≤ ngày" cắt mất cả ngày đó
+test("buildSentAtCondition: 'đúng ngày' / '≤ ngày' / '> ngày' / 'trong khoảng' lấy trọn ngày theo giờ Việt Nam", () => {
   const start = new Date("2026-10-04T17:00:00Z");
   const next = new Date("2026-10-05T17:00:00Z");
   assert.deepEqual(buildSentAtCondition("eq", ["2026-10-05"]), { sql: "(s.sent_at >= ? AND s.sent_at < ?)", params: [start, next] });
@@ -25,8 +25,8 @@ test("buildSentAtCondition: «đúng ngày» / «≤ ngày» / «> ngày» / «t
   assert.equal(buildSentAtCondition("isnull", ["1"]), null);
 });
 
-// Review 09/10/2026: «≤ ngày» hoặc nối HOẶC từng làm tắt cửa sổ 90 ngày → quét LIKE toàn bộ lịch sử
-test("chosenDateRange: chỉ ≥ / đúng ngày / trong khoảng / > mới là «từ ngày»; ≤ hoặc nối HOẶC thì không", () => {
+// Review 09/10/2026: "≤ ngày" hoặc nối HOẶC từng làm tắt cửa sổ 90 ngày → quét LIKE toàn bộ lịch sử
+test("chosenDateRange: chỉ ≥ / đúng ngày / trong khoảng / > mới là 'từ ngày'; ≤ hoặc nối HOẶC thì không", () => {
   const range = (init: Record<string, string>) => chosenDateRange(new URLSearchParams(init));
   assert.equal(iso(range({ sent_at__gte: "2026-10-01" }).from), "2026-09-30T17:00:00.000Z");
   assert.equal(iso(range({ sent_at__between: "2026-10-01,2026-10-05" }).from), "2026-09-30T17:00:00.000Z");
@@ -36,8 +36,8 @@ test("chosenDateRange: chỉ ≥ / đúng ngày / trong khoảng / > mới là �
   assert.deepEqual(range({ q: "thép" }), { from: undefined, to: undefined });
 });
 
-// Review lần 2: chỉ chọn «≤ 05/10/2026» thì cửa sổ 90 ngày phải tính lùi từ mốc đó, không từ hôm nay (ra rỗng)
-test("chosenDateRange: mốc «đến» = đầu ngày SAU ngày cuối được lấy (≤ / đúng ngày / trong khoảng), < thì chính ngày đó", () => {
+// Review lần 2: chỉ chọn "≤ 05/10/2026" thì cửa sổ 90 ngày phải tính lùi từ mốc đó, không từ hôm nay (ra rỗng)
+test("chosenDateRange: mốc 'đến' = đầu ngày SAU ngày cuối được lấy (≤ / đúng ngày / trong khoảng), < thì chính ngày đó", () => {
   const to = (init: Record<string, string>) => iso(chosenDateRange(new URLSearchParams(init)).to);
   assert.equal(to({ sent_at__lte: "2026-10-05" }), "2026-10-05T17:00:00.000Z");
   assert.equal(to({ sent_at__lt: "2026-10-05" }), "2026-10-04T17:00:00.000Z");

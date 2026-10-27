@@ -90,7 +90,7 @@ export const taskCrudConfig: CrudConfig<TaskDetail> = {
     'Việc giao qua lệnh / câu tự nhiên với bot, recap họp, AI rà soát tin nhóm, hoặc tạo thẳng trên web. Thao tác ở đây làm bot báo người phụ trách / người giao qua Zalo như làm trên Zalo.',
   unitLabel: 'việc',
   apiPath: TASKS_API_PATH,
-  emptyMessage: 'Chưa có việc nào — nhắn bot trên Zalo «giao … cho …» hoặc bấm «Thêm việc» ở đây.',
+  emptyMessage: 'Chưa có việc nào — nhắn bot trên Zalo "giao … cho …" hoặc bấm "Thêm việc" ở đây.',
   storageKey: 'tasks.list',
   searchParam: 'q',
   searchPlaceholder: 'Tìm mã, tên việc, người phụ trách',

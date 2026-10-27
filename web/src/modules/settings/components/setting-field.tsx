@@ -16,7 +16,7 @@ interface SettingFieldProps {
   setting: SettingView
   control: Control<SettingFormValues>
   disabled?: boolean
-  /** Có mặt CHỈ khi `source === 'web'` mới hiện nút «Khôi phục mặc định». */
+  /** Có mặt CHỈ khi `source === 'web'` mới hiện nút "Khôi phục mặc định". */
   onRestoreDefault?: () => void
   restorePending?: boolean
 }
@@ -62,7 +62,7 @@ function renderInput(setting: SettingView, field: FieldValue, id: string, disabl
       />
     )
   }
-  // Chuỗi có lựa chọn sẵn (vd «Nhà cung cấp AI») → chọn một giá trị
+  // Chuỗi có lựa chọn sẵn (vd "Nhà cung cấp AI") → chọn một giá trị
   if (setting.type === 'string' && setting.choices?.length) {
     return (
       <Select value={(field.value as string) ?? ''} onValueChange={field.onChange} disabled={disabled}>

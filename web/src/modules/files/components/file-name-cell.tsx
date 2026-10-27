@@ -5,7 +5,7 @@ import { isImageFile, type FileRecord } from '../types/file'
 import { getFileName } from '../utils/get-file-name'
 import { FilePreviewDialog } from './file-preview-dialog'
 
-/** Ô «Tệp» của bảng: bấm tên mở hộp thoại xem ảnh / thông tin tệp (không mở trang chi tiết của dòng). */
+/** Ô "Tệp" của bảng: bấm tên mở hộp thoại xem ảnh / thông tin tệp (không mở trang chi tiết của dòng). */
 export function FileNameCell({ file }: { file: FileRecord }) {
   const [open, setOpen] = useState(false)
   const name = getFileName(file)

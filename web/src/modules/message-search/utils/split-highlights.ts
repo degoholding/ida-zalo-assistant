@@ -23,8 +23,8 @@ function searchTerms(query: string): string[] {
 }
 
 /**
- * Cắt đoạn trích thành các mẩu, đánh dấu chỗ trùng từ khóa — không phân biệt dấu / hoa thường («cong no» tô sáng «Công
- * nợ»), giữ nguyên chữ gốc để hiện. Hàm thuần.
+ * Cắt đoạn trích thành các mẩu, đánh dấu chỗ trùng từ khóa — không phân biệt dấu / hoa thường ("cong no" tô sáng "Công
+ * nợ"), giữ nguyên chữ gốc để hiện. Hàm thuần.
  */
 export function splitHighlights(text: string, query: string): HighlightPart[] {
   const chars = Array.from(text.normalize('NFC'))

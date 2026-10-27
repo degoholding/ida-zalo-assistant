@@ -2,7 +2,7 @@ import { Pill } from '@/shared/ui/pill'
 import { CONTACT_KIND_SOURCE } from './contact-constants'
 import { getGroupKindLabel, getGroupKindTone, getKindLabel, getKindTone, getRoleLabel } from './format-contact'
 
-/** Nhãn loại người; tài khoản bot thì luôn hiện «Bot» thay cho khách hàng / nhân sự. */
+/** Nhãn loại người; tài khoản bot thì luôn hiện "Bot" thay cho khách hàng / nhân sự. */
 export function KindBadge({ kind, isBot, className }: { kind: number; isBot?: boolean; className?: string }) {
   if (isBot) return <Pill className={className ? `bg-navy text-white ${className}` : 'bg-navy text-white'}>Bot</Pill>
   return <Pill tone={getKindTone(kind)} className={className}>{getKindLabel(kind)}</Pill>

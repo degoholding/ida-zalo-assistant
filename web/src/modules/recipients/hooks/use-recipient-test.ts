@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 
 import { recipientApi } from '../api/recipient-api'
 
-/** «Gửi thử» kênh báo của một người nhận. Lỗi thì `http-client` tự bật toast đỏ, ở đây chỉ báo khi thành công. */
+/** "Gửi thử" kênh báo của một người nhận. Lỗi thì `http-client` tự bật toast đỏ, ở đây chỉ báo khi thành công. */
 export function useRecipientTest() {
   return useMutation({
     mutationFn: (id: number) => recipientApi.sendTest(id),

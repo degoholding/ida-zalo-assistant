@@ -4,7 +4,7 @@ import type { FriendOverview, FriendSearchResult } from '../types/friend-request
 
 export const ACCOUNTS_API_PATH = '/api/accounts'
 
-/** POST rồi lấy luôn câu của máy chủ cho toast («Đã gửi lời mời kết bạn»…). */
+/** POST rồi lấy luôn câu của máy chủ cho toast ("Đã gửi lời mời kết bạn"…). */
 async function postWithMessage(url: string, body?: unknown): Promise<string> {
   const res = await httpClient.post<SuccessEnvelope<unknown>>(url, body)
   return res.data.message ?? 'Đã xong'
@@ -17,7 +17,7 @@ export const accountApi = {
   friends: (id: number, refresh = false) =>
     apiGet<FriendOverview>(`${ACCOUNTS_API_PATH}/${id}/friends`, { params: refresh ? { refresh: 1 } : {} }),
   searchFriend: (id: number, phone: string) => apiGet<FriendSearchResult>(`${ACCOUNTS_API_PATH}/${id}/friends/search`, { params: { phone } }),
-  /** Bot mời kết bạn — `status` = FRIEND_REQUEST_STATUS (đã là bạn sẵn thì «accepted» luôn). */
+  /** Bot mời kết bạn — `status` = FRIEND_REQUEST_STATUS (đã là bạn sẵn thì "accepted" luôn). */
   sendFriendRequest: async (id: number, payload: { uid: string; message: string; display_name: string; avatar_url: string }) => {
     const res = await httpClient.post<SuccessEnvelope<{ status: number; sent_today: number; daily_cap: number }>>(
       `${ACCOUNTS_API_PATH}/${id}/friends/requests`, payload)

@@ -8,7 +8,7 @@ import { RecipientTestButton } from './recipient-test-button'
 const post = vi.fn()
 const toastSuccess = vi.fn()
 
-// Mock ở tầng `@/core/api` theo luật test (`testing.md`) — «Gửi thử» cần cả phong bì nên đi qua `httpClient`.
+// Mock ở tầng `@/core/api` theo luật test (`testing.md`) — "Gửi thử" cần cả phong bì nên đi qua `httpClient`.
 vi.mock('@/core/api', () => ({
   httpClient: { post: (...args: unknown[]) => post(...args) },
   apiGet: vi.fn(),

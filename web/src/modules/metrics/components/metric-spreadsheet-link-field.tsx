@@ -12,7 +12,7 @@ interface MetricSpreadsheetLinkFieldProps {
   disabled: boolean
 }
 
-/** Ô «Link bảng Google Sheets» kèm hộp gợi ý «Chia sẻ bảng cho <email service account> quyền Người xem». */
+/** Ô "Link bảng Google Sheets" kèm hộp gợi ý "Chia sẻ bảng cho <email service account> quyền Người xem". */
 export function MetricSpreadsheetLinkField({ control, name, disabled }: MetricSpreadsheetLinkFieldProps) {
   const { field } = useController({ control, name })
   const { data: email } = useMetricServiceAccountEmail()

@@ -24,7 +24,7 @@ export interface ListResult {
 export function combineWhere(base: SqlPart | undefined, filter: SqlPart): SqlPart {
   if (!base) return filter;
   if (!filter.sql) return { sql: `WHERE ${base.sql}`, params: base.params };
-  // Bộ lọc người dùng có thể nối bằng OR — bọc ngoặc để không «thoát» khỏi điều kiện cố định
+  // Bộ lọc người dùng có thể nối bằng OR — bọc ngoặc để không "thoát" khỏi điều kiện cố định
   return { sql: `WHERE (${base.sql}) AND (${filter.sql.replace(/^WHERE /, "")})`, params: [...base.params, ...filter.params] };
 }
 

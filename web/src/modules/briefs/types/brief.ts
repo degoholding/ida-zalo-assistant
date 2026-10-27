@@ -20,7 +20,7 @@ export const BRIEF_TRIGGER_OPTIONS = [
   { value: BRIEF_TRIGGER.webTest, label: 'Gửi thử (web)' },
 ]
 
-/** Trạng thái LƯU TRỮ thật của `brief_log` — dùng để lọc. Màn hiển thị trạng thái suy thêm «Không gửi được», xem `get-brief-display-status.ts`. */
+/** Trạng thái LƯU TRỮ thật của `brief_log` — dùng để lọc. Màn hiển thị trạng thái suy thêm "Không gửi được", xem `get-brief-display-status.ts`. */
 export const BRIEF_STATUS_OPTIONS = [
   { value: BRIEF_STATUS.composing, label: 'Đang soạn' },
   { value: BRIEF_STATUS.queued, label: 'Đã xếp hàng gửi' },

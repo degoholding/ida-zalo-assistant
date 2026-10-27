@@ -10,7 +10,7 @@ export const queryClient = new QueryClient({
    * MỌI mutation thành công đều làm mới NHẬT KÝ THAO TÁC (`AuditTimeline`).
    *
    * ⚠️ Đặt ở đây, không đặt trong từng hook. Backend ghi `tab_audit_log` ở gần
-   * như mọi lệnh ghi, mà khối «Lịch sử thao tác» lại đứng ngay dưới cái nút vừa
+   * như mọi lệnh ghi, mà khối "Lịch sử thao tác" lại đứng ngay dưới cái nút vừa
    * bấm: sửa xong mà nó vẫn ghi *"Chưa có thao tác nào"* thì người dùng đọc ra
    * là **hệ thống không ghi nhận việc mình vừa làm** — đúng lỗi bắt được
    * 04/09/2026 ở màn Quỹ phép năm (điều chỉnh tay lưu thật, dấu vết trên màn

@@ -54,7 +54,7 @@ export function useCrudSave<T, TValues extends Record<string, unknown> = Record<
   const queryClient = useQueryClient()
 
   return useMutation({
-    //  Bot trợ lý: máy chủ gửi câu nhắc có nghĩa trong `message` (vd «Đã bật đọc; lấy được 37 tin cũ»)
+    //  Bot trợ lý: máy chủ gửi câu nhắc có nghĩa trong `message` (vd "Đã bật đọc; lấy được 37 tin cũ")
     //  nên lấy phong bì đầy đủ, toast câu đó; không có thì dùng câu chung.
     mutationFn: async ({ id, values }: { id?: string | number; values: TValues }) => {
       const res = id

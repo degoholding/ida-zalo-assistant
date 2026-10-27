@@ -6,11 +6,11 @@ import { currentActorName } from "../../auth/principal.js";
 import type { ApiRoute } from "./api-route.js";
 import { diffFields, recordAudit } from "./audit-log.js";
 
-// API màn «Khóa AI» (tab đầu của Cài đặt, 07/10/2026): danh sách khóa có thứ tự, thêm (gọi thử hãng rồi mới lưu), sửa mô
-// hình / trần lượt, đưa lên, gỡ. Khóa chỉ đi VÀO (thân POST) — mọi phản hồi chỉ có đuôi «…ab12». KHÔNG log thân POST.
-// Nhật ký ghi vào «Lịch sử thay đổi» của màn Cài đặt (entity setting #1), không bao giờ ghi khóa.
+// API màn "Khóa AI" (tab đầu của Cài đặt, 07/10/2026): danh sách khóa có thứ tự, thêm (gọi thử hãng rồi mới lưu), sửa mô
+// hình / trần lượt, đưa lên, gỡ. Khóa chỉ đi VÀO (thân POST) — mọi phản hồi chỉ có đuôi "…ab12". KHÔNG log thân POST.
+// Nhật ký ghi vào "Lịch sử thay đổi" của màn Cài đặt (entity setting #1), không bao giờ ghi khóa.
 
-/** Trùng với `SETTINGS_ENTITY_ID` của settings-api — mục «Lịch sử thay đổi» của màn Cài đặt. */
+/** Trùng với `SETTINGS_ENTITY_ID` của settings-api — mục "Lịch sử thay đổi" của màn Cài đặt. */
 const SETTINGS_ENTITY_ID = 1;
 const PATCH_LABELS = { model: "Mô hình", model_heavy: "Mô hình việc nặng", daily_cap: "Trần lượt / ngày" };
 
@@ -33,7 +33,7 @@ async function audit(service: SyncService, action: string, message: string, chan
   await recordAudit(service.db, { entity: "setting", entityId: SETTINGS_ENTITY_ID, action, message, changedFields });
 }
 
-/** Gắn cờ «hãng được phép» (cài đặt «Hãng AI được phép dùng») — màn Khóa AI hiện khóa bị bỏ qua. */
+/** Gắn cờ "hãng được phép" (cài đặt "Hãng AI được phép dùng") — màn Khóa AI hiện khóa bị bỏ qua. */
 function withAllowed(service: SyncService, views: AiKeyView[]): (AiKeyView & { allowed: boolean })[] {
   // Chưa có cấu hình (dịch vụ dựng tối giản, vd bài kiểm) = mọi hãng được phép, như mặc định của cài đặt
   const allowed = service.config?.privacy?.allowedAiProviders;

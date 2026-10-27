@@ -34,7 +34,7 @@ function readContactRefs(value: unknown): ContactRef[] {
 }
 
 /**
- * Chọn NHIỀU người trong Danh bạ (vd «Người VIP» của người nhận).
+ * Chọn NHIỀU người trong Danh bạ (vd "Người VIP" của người nhận).
  *
  * Không dùng `MultiPicker`: nó lọc tại chỗ trên danh sách đang cầm, mà Danh bạ phải tra phía máy chủ. Thay vào đó
  * một ô tìm để THÊM từng người + dải chip để BỎ — đủ cho trần vài chục người.

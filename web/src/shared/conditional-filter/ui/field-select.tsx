@@ -34,7 +34,7 @@ export function FieldSelect({ rowId, selectedField }: FieldSelectProps) {
       {/*  ⚠️ Phải `w-full`, KHÔNG dùng `flex-1`. `SelectTrigger` của shadcn mang
            sẵn `w-fit`, mà bề rộng khai tường minh thắng `align-items: stretch`
            của khối cha — nên trong cột dọc ở khổ hẹp, `flex-1` (vốn chỉ chi phối
-           trục chính, tức CHIỀU CAO) không nong ô ra: ô «trường» co lại vừa chữ
+           trục chính, tức CHIỀU CAO) không nong ô ra: ô "trường" co lại vừa chữ
            trong khi hai ô dưới trải hết hàng, ba ô so le nhau. */}
       <SelectTrigger className="w-full md:w-44 md:shrink-0">
         <SelectValue placeholder="Chọn trường…" />

@@ -9,7 +9,7 @@ import type { ListSpec, SqlPart } from "./list-query.js";
 import { runList } from "./list-runner.js";
 import { buildVnDayCondition } from "./send-commands-api.js";
 
-// Màn web «Mẫu tin» (phase 10, phase 7). Mọi thay đổi đi qua `reply-template-workflow.ts` (kiểm quyền + luật trạng thái + nhật ký);
+// Màn web "Mẫu tin" (phase 10, phase 7). Mọi thay đổi đi qua `reply-template-workflow.ts` (kiểm quyền + luật trạng thái + nhật ký);
 // tệp này chỉ lọc / phân trang, dựng cờ `can_edit` / `can_review` cho giao diện và đổi `ReplyTemplateError` sang mã HTTP.
 
 export const REPLY_TEMPLATE_LIST_SPEC: ListSpec = {
@@ -30,7 +30,7 @@ const TEMPLATE_FROM = "FROM reply_template r";
 const TEMPLATE_COLUMNS = `r.id, r.name, r.situation, r.keywords, r.body, r.tone, r.status, r.author_user_id, r.author_name,
   r.reviewer_user_id, r.reviewer_name, r.review_note, r.submitted_at, r.reviewed_at, r.created_at, r.updated_at`;
 
-/** Chưa lọc theo trạng thái (không có `status` trên URL) thì ẩn mẫu «Ngừng dùng»; lọc rõ thì thấy hết. */
+/** Chưa lọc theo trạng thái (không có `status` trên URL) thì ẩn mẫu "Ngừng dùng"; lọc rõ thì thấy hết. */
 export function buildTemplateBaseWhere(principal: Principal, params: URLSearchParams): SqlPart {
   if (params.has("status")) return { sql: "r.tenant_id = ?", params: [principal.tenantId] };
   return { sql: "r.tenant_id = ? AND r.status <> ?", params: [principal.tenantId, ReplyTemplateStatus.Archived] };
@@ -99,7 +99,7 @@ export const replyTemplateRoutes: ApiRoute[] = [
     sendOk(response, await getTemplateDetail(service.db, id, principal), "Đã lưu mẫu — chờ duyệt");
   }],
 
-  // { action: submit | approve | return | archive, note? } — «return» bắt buộc ghi chú (workflow trả 422); trạng thái không cho → 409
+  // { action: submit | approve | return | archive, note? } — "return" bắt buộc ghi chú (workflow trả 422); trạng thái không cho → 409
   ["POST", /^\/api\/reply-templates\/(\d+)\/actions$/, async ({ request, response, match, service, principal }) => {
     const id = parseId(match[1]);
     const body = await readJson(request);

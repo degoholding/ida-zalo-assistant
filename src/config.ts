@@ -143,6 +143,12 @@ export interface AppConfig {
     loginClientId: string;
     oauthClientSecret: string;
     calendarAccount: GoogleAccountLink | null;
+    /**
+     * App Google đang ở chế độ Testing (refresh token sống 7 ngày) — biến .env `GOOGLE_OAUTH_TESTING`, mặc định bật (27/10/2026).
+     * Chuyển app sang In production thì đặt false: chấm trạng thái ở menu thôi tính hạn 7 ngày, chỉ đỏ khi Google từ chối.
+     * Không khai (cấu hình dựng tay trong bài kiểm) = coi như bật.
+     */
+    oauthTesting?: boolean;
   };
   /** Tắt bot khẩn (phase 9) — chỉ app ghi (web + lệnh Zalo); worker đọc lại mỗi 60 giây. Khóa ẩn `bot_halt`. */
   botHalt: BotHaltState;
@@ -266,7 +272,10 @@ export function loadConfig(): AppConfig {
       replyWaitMinutes: 120, vipWaitMinutes: 30, dailyReminderCap: 3, urgentMergeSeconds: 120, aiEnabled: true,
       telegramBotToken: (process.env.ALERT_TELEGRAM_BOT_TOKEN ?? "").trim(), telegramChatId: (process.env.ALERT_TELEGRAM_CHAT_ID ?? "").trim(),
     },
-    google: { serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null, loginClientId: "" },
+    google: {
+      serviceAccount: null, spreadsheetUrl: "", oauthClientId: "", oauthClientSecret: "", calendarAccount: null, loginClientId: "",
+      oauthTesting: readBool("GOOGLE_OAUTH_TESTING", true),
+    },
     botHalt: { halted: false, since: null, by: "", via: "" },
     meetingRecap: { enabled: false, folderId: "", maxBytes: 150 * 1024 * 1024 },
   };

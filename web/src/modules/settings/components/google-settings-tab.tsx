@@ -26,7 +26,7 @@ interface GoogleSheetsTestPanelProps {
   disabled?: boolean
 }
 
-/** Cuối thẻ Google Sheets: nút «Kiểm tra kết nối» (ghi thử một dòng) + hướng dẫn thu gọn. */
+/** Cuối thẻ Google Sheets: nút "Kiểm tra kết nối" (ghi thử một dòng) + hướng dẫn thu gọn. */
 function GoogleSheetsTestPanel({ settings, disabled }: GoogleSheetsTestPanelProps) {
   const testConnection = useTestGoogleConnection()
   const [testResult, setTestResult] = useState<GoogleTestResult | null>(null)

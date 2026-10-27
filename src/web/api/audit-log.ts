@@ -7,7 +7,7 @@ import { auditScopeSql } from "./audit-scope.js";
 import type { ApiRoute } from "./api-route.js";
 import { sendOk } from "./api-http.js";
 
-// Nhật ký thay đổi — nguồn của mục «Lịch sử» (AuditTimeline) ở mọi trang chi tiết của `web/`.
+// Nhật ký thay đổi — nguồn của mục "Lịch sử" (AuditTimeline) ở mọi trang chi tiết của `web/`.
 // Response giữ đúng hình `AuditLogEntry` của ERP v2 để khung giao diện chép sang chạy nguyên.
 
 export type AuditEntity = "contact" | "group" | "company" | "bot_account" | "file" | "setting" | "user" | "recipient" | "ticket" | "task" | "send_command" | "reply_template" | "metric_source" | "catalog" | "mcp_key";
@@ -77,7 +77,7 @@ export const auditRoutes: ApiRoute[] = [
     if (!AUDIT_ENTITIES.has(entity) || !Number.isSafeInteger(entityId) || entityId <= 0) {
       throw new ApiError(422, "validation_error", "Thiếu hoặc sai entity / entity_id");
     }
-    // Người được cấp «Xem lịch sử» (không phải quản trị): bản ghi đích phải trong phạm vi nhóm — ngoài phạm vi = 404.
+    // Người được cấp "Xem lịch sử" (không phải quản trị): bản ghi đích phải trong phạm vi nhóm — ngoài phạm vi = 404.
     // Web người thật vẫn thấy cả nhóm Mật (câu hỏi 2) nên includeConfidential = true.
     if (principal.role !== UserRole.Admin) {
       const scope = auditScopeSql(principal, true);

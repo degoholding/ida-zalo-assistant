@@ -8,12 +8,12 @@ import type { Operator, SqlPart, ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
 import { buildSummary, listFilterOptions, loadManagerNames, parseIsoDay, parseSummaryParams } from "./metric-summary-query.js";
 
-// Màn web «Số liệu» (phase 8, phase 10): CHỈ ĐỌC, quyền `metric.read` (Quản trị + Quản lý). Nhân viên gọi → 403 ở route-permissions.
+// Màn web "Số liệu" (phase 8, phase 10): CHỈ ĐỌC, quyền `metric.read` (Quản trị + Quản lý). Nhân viên gọi → 403 ở route-permissions.
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}/;
 const ALL_FLAGS = MetricFlag.Negative | MetricFlag.Deviation | MetricFlag.Unparsed | MetricFlag.UnknownStaff;
 
-/** Lọc `metric_date` (cột DATE, so theo chuỗi ngày — không dính múi giờ). Đầu vào «YYYY-MM-DD…» hoặc bỏ lọc. */
+/** Lọc `metric_date` (cột DATE, so theo chuỗi ngày — không dính múi giờ). Đầu vào "YYYY-MM-DD…" hoặc bỏ lọc. */
 export function buildMetricDateCondition(operator: Operator, values: string[]): SqlPart | null {
   const days = values.map((value) => (DAY_PATTERN.test(value) ? value.slice(0, 10) : ""));
   const [first, second] = days;

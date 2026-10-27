@@ -11,7 +11,7 @@ import type { CompanyDetail } from '../types/company'
 /** Tab Nhóm của công ty: nhóm Zalo đã gán vào công ty này. */
 export function CompanyGroupsTab({ company }: { company: CompanyDetail }) {
   if (!company.groups.length) {
-    return <Card><p className="p-4 text-sm text-muted-foreground">Chưa gán nhóm nào — mở một nhóm và chọn công ty này ở ô «Công ty».</p></Card>
+    return <Card><p className="p-4 text-sm text-muted-foreground">Chưa gán nhóm nào — mở một nhóm và chọn công ty này ở ô "Công ty".</p></Card>
   }
   return (
     <Card className="gap-0 p-0">

@@ -3,7 +3,8 @@ import { toast } from 'sonner'
 
 import { queryKeys } from '@/shared/constants/query-keys'
 import { conversationApi, type ThreadListParams } from '../api/conversation-api'
-import type { ChatMessage, MessagesCursor, MessagesPage } from '../types/conversation'
+import { extractErrorMessage } from '@/core/api'
+import type { ChatMessage, MessagesCursor, MessagesPage, ThreadCapturePatch } from '../types/conversation'
 
 /** Lưới đỡ khi kênh đẩy (SSE) đứt: hỏi lại mỗi 60 giây. Bình thường tin mới tới qua `useLiveEvents`. */
 const FALLBACK_REFRESH_MS = 60_000
@@ -82,5 +83,21 @@ export function useSendFile(id: number) {
       toast.success(message)
       refresh()
     },
+  })
+}
+
+/** Công tắc Đọc tin / Lấy file của cuộc riêng 1-1 — xong thì nạp lại đầu cuộc + cột trái. */
+export function useUpdateThreadCapture(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: ThreadCapturePatch) => conversationApi.updateCapture(id, patch),
+    onSuccess: (_data, patch) => {
+      const what = patch.read_messages !== undefined ? 'Đọc tin' : 'Lấy file'
+      const on = patch.read_messages ?? patch.capture_files
+      toast.success(`Đã ${on ? 'bật' : 'tắt'} ${what}`)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.thread(id) })
+      void queryClient.invalidateQueries({ queryKey: ['conversations', 'list'] })
+    },
+    onError: (error) => toast.error(extractErrorMessage(error)),
   })
 }

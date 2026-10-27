@@ -21,7 +21,7 @@ import { Label } from '@/shared/ui/label'
  *
  * Hai cách (08/10/2026 bỏ mật khẩu quản trị chung):
  * - Tên đăng nhập (hoặc email) + mật khẩu của từng người — quản trị đặt ở màn Người dùng.
- * - Nút «Đăng nhập bằng Google» — người có email trong màn Người dùng. Client ID đọc từ máy chủ lúc chạy
+ * - Nút "Đăng nhập bằng Google" — người có email trong màn Người dùng. Client ID đọc từ máy chủ lúc chạy
  *   (`/api/auth/config`), không nướng vào bản build. Rỗng = máy chủ chưa bật → ẩn hẳn nút (dựng nút với Client ID rỗng
  *   thì Google Identity Services báo lỗi liên tục).
  */
@@ -54,7 +54,7 @@ export function LoginPage() {
       await attempt()
       navigate(from, { replace: true })
     } catch (err) {
-      //  401/403 của máy chủ mang sẵn câu tiếng Việt («Email … chưa được cấp quyền…») — hiện nguyên văn.
+      //  401/403 của máy chủ mang sẵn câu tiếng Việt ("Email … chưa được cấp quyền…") — hiện nguyên văn.
       setError(extractErrorMessage(err))
     }
   }

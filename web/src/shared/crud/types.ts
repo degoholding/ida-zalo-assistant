@@ -68,7 +68,7 @@ export interface CrudFormField {
    * Chỉ hiện ô này khi giá trị đang nhập thỏa điều kiện.
    *
    * Dùng cho những ô CHỈ CÓ NGHĨA ở một nhánh cấu hình (vd tỷ lệ quy đổi khi
-   * chưa chọn «quy đổi» thì không nói lên gì). Ẩn hẳn thay vì làm mờ: ô mờ vẫn
+   * chưa chọn "quy đổi" thì không nói lên gì). Ẩn hẳn thay vì làm mờ: ô mờ vẫn
    * chiếm chỗ và vẫn khiến người đọc dừng lại đọc chú thích của nó.
    *
    * ⚠️ Ẩn chỉ là chuyện HIỂN THỊ — giá trị vẫn nằm trong form và vẫn gửi lên.
@@ -95,7 +95,7 @@ export interface CrudFormField {
    * Khai nó khi backend khai trường đó là **kiểu thật** (`date | None`,
    * `int | None`) chứ không phải `str = ""`. `DatePicker` không có cách nào khác
    * để nói "chưa chọn" — nó luôn giữ `''` — mà `''` thì không phải một ngày, nên
-   * schema chặt sẽ trả 422 «input is too short» cho một ô người dùng CỐ Ý bỏ
+   * schema chặt sẽ trả 422 "input is too short" cho một ô người dùng CỐ Ý bỏ
    * trống, và họ chỉ thấy bấm Lưu mà không có gì xảy ra.
    *
    * ⚠️ **Phải khai từng ô, cố ý không làm mặc định cho `type: 'date'`.** Các
@@ -158,7 +158,7 @@ export interface CrudConfig<T> {
    *
    * Bỏ trống thì `PageHeader` chỉ có mỗi dòng tiêu đề, và màn CRUD đứng cạnh
    * những màn viết tay (vốn luôn có mô tả) sẽ trông cụt lủn — khách chỉ đúng
-   * chỗ đó ngày 04/09/2026 ở tab «Danh mục phòng».
+   * chỗ đó ngày 04/09/2026 ở tab "Danh mục phòng".
    */
   description?: string
   /** Tên đơn vị danh từ (vd 'kho', 'đơn vị tính', dùng cho nút "Thêm kho"). */
@@ -229,7 +229,7 @@ export interface CrudConfig<T> {
   /** Đường dẫn tới trang chi tiết (vd (id) => `/inventory/warehouses/${id}`). */
   detailRoute?: (id: number | string) => string
   /**
-   * Đường dẫn trang THÊM MỚI (vd '/hr/leave-types/new'). Khai nó thì nút «Thêm»
+   * Đường dẫn trang THÊM MỚI (vd '/hr/leave-types/new'). Khai nó thì nút "Thêm"
    * **điều hướng sang trang đó** thay vì bật hộp thoại; bỏ trống = giữ hộp thoại
    * như cũ.
    *
@@ -251,11 +251,11 @@ export interface CrudConfig<T> {
   detailMedia?: (row: T) => ReactNode
   /**
    * Nút hành động THÊM ở hàng nút dính của trang chi tiết, đứng trước Lưu / Xóa — việc riêng của
-   * bản ghi mà biểu mẫu không diễn đạt được (vd «Lấy tin cũ» của nhóm, «Quét QR lại» của tài khoản bot).
+   * bản ghi mà biểu mẫu không diễn đạt được (vd "Lấy tin cũ" của nhóm, "Quét QR lại" của tài khoản bot).
    */
   detailActions?: (row: T) => ReactNode
   /**
-   * Trang chi tiết CHỈ XEM: không dựng biểu mẫu, không có nút «Lưu». Nội dung do `renderExtra` / `tabs` vẽ.
+   * Trang chi tiết CHỈ XEM: không dựng biểu mẫu, không có nút "Lưu". Nội dung do `renderExtra` / `tabs` vẽ.
    *
    * Sinh ra cho màn Ticket (08/10/2026): ticket do bot lập từ tin Zalo, không có ô nào sửa tay — đổi trạng thái đi
    * bằng nút riêng ở `detailActions`. Không có cờ này thì người có quyền `write` thấy nút Lưu, bấm vào là PATCH một
@@ -263,15 +263,15 @@ export interface CrudConfig<T> {
    */
   readOnlyDetail?: boolean
   /**
-   * Quyền sửa THEO DÒNG: trả `false` thì trang chi tiết khóa mọi ô và ẩn nút «Lưu» dù vai trò có `write`.
+   * Quyền sửa THEO DÒNG: trả `false` thì trang chi tiết khóa mọi ô và ẩn nút "Lưu" dù vai trò có `write`.
    *
    * Sinh ra cho màn Mẫu tin (review phase 10, 12/10/2026): mọi vai trò có `reply_template.write` nhưng nhân viên chỉ sửa được mẫu CỦA
-   * MÌNH (máy chủ trả cờ `can_edit`) — không có cờ này thì mở mẫu người khác vẫn thấy «Lưu», bấm vào là 403. Bỏ trống = theo vai trò.
+   * MÌNH (máy chủ trả cờ `can_edit`) — không có cờ này thì mở mẫu người khác vẫn thấy "Lưu", bấm vào là 403. Bỏ trống = theo vai trò.
    * Chỉ là hiển thị: máy chủ vẫn phải tự chặn.
    */
   canEditRow?: (row: T) => boolean
   /**
-   * Tên thực thể ghi trong NHẬT KÝ (`audit_log.entity`) khi khác `entity` phân quyền — mục «Lịch sử thao tác» tra theo tên này.
+   * Tên thực thể ghi trong NHẬT KÝ (`audit_log.entity`) khi khác `entity` phân quyền — mục "Lịch sử thao tác" tra theo tên này.
    *
    * Sinh ra cho màn Nguồn số liệu: quyền gác bằng `metric` nhưng máy chủ ghi nhật ký `metric_source`; tra bằng `metric` thì lịch sử
    * trống trơn. Bỏ trống = dùng `entity`.
@@ -319,12 +319,12 @@ export interface CrudConfig<T> {
   renderToolbarExtra?: () => ReactNode
   /**
    * Dòng ghi chú ngay trên bảng, dựng từ phản hồi danh sách (kể cả trường riêng ngoài `total` /
-   * `items`, vd màn Tìm tin báo «chỉ tìm từ ngày …», «hơn 1.000 tin»). `undefined` = chưa có dữ
+   * `items`, vd màn Tìm tin báo "chỉ tìm từ ngày …", "hơn 1.000 tin"). `undefined` = chưa có dữ
    * liệu. Trả `null` khi không có gì để báo.
    */
   listNotice?: (result: PaginatedResult<T> | undefined) => ReactNode
   /**
-   * Câu khi danh sách RỖNG mà không lọc gì. Mặc định mời bấm «Thêm» — sai với danh mục do Zalo
+   * Câu khi danh sách RỖNG mà không lọc gì. Mặc định mời bấm "Thêm" — sai với danh mục do Zalo
    * sinh ra (Danh bạ, Nhóm, Tệp) vốn không có nút Thêm.
    */
   emptyMessage?: string

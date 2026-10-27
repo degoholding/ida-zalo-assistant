@@ -5,7 +5,7 @@ import { ApiError } from "./api-http.js";
 import type { SqlPart } from "./list-query.js";
 
 // Phạm vi nhóm trên web (phase 4): người dùng không phải quản trị chỉ thấy nhóm được gán (user_group_scope), không thấy
-// cuộc nhắn riêng với bot. Ngoài phạm vi thì trả 404 như không có — không để lộ «có mà không được xem».
+// cuộc nhắn riêng với bot. Ngoài phạm vi thì trả 404 như không có — không để lộ "có mà không được xem".
 
 const NOT_FOUND = () => new ApiError(404, "not_found", "Không tìm thấy bản ghi");
 
@@ -30,7 +30,7 @@ export async function assertFileVisible(db: Db, principal: Principal, attachment
   assertThreadVisible(principal, Number(rows[0].group_id));
 }
 
-/** Điều kiện «người này ở ít nhất một nhóm trong phạm vi» cho bảng contact (alias c). */
+/** Điều kiện "người này ở ít nhất một nhóm trong phạm vi" cho bảng contact (alias c). */
 export function contactScopeSql(principal: Principal): SqlPart | null {
   if (principal.groupIds === null) return null;
   if (!principal.groupIds.length) return { sql: "1 = 0", params: [] };

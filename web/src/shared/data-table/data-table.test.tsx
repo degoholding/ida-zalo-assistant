@@ -331,7 +331,7 @@ describe('DataTable — onRowDoubleClick', () => {
 
 /**
  * bao-CR-518 — màu cột khai SẴN (`defaultColor`) cho cột mang nghĩa (bốn cột giá của
- * Tra cứu thị trường). Màu người dùng tự chọn trong menu «Cột» vẫn phải thắng.
+ * Tra cứu thị trường). Màu người dùng tự chọn trong menu "Cột" vẫn phải thắng.
  */
 describe('DataTable — defaultColor', () => {
   const tinted = (cell: Element | null) => (cell as HTMLElement | null)?.style.backgroundImage ?? ''

@@ -4,7 +4,7 @@ import { ErrorState } from '@/shared/ui/error-state'
 import { useAiKeyMutations, useAiKeys } from '../hooks/use-ai-keys'
 import { AiKeyListCard } from './ai-key-list-card'
 
-/** Tab «Khóa AI» đứng đầu màn Cài đặt — nối thẻ danh sách khóa với API. */
+/** Tab "Khóa AI" đứng đầu màn Cài đặt — nối thẻ danh sách khóa với API. */
 export function AiKeysTab() {
   const { data, isLoading, isError, refetch } = useAiKeys()
   const { add, update, moveUp, remove } = useAiKeyMutations()

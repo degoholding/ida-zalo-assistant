@@ -3,7 +3,7 @@ import { formatDateTime } from '@/shared/utils/format-date'
 import type { MetricSource } from '../types/metric'
 import { MetricSourceStatusBadge } from './metric-source-status-badge'
 
-/** Khối «Lượt đọc gần nhất» ở trang chi tiết nguồn: trạng thái, giờ đọc, số dòng, lỗi và cảnh báo. */
+/** Khối "Lượt đọc gần nhất" ở trang chi tiết nguồn: trạng thái, giờ đọc, số dòng, lỗi và cảnh báo. */
 export function MetricSourceStatusPanel({ source }: { source: MetricSource }) {
   return (
     <Card className="gap-3 p-3 sm:p-5">

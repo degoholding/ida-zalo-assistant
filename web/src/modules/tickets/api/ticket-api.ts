@@ -5,8 +5,8 @@ export const TICKETS_API_PATH = '/api/tickets'
 export const TICKET_HANDLERS_API_PATH = '/api/ticket-handlers'
 
 /**
- * Lấy cả phong bì ở các lệnh ghi: câu cần báo lại cho người bấm («Nhận xử lý — đã báo qua Zalo», «Đã thêm người xử
- * lý») nằm ở `message`. Lỗi (409 «T-12 Đã xong rồi.») thì `http-client` tự bật toast đỏ đúng câu máy chủ nói.
+ * Lấy cả phong bì ở các lệnh ghi: câu cần báo lại cho người bấm ("Nhận xử lý — đã báo qua Zalo", "Đã thêm người xử
+ * lý") nằm ở `message`. Lỗi (409 "T-12 Đã xong rồi.") thì `http-client` tự bật toast đỏ đúng câu máy chủ nói.
  */
 export const ticketApi = {
   runAction: async (id: number, request: TicketActionRequest) => {

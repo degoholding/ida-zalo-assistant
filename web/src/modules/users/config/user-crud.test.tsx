@@ -71,13 +71,13 @@ describe('user form', () => {
     expect(screen.queryByText('Phạm vi nhóm')).toBeNull()
   })
 
-  it('hides it too when the role comes back from the select as the string «1»', () => {
+  it('hides it too when the role comes back from the select as the string "1"', () => {
     //  Ô chọn của khung CRUD trả CHUỖI; so `=== 1` thô thì quản trị vẫn thấy ô chọn nhóm vô nghĩa.
     renderForm(makeUser({ role: '1' }))
     expect(screen.queryByText('Nhóm được xem')).toBeNull()
   })
 
-  it('hides the group picker when «all groups» is on, and brings it back when switched off', async () => {
+  it('hides the group picker when "all groups" is on, and brings it back when switched off', async () => {
     renderForm(makeUser({ all_groups: true }))
     expect(screen.queryByText('Nhóm được xem')).toBeNull()
 
@@ -105,7 +105,7 @@ describe('user form', () => {
 
   it('tells the admin the email is what Google login matches on, and that one of email / username is needed', () => {
     renderForm()
-    expect(screen.getByText(/bấm được nút «Đăng nhập bằng Google» với đúng email đó/)).toBeInTheDocument()
+    expect(screen.getByText(/bấm được nút "Đăng nhập bằng Google" với đúng email đó/)).toBeInTheDocument()
     expect(screen.getByText(/Cần ít nhất email hoặc tên đăng nhập/)).toBeInTheDocument()
   })
 

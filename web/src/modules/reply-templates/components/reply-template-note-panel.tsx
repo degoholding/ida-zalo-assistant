@@ -2,7 +2,7 @@ import { TriangleAlert } from 'lucide-react'
 
 import { REPLY_TEMPLATE_STATUS, type ReplyTemplate } from '../types/reply-template'
 
-/** Dải «Ghi chú trả lại: …» — chỉ hiện khi mẫu đang ở trạng thái Bị trả lại và có ghi chú. */
+/** Dải "Ghi chú trả lại: …" — chỉ hiện khi mẫu đang ở trạng thái Bị trả lại và có ghi chú. */
 export function ReplyTemplateNotePanel({ template }: { template: ReplyTemplate }) {
   if (template.status !== REPLY_TEMPLATE_STATUS.returned || !template.review_note) return null
   return (

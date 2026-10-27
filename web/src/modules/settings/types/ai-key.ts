@@ -1,5 +1,5 @@
 /**
- * Hãng của một dòng «Khóa AI» — chép từ `AiKeyProvider` ở `src/constants.ts` phía máy chủ (SMALLINT trong bảng `ai_key`).
+ * Hãng của một dòng "Khóa AI" — chép từ `AiKeyProvider` ở `src/constants.ts` phía máy chủ (SMALLINT trong bảng `ai_key`).
  * Đổi bên kia thì sửa bên này.
  */
 export const AiKeyProvider = {
@@ -27,18 +27,18 @@ export interface AiKeyItem {
   /** Rỗng = việc nặng dùng chính mô hình chính. */
   model_heavy: string
   default_model: string
-  /** «…ab12». */
+  /** "…ab12". */
   key_tail: string
   /** 0 = không giới hạn. */
   daily_cap: number
   used_today: number
-  /** Lỗi gần nhất khiến bot bỏ qua khóa, vd «hết tiền (402)». */
+  /** Lỗi gần nhất khiến bot bỏ qua khóa, vd "hết tiền (402)". */
   last_error: string
   last_error_at: string | null
   /** Không giải mã được (đổi khóa mã hóa máy chủ) — phải gỡ rồi thêm lại. */
   broken: boolean
   /**
-   * Hãng của khóa nằm trong «Hãng AI được phép dùng» (tab Trợ lý AI › An toàn dữ liệu). `false` = bot bỏ qua khóa này,
+   * Hãng của khóa nằm trong "Hãng AI được phép dùng" (tab Trợ lý AI › An toàn dữ liệu). `false` = bot bỏ qua khóa này,
    * dữ liệu không đi tới hãng đó.
    */
   allowed: boolean

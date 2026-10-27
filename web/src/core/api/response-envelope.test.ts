@@ -62,7 +62,7 @@ describe('extractErrorMessage', () => {
     expect(extractErrorMessage(error)).toBe('Ô "Mục đích" tối đa 355 ký tự (đang nhập 412)')
   })
 
-  it('backend cũ trả câu trơn «Dữ liệu không hợp lệ» thì vẫn ghép details', () => {
+  it('backend cũ trả câu trơn "Dữ liệu không hợp lệ" thì vẫn ghép details', () => {
     const error = {
       response: {
         data: {

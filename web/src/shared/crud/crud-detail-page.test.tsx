@@ -132,7 +132,7 @@ describe('CrudDetailPage — thêm mới', () => {
   it('bấm Tạo BA LẦN liên tiếp chỉ gửi MỘT lệnh', async () => {
     //  LỖI ĐÃ XẢY RA (04/09/2026): ba cú bấm ra ba POST — bản ghi chỉ tạo một
     //  (ràng buộc duy nhất ở DB đỡ hộ) nhưng người dùng nhận một toast xanh rồi
-    //  hai toast đỏ «Hệ thống gặp lỗi không lường trước». Danh mục không có cột
+    //  hai toast đỏ "Hệ thống gặp lỗi không lường trước". Danh mục không có cột
     //  duy nhất thì đó là ba bản ghi trùng.
     build('/hr/leave-types/new')
     await userEvent.type(await screen.findByLabelText(/Mã loại nghỉ/), 'moi')
@@ -236,7 +236,7 @@ describe('CrudDetailPage — read-only detail', () => {
 
 /**
  * Quyền sửa THEO DÒNG (`canEditRow`) — màn Mẫu tin: vai trò có `write` nhưng mẫu của người khác thì không sửa được (máy chủ trả 403).
- * Trang phải khóa ô và ẩn «Lưu» thay vì để người dùng bấm rồi nhận lỗi.
+ * Trang phải khóa ô và ẩn "Lưu" thay vì để người dùng bấm rồi nhận lỗi.
  */
 describe('CrudDetailPage — row-level edit (canEditRow)', () => {
   const ROW_GUARD: CrudConfig<LeaveType> = { ...CONFIG, canEditRow: (row) => row.code !== 'annual' }
@@ -261,7 +261,7 @@ describe('CrudDetailPage — row-level edit (canEditRow)', () => {
   })
 })
 
-/** «Lịch sử thao tác» tra theo `auditEntity` khi nhật ký máy chủ ghi tên khác khóa phân quyền (màn Nguồn số liệu). */
+/** "Lịch sử thao tác" tra theo `auditEntity` khi nhật ký máy chủ ghi tên khác khóa phân quyền (màn Nguồn số liệu). */
 describe('CrudDetailPage — audit entity', () => {
   it('uses auditEntity for the history timeline, falling back to entity', async () => {
     build('/hr/leave-types/5', { ...CONFIG, auditEntity: 'metric_source' })

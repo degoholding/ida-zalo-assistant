@@ -27,9 +27,9 @@ describe('nameInitials', () => {
     expect(nameInitials('lê minh đức')).toBe('MĐ')
   })
 
-  it('bỏ đuôi chú thích trong ngoặc — «(Demo)» từng cho ra chữ tắt «M(»', () => {
+  it('bỏ đuôi chú thích trong ngoặc — "(Demo)" từng cho ra chữ tắt "M("', () => {
     //  Lỗi thật thấy trên màn Chức vụ 10/09/2026: hồ sơ demo tên "Trưởng phòng
-    //  Thu mua (Demo)" ra vòng tròn ghi «M(», đọc như ảnh hỏng.
+    //  Thu mua (Demo)" ra vòng tròn ghi "M(", đọc như ảnh hỏng.
     expect(nameInitials('Trưởng phòng Thu mua (Demo)')).toBe('TM')
     expect(nameInitials('Manager (Demo)')).toBe('M')
   })
@@ -48,7 +48,7 @@ describe('departmentInitials', () => {
     expect(departmentInitials('Phòng Kinh doanh')).toBe('KD')
   })
 
-  it('bỏ tiền tố loại đơn vị, không thì vòng tròn nào cũng bắt đầu bằng «P»', () => {
+  it('bỏ tiền tố loại đơn vị, không thì vòng tròn nào cũng bắt đầu bằng "P"', () => {
     expect(departmentInitials('Phòng Hành chính')).toBe('HC')
     expect(departmentInitials('Ban Kiểm soát')).toBe('KS')
     expect(departmentInitials('Bộ phận Kho vận')).toBe('KV')

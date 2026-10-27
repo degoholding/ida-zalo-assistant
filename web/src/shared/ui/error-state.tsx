@@ -43,7 +43,7 @@ export function ErrorState({
 
       {children && (
         //  ⚠️ Khổ hẹp XẾP DỌC và nút TRẢI HẾT HÀNG (`w-full` cho con trực tiếp).
-        //  Màn lỗi thường có hai nút («Tải lại trang» + «Về màn chọn phân hệ»)
+        //  Màn lỗi thường có hai nút ("Tải lại trang" + "Về màn chọn phân hệ")
         //  cộng lại ~330px — ở 320px chúng xuống hai hàng, mỗi nút một bề rộng
         //  khác nhau nằm giữa hai khoảng trắng lệch, đọc ra như hai mẩu rời chứ
         //  không như một cặp lựa chọn. Mà đây lại là chỗ người dùng đang bối
@@ -64,7 +64,7 @@ export function ErrorState({
         //  chuỗi tràn ra cả hai mép và bị xén hai đầu.
         //
         //  ⚠️ `break-words` chứ KHÔNG `break-all`. Chuỗi này là câu lỗi lẫn URL
-        //  («Failed to fetch dynamically imported module: http://…»): `break-all`
+        //  ("Failed to fetch dynamically imported module: http://…"): `break-all`
         //  cắt giữa MỌI từ nên phần chữ vỡ vụn từng khúc ba bốn ký tự, trong
         //  khi thứ cần bẻ chỉ là cái URL dài. Bản cũ dùng `break-all` nên vô
         //  tình không tràn — nhưng đổi sang `break-words` mà quên `w-full` thì

@@ -33,7 +33,7 @@ describe('SearchSelect', () => {
   it('tìm theo TÊN, không bắt gõ đúng từ đầu nhãn', async () => {
     //  Lỗi khách báo 25/08/2026: ô chọn loại văn bản là `Select` thường, 33
     //  dòng, không có ô tìm. Typeahead của trình duyệt khớp từ ĐẦU nhãn mà nhãn
-    //  lại bắt đầu bằng MÃ, nên gõ «nghỉ phép» không nhảy tới đâu và người dùng
+    //  lại bắt đầu bằng MÃ, nên gõ "nghỉ phép" không nhảy tới đâu và người dùng
     //  kết luận là danh mục không có loại đó.
     const nguoi = userEvent.setup()
     dung()
@@ -52,7 +52,7 @@ describe('SearchSelect', () => {
   })
 
   it('chữ Đ cũng bỏ dấu được — NFD không đụng tới nó', async () => {
-    //  `normalize('NFD')` tách dấu thành ký tự tổ hợp, nhưng «đ» là một CHỮ CÁI
+    //  `normalize('NFD')` tách dấu thành ký tự tổ hợp, nhưng "đ" là một CHỮ CÁI
     //  riêng chứ không phải d có dấu, nên phải thay tay. Thiếu chỗ đó thì gõ
     //  "don vi" không ra "Đơn vị".
     const nguoi = userEvent.setup()
@@ -168,10 +168,10 @@ describe('SearchSelect', () => {
   })
 
   it('kiểu searchInTrigger: bấm LẦN HAI vào ô đang mở không đóng danh sách, gõ không bị nối vào nhãn cũ', async () => {
-    //  bao-CR-475: Radix coi cú bấm vào chính ô gõ (nằm NGOÀI khung danh sách) là «bấm
-    //  ra ngoài» → đóng danh sách, ô hiện lại nhãn đã chọn, gõ tiếp thành «Hợp đồng · HDb»
+    //  bao-CR-475: Radix coi cú bấm vào chính ô gõ (nằm NGOÀI khung danh sách) là "bấm
+    //  ra ngoài" → đóng danh sách, ô hiện lại nhãn đã chọn, gõ tiếp thành "Hợp đồng · HDb"
     //  và không còn mục nào khớp. Người dùng thường bấm lại vào ô để đặt con trỏ — đúng
-    //  thao tác đại ca yêu cầu («nhập text rồi chọn trên đó»).
+    //  thao tác đại ca yêu cầu ("nhập text rồi chọn trên đó").
     const nguoi = userEvent.setup()
     const onChange = vi.fn()
     render(
@@ -187,7 +187,7 @@ describe('SearchSelect', () => {
     expect(onChange).toHaveBeenCalledWith('28')
   })
 
-  it('lọc còn ít hơn mức cắt thì KHÔNG hiện câu «còn … mục»', async () => {
+  it('lọc còn ít hơn mức cắt thì KHÔNG hiện câu "còn … mục"', async () => {
     const nhieu = Array.from({ length: 75 }, (_, i) => ({
       value: String(i),
       label: `Nhân sự ${i}`,

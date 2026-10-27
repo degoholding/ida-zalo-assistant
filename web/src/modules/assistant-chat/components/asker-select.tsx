@@ -12,7 +12,7 @@ interface AskerSelectProps {
   onChange: (id: number) => void
 }
 
-/** Chọn «hỏi dưới tên ai» — vai trò hiện kèm tên vì một người có thể trùng tên trong danh bạ. */
+/** Chọn "hỏi dưới tên ai" — vai trò hiện kèm tên vì một người có thể trùng tên trong danh bạ. */
 export function AskerSelect({ askers, value, onChange }: AskerSelectProps) {
   return (
     <Select value={value ? String(value) : undefined} onValueChange={(next) => onChange(Number(next))}>

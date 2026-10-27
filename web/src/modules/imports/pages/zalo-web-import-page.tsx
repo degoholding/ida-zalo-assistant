@@ -14,9 +14,9 @@ import { buildZaloWebExporter, EXPORT_ALL_CONVERSATIONS, toBookmarklet } from '.
 
 const STEPS = [
   'Mở chat.zalo.me trên máy tính, đăng nhập bằng tài khoản Zalo của MỘT THÀNH VIÊN lâu năm trong các nhóm cần lấy (không phải tài khoản bot — đăng nhập web bằng tài khoản bot là bot bị đá, phải quét QR lại).',
-  'Trên điện thoại, khi Zalo hỏi «Đồng bộ tin nhắn sang máy tính?» thì bấm Đồng ý; chờ web báo «Đồng bộ tin nhắn thành công». Zalo chỉ đồng bộ khoảng 2 tuần gần nhất — giới hạn của Zalo, không chỉnh được.',
-  'Kéo nút xuất bên dưới lên thanh dấu trang (Ctrl+Shift+B để hiện thanh). Ở Zalo Web, đứng ở tab Tin nhắn (danh sách «Tất cả», không lọc) rồi bấm nút: trang tự mở lần lượt từng nhóm, cuộn lên đầu, gom tin + ảnh, mỗi nhóm tải về một tệp .json. Góc phải dưới có bảng tiến độ và nút Dừng. Chrome hỏi «tải nhiều tệp» thì bấm Cho phép.',
-  'Chọn TẤT CẢ tệp .json vừa tải ở bước 4 (giữ Ctrl để chọn nhiều). Chỉ nhập được nhóm bot ĐÃ Ở và đã bật «Đọc tin»; tệp chat riêng giữ làm bản lưu, bot chưa nhập. Tin trùng với tin bot đã lưu thì bỏ qua — nạp lại nhiều lần không nhân đôi.',
+  'Trên điện thoại, khi Zalo hỏi "Đồng bộ tin nhắn sang máy tính?" thì bấm Đồng ý; chờ web báo "Đồng bộ tin nhắn thành công". Zalo chỉ đồng bộ khoảng 2 tuần gần nhất — giới hạn của Zalo, không chỉnh được.',
+  'Kéo nút xuất bên dưới lên thanh dấu trang (Ctrl+Shift+B để hiện thanh). Ở Zalo Web, đứng ở tab Tin nhắn (danh sách "Tất cả", không lọc) rồi bấm nút: trang tự mở lần lượt từng nhóm, cuộn lên đầu, gom tin + ảnh, mỗi nhóm tải về một tệp .json. Góc phải dưới có bảng tiến độ và nút Dừng. Chrome hỏi "tải nhiều tệp" thì bấm Cho phép.',
+  'Chọn TẤT CẢ tệp .json vừa tải ở bước 4 (giữ Ctrl để chọn nhiều). Chỉ nhập được nhóm bot ĐÃ Ở và đã bật "Đọc tin"; tệp chat riêng giữ làm bản lưu, bot chưa nhập. Tin trùng với tin bot đã lưu thì bỏ qua — nạp lại nhiều lần không nhân đôi.',
 ]
 
 interface BookmarkletLinkProps {
@@ -127,8 +127,8 @@ export function ZaloWebImportPage() {
           {targets.isLoading
             ? 'Đang tải danh sách nhóm…'
             : targetList.length
-              ? '«Nhóm của bot»: tự mở lần lượt các nhóm đang bật «Đọc tin» ở màn Nhóm (bật thêm nhóm thì kéo lại nút này). «Toàn bộ danh sách»: mọi cuộc ở cột trái Zalo Web, cả nhóm lẫn chat riêng. «Cuộc đang mở»: chỉ cuộc đang mở (nhóm hoặc chat riêng). Mỗi cuộc một tệp.'
-              : 'Bot chưa bật «Đọc tin» ở nhóm nào nên chưa có nút «Nhóm của bot». «Toàn bộ danh sách»: mọi cuộc ở cột trái Zalo Web; «Cuộc đang mở»: chỉ cuộc đang mở. Mỗi cuộc một tệp.'}
+              ? '"Nhóm của bot": tự mở lần lượt các nhóm đang bật "Đọc tin" ở màn Nhóm (bật thêm nhóm thì kéo lại nút này). "Toàn bộ danh sách": mọi cuộc ở cột trái Zalo Web, cả nhóm lẫn chat riêng. "Cuộc đang mở": chỉ cuộc đang mở (nhóm hoặc chat riêng). Mỗi cuộc một tệp.'
+              : 'Bot chưa bật "Đọc tin" ở nhóm nào nên chưa có nút "Nhóm của bot". "Toàn bộ danh sách": mọi cuộc ở cột trái Zalo Web; "Cuộc đang mở": chỉ cuộc đang mở. Mỗi cuộc một tệp.'}
           {' '}Bấm ở trang này không chạy — chỉ chạy khi đang ở chat.zalo.me.
         </p>
         <div className="flex items-center gap-2">

@@ -48,7 +48,7 @@ export function CrudField({ field, register, control, errors, isReadonly }: Crud
   const errorMessage = (getPath(errors, field.name) as { message?: string } | undefined)
     ?.message
   //  Ô SỐ hẹp lại: bề ngang của ô là lời hứa về lượng chữ phải gõ. Kéo ô nhập
-  //  «Tối đa mỗi lần nghỉ (ngày)» dài nửa màn hình cho một con số hai chữ số thì
+  //  "Tối đa mỗi lần nghỉ (ngày)" dài nửa màn hình cho một con số hai chữ số thì
   //  nó đọc như một ô ghi chú bỏ trống. Chỉ ô nhập bị chặn, còn nhãn và chú thích
   //  vẫn rộng bằng cả cột — chú thích mới là chỗ cần chỗ để xuống dòng.
   const isNumeric = field.type === 'number' || field.type === 'percent'
@@ -136,12 +136,12 @@ export function CrudField({ field, register, control, errors, isReadonly }: Crud
  * CÔNG TẮC — một HÀNG NGANG, không phải một ô trong lưới.
  *
  * Bản cũ nhét công tắc vào đúng khuôn của ô nhập: nhãn ở trên, công tắc ở dưới,
- * cạnh nó là chữ *«Đang dùng / Hoạt động»*, rồi chú thích ở dòng thứ ba. Ba
+ * cạnh nó là chữ *"Đang dùng / Hoạt động"*, rồi chú thích ở dòng thứ ba. Ba
  * chuyện hỏng cùng lúc, thấy rõ nhất ở màn *Loại nghỉ* (07/09/2026):
  *
  * 1. **Chữ trạng thái là chữ thừa** — nó nói lại đúng thứ cái công tắc ngay bên
  *    trái đang nói, mà lại nói bằng từ của danh mục ("Hoạt động") nên với một
- *    nút tên *«Có hưởng lương»* thì câu đó đọc không ra nghĩa gì.
+ *    nút tên *"Có hưởng lương"* thì câu đó đọc không ra nghĩa gì.
  * 2. **Cao thấp lệch nhau.** Công tắc cao 3 dòng, ô nhập cao 2 — xếp xen kẽ
  *    trong lưới hai cột là hàng nào cũng so le, và hàng lẻ chừa một lỗ trắng
  *    bằng nửa màn hình.

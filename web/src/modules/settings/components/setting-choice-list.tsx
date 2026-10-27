@@ -12,7 +12,7 @@ interface SettingChoiceListProps {
   disabled?: boolean
 }
 
-/** Ô danh sách có lựa chọn sẵn (vd «Loại tệp bot được đọc»): mỗi lựa chọn một ô tick, gom theo nhóm. */
+/** Ô danh sách có lựa chọn sẵn (vd "Loại tệp bot được đọc"): mỗi lựa chọn một ô tick, gom theo nhóm. */
 export function SettingChoiceList({ id, choices, value, onChange, disabled }: SettingChoiceListProps) {
   const selected = parseChoiceList(value)
   return (

@@ -44,7 +44,7 @@ beforeEach(() => {
 })
 
 describe('AssistantSettingsTab', () => {
-  it('folds the old AI fields into «Nâng cao (cách cũ)» with an explanation once the key list has a key', async () => {
+  it('folds the old AI fields into "Nâng cao (cách cũ)" with an explanation once the key list has a key', async () => {
     apiGet.mockResolvedValue([KEY])
     renderTab()
     const summary = await screen.findByText(/Nâng cao \(cách cũ\)/)
@@ -60,7 +60,7 @@ describe('AssistantSettingsTab', () => {
   it('keeps every field in the main form while the key list is empty — the bot still runs on the old settings', async () => {
     apiGet.mockResolvedValue([])
     renderTab()
-    expect(await screen.findByText(/Dễ hơn: thêm khóa ở tab «Khóa AI»/)).toBeInTheDocument()
+    expect(await screen.findByText(/Dễ hơn: thêm khóa ở tab "Khóa AI"/)).toBeInTheDocument()
     expect(screen.queryByText(/Nâng cao \(cách cũ\)/)).toBeNull()
     expect(screen.getByText('Gemini — mô hình chính').closest('details')).toBeNull()
   })

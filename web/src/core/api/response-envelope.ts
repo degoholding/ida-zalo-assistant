@@ -24,9 +24,9 @@ const LEGACY_VALIDATION_MESSAGE = 'Dữ liệu không hợp lệ'
 /**
  * Thông điệp lỗi ưu tiên: error.message > message > message của axios > câu mặc định.
  *
- * bao-CR-538: backend nay tự viết câu tiếng Việt chỉ đúng ô sai cho lỗi 422 (vd «Ô "Mục đích"
- * tối đa 355 ký tự (đang nhập 412)»), nên KHÔNG nối thêm `details` tiếng Anh của Pydantic nữa.
- * Chỉ khi backend cũ còn trả câu trơn «Dữ liệu không hợp lệ» mới ghép `details` cho đỡ mù.
+ * bao-CR-538: backend nay tự viết câu tiếng Việt chỉ đúng ô sai cho lỗi 422 (vd "Ô "Mục đích"
+ * tối đa 355 ký tự (đang nhập 412)"), nên KHÔNG nối thêm `details` tiếng Anh của Pydantic nữa.
+ * Chỉ khi backend cũ còn trả câu trơn "Dữ liệu không hợp lệ" mới ghép `details` cho đỡ mù.
  */
 export function extractErrorMessage(error: unknown): string {
   const fallback = 'Có lỗi xảy ra, vui lòng thử lại'

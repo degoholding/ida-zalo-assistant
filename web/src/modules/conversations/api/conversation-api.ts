@@ -1,6 +1,6 @@
-import { apiGet, apiPost, httpClient, type SuccessEnvelope } from '@/core/api'
+import { apiGet, apiPatch, apiPost, httpClient, type SuccessEnvelope } from '@/core/api'
 import type { PaginatedResult } from '@/shared/types/api'
-import type { MessagesCursor, MessagesPage, Thread, ThreadDetail } from '../types/conversation'
+import type { MessagesCursor, MessagesPage, Thread, ThreadCapturePatch, ThreadDetail } from '../types/conversation'
 
 export const CONVERSATIONS_API_PATH = '/api/conversations'
 
@@ -24,6 +24,8 @@ export const conversationApi = {
   list: (params: ThreadListParams) =>
     apiGet<PaginatedResult<Thread>>(CONVERSATIONS_API_PATH, { params: { ...params, page_size: THREAD_LIST_SIZE } }),
   thread: (id: number) => apiGet<ThreadDetail>(`${CONVERSATIONS_API_PATH}/${id}`),
+  /** Cuộc riêng 1-1: bật / tắt Đọc tin, Lấy file (chỉ quản trị). Chỉ gửi trường đổi. */
+  updateCapture: (id: number, patch: ThreadCapturePatch) => apiPatch<ThreadDetail>(`${CONVERSATIONS_API_PATH}/${id}`, patch),
   messages: (id: number, cursor: MessagesCursor) =>
     apiGet<MessagesPage>(`${CONVERSATIONS_API_PATH}/${id}/messages`, { params: toMessagesParams(cursor) }),
   /** Quản trị gõ chữ — đi ra Zalo dưới tên tài khoản bot. */

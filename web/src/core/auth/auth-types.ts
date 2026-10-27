@@ -9,7 +9,7 @@ export interface AuthUser {
   /** Rỗng với phiên mật khẩu quản trị. */
   email: string
   role: UserRole
-  /** Thấy mọi nhóm — quản trị luôn `true`; còn lại theo ô «Thấy mọi nhóm» ở màn Người dùng. */
+  /** Thấy mọi nhóm — quản trị luôn `true`; còn lại theo ô "Thấy mọi nhóm" ở màn Người dùng. */
   all_groups: boolean
   /** Ma trận quyền `{ thực thể: { hành động: true } }` — chỉ để ẩn/hiện nút, chốt thật ở máy chủ. */
   permissions: PermissionMap
@@ -29,6 +29,6 @@ export interface LoginCredentials {
 
 /** `GET /api/auth/config` — đọc được khi CHƯA đăng nhập. */
 export interface AuthConfig {
-  /** Client ID OAuth của nút «Đăng nhập bằng Google»; rỗng = máy chủ chưa bật đăng nhập Google. */
+  /** Client ID OAuth của nút "Đăng nhập bằng Google"; rỗng = máy chủ chưa bật đăng nhập Google. */
   google_client_id: string
 }

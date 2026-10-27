@@ -41,7 +41,7 @@ export function QrLoginDialog({ open, onOpenChange, label: presetLabel }: QrLogi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{presetLabel ? `Quét QR lại — «${presetLabel}»` : 'Thêm tài khoản bot'}</DialogTitle>
+          <DialogTitle>{presetLabel ? `Quét QR lại — "${presetLabel}"` : 'Thêm tài khoản bot'}</DialogTitle>
           <DialogDescription>
             Mở app Zalo của tài khoản bot → biểu tượng QR → quét mã. Không mở Zalo Web bằng tài khoản bot: mỗi tài khoản chỉ
             một phiên web, mở là bot bị đá ra.

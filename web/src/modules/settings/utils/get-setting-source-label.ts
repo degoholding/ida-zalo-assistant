@@ -4,12 +4,12 @@ import type { SettingView } from '../types/setting'
 export interface SettingSourceLabel {
   /** Chữ hiện trong `Pill` / dòng chú thích dưới ô. */
   text: string
-  /** `true` khi giá trị đang đặt trên web — chỉ lúc đó mới có nút «Khôi phục mặc định». */
+  /** `true` khi giá trị đang đặt trên web — chỉ lúc đó mới có nút "Khôi phục mặc định". */
   isWeb: boolean
 }
 
 /**
- * Nhãn nguồn của một ô KHÔNG bí mật. Ô bí mật có dòng riêng («Đã đặt · <hint>»)
+ * Nhãn nguồn của một ô KHÔNG bí mật. Ô bí mật có dòng riêng ("Đã đặt · <hint>")
  * nên không đi qua hàm này — xem `SecretSettingField`.
  */
 export function getSettingSourceLabel(

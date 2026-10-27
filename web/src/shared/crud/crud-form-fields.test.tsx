@@ -100,7 +100,7 @@ describe('CrudFormFields', () => {
 
 describe('CrudFormFields — trật tự và khuôn ô', () => {
   it('giữ ô không khai nhóm ở ĐÚNG CHỖ CUỐI, không kéo ngược lên đầu', () => {
-    //  Gom theo TÊN nhóm thì «Ghi chú» nhập chung với cụm không tên mở màn và
+    //  Gom theo TÊN nhóm thì "Ghi chú" nhập chung với cụm không tên mở màn và
     //  nhảy lên trên cùng — người khai config không cách nào xếp nó xuống dưới.
     build()
     const labels = screen
@@ -110,8 +110,8 @@ describe('CrudFormFields — trật tự và khuôn ô', () => {
   })
 
   it('nhóm mở đầu bằng CÔNG TẮC thì công tắc nằm TRÊN ô nhập nó mở ra', () => {
-    //  Bản cũ luôn đẩy ô nhập lên trên, nên bật «Trừ quỹ phép» ở dưới thì ô
-    //  «Hạn mức» mọc ra PHÍA TRÊN cái nút vừa bấm — ngoài tầm mắt đang nhìn.
+    //  Bản cũ luôn đẩy ô nhập lên trên, nên bật "Trừ quỹ phép" ở dưới thì ô
+    //  "Hạn mức" mọc ra PHÍA TRÊN cái nút vừa bấm — ngoài tầm mắt đang nhìn.
     build([
       { name: 'counts', label: 'Trừ quỹ phép', type: 'switch', defaultValue: true, section: 'Quỹ' },
       { name: 'quota', label: 'Hạn mức', type: 'number', defaultValue: 0, section: 'Quỹ' },
@@ -132,9 +132,9 @@ describe('CrudFormFields — trật tự và khuôn ô', () => {
   })
 
   it('công tắc KHÔNG lặp lại chữ trạng thái bên cạnh chính nó', () => {
-    //  Bản cũ in «Đang dùng / Hoạt động» cạnh mỗi công tắc — nói lại đúng thứ
-    //  công tắc đang nói, mà lại bằng từ của danh mục nên với một nút tên «Có
-    //  hưởng lương» thì câu đó vô nghĩa.
+    //  Bản cũ in "Đang dùng / Hoạt động" cạnh mỗi công tắc — nói lại đúng thứ
+    //  công tắc đang nói, mà lại bằng từ của danh mục nên với một nút tên "Có
+    //  hưởng lương" thì câu đó vô nghĩa.
     build()
     expect(screen.queryByText(/Hoạt động/)).not.toBeInTheDocument()
   })

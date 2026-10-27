@@ -10,7 +10,7 @@ describe('stripDiacritics', () => {
 
   it('xử lý đ / Đ — NFD không đụng tới hai chữ này', () => {
     //  `đ` không phải `d` có dấu nên `normalize('NFD')` để nguyên; quên thay tay
-    //  thì gõ "dat phong" không khớp «Đặt phòng».
+    //  thì gõ "dat phong" không khớp "Đặt phòng".
     expect(stripDiacritics('Đặt phòng')).toBe('dat phong')
     expect(stripDiacritics('đơn vị')).toBe('don vi')
   })

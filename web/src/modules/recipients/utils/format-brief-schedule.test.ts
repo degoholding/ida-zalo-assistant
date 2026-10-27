@@ -12,7 +12,7 @@ describe('formatBriefSchedule', () => {
     expect(formatBriefSchedule('07:30', null)).toBe('Sáng 07:30')
   })
 
-  it('says «off» for empty, blank or missing times instead of an empty cell', () => {
+  it('says "off" for empty, blank or missing times instead of an empty cell', () => {
     expect(formatBriefSchedule('', '')).toBe('Không gửi')
     expect(formatBriefSchedule('  ', undefined)).toBe('Không gửi')
   })

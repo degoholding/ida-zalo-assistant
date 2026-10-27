@@ -12,7 +12,7 @@ import type { ExportTarget } from '../types/import'
  *
  * Ba chế độ (đối số TARGETS):
  * - `null` → xuất cuộc ĐANG MỞ (nhóm hoặc chat riêng), một tệp.
- * - mảng nhóm (nút «nhóm của bot») → tự tìm từng nhóm trong cột trái (`#conversationList`, mỗi dòng mang
+ * - mảng nhóm (nút "nhóm của bot") → tự tìm từng nhóm trong cột trái (`#conversationList`, mỗi dòng mang
  *   `anim-data-id="<mã cuộc>"`, nhóm có tiền tố "g" — đọc từ mã Zalo Web), bấm mở, cuộn gom.
  * - `'ALL'` → cuộn hết cột trái lấy mọi cuộc (nhóm + chat riêng) rồi làm như trên.
  * Mỗi cuộc một tệp (ảnh nặng, gộp một tệp dễ vượt giới hạn nạp).
@@ -96,7 +96,7 @@ const EXPORTER_BODY = `async function (TARGETS) {
     var found = {};
     var conv = convId;
     var scroller = frames().length ? scrollerAbove(frames()[0]) : null;
-    // Đi theo thứ tự trên màn hình: tin thường mang data-qid; tin hệ thống («A đã thêm B vào nhóm») là khối
+    // Đi theo thứ tự trên màn hình: tin thường mang data-qid; tin hệ thống ("A đã thêm B vào nhóm") là khối
     // .event-message KHÔNG có mã tin — tự dựng mã từ câu chữ + giờ, giờ đọc ở thuộc tính title (Zalo gắn giờ
     // đầy đủ vào đó), không có thì mượn mốc của tin thường đứng trước / sau.
     var collect = function () {
@@ -280,7 +280,7 @@ const EXPORTER_BODY = `async function (TARGETS) {
 /** Chú thích (tiếng Việt có dấu) chỉ để người đọc mã — bỏ khỏi bản chạy cho bookmarklet gọn và thuần ASCII. */
 const EXPORTER_RUNTIME = EXPORTER_BODY.replace(/^[ \t]*\/\/.*\n/gm, '')
 
-/** Chế độ «mọi cuộc trong cột trái» (nhóm + chat riêng). */
+/** Chế độ "mọi cuộc trong cột trái" (nhóm + chat riêng). */
 export const EXPORT_ALL_CONVERSATIONS = 'ALL'
 
 /**

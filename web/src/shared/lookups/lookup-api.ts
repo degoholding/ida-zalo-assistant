@@ -23,7 +23,7 @@ const CONTACT_SEARCH_PAGE_SIZE = 30
 
 /** Đường API của các danh sách ngắn (cho `source.url` của ô chọn trong biểu mẫu CRUD). */
 export const LOOKUP_URLS = {
-  /** Có mục «— Chưa gán —» (id 0) ở đầu — cho ô chọn công ty của biểu mẫu. */
+  /** Có mục "— Chưa gán —" (id 0) ở đầu — cho ô chọn công ty của biểu mẫu. */
   companiesWithNone: '/api/lookups/companies?with_none=1',
   companies: '/api/lookups/companies',
   groups: '/api/lookups/groups',

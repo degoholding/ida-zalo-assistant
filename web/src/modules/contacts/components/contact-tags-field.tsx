@@ -17,7 +17,7 @@ interface ContactTagsFieldProps {
 }
 
 /**
- * Ô «Thẻ» của biểu mẫu CRUD: giá trị trong form là MẢNG (như API), người dùng gõ chuỗi cách nhau bằng
+ * Ô "Thẻ" của biểu mẫu CRUD: giá trị trong form là MẢNG (như API), người dùng gõ chuỗi cách nhau bằng
  * dấu phẩy. Chuỗi đang gõ giữ trong state của ô (để không nuốt dấu phẩy vừa gõ), mỗi phím thì đẩy
  * mảng đã tách vào form; form nạp lại bản ghi (giá trị khác hẳn chuỗi đang gõ) thì đồng bộ ngược.
  */
@@ -27,7 +27,7 @@ export function ContactTagsField({ control, name, disabled }: ContactTagsFieldPr
   const [text, setText] = useState(tags.join(', '))
   const joined = tags.join(TAG_SEPARATOR)
   // Form nạp lại bản ghi (mảng khác hẳn chuỗi đang gõ) thì đồng bộ ngược ngay trong lượt vẽ —
-  // kiểu «điều chỉnh state khi prop đổi» của React, không qua effect để khỏi vẽ hai nhịp
+  // kiểu "điều chỉnh state khi prop đổi" của React, không qua effect để khỏi vẽ hai nhịp
   const [seenJoined, setSeenJoined] = useState(joined)
   if (joined !== seenJoined) {
     setSeenJoined(joined)

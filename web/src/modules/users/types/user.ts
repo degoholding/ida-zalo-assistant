@@ -17,12 +17,12 @@ export interface AppUser {
   all_groups: boolean
   /** Cho AI (MCP / trợ lý) đọc nhóm Mật khi người này hỏi. */
   can_view_confidential: boolean
-  /** Xem «Lịch sử thao tác» của bản ghi trong phạm vi nhóm (quản trị luôn xem được). */
+  /** Xem "Lịch sử thao tác" của bản ghi trong phạm vi nhóm (quản trị luôn xem được). */
   can_view_audit: boolean
   is_active: boolean
   last_login_at: string | null
   created_at: string
-  /** Số nhóm trong phạm vi được xem (chỉ có nghĩa khi không «Thấy mọi nhóm»). */
+  /** Số nhóm trong phạm vi được xem (chỉ có nghĩa khi không "Thấy mọi nhóm"). */
   group_count: number
 }
 

@@ -11,11 +11,11 @@ import { ValueInput } from './value-input'
  *
  * ⚠️ **Dưới 768px ba ô XẾP DỌC trong một thẻ riêng.** Bề rộng tối thiểu của hàng
  * ngang là 176 + 160 + 128 + 32 cộng khoảng cách ≈ **510px**, nên trên máy 393px
- * nó tự xuống dòng lung tung: ô «trường» ở dòng một, «phép so sánh» rơi xuống
+ * nó tự xuống dòng lung tung: ô "trường" ở dòng một, "phép so sánh" rơi xuống
  * dòng hai cạnh nửa ô giá trị, và khi có hai ba điều kiện thì không còn nhìn ra
  * đâu là ranh giới giữa chúng.
  *
- * ⚠️ **Nút xóa nằm ở HÀNG TIÊU ĐỀ của thẻ, không đứng cạnh ô «trường».** Đặt
+ * ⚠️ **Nút xóa nằm ở HÀNG TIÊU ĐỀ của thẻ, không đứng cạnh ô "trường".** Đặt
  * cạnh ô trường thì ô đó hụt đi 40px so với hai ô dưới, và ba ô đáng ra thẳng
  * hàng lại so le đúng một chỗ — thứ đập vào mắt trước cả nội dung. Đẩy nút lên
  * hàng riêng cùng số thứ tự thì cả ba ô rộng bằng nhau, mà thẻ cũng có được một

@@ -34,7 +34,7 @@ function renderForm(extras?: Record<string, React.ReactNode>) {
 }
 
 describe('SettingsSectionsForm', () => {
-  it('counts unsaved changes in the sticky bar and discards them on «Hoàn tác»', async () => {
+  it('counts unsaved changes in the sticky bar and discards them on "Hoàn tác"', async () => {
     renderForm()
     expect(screen.getByText('Không có thay đổi chưa lưu')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Lưu thay đổi/ })).toBeDisabled()

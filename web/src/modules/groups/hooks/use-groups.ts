@@ -11,7 +11,7 @@ import type { BackfillStatus } from '../types/group'
 const POLL_MS = 2000
 
 /**
- * «Lấy tin cũ» chạy nền ở máy chủ: bấm là bắt đầu, rồi hỏi tiến độ 2 giây một lần tới khi xong.
+ * "Lấy tin cũ" chạy nền ở máy chủ: bấm là bắt đầu, rồi hỏi tiến độ 2 giây một lần tới khi xong.
  * Xong thì toast câu kết luận và nạp lại nhóm + hội thoại.
  */
 export function useBackfillGroup(id: number) {

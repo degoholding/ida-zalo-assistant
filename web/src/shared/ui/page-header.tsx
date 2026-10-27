@@ -78,7 +78,7 @@ export function PageHeader({
 
           `flex-[1_1_16rem]` chứ KHÔNG `flex-1`: `flex-1` đặt cỡ gốc bằng 0, tức
           khối tiêu đề không đòi lấy một pixel nào và cụm nút cứ thế lấn hết —
-          màn chi tiết 4 nút ở 768px bóp tiêu đề còn ~60px, «Đơn nghỉ phép NP010»
+          màn chi tiết 4 nút ở 768px bóp tiêu đề còn ~60px, "Đơn nghỉ phép NP010"
           rơi xuống thành bốn dòng mỗi dòng một chữ, trong khi cụm nút vẫn nằm
           thong dong một hàng (báo 09/09/2026). 16rem là mức tiêu đề đòi giữ:
           còn đủ chỗ thì nút vẫn ở cùng hàng, không đủ thì cả cụm nút xuống hàng

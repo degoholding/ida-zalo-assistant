@@ -26,7 +26,7 @@ export const FILE_COLUMNS: DataTableColumn<FileRecord>[] = [
     hideable: false,
     defaultPinned: true,
     sortable: true,
-    // Bấm tên: ảnh hiện ngay trong hộp thoại, tệp khác hiện thông tin — kèm «Tải về» và «Xem trong hội thoại»
+    // Bấm tên: ảnh hiện ngay trong hộp thoại, tệp khác hiện thông tin — kèm "Tải về" và "Xem trong hội thoại"
     cell: (file) => <FileNameCell file={file} />,
   },
   {
@@ -87,10 +87,10 @@ const FILE_FILTER_FIELDS: FilterFieldDefinition[] = [
 export const fileCrudConfig: CrudConfig<FileRecord> = {
   entity: 'file',
   title: 'Tệp',
-  description: 'Tệp, ảnh, video gửi trong các nhóm đang đọc và tin riêng. Bấm tên tệp để xem ảnh / thông tin tệp và mở đúng chỗ trong hội thoại. «Đọc» bóc chữ trong tệp (bot cũng dùng chữ này để tóm tắt và tìm); «Tải vào kho» thử lấy lại tệp lỗi; nút ghim «Giữ tệp gốc» để tệp không bị xóa khi hết hạn giữ tệp của nhóm.',
+  description: 'Tệp, ảnh, video gửi trong các nhóm đang đọc và tin riêng. Bấm tên tệp để xem ảnh / thông tin tệp và mở đúng chỗ trong hội thoại. "Đọc" bóc chữ trong tệp (bot cũng dùng chữ này để tóm tắt và tìm); "Tải vào kho" thử lấy lại tệp lỗi; nút ghim "Giữ tệp gốc" để tệp không bị xóa khi hết hạn giữ tệp của nhóm.',
   unitLabel: 'tệp',
   apiPath: FILES_API_PATH,
-  emptyMessage: 'Chưa có tệp nào — bật «Lấy file» cho nhóm, tệp gửi trong nhóm sẽ hiện ở đây.',
+  emptyMessage: 'Chưa có tệp nào — bật "Lấy file" cho nhóm, tệp gửi trong nhóm sẽ hiện ở đây.',
   storageKey: 'files.list',
   searchParam: 'q',
   searchPlaceholder: 'Tìm tên tệp, người gửi, chữ trong tệp đã đọc',

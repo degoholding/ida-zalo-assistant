@@ -17,7 +17,7 @@ export const metricsModule: RouteObject[] = [
   },
   {
     // Route TĨNH (thêm mới, cùng trang chi tiết — không có `:id` thì `CrudDetailPage` tự vào chế độ tạo); react-router ưu tiên đường
-    // tĩnh nên «new» không bị hiểu là id
+    // tĩnh nên "new" không bị hiểu là id
     path: METRIC_SOURCE_CREATE_ROUTE,
     lazy: async () => ({ Component: (await import('./pages/metric-source-detail-page')).MetricSourceDetailPage }),
     errorElement: <RouteErrorPage />,

@@ -11,9 +11,9 @@ import { ConditionalFilterBody } from '@/shared/conditional-filter'
  * điều kiện. Nhúng thẳng phần ruột vào tờ trượt thì hàng điều kiện được xếp dọc
  * (xem `FilterRowItem`) và cả màn hình rộng ngang là chỗ của nó.
  *
- * ⚠️ **`actions={false}` — mục này KHÔNG dựng nút «Áp dụng» của riêng nó.** Tờ
+ * ⚠️ **`actions={false}` — mục này KHÔNG dựng nút "Áp dụng" của riêng nó.** Tờ
  * trượt đã có nút chính ở chân, và nút đó gọi `apply()` qua
- * `QuickFilterSheetProps.onApply`. Hai nút «Áp dụng» trong một tấm thì người
+ * `QuickFilterSheetProps.onApply`. Hai nút "Áp dụng" trong một tấm thì người
  * dùng phải đoán cái nào ăn — đoán sai là mất trắng mấy điều kiện vừa gõ.
  *
  * ⚠️ **`inPopover={false}`** là bắt buộc: chân bộ lọc mặc định bọc nút bằng

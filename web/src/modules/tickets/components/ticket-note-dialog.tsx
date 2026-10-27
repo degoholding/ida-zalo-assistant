@@ -25,7 +25,7 @@ interface TicketNoteDialogProps {
 
 /**
  * Hộp thoại có một ô ghi chú cho các thao tác gửi kèm lời nhắn tới người báo (Báo xong, Hủy, Nhắn người gửi).
- * Chặn ở đây hai luật của máy chủ cho khỏi phải ăn 422: tối đa 2000 ký tự, và «Nhắn» thì phải có nội dung.
+ * Chặn ở đây hai luật của máy chủ cho khỏi phải ăn 422: tối đa 2000 ký tự, và "Nhắn" thì phải có nội dung.
  */
 export function TicketNoteDialog({
   open,

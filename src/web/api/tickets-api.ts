@@ -149,7 +149,7 @@ export const ticketRoutes: ApiRoute[] = [
     sendOk(response, await getTicketDetail(service.db, id, principal), `${TICKET_ACTION_LABELS[action]} — đã báo qua Zalo`);
   }],
 
-  // Người xử lý ticket: nhận tin báo ticket mới qua Zalo, gõ «nhận / xong T-12» được
+  // Người xử lý ticket: nhận tin báo ticket mới qua Zalo, gõ "nhận / xong T-12" được
   ["GET", /^\/api\/ticket-handlers$/, async ({ response, service, principal }) => {
     const [rows] = await service.db.query<RowDataPacket[]>(
       `SELECT c.id AS contact_id, c.zalo_uid, COALESCE(NULLIF(c.display_name, ''), c.zalo_name) AS name, c.avatar_url, h.created_at
@@ -163,14 +163,14 @@ export const ticketRoutes: ApiRoute[] = [
     const [contacts] = await service.db.query<RowDataPacket[]>("SELECT COALESCE(NULLIF(display_name, ''), zalo_name) AS name FROM contact WHERE id = ?", [contactId]);
     if (!contacts[0]) throw new ApiError(404, "not_found", "Không có người này trong Danh bạ");
     await service.db.query("INSERT IGNORE INTO ticket_handler (tenant_id, contact_id) VALUES (?, ?)", [principal.tenantId, contactId]);
-    await recordAudit(service.db, { entity: "ticket", entityId: 0, action: "update", message: `Thêm người xử lý ticket «${contacts[0].name}»` });
+    await recordAudit(service.db, { entity: "ticket", entityId: 0, action: "update", message: `Thêm người xử lý ticket "${contacts[0].name}"` });
     sendOk(response, { contact_id: contactId }, "Đã thêm người xử lý");
   }],
   ["DELETE", /^\/api\/ticket-handlers\/(\d+)$/, async ({ response, match, service, principal }) => {
     const contactId = parseId(match[1]);
     const [contacts] = await service.db.query<RowDataPacket[]>("SELECT COALESCE(NULLIF(display_name, ''), zalo_name) AS name FROM contact WHERE id = ?", [contactId]);
     await service.db.query("DELETE FROM ticket_handler WHERE tenant_id = ? AND contact_id = ?", [principal.tenantId, contactId]);
-    await recordAudit(service.db, { entity: "ticket", entityId: 0, action: "update", message: `Bỏ người xử lý ticket «${contacts[0]?.name ?? contactId}»` });
+    await recordAudit(service.db, { entity: "ticket", entityId: 0, action: "update", message: `Bỏ người xử lý ticket "${contacts[0]?.name ?? contactId}"` });
     sendOk(response, { contact_id: contactId }, "Đã bỏ người xử lý");
   }],
 ];

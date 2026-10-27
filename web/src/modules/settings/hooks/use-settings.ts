@@ -18,14 +18,14 @@ export function useSaveSettings() {
     onSuccess: ({ message }) => {
       toast.success(message)
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.all })
-      // Client ID / secret vừa lưu / xóa đổi luôn trạng thái «Kết nối Google» — không nạp lại thì nút Kết nối vẫn khóa
+      // Client ID / secret vừa lưu / xóa đổi luôn trạng thái "Kết nối Google" — không nạp lại thì nút Kết nối vẫn khóa
       void queryClient.invalidateQueries({ queryKey: queryKeys.googleOauth.all })
     },
     onError: (error) => toast.error(extractErrorMessage(error)),
   })
 }
 
-/** Khôi phục một khóa về `.env` / mặc định — dùng cho «Khôi phục mặc định» và «Xóa» ô bí mật. */
+/** Khôi phục một khóa về `.env` / mặc định — dùng cho "Khôi phục mặc định" và "Xóa" ô bí mật. */
 export function useResetSetting() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -33,7 +33,7 @@ export function useResetSetting() {
     onSuccess: ({ message }) => {
       toast.success(message)
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings.all })
-      // Client ID / secret vừa lưu / xóa đổi luôn trạng thái «Kết nối Google» — không nạp lại thì nút Kết nối vẫn khóa
+      // Client ID / secret vừa lưu / xóa đổi luôn trạng thái "Kết nối Google" — không nạp lại thì nút Kết nối vẫn khóa
       void queryClient.invalidateQueries({ queryKey: queryKeys.googleOauth.all })
     },
     onError: (error) => toast.error(extractErrorMessage(error)),
@@ -41,14 +41,14 @@ export function useResetSetting() {
 }
 
 /**
- * Nút «Kiểm tra kết nối» — kết quả hiện NGAY DƯỚI NÚT (thành công/lỗi), không
+ * Nút "Kiểm tra kết nối" — kết quả hiện NGAY DƯỚI NÚT (thành công/lỗi), không
  * qua toast, nên không gắn `onError` ở đây: để component tự đọc `error`.
  */
 export function useTestGoogleConnection() {
   return useMutation({ mutationFn: settingApi.testGoogleConnection })
 }
 
-/** Nút «Kiểm tra thư mục» của khối «Recap họp tự động» — cùng khuôn hiện kết quả ngay dưới nút như Sheets. */
+/** Nút "Kiểm tra thư mục" của khối "Recap họp tự động" — cùng khuôn hiện kết quả ngay dưới nút như Sheets. */
 export function useTestDriveFolder() {
   return useMutation({ mutationFn: settingApi.testDriveFolder })
 }

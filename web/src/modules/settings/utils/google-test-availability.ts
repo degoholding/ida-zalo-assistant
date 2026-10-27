@@ -5,7 +5,7 @@ export interface GoogleTestAvailability {
 }
 
 /**
- * Nút «Kiểm tra kết nối» dùng giá trị ĐÃ LƯU trên máy chủ (không phải chữ đang
+ * Nút "Kiểm tra kết nối" dùng giá trị ĐÃ LƯU trên máy chủ (không phải chữ đang
  * gõ dở trên form) — cần CẢ khóa service account lẫn link trang tính đã đặt,
  * thiếu một trong hai thì gọi chắc chắn lỗi 422 mà không cần ra mạng.
  */

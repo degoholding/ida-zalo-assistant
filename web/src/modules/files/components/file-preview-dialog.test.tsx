@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FILE_STATUS, type FileRecord } from '../types/file'
 import { FileNameCell } from './file-name-cell'
 
-// Mock ở tầng `@/core/api` theo luật test (`testing.md`) — hộp «Xem chữ» gọi apiGet.
+// Mock ở tầng `@/core/api` theo luật test (`testing.md`) — hộp "Xem chữ" gọi apiGet.
 vi.mock('@/core/api', () => ({
   httpClient: { patch: vi.fn(), post: vi.fn() },
   apiGet: vi.fn(() => new Promise(() => undefined)),
@@ -35,7 +35,7 @@ function renderCell(file: FileRecord) {
 }
 
 describe('FileNameCell / FilePreviewDialog', () => {
-  // Lỗi 08/10/2026: ảnh chat.photo không tên hiện «(chat.photo)» và bấm tên thì tải về tệp .bin thay vì xem ảnh
+  // Lỗi 08/10/2026: ảnh chat.photo không tên hiện "(chat.photo)" và bấm tên thì tải về tệp .bin thay vì xem ảnh
   it('opens a nameless chat photo as an inline picture with download and jump-to-message buttons', async () => {
     renderCell(makeFile())
 
@@ -56,7 +56,7 @@ describe('FileNameCell / FilePreviewDialog', () => {
     expect(within(screen.getByRole('dialog')).getByRole('img')).toHaveAttribute('src', '/api/files/8/download?inline=1')
   })
 
-  it('shows file info, the text summary and «Xem chữ» for a document that was read', async () => {
+  it('shows file info, the text summary and "Xem chữ" for a document that was read', async () => {
     renderCell(makeFile({ file_name: 'bao-gia.xlsx', file_ext: 'xlsx', message_kind: 2, zalo_msg_type: 'share.file', text_chars: 1234, text_summary: 'bảng 2 trang tính' }))
 
     await userEvent.click(screen.getByRole('button', { name: 'bao-gia.xlsx' }))

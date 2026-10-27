@@ -21,7 +21,7 @@ interface SettingsSectionsFormProps {
   /** Cách chia thẻ (config/settings-sections.ts). */
   sections: SettingsSection[]
   disabled?: boolean
-  /** Phần thêm ở cuối một thẻ, theo id thẻ (vd nút «Kết nối Google», kiểm tra Sheets). */
+  /** Phần thêm ở cuối một thẻ, theo id thẻ (vd nút "Kết nối Google", kiểm tra Sheets). */
   extras?: Partial<Record<string, ReactNode>>
 }
 
@@ -34,7 +34,7 @@ export function SettingsSectionsForm({ settings, sections, disabled, extras }: S
   const form = useSettingsForm(settings)
   const saveSettings = useSaveSettings()
   const resetSetting = useResetSetting()
-  // Đổi key mỗi lần Lưu / Khôi phục / Hoàn tác để `SecretSettingField` tính lại chế độ hiện («Đã đặt» hay ô nhập trống)
+  // Đổi key mỗi lần Lưu / Khôi phục / Hoàn tác để `SecretSettingField` tính lại chế độ hiện ("Đã đặt" hay ô nhập trống)
   const [version, setVersion] = useState(0)
   const resolved = useMemo(() => groupSettingsIntoSections(sections, settings), [sections, settings])
   const dirtyCount = Object.keys(form.formState.dirtyFields).length

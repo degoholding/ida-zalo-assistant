@@ -7,7 +7,7 @@ import { getThisWeekRange } from '../utils/get-this-week-range'
 import { MetricSummaryFilters } from './metric-summary-filters'
 import { MetricSummaryTable } from './metric-summary-table'
 
-/** Tab «Tổng hợp»: thanh lọc + bảng gộp. Mặc định tuần này, chỉ tiêu đầu tiên của danh mục. */
+/** Tab "Tổng hợp": thanh lọc + bảng gộp. Mặc định tuần này, chỉ tiêu đầu tiên của danh mục. */
 export function MetricSummaryPanel() {
   const { data: catalog } = useMetricCatalog()
   const [filters, setFilters] = useState<MetricSummaryQuery>(() => ({
@@ -23,7 +23,7 @@ export function MetricSummaryPanel() {
       {rangeInvalid && <p className="text-sm text-destructive">Ngày bắt đầu phải trước hoặc trùng ngày kết thúc.</p>}
       {catalog && catalog.metrics.length === 0 ? (
         <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          Chưa có chỉ tiêu nào — quản trị cấu hình nguồn số liệu ở màn «Nguồn số liệu» trước.
+          Chưa có chỉ tiêu nào — quản trị cấu hình nguồn số liệu ở màn "Nguồn số liệu" trước.
         </p>
       ) : (
         <MetricSummaryTable summary={summary.data} groupBy={query.group_by} isLoading={summary.isLoading} isError={summary.isError || rangeInvalid} />

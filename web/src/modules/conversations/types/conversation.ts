@@ -15,6 +15,18 @@ export interface Thread {
   last_sender: string | null
   last_from_bot: boolean
   avatar_url: string | null
+  /**
+   * Cuộc riêng 1-1 (27/10/2026, API của Agent 2): bot có lưu tin / lấy file của cuộc này không. Nhóm thì cờ nằm ở `group`.
+   * Tùy chọn: máy chủ chưa có bản API mới thì không trả (khi đó công tắc không hiện).
+   */
+  read_messages?: boolean | number
+  capture_files?: boolean | number
+}
+
+/** Thân `PATCH /api/conversations/:id` — gửi ít nhất một trường; máy chủ trả 422 khi rỗng / có trường lạ. */
+export interface ThreadCapturePatch {
+  read_messages?: boolean
+  capture_files?: boolean
 }
 
 export interface ThreadMember {
@@ -50,7 +62,7 @@ export interface ThreadGroup {
 export interface ThreadDetail extends Thread {
   /** Tên tài khoản bot sẽ đứng tên tin quản trị gõ (null = không có bot nào gửi được). */
   bot_name: string | null
-  /** «Chỉ lưu»: không có bot Trợ lý trong cuộc → quản trị cũng không gửi được (máy chủ trả 409). */
+  /** "Chỉ lưu": không có bot Trợ lý trong cuộc → quản trị cũng không gửi được (máy chủ trả 409). */
   collect_only: boolean
   contact: Contact | null
   group: ThreadGroup | null

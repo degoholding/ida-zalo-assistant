@@ -16,8 +16,8 @@ function formatVnParts(date: Date) {
 }
 
 /**
- * «Lỗi lúc 14:05: hết tiền (402)» — bot đã bỏ qua khóa này lúc đó và chuyển sang khóa kế. Khác ngày (giờ Việt Nam) thì kèm
- * ngày «Lỗi lúc 14:05 06/10: …». Chưa từng lỗi / ngày hỏng thì rỗng.
+ * "Lỗi lúc 14:05: hết tiền (402)" — bot đã bỏ qua khóa này lúc đó và chuyển sang khóa kế. Khác ngày (giờ Việt Nam) thì kèm
+ * ngày "Lỗi lúc 14:05 06/10: …". Chưa từng lỗi / ngày hỏng thì rỗng.
  */
 export function formatAiKeyLastError(item: Pick<AiKeyItem, 'last_error' | 'last_error_at'>, now: Date): string {
   if (!item.last_error || !item.last_error_at) return ''

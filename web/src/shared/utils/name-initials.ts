@@ -17,7 +17,7 @@ export function nameInitials(name: string): string {
       .split(/\s+/)
       //  ⚠️ Bỏ mẩu KHÔNG mở đầu bằng chữ cái. Hồ sơ hay mang đuôi chú thích
       //  trong ngoặc ("Trưởng phòng Thu mua (Demo)"), mà hai từ cuối lúc đó là
-      //  ["mua", "(Demo)"] nên vòng tròn hiện ra «M(» — đọc như một lỗi hiển
+      //  ["mua", "(Demo)"] nên vòng tròn hiện ra "M(" — đọc như một lỗi hiển
       //  thị chứ không như tên viết tắt. Cùng lý do `departmentInitials` chặn
       //  tên mở đầu bằng "(".
       .filter((part) => /^\p{L}/u.test(part))
@@ -28,7 +28,7 @@ export function nameInitials(name: string): string {
 }
 
 //  Tiền tố loại đơn vị — bỏ đi trước khi lấy chữ viết tắt, vì gần như phòng nào
-//  cũng có và giữ lại thì mọi vòng tròn đều bắt đầu bằng chữ «P».
+//  cũng có và giữ lại thì mọi vòng tròn đều bắt đầu bằng chữ "P".
 const ORG_UNIT_PREFIX = /^(phòng|ban|bộ phận|trung tâm|chi nhánh|khối|tổ)\s+/i
 
 /**
@@ -41,7 +41,7 @@ const ORG_UNIT_PREFIX = /^(phòng|ban|bộ phận|trung tâm|chi nhánh|khối|t
  * thông" và mọi phòng khác kết thúc bằng hai chữ đó.
  *
  * Tên trong ngoặc (vd "(Chưa gắn phòng ban)" — nhóm giả cho hồ sơ chưa có
- * phòng) trả về dấu «—»: viết tắt một câu phủ định thành hai chữ cái thì đọc ra
+ * phòng) trả về dấu "—": viết tắt một câu phủ định thành hai chữ cái thì đọc ra
  * như tên một phòng có thật.
  */
 export function departmentInitials(name: string): string {

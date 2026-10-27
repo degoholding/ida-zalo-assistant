@@ -9,7 +9,7 @@ import { formatChangePercent, formatMetricNumber } from '../utils/format-metric-
 const TOTAL_KEY = '__total__'
 const GROUP_LABEL: Record<MetricGroupBy, string> = { staff: 'Nhân viên', area: 'Khu vực', date: 'Ngày' }
 
-/** Mũi tên + % đổi: tăng xanh, giảm đỏ, không so được thì «—». */
+/** Mũi tên + % đổi: tăng xanh, giảm đỏ, không so được thì "—". */
 function ChangeCell({ value }: { value: number | null }) {
   if (value === null) return <span className="text-muted-foreground">—</span>
   const Icon = value >= 0 ? ArrowUp : ArrowDown

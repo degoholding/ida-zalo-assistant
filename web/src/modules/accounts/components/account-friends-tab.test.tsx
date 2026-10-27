@@ -85,7 +85,7 @@ describe('AccountFriendsTab', () => {
       uid: '2001', message: DEFAULT_MESSAGE, display_name: 'Chị Lan', avatar_url: 'https://ava/lan.jpg',
     })
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Đã gửi lời mời kết bạn'))
-    // Thẻ kết quả đổi sang «đã mời» mà không tra lại số trên Zalo
+    // Thẻ kết quả đổi sang "đã mời" mà không tra lại số trên Zalo
     expect(await screen.findByText(/Bot đã mời, đang chờ/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Gửi lời mời' })).toBeNull()
     expect(apiGet.mock.calls.filter(([url]) => url === '/api/accounts/3/friends/search')).toHaveLength(1)
@@ -156,7 +156,7 @@ describe('AccountFriendsTab', () => {
     expect(screen.getByRole('button', { name: /Làm mới/ })).toBeDisabled()
   })
 
-  it('«Làm mới» asks the server to re-check Zalo now', async () => {
+  it('"Làm mới" asks the server to re-check Zalo now', async () => {
     serve(makeOverview())
     renderTab()
     await userEvent.click(await screen.findByRole('button', { name: /Làm mới/ }))

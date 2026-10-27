@@ -13,7 +13,7 @@ import {
 
 describe('ticket status mapping', () => {
   it('mirrors the server TicketStatus codes 1..4 with the Vietnamese labels', () => {
-    //  Chép tay từ `src/constants.ts` — lệch một số là lọc «Đang xử lý» ra ticket «Đã xong».
+    //  Chép tay từ `src/constants.ts` — lệch một số là lọc "Đang xử lý" ra ticket "Đã xong".
     expect(TICKET_STATUS).toEqual({ new: 1, inProgress: 2, done: 3, cancelled: 4 })
     expect(TICKET_STATUS_OPTIONS.map((option) => [option.value, option.label])).toEqual([
       [1, 'Mới'],

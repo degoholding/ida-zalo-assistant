@@ -13,7 +13,7 @@ export interface SendCommandDisplayStatus {
 }
 
 /**
- * Trạng thái hiển thị suy từ `status` + số nơi lỗi: «Xong» mà có nơi lỗi thì hiện «Xong — có lỗi (1/3)» để người xem
+ * Trạng thái hiển thị suy từ `status` + số nơi lỗi: "Xong" mà có nơi lỗi thì hiện "Xong — có lỗi (1/3)" để người xem
  * không tưởng lệnh trót lọt. Mã lạ → nhãn rỗng tông trung tính (không đoán).
  */
 export function getSendCommandDisplayStatus(command: SendCommandForDisplayStatus): SendCommandDisplayStatus {

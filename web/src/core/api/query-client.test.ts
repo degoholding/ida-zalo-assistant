@@ -10,7 +10,7 @@ async function runMutation(fn: () => Promise<unknown> = async () => 'ok') {
 
 /**
  * ⚠️ LỖI ĐÃ XẢY RA (04/09/2026, màn Quỹ phép năm): điều chỉnh tay lưu thật,
- * backend ghi `tab_audit_log` thật, nhưng khối «Lịch sử thao tác» đứng ngay dưới
+ * backend ghi `tab_audit_log` thật, nhưng khối "Lịch sử thao tác" đứng ngay dưới
  * nút vừa bấm vẫn ghi *"Chưa có thao tác nào"* — người dùng đọc ra là hệ thống
  * không ghi nhận việc mình vừa làm.
  */

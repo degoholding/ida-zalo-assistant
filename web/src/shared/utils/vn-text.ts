@@ -3,8 +3,8 @@
  *
  * Người Việt gõ ô tìm thường không bỏ dấu — "nghi phep", "phap nhan", "tang 3".
  * So thô thì "tang" không khớp "Tầng" và người dùng kết luận là danh mục không
- * có mục đó, dù nó nằm ngay đấy (khách báo 25/08/2026 với loại văn bản «Giấy
- * nghỉ phép»; đo lại 04/09/2026 ở hộp chọn phòng họp: gõ "tang 3" ra 0 phòng
+ * có mục đó, dù nó nằm ngay đấy (khách báo 25/08/2026 với loại văn bản "Giấy
+ * nghỉ phép"; đo lại 04/09/2026 ở hộp chọn phòng họp: gõ "tang 3" ra 0 phòng
  * trong khi có 4).
  *
  * `normalize('NFD')` tách dấu thành ký tự tổ hợp riêng rồi xóa chúng đi. Riêng

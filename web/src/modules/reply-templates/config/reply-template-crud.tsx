@@ -18,7 +18,7 @@ import {
   type ReplyTemplate,
 } from '../types/reply-template'
 
-/** Cột «Mẫu tin» — `key` cột sắp xếp PHẢI trùng `sorts` của `REPLY_TEMPLATE_LIST_SPEC` (`src/web/api/reply-templates-api.ts`). */
+/** Cột "Mẫu tin" — `key` cột sắp xếp PHẢI trùng `sorts` của `REPLY_TEMPLATE_LIST_SPEC` (`src/web/api/reply-templates-api.ts`). */
 export const REPLY_TEMPLATE_COLUMNS: DataTableColumn<ReplyTemplate>[] = [
   { key: 'name', header: 'Tên mẫu', width: 220, sortable: true, hideable: false, cell: (template) => <span className="font-medium">{template.name}</span> },
   { key: 'situation', header: 'Tình huống', width: 280, wrap: true, cell: (template) => <span className="text-muted-foreground">{template.situation || '—'}</span> },
@@ -38,7 +38,7 @@ export const REPLY_TEMPLATE_COLUMNS: DataTableColumn<ReplyTemplate>[] = [
 
 const toOptions = (options: { value: number; label: string }[]) => options.map((option) => ({ value: String(option.value), label: option.label }))
 
-// «Chờ duyệt» đứng đầu để người duyệt bấm lọc nhanh việc của mình
+// "Chờ duyệt" đứng đầu để người duyệt bấm lọc nhanh việc của mình
 const STATUS_FILTER_OPTIONS = [
   ...REPLY_TEMPLATE_STATUS_OPTIONS.filter((option) => option.value === REPLY_TEMPLATE_STATUS.pendingReview),
   ...REPLY_TEMPLATE_STATUS_OPTIONS.filter((option) => option.value !== REPLY_TEMPLATE_STATUS.pendingReview),
@@ -62,7 +62,7 @@ const REPLY_TEMPLATE_FORM_FIELDS: CrudFormField[] = [
     type: 'textarea',
     required: true,
     fullWidth: true,
-    hint: 'Dùng [tên khách], [giá], [ngày giao] cho chỗ cần điền. Lưu = gửi duyệt lại: mẫu đã duyệt mà sửa sẽ về «Chờ duyệt» và bot tạm ngừng dùng cho tới khi duyệt lại.',
+    hint: 'Dùng [tên khách], [giá], [ngày giao] cho chỗ cần điền. Lưu = gửi duyệt lại: mẫu đã duyệt mà sửa sẽ về "Chờ duyệt" và bot tạm ngừng dùng cho tới khi duyệt lại.',
   },
 ]
 
@@ -70,10 +70,10 @@ export const replyTemplateCrudConfig: CrudConfig<ReplyTemplate> = {
   entity: 'reply_template',
   title: 'Mẫu tin',
   description:
-    'Thư viện mẫu trả lời khách. Ai cũng soạn / sửa được; bấm Lưu là gửi duyệt. Quản trị và Quản lý duyệt, trả lại (kèm ghi chú) hoặc ngừng dùng. Bot chỉ dùng mẫu «Đã duyệt».',
+    'Thư viện mẫu trả lời khách. Ai cũng soạn / sửa được; bấm Lưu là gửi duyệt. Quản trị và Quản lý duyệt, trả lại (kèm ghi chú) hoặc ngừng dùng. Bot chỉ dùng mẫu "Đã duyệt".',
   unitLabel: 'mẫu tin',
   apiPath: REPLY_TEMPLATES_API_PATH,
-  emptyMessage: 'Chưa có mẫu tin nào — bấm «Thêm mẫu tin» để soạn.',
+  emptyMessage: 'Chưa có mẫu tin nào — bấm "Thêm mẫu tin" để soạn.',
   storageKey: 'reply-templates.list',
   searchParam: 'q',
   searchPlaceholder: 'Tìm tên, tình huống, từ khóa, nội dung',
@@ -93,7 +93,7 @@ export const replyTemplateCrudConfig: CrudConfig<ReplyTemplate> = {
     { icon: MessageSquareQuote, text: getReplyToneLabel(template.tone) || 'Không rõ tông', tone: 'muted' },
     { icon: UserRound, text: template.author_name ? `Soạn: ${template.author_name}` : 'Chưa rõ người soạn', tone: 'muted' },
   ],
-  //  Nhân viên chỉ sửa mẫu CỦA MÌNH (người duyệt sửa được mọi mẫu) — máy chủ trả cờ `can_edit`; mẫu người khác thì khóa ô, ẩn «Lưu»
+  //  Nhân viên chỉ sửa mẫu CỦA MÌNH (người duyệt sửa được mọi mẫu) — máy chủ trả cờ `can_edit`; mẫu người khác thì khóa ô, ẩn "Lưu"
   canEditRow: (template) => template.can_edit,
   detailActions: (template) => <ReplyTemplateActionButtons template={template} />,
   renderExtra: (template) => (

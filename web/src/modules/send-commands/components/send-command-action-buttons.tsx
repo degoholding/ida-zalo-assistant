@@ -10,8 +10,8 @@ import { formatSendCommandCode, type SendCommandDetail } from '../types/send-com
 import { getSendCommandActions } from '../utils/get-send-command-actions'
 
 /**
- * Nút thao tác ở trang chi tiết lệnh gửi: «Hủy lệnh» (chờ xác nhận / đang hẹn — ai thấy lệnh cũng hủy được, phạm vi lệnh
- * do máy chủ giữ) và «Gửi lại nơi lỗi» (chỉ quản trị). Nút nào hiện theo `getSendCommandActions`.
+ * Nút thao tác ở trang chi tiết lệnh gửi: "Hủy lệnh" (chờ xác nhận / đang hẹn — ai thấy lệnh cũng hủy được, phạm vi lệnh
+ * do máy chủ giữ) và "Gửi lại nơi lỗi" (chỉ quản trị). Nút nào hiện theo `getSendCommandActions`.
  */
 export function SendCommandActionButtons({ command }: { command: SendCommandDetail }) {
   const { can } = usePermission()

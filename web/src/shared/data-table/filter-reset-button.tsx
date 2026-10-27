@@ -106,13 +106,13 @@ export function FilterResetButton({ active, keepParams, onReset }: FilterResetBu
       variant="ghost"
       title="Bỏ mọi bộ lọc đang áp dụng"
       //  ⚠️ Khổ hẹp: **chỉ còn biểu tượng**. Nút này mọc thêm vào hàng công cụ
-      //  ĐÚNG LÚC đang lọc, và trên máy 390px hàng đó đã có sẵn ô tìm + nút «Bộ
-      //  lọc» + nút «Tải lại» — thêm 100px chữ thì ô tìm bị bóp còn **43px**,
-      //  câu gợi ý cụt thành «Tì». Tức là hễ lọc một phát là ô tìm hỏng, đúng
+      //  ĐÚNG LÚC đang lọc, và trên máy 390px hàng đó đã có sẵn ô tìm + nút "Bộ
+      //  lọc" + nút "Tải lại" — thêm 100px chữ thì ô tìm bị bóp còn **43px**,
+      //  câu gợi ý cụt thành "Tì". Tức là hễ lọc một phát là ô tìm hỏng, đúng
       //  lúc người ta hay muốn gõ thêm từ khóa để thu hẹp tiếp.
       //
       //  Bỏ chữ ở đây không mất nghĩa: cái phễu gạch chéo đứng ngay cạnh nút
-      //  «Bộ lọc» đang mang huy hiệu số, và `aria-label` + `title` vẫn nói đủ.
+      //  "Bộ lọc" đang mang huy hiệu số, và `aria-label` + `title` vẫn nói đủ.
       className="text-muted-foreground hover:text-destructive max-md:size-9 max-md:p-0 max-md:[&>svg]:mr-0"
       aria-label="Xóa lọc"
       onClick={handleReset}

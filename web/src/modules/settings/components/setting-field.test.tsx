@@ -27,7 +27,7 @@ describe('SettingField', () => {
     expect(screen.queryByRole('button', { name: /Khôi phục mặc định/ })).toBeNull()
   })
 
-  it('nguồn "đặt trên web" hiện Pill «đặt trên web» kèm nút khôi phục khi có onRestoreDefault', () => {
+  it('nguồn "đặt trên web" hiện Pill "đặt trên web" kèm nút khôi phục khi có onRestoreDefault', () => {
     render(<Harness setting={makeSetting({ source: 'web' })} onRestoreDefault={vi.fn()} />)
     expect(screen.getByText('đặt trên web')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Khôi phục mặc định/ })).toBeInTheDocument()

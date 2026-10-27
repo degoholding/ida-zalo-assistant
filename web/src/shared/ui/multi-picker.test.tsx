@@ -21,7 +21,7 @@ async function openPicker(value: number[] = [], onChange = vi.fn()) {
     />,
   )
   //  Nút mở đổi CHỮ khi đã chọn gì đó: rỗng thì là câu mời, có rồi thì là
-  //  «Đã chọn N» (CR-172). Tìm theo cả hai kiểu để không phải sửa mỗi bài test.
+  //  "Đã chọn N" (CR-172). Tìm theo cả hai kiểu để không phải sửa mỗi bài test.
   await user.click(
     screen.getByRole('button', {
       name: value.length ? new RegExp(`Đã chọn ${value.length}`) : /Chọn pháp nhân/,
@@ -72,7 +72,7 @@ function renderManyChips(value: number[], onChange = vi.fn()) {
 describe('MultiPicker — dải chip khi chọn nhiều', () => {
   it('chọn nhiều thì GẬP dải chip lại, không đổ hết ra màn hình', () => {
     //  Khách báo 25/08/2026: sổ văn bản chọn ~200 người xem, mỗi người một chip
-    //  nên dải chip cao hơn cả màn hình và đẩy ô «Người quản lý» ngay dưới đi
+    //  nên dải chip cao hơn cả màn hình và đẩy ô "Người quản lý" ngay dưới đi
     //  mất — người dùng tưởng form hỏng.
     renderManyChips(NHIEU.map((item) => item.id))
 
@@ -123,7 +123,7 @@ describe('MultiPicker — dải chip khi chọn nhiều', () => {
   })
 
   it('nút thao tác KHÔNG nằm lẫn trong dải chip', () => {
-    //  «Xem thêm» / «Bỏ hết» không phải là "một người đã chọn"; để lẫn giữa các
+    //  "Xem thêm" / "Bỏ hết" không phải là "một người đã chọn"; để lẫn giữa các
     //  chip thì người dùng đọc nhầm thành một mục nữa trong danh sách.
     renderManyChips(NHIEU.map((item) => item.id))
     const chip = screen.getAllByRole('button', { name: /^Bỏ Nhân sự/ })[0]
@@ -141,13 +141,13 @@ describe('MultiPicker — dải chip khi chọn nhiều', () => {
 
   it('ĐÚNG 10 (bằng ngưỡng) thì hiện hết, không bày nút bung thừa', () => {
     //  Ca biên: `slice(0, 10)` của đúng 10 phần tử vẫn là 10, phần dư = 0. Sai
-    //  dấu so sánh một chút là hiện «Xem thêm 0».
+    //  dấu so sánh một chút là hiện "Xem thêm 0".
     renderManyChips(NHIEU.slice(0, 10).map((item) => item.id))
     expect(screen.getAllByRole('button', { name: /^Bỏ Nhân sự/ })).toHaveLength(10)
     expect(screen.queryByRole('button', { name: /Xem thêm/ })).not.toBeInTheDocument()
   })
 
-  it('11 mục thì gập còn 10 và báo đúng «Xem thêm 1»', () => {
+  it('11 mục thì gập còn 10 và báo đúng "Xem thêm 1"', () => {
     renderManyChips(NHIEU.slice(0, 11).map((item) => item.id))
     expect(screen.getAllByRole('button', { name: /^Bỏ Nhân sự/ })).toHaveLength(10)
     expect(screen.getByRole('button', { name: /Xem thêm 1$/ })).toBeInTheDocument()
@@ -156,7 +156,7 @@ describe('MultiPicker — dải chip khi chọn nhiều', () => {
   it('id đã chọn nhưng KHÔNG còn trong danh mục thì không đếm, không vẽ chip ma', () => {
     //  `selected` lọc theo `options`, nên id mồ côi (nhân sự đã nghỉ, bị gỡ khỏi
     //  danh sách `is_active`) phải rụng khỏi cả số đếm lẫn dải chip — nếu không,
-    //  nút mở nói «Đã chọn 3» trong khi chỉ vẽ ra 2 chip.
+    //  nút mở nói "Đã chọn 3" trong khi chỉ vẽ ra 2 chip.
     renderManyChips([1, 2, 999_999])
     expect(screen.getByRole('button', { name: /Đã chọn 2/ })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /^Bỏ Nhân sự/ })).toHaveLength(2)
@@ -168,7 +168,7 @@ describe('MultiPicker — dải chip khi chọn nhiều', () => {
     expect(screen.queryByRole('button', { name: /Đã chọn/ })).not.toBeInTheDocument()
   })
 
-  it('«Bỏ hết» xóa sạch lựa chọn trong một lần bấm', async () => {
+  it('"Bỏ hết" xóa sạch lựa chọn trong một lần bấm', async () => {
     const nguoi = userEvent.setup()
     const onChange = renderManyChips([1, 2, 3])
     await nguoi.click(screen.getByRole('button', { name: 'Bỏ hết' }))
@@ -218,8 +218,8 @@ describe('MultiPicker — khung tóm tắt cho ô lọc', () => {
   it('drops the chip strip so the toolbar row stays one line tall', () => {
     renderSummary([1, 2, 3])
 
-    //  Chip có nút X riêng tên «Bỏ <nhãn>» — không còn cái nào nghĩa là dải chip
-    //  đã tắt hẳn; thứ duy nhất còn lại là dấu X «Bỏ hết» ngay trong khung.
+    //  Chip có nút X riêng tên "Bỏ <nhãn>" — không còn cái nào nghĩa là dải chip
+    //  đã tắt hẳn; thứ duy nhất còn lại là dấu X "Bỏ hết" ngay trong khung.
     expect(screen.queryByRole('button', { name: /^Bỏ CÔNG TY/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Bỏ NHÀ PHÂN PHỐI/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Bỏ hết' })).toBeInTheDocument()
@@ -247,7 +247,7 @@ describe('MultiPicker · hideSelectAll', () => {
     return { user, onChange }
   }
 
-  //  Có chỗ «chọn hết» là thao tác gần như luôn SAI — vd ô Hồ sơ tiên quyết:
+  //  Có chỗ "chọn hết" là thao tác gần như luôn SAI — vd ô Hồ sơ tiên quyết:
   //  chọn mọi tờ trong kho làm tiên quyết cho một tờ thì tờ đó khóa gần như
   //  vĩnh viễn. Mà nút lại nằm đúng chỗ dễ bấm nhầm nhất, ngay trên mục đầu.
   it('giấu hàng chọn tất cả ở cả hai chiều bật/tắt', async () => {

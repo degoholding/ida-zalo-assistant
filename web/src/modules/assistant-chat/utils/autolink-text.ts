@@ -12,7 +12,7 @@ const CLOSING_TO_OPENING: Record<string, string> = { ')': '(', ']': '[', '}': '{
 
 /**
  * Bóc dấu câu / ngoặc đóng không khớp ở cuối URL. Ngoặc đóng chỉ bóc khi KHÔNG
- * khớp một ngoặc mở nào trong chính URL — «(xem https://a.com/b(1))» giữ lại
+ * khớp một ngoặc mở nào trong chính URL — "(xem https://a.com/b(1))" giữ lại
  * `b(1)` vì ngoặc đó mở bên trong URL, chỉ bóc cái `)` thừa cuối cùng.
  */
 function trimTrailingPunctuation(url: string): string {

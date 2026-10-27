@@ -17,11 +17,11 @@ const DEFAULT_EXPIRY = '90'
 const NAME_MAX = 100
 
 /**
- * Hộp thoại «Thêm khóa MCP» (khe `FormDialog` của khung CRUD). Hai bước: nhập → hiện khóa thô MỘT lần.
+ * Hộp thoại "Thêm khóa MCP" (khe `FormDialog` của khung CRUD). Hai bước: nhập → hiện khóa thô MỘT lần.
  * Khóa thô chỉ nằm trong state `token` của component; đóng hộp thoại là state bị bỏ (đóng = unmount nội dung).
  */
 export function McpKeyCreateDialog({ open, onOpenChange }: CrudFormDialogProps<McpKeyDetail>) {
-  // Khóa thô đang hiện: Esc / bấm ra ngoài / nút X sẽ làm mất khóa không lấy lại được → chỉ đóng bằng nút «Tôi đã chép khóa»
+  // Khóa thô đang hiện: Esc / bấm ra ngoài / nút X sẽ làm mất khóa không lấy lại được → chỉ đóng bằng nút "Tôi đã chép khóa"
   const [keyShown, setKeyShown] = useState(false)
   const keepOpen = (event: Event) => { if (keyShown) event.preventDefault() }
   function close() {

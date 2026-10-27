@@ -4,7 +4,7 @@ import type { SqlPart } from "./list-query.js";
 import { commandScopeWhere } from "./send-commands-api.js";
 import { contactScopeSql } from "./scope.js";
 
-// Phạm vi dòng của «Lịch sử thao tác» (bảng audit_log, alias `a`). Quyền xem nhật ký là quyền CẤP ĐƯỢC (`app_user.can_view_audit`),
+// Phạm vi dòng của "Lịch sử thao tác" (bảng audit_log, alias `a`). Quyền xem nhật ký là quyền CẤP ĐƯỢC (`app_user.can_view_audit`),
 // nên người không phải quản trị chỉ thấy dòng của bản ghi họ đang được phép xem: nhóm / tệp / việc / ticket trong phạm vi nhóm,
 // Danh bạ ở ≥ 1 nhóm được gán, lệnh gửi của chính mình, mẫu tin / công ty (ai cũng đọc được), Danh mục / nguồn số liệu khi có
 // quyền đọc, khóa MCP của chính mình. Người dùng / người nhận / cài đặt / tài khoản bot: chỉ quản trị.

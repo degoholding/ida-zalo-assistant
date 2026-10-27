@@ -11,7 +11,7 @@ interface MessageSearchNoticeProps {
 /**
  * Ghi chú trên bảng kết quả khi máy chủ phải tự giới hạn: tin cũ còn đang nạp vào bộ tìm, chỉ
  * tìm từ một ngày trở đi (từ khóa phải dò từng tin), hoặc có hơn 1.000 tin khớp. Không giới hạn
- * gì thì không vẽ — để người tìm không tưởng «không thấy» nghĩa là «không có».
+ * gì thì không vẽ — để người tìm không tưởng "không thấy" nghĩa là "không có".
  */
 export function MessageSearchNotice({ result }: MessageSearchNoticeProps) {
   if (!result) return null
@@ -23,7 +23,7 @@ export function MessageSearchNotice({ result }: MessageSearchNoticeProps) {
   }
   if (result.window_from) {
     lines.push(
-      `Từ khóa này phải dò từng tin nên chỉ tìm các tin từ ${formatDate(result.window_from)} trở đi — chọn «Lúc gửi» (từ ngày) ở bộ lọc để tìm xa hơn.`,
+      `Từ khóa này phải dò từng tin nên chỉ tìm các tin từ ${formatDate(result.window_from)} trở đi — chọn "Lúc gửi" (từ ngày) ở bộ lọc để tìm xa hơn.`,
     )
   }
   if (result.total_capped) {

@@ -13,7 +13,7 @@ import {
 
 describe('brief kind mapping', () => {
   it('mirrors the server BriefKind codes 1..4 with the Vietnamese labels', () => {
-    // Chép tay từ `src/constants.ts` — lệch một số là lọc «Bản tin sáng» ra «Báo cáo tuần»
+    // Chép tay từ `src/constants.ts` — lệch một số là lọc "Bản tin sáng" ra "Báo cáo tuần"
     expect(BRIEF_KIND).toEqual({ morning: 1, evening: 2, weekly: 3, monthly: 4 })
     expect(BRIEF_KIND_OPTIONS.map((option) => [option.value, option.label])).toEqual([
       [1, 'Bản tin sáng'],

@@ -12,7 +12,7 @@ export type ScheduleRunStatus = (typeof ScheduleRunStatus)[keyof typeof Schedule
 export interface ScheduleStatus {
   name: string
   label: string
-  /** Mô tả lịch bằng chữ, vd «hằng ngày 02:00». */
+  /** Mô tả lịch bằng chữ, vd "hằng ngày 02:00". */
   schedule: string
   lastStartedAt: string | null
   lastFinishedAt: string | null

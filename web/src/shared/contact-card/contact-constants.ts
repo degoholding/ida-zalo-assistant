@@ -8,7 +8,7 @@ export const CONTACT_ROLE = { none: 0, departmentHead: 1, manager: 2 } as const
 export const GROUP_KIND = { customer: 1, internal: 2 } as const
 export const CONVERSATION_TYPE = { direct: 0, group: 1 } as const
 
-/** Ô «Loại» của biểu mẫu: `auto` = theo nhóm, còn lại là mã loại chỉnh tay (máy chủ: `kind_mode`). */
+/** Ô "Loại" của biểu mẫu: `auto` = theo nhóm, còn lại là mã loại chỉnh tay (máy chủ: `kind_mode`). */
 export const KIND_MODE_AUTO = 'auto'
 
 export const CONTACT_KIND_OPTIONS = [
@@ -39,7 +39,7 @@ export interface Contact {
   avatar_url: string | null
   kind: number
   kind_source: number
-  /** `auto` hoặc mã loại dạng chuỗi — giá trị của ô chọn «Loại». */
+  /** `auto` hoặc mã loại dạng chuỗi — giá trị của ô chọn "Loại". */
   kind_mode: string
   role: number
   /** 0 = chưa gán (ô chọn không biểu diễn được null). */

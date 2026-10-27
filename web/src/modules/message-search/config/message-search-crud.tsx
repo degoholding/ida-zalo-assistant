@@ -48,8 +48,8 @@ export const messageSearchCrudConfig: CrudConfig<MessageSearchRecord> = {
   title: 'Tìm tin',
   description:
     'Tìm tin nhắn cũ theo từ khóa trong các cuộc trò chuyện bạn được xem — gõ không dấu cũng tìm được, cụm cố định đặt trong ngoặc kép ("hợp đồng thép"). ' +
-    'Lọc thêm theo cuộc trò chuyện, người gửi, khoảng ngày. Từ khóa quá phổ biến thì chỉ tìm trong 90 ngày gần nhất — chọn «Lúc gửi» ở bộ lọc để tìm xa hơn. ' +
-    'Bấm «Xem trong hội thoại» để mở đúng tin cùng các tin trước và sau.',
+    'Lọc thêm theo cuộc trò chuyện, người gửi, khoảng ngày. Từ khóa quá phổ biến thì chỉ tìm trong 90 ngày gần nhất — chọn "Lúc gửi" ở bộ lọc để tìm xa hơn. ' +
+    'Bấm "Xem trong hội thoại" để mở đúng tin cùng các tin trước và sau.',
   unitLabel: 'tin',
   apiPath: MESSAGE_SEARCH_API_PATH,
   emptyMessage: 'Gõ từ khóa vào ô tìm để bắt đầu (vd: công nợ Minh Phát).',

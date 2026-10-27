@@ -21,7 +21,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-/** Thanh lọc tab «Tổng hợp»: chỉ tiêu, khoảng ngày, khu vực, nhân viên, gộp theo. */
+/** Thanh lọc tab "Tổng hợp": chỉ tiêu, khoảng ngày, khu vực, nhân viên, gộp theo. */
 export function MetricSummaryFilters({ query, catalog, onChange }: MetricSummaryFiltersProps) {
   // Cùng một mã có thể do nhiều nguồn khai — ô chọn chỉ cần một dòng cho mỗi mã
   const metrics = [...new Map((catalog?.metrics ?? []).map((item) => [item.code, item])).values()]

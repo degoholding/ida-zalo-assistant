@@ -1,4 +1,4 @@
-/** Tình trạng «tắt bot khẩn» như `GET /api/bot-halt` trả về (khớp `BotHaltState` ở `src/messaging/bot-halt-state.ts`). */
+/** Tình trạng "tắt bot khẩn" như `GET /api/bot-halt` trả về (khớp `BotHaltState` ở `src/messaging/bot-halt-state.ts`). */
 export interface BotHaltStatus {
   halted: boolean
   /** ISO 8601 lúc tắt; null khi đang bật */

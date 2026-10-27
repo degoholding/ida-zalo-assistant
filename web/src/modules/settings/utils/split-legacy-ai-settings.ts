@@ -1,8 +1,8 @@
 import type { SettingView } from '../types/setting'
 
 /**
- * Các ô AI «cách cũ» của tab Trợ lý AI (nhà cung cấp, khóa, mô hình Gemini / OpenAI). Có bảng Khóa AI thì bot bỏ qua chúng —
- * màn hình gập vào mục «Nâng cao (cách cũ)». Định nghĩa phía máy chủ giữ nguyên để `.env` đang dùng không vỡ.
+ * Các ô AI "cách cũ" của tab Trợ lý AI (nhà cung cấp, khóa, mô hình Gemini / OpenAI). Có bảng Khóa AI thì bot bỏ qua chúng —
+ * màn hình gập vào mục "Nâng cao (cách cũ)". Định nghĩa phía máy chủ giữ nguyên để `.env` đang dùng không vỡ.
  */
 export const LEGACY_AI_SETTING_KEYS = [
   'ai_provider',

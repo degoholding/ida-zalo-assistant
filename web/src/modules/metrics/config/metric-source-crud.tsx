@@ -34,15 +34,15 @@ export const METRIC_SOURCE_COLUMNS: DataTableColumn<MetricSource>[] = [
 const YES_NO = [{ value: '1', label: 'Có' }, { value: '0', label: 'Không' }]
 
 export const metricSourceCrudConfig: CrudConfig<MetricSource> = {
-  // Quyền: `metric` — Quản trị đủ (kể cả `create` → nút «Thêm» của khung), Quản lý chỉ đọc (và không thấy menu). Chốt thật ở máy
-  // chủ: `/api/metric-sources*` chỉ quản trị. Nhật ký máy chủ ghi `metric_source` nên «Lịch sử thao tác» tra theo tên đó.
+  // Quyền: `metric` — Quản trị đủ (kể cả `create` → nút "Thêm" của khung), Quản lý chỉ đọc (và không thấy menu). Chốt thật ở máy
+  // chủ: `/api/metric-sources*` chỉ quản trị. Nhật ký máy chủ ghi `metric_source` nên "Lịch sử thao tác" tra theo tên đó.
   entity: 'metric',
   auditEntity: 'metric_source',
   title: 'Nguồn số liệu',
-  description: 'Các bảng Google Sheets bot đọc số liệu. Dán link, chọn tab, khai cột rồi «Kiểm tra đọc thử» trước khi lưu.',
+  description: 'Các bảng Google Sheets bot đọc số liệu. Dán link, chọn tab, khai cột rồi "Kiểm tra đọc thử" trước khi lưu.',
   unitLabel: 'nguồn số liệu',
   apiPath: METRIC_SOURCES_API_PATH,
-  emptyMessage: 'Chưa có nguồn nào — bấm «Thêm nguồn số liệu» để dán link bảng đầu tiên.',
+  emptyMessage: 'Chưa có nguồn nào — bấm "Thêm nguồn số liệu" để dán link bảng đầu tiên.',
   storageKey: 'metrics.sources',
   searchParam: 'q',
   searchPlaceholder: 'Tìm tên nguồn, tab',
@@ -58,11 +58,11 @@ export const metricSourceCrudConfig: CrudConfig<MetricSource> = {
   //  Form dài (ánh xạ cột + đọc thử) → thêm mới ở TRANG riêng (cùng `CrudDetailPage`), không nhồi vào hộp thoại
   createRoute: METRIC_SOURCE_CREATE_ROUTE,
   getItemName: (source) => source.name,
-  deleteWarning: 'Xóa nguồn thì toàn bộ số đã đọc từ nguồn này cũng bị xóa. Muốn giữ số cũ thì dùng «Tắt đọc».',
+  deleteWarning: 'Xóa nguồn thì toàn bộ số đã đọc từ nguồn này cũng bị xóa. Muốn giữ số cũ thì dùng "Tắt đọc".',
   detailMaxWidth: 'max-w-6xl',
   formSections: {
     [SECTION_SOURCE]: 'Bot đọc bảng bằng service account — nhớ chia sẻ bảng cho email đó (quyền Người xem).',
-    [SECTION_MAPPING]: 'Khai cột ngày, nhân viên, khu vực và từng chỉ tiêu; bấm «Kiểm tra đọc thử» để thấy bảng khớp cột nào.',
+    [SECTION_MAPPING]: 'Khai cột ngày, nhân viên, khu vực và từng chỉ tiêu; bấm "Kiểm tra đọc thử" để thấy bảng khớp cột nào.',
   },
   formFields: [
     { name: 'name', label: 'Tên nguồn', type: 'text', required: true, section: SECTION_SOURCE, placeholder: 'Báo cáo bán hàng hằng ngày' },

@@ -6,14 +6,14 @@ export const AI_KEY_INTRO = 'Bot dùng khóa số 1; khóa đó hết tiền, h�
 export interface AiKeyProviderOption {
   value: AiKeyProvider
   label: string
-  /** Trang lấy khóa của hãng; rỗng = hãng tùy chỉnh (nhập địa chỉ trạm thay vì «Mở trang»). */
+  /** Trang lấy khóa của hãng; rỗng = hãng tùy chỉnh (nhập địa chỉ trạm thay vì "Mở trang"). */
   site: string
   /** Gợi ý tên mô hình hay dùng — chỉ gợi ý, gõ tên khác vẫn được. */
   models: string[]
 }
 
 /**
- * Thứ tự hiện trong ô «1. Hãng». Nhãn khớp `AI_PROVIDERS` ở `src/assistant/ai-key-providers.ts`. Claude chưa có: máy chủ
+ * Thứ tự hiện trong ô "1. Hãng". Nhãn khớp `AI_PROVIDERS` ở `src/assistant/ai-key-providers.ts`. Claude chưa có: máy chủ
  * bot chưa có client gọi Anthropic.
  */
 export const AI_KEY_PROVIDER_OPTIONS: AiKeyProviderOption[] = [

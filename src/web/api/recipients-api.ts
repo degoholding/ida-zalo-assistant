@@ -16,7 +16,7 @@ const MAX_GROUPS = 500;
 const MAX_VIPS = 50;
 const TEST_TEXT = "Dạ đây là tin thử kênh báo của Bot trợ lý — từ giờ cảnh báo tin khẩn, việc đến hạn và bản tin sẽ gửi vào chat này ạ.";
 
-/** Loại bản tin nút «Gửi thử bản tin» gọi được — khớp `BriefKind` (src/constants.ts). */
+/** Loại bản tin nút "Gửi thử bản tin" gọi được — khớp `BriefKind` (src/constants.ts). */
 const BRIEF_TEST_KINDS = new Set<number>([BriefKind.Morning, BriefKind.Evening, BriefKind.Weekly, BriefKind.Monthly]);
 const BRIEF_TEST_LABELS: Record<number, string> = {
   [BriefKind.Morning]: "bản tin sáng", [BriefKind.Evening]: "bản tin cuối ngày",

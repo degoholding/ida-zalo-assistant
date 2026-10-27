@@ -14,7 +14,7 @@ interface TicketHandlerAddDialogProps {
   onSubmit: (contactId: number) => void
 }
 
-/** Chọn một người trong Danh bạ làm người xử lý ticket — cùng ô tra phía máy chủ như ô «Người trên Zalo» của Người nhận. */
+/** Chọn một người trong Danh bạ làm người xử lý ticket — cùng ô tra phía máy chủ như ô "Người trên Zalo" của Người nhận. */
 export function TicketHandlerAddDialog({ open, onOpenChange, pending, onSubmit }: TicketHandlerAddDialogProps) {
   const [contactId, setContactId] = useState('')
   const { options, setKeyword, isFetching } = useContactOptions(open)

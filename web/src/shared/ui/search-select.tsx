@@ -218,8 +218,8 @@ export function SearchSelect({
           //  Giữ con trỏ Ở LẠI ô gõ, đừng để Radix nhảy focus vào danh sách (gõ tiếp được).
           onOpenAutoFocus={(event) => event.preventDefault()}
           //  bao-CR-475 — bấm vào CHÍNH Ô GÕ (nằm ngoài khung danh sách) thì Radix coi là
-          //  «bấm ra ngoài» và đóng danh sách: ô hiện lại nhãn đã chọn, gõ tiếp bị nối vào
-          //  nhãn cũ («Hợp đồng · HDb») nên không còn mục nào khớp. Bấm lại vào ô để đặt con
+          //  "bấm ra ngoài" và đóng danh sách: ô hiện lại nhãn đã chọn, gõ tiếp bị nối vào
+          //  nhãn cũ ("Hợp đồng · HDb") nên không còn mục nào khớp. Bấm lại vào ô để đặt con
           //  trỏ là thao tác rất thường — cú bấm trong ô neo không được tính là ra ngoài.
           onInteractOutside={(event) => {
             if (anchorRef.current?.contains(event.target as Node)) event.preventDefault()

@@ -21,7 +21,7 @@ function formatUserOption(user: RecipientUserOption): string {
   return user.is_active ? name : `${name} (đã ngừng)`
 }
 
-/** Ô «Tài khoản web» (không bắt buộc) — chọn trong màn Người dùng. */
+/** Ô "Tài khoản web" (không bắt buộc) — chọn trong màn Người dùng. */
 export function RecipientUserField({ control, name, disabled }: RecipientUserFieldProps) {
   const { field } = useController({ control, name })
   const selectedId = Number(field.value) || 0

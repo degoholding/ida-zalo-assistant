@@ -9,7 +9,7 @@ import type { LinesTableColumn } from './types'
  *
  * Ba cột tiền của thẻ Chi phí thu mua mang màu theo độ quan trọng (xanh · vàng · đỏ).
  * Màu đó phải hiện ngay lần đầu mở bảng, nhưng không được giành quyền của người dùng:
- * ai đã tự tô cột trong menu «Cột» thì màu của họ thắng.
+ * ai đã tự tô cột trong menu "Cột" thì màu của họ thắng.
  */
 const STORAGE_KEY = 'test-default-color'
 
@@ -36,7 +36,7 @@ function renderTable() {
 /** Ô tiêu đề (`th`) chứa chữ tiêu đề — màu cột được gắn ở đó. */
 function headerCellOf(label: string): HTMLElement {
   const cell = screen.getByText(label).closest('th')
-  if (!cell) throw new Error(`không thấy ô tiêu đề «${label}»`)
+  if (!cell) throw new Error(`không thấy ô tiêu đề "${label}"`)
   return cell
 }
 

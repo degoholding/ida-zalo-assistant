@@ -17,7 +17,7 @@ export interface AuditLogEntry {
    *
    * ⚠️ **RỖNG với mọi dòng ghi trước CR-312 P1.** Hồi đó chưa có `tab_request_log`
    * nên không có gì để nối; đừng dựng đường dẫn tới chuỗi trống, và đừng đọc chuỗi
-   * rỗng thành «lượt gọi đã bị xóa».
+   * rỗng thành "lượt gọi đã bị xóa".
    */
   request_id?: string
   /** Tên các trường đã đổi, backend nối sẵn bằng dấu phẩy. Rỗng khi không đổi gì. */
@@ -27,7 +27,7 @@ export interface AuditLogEntry {
 }
 
 /**
- * Nhật ký thao tác trên một bản ghi. Máy chủ: quản trị thấy hết; người được cấp «Xem lịch sử thao tác» chỉ thấy bản ghi trong
+ * Nhật ký thao tác trên một bản ghi. Máy chủ: quản trị thấy hết; người được cấp "Xem lịch sử thao tác" chỉ thấy bản ghi trong
  * phạm vi nhóm (ngoài phạm vi → 404); người không có quyền → 403. `AuditTimeline` chỉ gọi khi `can('audit', 'read')`.
  */
 export const auditApi = {

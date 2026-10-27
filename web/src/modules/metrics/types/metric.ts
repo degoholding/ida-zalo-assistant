@@ -112,7 +112,7 @@ export interface MissingReporter {
 /** `GET /api/metrics/missing` */
 export interface MetricMissing {
   date: string
-  /** false = chưa tới 18:00 (hoặc chưa có nguồn «báo hằng ngày») nên chưa kết luận */
+  /** false = chưa tới 18:00 (hoặc chưa có nguồn "báo hằng ngày") nên chưa kết luận */
   ready: boolean
   missing: MissingReporter[]
   late: MissingReporter[]

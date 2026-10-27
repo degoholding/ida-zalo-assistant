@@ -11,14 +11,14 @@ import { runList } from "./list-runner.js";
 import { parseVnDayStart } from "./message-search-api.js";
 import { pipeStreamToResponse } from "../pipe-stream-to-response.js";
 
-// Màn web «Bản tin» (phase 8, phase 5 — N6): CHỈ ĐỌC. Bản tin có thể chứa dữ liệu nhóm Mật của người nhận đó nên
+// Màn web "Bản tin" (phase 8, phase 5 — N6): CHỈ ĐỌC. Bản tin có thể chứa dữ liệu nhóm Mật của người nhận đó nên
 // KHÔNG theo phạm vi nhóm như màn khác — quản trị thấy hết, người dùng khác chỉ thấy bản tin của người nhận gắn với
 // TÀI KHOẢN MÌNH (`recipient.user_id`). Tải tệp chỉ qua id `brief_log` + chỉ số trong cột `files`, không bao giờ nhận
 // khóa lưu trữ thật từ người dùng (xem `plans/261009-1555-phase-08-briefs-reports/phase-05-web-brief-screen.md`).
 
 const DAY_MS = 86_400_000;
 
-/** «Trong khoảng» (hoặc đúng ngày / ≤ / ≥…) trên `created_at` theo giờ Việt Nam — cùng khuôn `buildDueAtCondition` của tasks-api.ts. */
+/** "Trong khoảng" (hoặc đúng ngày / ≤ / ≥…) trên `created_at` theo giờ Việt Nam — cùng khuôn `buildDueAtCondition` của tasks-api.ts. */
 export function buildBriefCreatedAtCondition(operator: Operator, values: string[]): SqlPart | null {
   const days = values.map(parseVnDayStart);
   const [first, second] = days;
@@ -99,7 +99,7 @@ async function getBriefDetail(db: Db, id: number, principal: Principal): Promise
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${BRIEF_COLUMNS}, b.body, b.files ${BRIEF_FROM} WHERE b.id = ? AND (${where.sql})`, [id, ...where.params]);
   const row = rows[0];
-  // Ngoài phạm vi cũng 404 — không để lộ «có bản tin này nhưng không được xem»
+  // Ngoài phạm vi cũng 404 — không để lộ "có bản tin này nhưng không được xem"
   if (!row) throw new ApiError(404, "not_found", "Không có bản tin này");
   const files = parseBriefFiles(row.files).map((file, index) => ({
     index, file_name: file.fileName, bytes: file.bytes, download_url: `/api/briefs/${id}/files/${index}`,
@@ -107,7 +107,7 @@ async function getBriefDetail(db: Db, id: number, principal: Principal): Promise
   return { ...decorate([row], principal.role === UserRole.Admin)[0], body: String(row.body ?? ""), files };
 }
 
-/** Ô lọc «Người nhận» ở bộ lọc nâng cao — chỉ trả người nhận trong phạm vi người đang xem (admin: cả tenant; người khác: chỉ chính mình). */
+/** Ô lọc "Người nhận" ở bộ lọc nâng cao — chỉ trả người nhận trong phạm vi người đang xem (admin: cả tenant; người khác: chỉ chính mình). */
 async function listRecipientOptions(db: Db, principal: Principal, search: string): Promise<{ id: number; name: string }[]> {
   const where = recipientScopeWhere(principal);
   const [rows] = await db.query<RowDataPacket[]>(

@@ -20,7 +20,7 @@ export interface HorizontalOverflow {
  * ⚠️ **Phải theo dõi CẢ kích thước lẫn sự kiện cuộn.** Chỉ nghe `scroll` thì
  * lần vẽ đầu tiên không có sự kiện nào, dải mờ không xuất hiện cho tới khi người
  * dùng vuốt — tức đúng lúc cần gợi ý nhất thì nó im. Và số cột đổi được (menu
- * «Cột», nút «Bảng đầy đủ») nên `scrollWidth` đổi mà không có `scroll` lẫn
+ * "Cột", nút "Bảng đầy đủ") nên `scrollWidth` đổi mà không có `scroll` lẫn
  * `resize` của khung: phải quan sát cả NÚT CON bên trong.
  *
  * ⚠️ Ngưỡng 1px chứ không phải 0: `scrollWidth` và `clientWidth` là số nguyên

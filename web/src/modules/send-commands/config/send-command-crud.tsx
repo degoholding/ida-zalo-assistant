@@ -21,7 +21,7 @@ import {
   type SendCommandDetail,
 } from '../types/send-command'
 
-/** Cột «Gửi tin» — `key` cột sắp xếp PHẢI trùng `sorts` của `SEND_COMMAND_LIST_SPEC` (`src/web/api/send-commands-api.ts`). */
+/** Cột "Gửi tin" — `key` cột sắp xếp PHẢI trùng `sorts` của `SEND_COMMAND_LIST_SPEC` (`src/web/api/send-commands-api.ts`). */
 export const SEND_COMMAND_COLUMNS: DataTableColumn<SendCommandDetail>[] = [
   { key: 'id', header: 'Mã', width: 80, hideable: false, cell: (command) => <span className="font-mono">{formatSendCommandCode(command.id)}</span> },
   {
@@ -97,7 +97,7 @@ export const sendCommandCrudConfig: CrudConfig<SendCommandDetail> = {
     'Nhật ký lệnh gửi tin và nhắc hẹn nhóm (lệnh nhắn bot trên Zalo và tin quản trị gửi từ màn Hội thoại). Quản trị thấy hết; người khác chỉ thấy lệnh do chính mình ra. Hủy được lệnh đang hẹn; quản trị gửi lại nơi lỗi và tắt / bật bot khẩn.',
   unitLabel: 'lệnh gửi',
   apiPath: SEND_COMMANDS_API_PATH,
-  emptyMessage: 'Chưa có lệnh gửi nào — nhắn bot trên Zalo «gửi nhóm …: …» để ra lệnh.',
+  emptyMessage: 'Chưa có lệnh gửi nào — nhắn bot trên Zalo "gửi nhóm …: …" để ra lệnh.',
   storageKey: 'send-commands.list',
   searchParam: 'q',
   searchPlaceholder: 'Tìm người ra lệnh, nội dung',

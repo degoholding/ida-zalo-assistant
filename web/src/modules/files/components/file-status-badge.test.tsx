@@ -10,7 +10,7 @@ describe('FileStatusBadge', () => {
     expect(screen.getByText('Đã xóa tệp gốc (còn chữ)')).toBeInTheDocument()
   })
 
-  it('adds a «Giữ» marker only for kept files', () => {
+  it('adds a "Giữ" marker only for kept files', () => {
     const { rerender } = render(<FileStatusBadge status={FILE_STATUS.stored} keepFile />)
     expect(screen.getByText('Giữ')).toBeInTheDocument()
     rerender(<FileStatusBadge status={FILE_STATUS.stored} keepFile={false} />)

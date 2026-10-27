@@ -25,7 +25,7 @@ interface TaskNoteDialogProps {
 
 /**
  * Hộp thoại có một ô ghi chú cho các thao tác gửi kèm lời nhắn (Xong, Hủy, Ghi chú). Chặn ở đây hai luật của máy
- * chủ cho khỏi phải ăn 422: tối đa 2000 ký tự, và «Ghi chú» thì phải có nội dung.
+ * chủ cho khỏi phải ăn 422: tối đa 2000 ký tự, và "Ghi chú" thì phải có nội dung.
  */
 export function TaskNoteDialog({
   open,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ENTITIES, type PermissionAction, type PermissionEntity } from '@/core/authorization/permission-types'
 import { appRoutes } from '@/shared/constants/app-routes'
-import { NAV_ITEMS, selectVisibleNavItems } from './nav-items'
+import { ALL_NAV_ITEMS, NAV_GROUPS, NAV_ITEMS, USER_MENU_ITEMS, navGroupLabel, selectVisibleNavGroups, selectVisibleNavItems } from './nav-items'
 
 /**
  * Ma trận quyền CHÉP TAY từ `permissionsFor` ở máy chủ (`src/auth/principal.ts`) — đổi bên đó thì sửa ở đây.
@@ -28,10 +28,13 @@ function buildPermissions(role: 'admin' | 'manager' | 'staff') {
   ) as Record<string, Record<string, boolean>>
 }
 
-function visibleLabels(role: 'admin' | 'manager' | 'staff') {
+function canFor(role: 'admin' | 'manager' | 'staff') {
   const permissions = buildPermissions(role)
-  const can = (entity: PermissionEntity, action: PermissionAction) => Boolean(permissions[entity]?.[action])
-  return selectVisibleNavItems(can).map((item) => item.label)
+  return (entity: PermissionEntity, action: PermissionAction) => Boolean(permissions[entity]?.[action])
+}
+
+function visibleLabels(role: 'admin' | 'manager' | 'staff') {
+  return selectVisibleNavItems(canFor(role)).map((item) => item.label)
 }
 
 describe('sidebar gating by role', () => {
@@ -41,9 +44,10 @@ describe('sidebar gating by role', () => {
   })
 
   it('hides every admin-only screen from a staff member', () => {
-    // «Tìm tin» (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
-    // «Bản tin» (phase 8) cũng đọc được — phạm vi DÒNG (không phải vai trò) lọc ở máy chủ
-    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Danh bạ', 'Nhóm', 'Tệp', 'Ticket', 'Việc', 'Bản tin', 'Gửi tin', 'Mẫu tin', 'Công ty', 'Khóa MCP'])
+    // "Tìm tin" (phase 6) dùng quyền xem hội thoại — nhân viên thấy, trong phạm vi nhóm của mình
+    // "Bản tin" (phase 8) cũng đọc được — phạm vi DÒNG (không phải vai trò) lọc ở máy chủ
+    // Thứ tự theo nhóm (27/10/2026): Tin nhắn → Theo dõi → Gửi tin → Danh bạ; Khóa MCP đã dời sang menu cá nhân
+    expect(visibleLabels('staff')).toEqual(['Hội thoại', 'Tìm tin', 'Tệp', 'Việc', 'Ticket', 'Bản tin', 'Gửi tin', 'Mẫu tin', 'Danh bạ', 'Nhóm', 'Công ty'])
   })
 
   it('gives a manager the staff menu plus Số liệu and Danh mục — write rights do not unlock admin screens', () => {
@@ -72,8 +76,12 @@ describe('menu items point at registered screens', () => {
     expect(paths).toContain(appRoutes.recipients.list)
   })
 
-  it('shows Khóa MCP to every role (each manages their own keys)', () => {
-    for (const role of ['admin', 'manager', 'staff'] as const) expect(visibleLabels(role)).toContain('Khóa MCP')
+  it('shows Khóa MCP to every role in the personal menu, not in the sidebar (each manages their own keys)', () => {
+    for (const role of ['admin', 'manager', 'staff'] as const) {
+      expect(selectVisibleNavItems(canFor(role), USER_MENU_ITEMS).map((item) => item.label)).toEqual(['Khóa MCP'])
+      expect(visibleLabels(role)).not.toContain('Khóa MCP')
+    }
+    expect(ALL_NAV_ITEMS.map((item) => item.path)).toContain(appRoutes.mcpKeys.list)
   })
 
   it('has a menu entry for the Ticket list that staff can see (read-only)', () => {
@@ -97,7 +105,33 @@ describe('menu items point at registered screens', () => {
   })
 
   it('never repeats a path — the breadcrumb picks the first prefix match', () => {
-    const paths = NAV_ITEMS.map((item) => item.path)
+    const paths = ALL_NAV_ITEMS.map((item) => item.path)
     expect(new Set(paths).size).toBe(paths.length)
+  })
+})
+
+describe('sidebar groups (27/10/2026: six collapsible groups instead of one flat list)', () => {
+  it('every item belongs to a declared group and the groups keep their declared order for an admin', () => {
+    const groupIds = NAV_GROUPS.map((group) => group.id)
+    for (const item of NAV_ITEMS) expect(groupIds).toContain(item.group)
+    expect(selectVisibleNavGroups(canFor('admin')).map((group) => group.label)).toEqual(['Tin nhắn', 'Theo dõi', 'Gửi tin', 'Số liệu', 'Danh bạ', 'Hệ thống'])
+    expect(selectVisibleNavGroups(canFor('admin')).flatMap((group) => group.items.map((item) => item.label))).toEqual(NAV_ITEMS.map((item) => item.label))
+  })
+
+  it('drops a group whose every item is hidden — staff see no Số liệu and no Hệ thống heading', () => {
+    expect(selectVisibleNavGroups(canFor('staff')).map((group) => group.label)).toEqual(['Tin nhắn', 'Theo dõi', 'Gửi tin', 'Danh bạ'])
+    expect(selectVisibleNavGroups(canFor('manager')).map((group) => group.label)).toEqual(['Tin nhắn', 'Theo dõi', 'Gửi tin', 'Số liệu', 'Danh bạ'])
+    expect(selectVisibleNavGroups(() => false)).toEqual([])
+  })
+
+  it('puts each screen under the agreed group', () => {
+    const groupOf = (label: string) => navGroupLabel(NAV_ITEMS.find((item) => item.label === label))
+    expect(['Hội thoại', 'Tìm tin', 'Tệp', 'Hỏi trợ lý'].map(groupOf)).toEqual(Array(4).fill('Tin nhắn'))
+    expect(['Việc', 'Ticket', 'Bản tin', 'Người nhận'].map(groupOf)).toEqual(Array(4).fill('Theo dõi'))
+    expect(['Gửi tin', 'Mẫu tin'].map(groupOf)).toEqual(Array(2).fill('Gửi tin'))
+    expect(['Số liệu', 'Nguồn số liệu', 'Danh mục NV / ĐL'].map(groupOf)).toEqual(Array(3).fill('Số liệu'))
+    expect(['Danh bạ', 'Nhóm', 'Công ty'].map(groupOf)).toEqual(Array(3).fill('Danh bạ'))
+    expect(['Tài khoản bot', 'Người dùng', 'Nhập lịch sử', 'Cài đặt'].map(groupOf)).toEqual(Array(4).fill('Hệ thống'))
+    expect(navGroupLabel(undefined)).toBeUndefined()
   })
 })

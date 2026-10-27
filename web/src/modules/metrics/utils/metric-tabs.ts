@@ -6,7 +6,7 @@ export const METRIC_TABS = [
 
 export type MetricTabKey = (typeof METRIC_TABS)[number]['key']
 
-/** Giá trị `?tab=` lạ hoặc thiếu thì về tab «Tổng hợp». */
+/** Giá trị `?tab=` lạ hoặc thiếu thì về tab "Tổng hợp". */
 export function resolveMetricTab(raw: string | null): MetricTabKey {
   return METRIC_TABS.find((tab) => tab.key === raw)?.key ?? 'summary'
 }

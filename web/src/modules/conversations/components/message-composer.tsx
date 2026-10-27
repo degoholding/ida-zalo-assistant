@@ -16,7 +16,7 @@ interface MessageComposerProps {
   threadId: number
   /** Tên tài khoản bot sẽ đứng tên tin — nhắc người gõ biết bên kia thấy ai nhắn. */
   botName: string
-  /** Cuộc «chỉ lưu» (không có bot Trợ lý): ô soạn tắt, hiện lời báo thay vì cho gõ. */
+  /** Cuộc "chỉ lưu" (không có bot Trợ lý): ô soạn tắt, hiện lời báo thay vì cho gõ. */
   collectOnly?: boolean
 }
 
@@ -110,7 +110,7 @@ export function MessageComposer({ threadId, botName, collectOnly = false }: Mess
           value={text}
           onChange={(event) => setText(event.target.value.slice(0, MAX_TEXT_LENGTH))}
           onKeyDown={handleKeyDown}
-          placeholder={`Nhắn dưới tên «${botName}» — Enter gửi, Shift+Enter xuống dòng`}
+          placeholder={`Nhắn dưới tên "${botName}" — Enter gửi, Shift+Enter xuống dòng`}
           readOnly={busy}
           rows={1}
           className="max-h-40 min-h-9 resize-none"

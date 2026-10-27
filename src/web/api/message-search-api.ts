@@ -13,23 +13,23 @@ import { parseListRequest, type ListSpec, type Operator, type SqlPart } from "./
 import { combineWhere } from "./list-runner.js";
 import { scopedWhere } from "./scope.js";
 
-// Màn «Tìm tin» (phase 6 — N4, IDA câu 21): tìm theo từ khóa (chỉ mục toàn văn, xem src/search/message-search.ts) + lọc
+// Màn "Tìm tin" (phase 6 — N4, IDA câu 21): tìm theo từ khóa (chỉ mục toàn văn, xem src/search/message-search.ts) + lọc
 // nhóm / người gửi / khoảng ngày. Phạm vi nhóm của người dùng áp như màn Hội thoại. Chưa gõ từ khóa thì không trả gì.
 // Tự phân trang thay vì runList để mọi câu (đếm + trang) có trần 5 giây và câu đếm dừng ở 1.000 (review 09/10/2026: đếm
 // không trần trên lối quét LIKE đọc hết cửa sổ ngày, hai lần mỗi phím gõ).
 
 const DAY_MS = 86_400_000;
-/** Đếm tới đây thì dừng — màn hiện «1000+», khỏi đọc hết hàng chục nghìn tin chỉ để ra con số. */
+/** Đếm tới đây thì dừng — màn hiện "1000+", khỏi đọc hết hàng chục nghìn tin chỉ để ra con số. */
 export const MAX_COUNTED = 1000;
 
-/** «2026-10-05» (ô chọn ngày) = 00:00 giờ Việt Nam ngày đó; chuỗi có giờ thì giữ nguyên. null = không đọc được. Hàm thuần. */
+/** "2026-10-05" (ô chọn ngày) = 00:00 giờ Việt Nam ngày đó; chuỗi có giờ thì giữ nguyên. null = không đọc được. Hàm thuần. */
 export function parseVnDayStart(raw: string): Date | null {
   const value = /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()) ? new Date(`${raw.trim()}T00:00:00+07:00`) : new Date(raw);
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
 /**
- * Lọc «Lúc gửi» theo NGÀY trên cột giờ có mili giây: «đúng ngày» = cả ngày, «≤ ngày» = hết ngày đó, «> ngày» = từ ngày sau.
+ * Lọc "Lúc gửi" theo NGÀY trên cột giờ có mili giây: "đúng ngày" = cả ngày, "≤ ngày" = hết ngày đó, "> ngày" = từ ngày sau.
  * So thẳng `sent_at = '2026-10-05 00:00:00.000'` thì gần như không bao giờ khớp. Hàm thuần.
  */
 export function buildSentAtCondition(operator: Operator, values: string[]): SqlPart | null {
@@ -50,9 +50,9 @@ export function buildSentAtCondition(operator: Operator, values: string[]): SqlP
 }
 
 /**
- * Khoảng ngày người tìm thật sự chọn ở «Lúc gửi» — để lối quét LIKE đặt cửa sổ: có «từ» (≥ / > / đúng ngày / trong khoảng)
- * thì không tự giới hạn; chỉ có «đến» (≤ / <) thì 90 ngày tính lùi từ mốc đó. Bộ lọc nối bằng HOẶC (conjunction=or) thì mốc
- * ngày không ràng được kết quả → coi như không chọn. Mốc «đến» là đầu ngày SAU ngày cuối được lấy. Hàm thuần.
+ * Khoảng ngày người tìm thật sự chọn ở "Lúc gửi" — để lối quét LIKE đặt cửa sổ: có "từ" (≥ / > / đúng ngày / trong khoảng)
+ * thì không tự giới hạn; chỉ có "đến" (≤ / <) thì 90 ngày tính lùi từ mốc đó. Bộ lọc nối bằng HOẶC (conjunction=or) thì mốc
+ * ngày không ràng được kết quả → coi như không chọn. Mốc "đến" là đầu ngày SAU ngày cuối được lấy. Hàm thuần.
  */
 export function chosenDateRange(params: URLSearchParams): { from?: Date; to?: Date } {
   if (params.get("conjunction") === "or") return {};
@@ -83,7 +83,7 @@ export const MESSAGE_SEARCH_SPEC: ListSpec = {
 
 const SELECT = `m.id, m.group_id AS thread_id, COALESCE(NULLIF(g.label, ''), g.name) AS thread_name, g.thread_type,
   m.sender_uid, m.sender_name, m.sent_at, m.kind, s.text`;
-/** Cùng điều kiện với màn Hội thoại: nhóm đã tắt «Đọc tin» không hiện, tin cũ của nó cũng không tìm ra. */
+/** Cùng điều kiện với màn Hội thoại: nhóm đã tắt "Đọc tin" không hiện, tin cũ của nó cũng không tìm ra. */
 const VISIBLE_THREADS = `(g.thread_type = ${ConversationType.Direct} OR g.read_messages = 1)`;
 
 export async function searchMessagePage(db: Db, params: URLSearchParams, principal: Principal, now = new Date()): Promise<Record<string, unknown>> {
@@ -118,7 +118,7 @@ export async function searchMessagePage(db: Db, params: URLSearchParams, princip
     };
   };
   // Lối quét LIKE (từ quá ngắn / MySQL chưa cấu hình / từ quá phổ biến): LUÔN có mốc ngày — người tìm chọn, không thì 90 ngày
-  // tính lùi từ mốc «đến» (hoặc hôm nay). window_from = mốc tự đặt đó, để màn báo «chỉ tìm từ ngày …»
+  // tính lùi từ mốc "đến" (hoặc hôm nay). window_from = mốc tự đặt đó, để màn báo "chỉ tìm từ ngày …"
   const likeBound = likeWindowStart(chosen.from, chosen.to ?? now);
   const windowFrom = chosen.from ? null : likeBound.toISOString();
   const finish = async (text: SqlCondition, lowerBound: Date | null, window_from: string | null) =>

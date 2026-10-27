@@ -58,7 +58,7 @@ export function isTicketOpen(status: number): boolean {
 export interface Ticket {
   [key: string]: unknown
   id: number
-  /** Mã hiển thị, vd «T-0012». */
+  /** Mã hiển thị, vd "T-0012". */
   code: string
   status: number
   title: string
@@ -69,7 +69,7 @@ export interface Ticket {
   resolution: string
   /** `group` = báo trong nhóm, `direct` = tin riêng với bot, rỗng = không rõ nguồn. */
   source_kind: 'group' | 'direct' | ''
-  /** Tên nhóm, hoặc «Tin riêng»; rỗng khi không rõ nguồn. */
+  /** Tên nhóm, hoặc "Tin riêng"; rỗng khi không rõ nguồn. */
   source_name: string
   attachment_count: number
   created_at: string

@@ -16,7 +16,7 @@ function build(over: { page?: number; pageSize?: number; total: number }) {
   )
 }
 
-/** Dãy nút số trang — nhận ra bằng nút «Trang sau», thứ luôn có mặt cùng nó. */
+/** Dãy nút số trang — nhận ra bằng nút "Trang sau", thứ luôn có mặt cùng nó. */
 const nutTrang = () => screen.queryByRole('button', { name: /trang sau/i })
 /** Ô chọn số dòng mỗi trang. */
 const oSoDong = () => screen.queryByRole('combobox')
@@ -32,13 +32,13 @@ describe('DataTablePagination', () => {
     expect(screen.getByRole('button', { name: 'Trang 1' })).toBeInTheDocument()
   })
 
-  it('bảng rỗng thì chân bảng im hẳn — câu «bảng trống» phía trên đã nói đủ', () => {
+  it('bảng rỗng thì chân bảng im hẳn — câu "bảng trống" phía trên đã nói đủ', () => {
     const { container } = build({ total: 0 })
     expect(container).toBeEmptyDOMElement()
   })
 
   it('vừa đúng một trang thì bỏ dãy nút số trang, giữ lại con số tổng', () => {
-    //  Hai nút lùi/tiến đều xám và nút «1» bấm vào đứng nguyên chỗ cũ.
+    //  Hai nút lùi/tiến đều xám và nút "1" bấm vào đứng nguyên chỗ cũ.
     build({ total: 1 })
 
     expect(nutTrang()).not.toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('DataTablePagination', () => {
   })
 
   it('⚠️ chọn 100 dòng/trang trên danh sách 80 dòng thì vẫn quay về được', () => {
-    //  Cái bẫy «nút hoàn tác biến mất vì chính lựa chọn cần hoàn tác»: 80 dòng
+    //  Cái bẫy "nút hoàn tác biến mất vì chính lựa chọn cần hoàn tác": 80 dòng
     //  ở cỡ trang 100 chỉ còn một trang, ẩn ô chọn đi là người dùng kẹt vĩnh
     //  viễn với một trang cuộn dài 80 thẻ, không đường nào về 20 dòng/trang.
     build({ total: 80, pageSize: 100 })

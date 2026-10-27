@@ -9,7 +9,7 @@ import { useCatalogMatchAction } from '../hooks/use-catalog-mutations'
 import { CATALOG_MATCH_STATUS, type CatalogEntryDetail } from '../types/catalog'
 import { CatalogMatchStatusBadge } from './catalog-match-status-badge'
 
-/** Khối ở chi tiết: liên hệ Zalo đang gắn (nút «Bỏ gắn») và bảng ứng viên khi khớp không chắc (nút «Chọn»). */
+/** Khối ở chi tiết: liên hệ Zalo đang gắn (nút "Bỏ gắn") và bảng ứng viên khi khớp không chắc (nút "Chọn"). */
 export function CatalogCandidatePanel({ entry }: { entry: CatalogEntryDetail }) {
   const { can } = usePermission()
   const mutation = useCatalogMatchAction(entry.id)
@@ -66,7 +66,7 @@ export function CatalogCandidatePanel({ entry }: { entry: CatalogEntryDetail }) 
                 <TableCell>{Math.round(candidate.score * 100)}%</TableCell>
                 <TableCell className="text-right">
                   {candidate.linked_entry_name ? (
-                    <span className="text-xs text-muted-foreground">Đã gắn «{candidate.linked_entry_name}»</span>
+                    <span className="text-xs text-muted-foreground">Đã gắn "{candidate.linked_entry_name}"</span>
                   ) : (
                     canWrite && (
                       <Button size="sm" disabled={busy} onClick={() => mutation.mutate({ action: 'confirm', contact_id: candidate.contact_id })}>

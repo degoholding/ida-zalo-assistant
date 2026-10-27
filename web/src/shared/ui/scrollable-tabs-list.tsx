@@ -43,8 +43,8 @@ interface ScrollableTabsListProps {
  * không thì tab đầu và tab cuối bị kẹt sau phần đệm của trang.
  *
  * ⚠️ **Phải có MŨI TÊN ở mép, không được chỉ dựa vào việc lộ nửa tab.** Nửa tab
- * ló ra là dấu hiệu quá mờ: người dùng đọc nó thành «chữ bị cắt» chứ không thành
- * «còn nữa, kéo đi» (khách báo 10/09/2026). Mũi tên vừa NÓI ra là kéo được, vừa
+ * ló ra là dấu hiệu quá mờ: người dùng đọc nó thành "chữ bị cắt" chứ không thành
+ * "còn nữa, kéo đi" (khách báo 10/09/2026). Mũi tên vừa NÓI ra là kéo được, vừa
  * BẤM được — trên máy tính không có ngón tay để vuốt ngang, mà chuột thì phải
  * giữ Shift mới lăn ngang được; không có nút thì mấy tab cuối coi như không tồn
  * tại. Hai nút tự hiện/ẩn theo chỗ đang đứng: không còn gì bên nào thì nút bên
@@ -163,7 +163,7 @@ export function ScrollableTabsList({
  * Mũi tên ở một mép dải tab.
  *
  * ⚠️ Nền chuyển sắc (`from-canvas`) chứ không nền đặc: tab trượt vào **mờ dần
- * rồi mới khuất**, đó là thứ nói «còn nữa» rõ hơn cả mũi tên. Nền đặc thì tab
+ * rồi mới khuất**, đó là thứ nói "còn nữa" rõ hơn cả mũi tên. Nền đặc thì tab
  * bị cắt cụt ngang thân, nhìn ra như lỗi vẽ.
  *
  * ⚠️ `md:hidden` — từ `md` khung không còn cuộn nên nút này không điều khiển

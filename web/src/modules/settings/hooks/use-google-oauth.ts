@@ -11,7 +11,7 @@ export function useGoogleOauthStatus() {
 }
 
 /**
- * Bấm «Kết nối Google»: xin `auth_url` rồi điều hướng CẢ TRÌNH DUYỆT sang Google
+ * Bấm "Kết nối Google": xin `auth_url` rồi điều hướng CẢ TRÌNH DUYỆT sang Google
  * (`window.location.assign`, không phải điều hướng trong app) — Google xác thực
  * xong tự đưa trình duyệt về lại `/app/settings`.
  */

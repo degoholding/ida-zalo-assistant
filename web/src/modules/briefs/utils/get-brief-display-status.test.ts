@@ -13,7 +13,7 @@ describe('getBriefDisplayStatus', () => {
     expect(getBriefDisplayStatus({ status: BRIEF_STATUS.failed, kind: BRIEF_KIND.morning, created_at: '2020-01-01T00:00:00Z' }, NOW)).toBe('failed')
   })
 
-  it('Queued bản tin sáng/cuối ngày (không tệp): còn trong 2 giờ thì vẫn «queued», quá 2 giờ thì «undeliverable»', () => {
+  it('Queued bản tin sáng/cuối ngày (không tệp): còn trong 2 giờ thì vẫn "queued", quá 2 giờ thì "undeliverable"', () => {
     const justUnder = new Date(NOW.getTime() - (2 * 60 * 60 * 1000 - 1)).toISOString()
     const justOver = new Date(NOW.getTime() - (2 * 60 * 60 * 1000 + 1)).toISOString()
     expect(getBriefDisplayStatus({ status: BRIEF_STATUS.queued, kind: BRIEF_KIND.morning, created_at: justUnder }, NOW)).toBe('queued')
@@ -23,7 +23,7 @@ describe('getBriefDisplayStatus', () => {
   it('Queued báo cáo tuần/tháng (có tệp): mốc rộng hơn, 12 giờ', () => {
     const justUnder = new Date(NOW.getTime() - (12 * 60 * 60 * 1000 - 1)).toISOString()
     const justOver = new Date(NOW.getTime() - (12 * 60 * 60 * 1000 + 1)).toISOString()
-    // Cùng tuổi (2 giờ 1 phút) — bản tin sáng đã «undeliverable» nhưng báo cáo tuần vẫn «queued»
+    // Cùng tuổi (2 giờ 1 phút) — bản tin sáng đã "undeliverable" nhưng báo cáo tuần vẫn "queued"
     const twoHoursOneMinute = new Date(NOW.getTime() - (2 * 60 * 60 * 1000 + 60_000)).toISOString()
     expect(getBriefDisplayStatus({ status: BRIEF_STATUS.queued, kind: BRIEF_KIND.weekly, created_at: twoHoursOneMinute }, NOW)).toBe('queued')
     expect(getBriefDisplayStatus({ status: BRIEF_STATUS.queued, kind: BRIEF_KIND.weekly, created_at: justUnder }, NOW)).toBe('queued')

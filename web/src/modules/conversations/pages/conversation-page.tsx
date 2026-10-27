@@ -34,7 +34,7 @@ export function ConversationPage() {
   useLiveEvents()
   const threads = useThreads(listParams)
   const thread = useThread(selectedId)
-  // `?msg=<id tin>` (màn Tệp «Xem trong hội thoại»): mở cuộc quanh đúng tin đó, cuộn tới và làm sáng
+  // `?msg=<id tin>` (màn Tệp "Xem trong hội thoại"): mở cuộc quanh đúng tin đó, cuộn tới và làm sáng
   const focusMessageId = Number(searchParams.get('msg')) > 0 ? Number(searchParams.get('msg')) : null
   const messages = useMessages(selectedId, focusMessageId)
   const items = useMemo(() => flattenMessagePages(messages.data?.pages), [messages.data])

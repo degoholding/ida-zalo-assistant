@@ -8,8 +8,8 @@ const axiosError = (status: number, message?: string) => ({
 })
 
 describe('describeListError', () => {
-  // Review 09/10/2026: màn Tìm tin trả 422 «Tìm lâu quá — thêm từ khóa…» nhưng bảng hiện
-  // «Kiểm tra kết nối hoặc quyền truy cập» — người dùng đi kiểm mạng thay vì thu hẹp từ khóa
+  // Review 09/10/2026: màn Tìm tin trả 422 "Tìm lâu quá — thêm từ khóa…" nhưng bảng hiện
+  // "Kiểm tra kết nối hoặc quyền truy cập" — người dùng đi kiểm mạng thay vì thu hẹp từ khóa
   it('shows the server-written guidance when the server rejects the request itself (422)', () => {
     expect(describeListError(axiosError(422, 'Tìm lâu quá — thêm từ khóa cụ thể hơn.'))).toBe(
       'Tìm lâu quá — thêm từ khóa cụ thể hơn.',

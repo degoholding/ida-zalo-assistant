@@ -18,7 +18,7 @@ export function useRetryFile() {
   })
 }
 
-/** «Đọc»: bóc chữ của tệp (xlsx / docx tức thì; pdf / ảnh vài giây vì nhờ mô hình). */
+/** "Đọc": bóc chữ của tệp (xlsx / docx tức thì; pdf / ảnh vài giây vì nhờ mô hình). */
 export function useExtractFile() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -32,7 +32,7 @@ export function useExtractFile() {
   })
 }
 
-/** «Giữ tệp gốc» / «Bỏ giữ tệp gốc» trên một dòng. */
+/** "Giữ tệp gốc" / "Bỏ giữ tệp gốc" trên một dòng. */
 export function useSetKeepFile() {
   const queryClient = useQueryClient()
   return useMutation({

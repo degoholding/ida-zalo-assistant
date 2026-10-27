@@ -13,7 +13,7 @@ const BRIEF_TEST_OPTIONS = [
 ] as const
 
 /**
- * «Gửi thử bản tin» ở hàng nút dính cạnh «Gửi thử»: menu chọn 1 trong 4 loại, gọi API `brief-test` (trigger WebTest —
+ * "Gửi thử bản tin" ở hàng nút dính cạnh "Gửi thử": menu chọn 1 trong 4 loại, gọi API `brief-test` (trigger WebTest —
  * không chặn bản theo lịch vẫn chạy trong ngày, xem `src/briefs/brief-log-repository.ts`).
  */
 export function RecipientBriefTestButton({ recipientId }: { recipientId: number }) {

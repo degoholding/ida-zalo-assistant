@@ -15,7 +15,7 @@ import type { ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
 import { parseSourceDraft, type SourceDraft } from "./metric-source-input.js";
 
-// Màn «Nguồn số liệu» (phase 8, phase 10): CRUD nguồn bảng Google + «Kiểm tra đọc thử» + «Đọc ngay». KHÔNG khai luật ở
+// Màn "Nguồn số liệu" (phase 8, phase 10): CRUD nguồn bảng Google + "Kiểm tra đọc thử" + "Đọc ngay". KHÔNG khai luật ở
 // route-permissions.ts nên mọi route ở đây chỉ quản trị gọi được. Không bao giờ trả khóa service account — chỉ email của nó
 // (để quản trị biết chia sẻ bảng cho ai).
 
@@ -76,7 +76,7 @@ const COLUMN_BY_FIELD: Record<string, string> = {
   mapping: "mapping", dailyReport: "daily_report", isActive: "is_active",
 };
 
-/** Trường đổi «hình» bảng đọc ra — đổi thì bỏ mốc số dòng lượt trước. */
+/** Trường đổi "hình" bảng đọc ra — đổi thì bỏ mốc số dòng lượt trước. */
 const SHAPE_FIELDS = new Set(["spreadsheetId", "sheetTitle", "headerRow", "mapping"]);
 
 function draftValue(key: string, draft: SourceDraft): unknown {
@@ -94,7 +94,7 @@ function sampleToApi(record: MetricRecord): Record<string, unknown> {
 
 async function runSyncNow(service: SyncService, source: MetricSourceRow): Promise<Record<string, unknown>> {
   requireClient(service);
-  // «Đọc ngay» của quản trị chấp nhận bảng co lại thật (cảnh báo «quá ít so với lượt trước» trên màn này) — xem SyncOptions
+  // "Đọc ngay" của quản trị chấp nhận bảng co lại thật (cảnh báo "quá ít so với lượt trước" trên màn này) — xem SyncOptions
   const outcome = await syncSource(metricsDeps(service.db, service.config), source.id, new Date(), { acceptShrink: true });
   if (outcome.skipped) throw new ApiError(409, "conflict", "Nguồn đang được đọc ở nơi khác — thử lại sau ít phút");
   const message = outcome.status === MetricSourceStatus.Ok ? `Đọc ngay: ${outcome.records} số, bỏ ${outcome.removed} dòng đã xóa` : `Đọc ngay lỗi: ${outcome.error}`;
@@ -149,7 +149,7 @@ export const metricSourceRoutes: ApiRoute[] = [
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [principal.tenantId, draft.name, draft.spreadsheetId, draft.sheetTitle, draft.headerRow ?? 1, JSON.stringify(draft.mapping), draft.dailyReport ? 1 : 0, draft.isActive === false ? 0 : 1],
     );
-    await recordAudit(service.db, { entity: SOURCE_ENTITY, entityId: result.insertId, action: "create", message: `Thêm nguồn «${draft.name}»` });
+    await recordAudit(service.db, { entity: SOURCE_ENTITY, entityId: result.insertId, action: "create", message: `Thêm nguồn "${draft.name}"` });
     sendOk(response, toSourceApi(await loadSource(service.db, result.insertId, principal.tenantId)), "Đã thêm nguồn số liệu", 201);
   }],
 
@@ -182,16 +182,16 @@ export const metricSourceRoutes: ApiRoute[] = [
     }
     if (action !== "enable" && action !== "disable") throw new ApiError(422, "validation_error", "Thao tác không hợp lệ");
     await service.db.query("UPDATE metric_source SET is_active = ? WHERE id = ?", [action === "enable" ? 1 : 0, id]);
-    await recordAudit(service.db, { entity: SOURCE_ENTITY, entityId: id, action: action === "enable" ? "activate" : "deactivate", message: `${action === "enable" ? "Bật" : "Tắt"} đọc nguồn «${source.name}»` });
+    await recordAudit(service.db, { entity: SOURCE_ENTITY, entityId: id, action: action === "enable" ? "activate" : "deactivate", message: `${action === "enable" ? "Bật" : "Tắt"} đọc nguồn "${source.name}"` });
     sendOk(response, toSourceApi(await loadSource(service.db, id, principal.tenantId)), action === "enable" ? "Đã bật đọc nguồn" : "Đã tắt đọc nguồn");
   }],
 
-  // Xóa nguồn kéo theo số đã đọc của nguồn (ON DELETE CASCADE) — muốn giữ số cũ thì dùng «Tắt»
+  // Xóa nguồn kéo theo số đã đọc của nguồn (ON DELETE CASCADE) — muốn giữ số cũ thì dùng "Tắt"
   ["DELETE", /^\/api\/metric-sources\/(\d+)$/, async ({ response, match, service, principal }) => {
     const id = parseId(match[1]);
     const source = await loadSource(service.db, id, principal.tenantId);
     await service.db.query("DELETE FROM metric_source WHERE id = ?", [id]);
-    await recordAudit(service.db, { entity: SOURCE_ENTITY, entityId: id, action: "delete", message: `Xóa nguồn «${source.name}»` });
+    await recordAudit(service.db, { entity: SOURCE_ENTITY, entityId: id, action: "delete", message: `Xóa nguồn "${source.name}"` });
     sendOk(response, { id }, "Đã xóa nguồn số liệu");
   }],
 ];

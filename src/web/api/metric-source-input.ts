@@ -3,7 +3,7 @@ import { validateMapping } from "../../metrics/metric-mapping.js";
 import type { MetricMapping } from "../../metrics/metric-types.js";
 import { ApiError } from "./api-http.js";
 
-// Đọc + kiểm thân JSON của «Nguồn số liệu» (thêm / sửa / đọc thử). Hàm thuần, ném ApiError 422 bằng câu tiếng Việt.
+// Đọc + kiểm thân JSON của "Nguồn số liệu" (thêm / sửa / đọc thử). Hàm thuần, ném ApiError 422 bằng câu tiếng Việt.
 
 export const SHEET_TITLE_MAX = 150;
 export const SOURCE_NAME_MAX = 150;
@@ -81,8 +81,8 @@ export function parseSourceDraft(body: Record<string, unknown>, requireAll: bool
     draft.headerRow = row;
   }
   if (body.mapping !== undefined) draft.mapping = toStoredMapping(body.mapping);
-  if (body.daily_report !== undefined) draft.dailyReport = readBool(body.daily_report, "«Báo hằng ngày»");
-  if (body.is_active !== undefined) draft.isActive = readBool(body.is_active, "«Đang đọc»");
+  if (body.daily_report !== undefined) draft.dailyReport = readBool(body.daily_report, "'Báo hằng ngày'");
+  if (body.is_active !== undefined) draft.isActive = readBool(body.is_active, "'Đang đọc'");
   if (requireAll) {
     if (draft.spreadsheetId === undefined) throw invalid("Chưa dán link bảng");
     if (draft.sheetTitle === undefined) throw invalid("Chưa nhập tên tab");

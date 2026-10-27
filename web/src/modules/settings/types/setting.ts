@@ -63,11 +63,27 @@ export interface GoogleOauthStatus {
   email: string
   /** URL chính xác phải khai ở "Authorized redirect URIs" trên Google Cloud. */
   redirect_uri: string
-  /** Đã tick quyền đọc Drive (chỉ xem) lúc đồng ý — cần cho «Recap họp tự động». Kết nối từ trước phase này = false. */
+  /** Đã tick quyền đọc Drive (chỉ xem) lúc đồng ý — cần cho "Recap họp tự động". Kết nối từ trước phase này = false. */
   drive_scope_granted: boolean
+  /**
+   * Hạn 7 ngày của app Google ở chế độ Testing (27/10/2026) — dùng cho chấm trạng thái ở menu (`shared/connection-health`).
+   * Tùy chọn: máy chủ cũ chưa trả. null = kết nối cũ, không biết lúc đồng ý.
+   */
+  /** false = app Google đã ở In production: không có hạn 7 ngày (expires_at / days_left null, không có expiring). */
+  oauth_testing?: boolean
+  connected_at?: string | null
+  expires_at?: string | null
+  /** Số ngày còn lại (một chữ số lẻ, có thể âm); null khi không biết. */
+  days_left?: number | null
+  /** Quá hạn theo ngày HOẶC Google vừa từ chối refresh token. */
+  expired?: boolean
+  /** Câu lỗi lần Google từ chối gần nhất; rỗng = chưa có. */
+  refresh_error?: string
+  refresh_error_at?: string | null
+  health?: 'ok' | 'expiring' | 'expired' | 'disconnected'
 }
 
-/** `POST /api/settings/google/drive-test` thành công — kiểm thư mục «Ghi âm họp» qua Gmail đã kết nối. */
+/** `POST /api/settings/google/drive-test` thành công — kiểm thư mục "Ghi âm họp" qua Gmail đã kết nối. */
 export interface DriveTestResult {
   ok: true
   folder_name: string

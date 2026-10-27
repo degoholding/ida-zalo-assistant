@@ -6,7 +6,7 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 import { useMcpKeyRevoke } from '../hooks/use-mcp-key-actions'
 import type { McpKeyDetail } from '../types/mcp-key'
 
-/** «Thu hồi» ở hàng nút dính của trang chi tiết — hỏi xác nhận vì client đang dùng khóa này sẽ bị 401 ngay. Khóa đã thu hồi thì ẩn. */
+/** "Thu hồi" ở hàng nút dính của trang chi tiết — hỏi xác nhận vì client đang dùng khóa này sẽ bị 401 ngay. Khóa đã thu hồi thì ẩn. */
 export function McpKeyRevokeButton({ mcpKey }: { mcpKey: McpKeyDetail }) {
   const revoke = useMcpKeyRevoke()
   if (mcpKey.revoked_at) return null
@@ -14,7 +14,7 @@ export function McpKeyRevokeButton({ mcpKey }: { mcpKey: McpKeyDetail }) {
   async function handleClick() {
     const accepted = await confirm({
       title: 'Thu hồi khóa MCP',
-      message: `Thu hồi khóa «${mcpKey.name}»? Mọi client đang dùng khóa này sẽ bị từ chối ngay và không khôi phục được.`,
+      message: `Thu hồi khóa "${mcpKey.name}"? Mọi client đang dùng khóa này sẽ bị từ chối ngay và không khôi phục được.`,
       confirmLabel: 'Thu hồi',
     })
     if (accepted) revoke.mutate(mcpKey.id)

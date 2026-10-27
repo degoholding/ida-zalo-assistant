@@ -7,14 +7,14 @@ const STATUS_TONE: Record<number, StatusTone> = {
   [FILE_STATUS.stored]: 'done',
   [FILE_STATUS.failed]: 'danger',
   [FILE_STATUS.skipped]: 'neutral',
-  // Không phải lỗi, chỉ là tệp gốc đã dọn theo hạn — tông «xong một phần» (còn chữ, mất tệp)
+  // Không phải lỗi, chỉ là tệp gốc đã dọn theo hạn — tông "xong một phần" (còn chữ, mất tệp)
   [FILE_STATUS.expired]: 'partial',
 }
 
 interface FileStatusBadgeProps {
   status: number
   lastError?: string
-  /** Tệp đánh dấu «giữ tệp gốc» — hiện thêm nhãn «Giữ» cạnh trạng thái. */
+  /** Tệp đánh dấu "giữ tệp gốc" — hiện thêm nhãn "Giữ" cạnh trạng thái. */
   keepFile?: boolean
 }
 

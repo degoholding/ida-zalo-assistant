@@ -3,7 +3,7 @@ import { isCollectOnlyThread } from "../../sync/collect-only.js";
 import { COLLECT_ONLY_MESSAGE, CollectOnlyAccountError } from "../../zalo/collect-only-account-error.js";
 import { ApiError } from "./api-http.js";
 
-// Ô soạn ở màn Hội thoại: cuộc không có bot Trợ lý nào (chỉ bot Normal — «chỉ lưu») thì quản trị cũng không gửi được.
+// Ô soạn ở màn Hội thoại: cuộc không có bot Trợ lý nào (chỉ bot Normal — "chỉ lưu") thì quản trị cũng không gửi được.
 // Kiểm TRƯỚC khi chọn tài khoản để báo đúng lý do kể cả khi tài khoản đang tắt; ZaloSender vẫn chặn lần nữa ở tầng gửi.
 
 export const COLLECT_ONLY_ERROR_CODE = "collect_only";

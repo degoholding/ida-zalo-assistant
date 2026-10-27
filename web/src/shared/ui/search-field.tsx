@@ -13,7 +13,7 @@ export interface SearchFieldProps {
    * ⚠️ Phải đổi bằng JS chứ không giấu bớt chữ bằng CSS được: `placeholder` là
    * một thuộc tính, không phải một nút trong cây DOM — không có gì để gắn
    * `max-md:hidden` vào. Cắt bằng bề rộng ô thì trình duyệt xén giữa chừng và ra
-   * «Tìm tên, số hiệu, từ k…», tức người đọc mất đúng phần cuối — mà phần cuối
+   * "Tìm tên, số hiệu, từ k…", tức người đọc mất đúng phần cuối — mà phần cuối
    * mới là thứ họ chưa đoán được (*từ khóa*, *loại*, *bước*).
    *
    * ⚠️ **TRẦN ~100px, tức khoảng HAI vế.** Đây là chỗ dễ viết hụt nhất: câu
@@ -40,10 +40,10 @@ export interface SearchFieldProps {
  * máy tính người ta bôi đen rồi xóa; trên điện thoại thao tác đó là giữ · kéo
  * hai đầu · bấm xóa, cho một việc đáng ra một chạm.
  *
- * ⚠️ **Đừng nhét nút «Bộ lọc» vào trong ô này.** Đã làm rồi và đã bỏ: một cái
+ * ⚠️ **Đừng nhét nút "Bộ lọc" vào trong ô này.** Đã làm rồi và đã bỏ: một cái
  * phễu nằm lọt trong khung viền của ô tìm đọc ra như "tùy chọn tìm kiếm" chứ
  * không ra một bộ lọc riêng — người dùng nhìn vào không đoán được nó làm gì.
- * Nút lọc đứng RIÊNG bên cạnh, có chữ «Bộ lọc», thì không phải đoán.
+ * Nút lọc đứng RIÊNG bên cạnh, có chữ "Bộ lọc", thì không phải đoán.
  *
  * ⚠️ Dựng bằng `<input>` trần trong một khối có viền, KHÔNG lồng `<Input>` của
  * shadcn vào: `Input` tự vẽ viền + nền + vòng focus của riêng nó, lồng vào là

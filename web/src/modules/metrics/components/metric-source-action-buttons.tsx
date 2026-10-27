@@ -5,7 +5,7 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 import { useMetricSourceAction } from '../hooks/use-metric-source-action'
 import type { MetricSource } from '../types/metric'
 
-/** Nút ở trang chi tiết nguồn: «Đọc ngay» (chạy một lượt đọc trong tiến trình app) và «Bật / Tắt» đọc. */
+/** Nút ở trang chi tiết nguồn: "Đọc ngay" (chạy một lượt đọc trong tiến trình app) và "Bật / Tắt" đọc. */
 export function MetricSourceActionButtons({ source }: { source: MetricSource }) {
   const mutation = useMetricSourceAction(source.id)
   const busy = mutation.isPending
@@ -13,7 +13,7 @@ export function MetricSourceActionButtons({ source }: { source: MetricSource }) 
   const runToggle = async () => {
     if (source.is_active) {
       const ok = await confirm({
-        title: `Tắt đọc nguồn «${source.name}»`,
+        title: `Tắt đọc nguồn "${source.name}"`,
         message: 'Bot ngừng đọc bảng này và số liệu của nó biến khỏi màn Số liệu / báo cáo (số đã đọc vẫn giữ, bật lại là hiện lại).',
         confirmLabel: 'Tắt đọc',
       })

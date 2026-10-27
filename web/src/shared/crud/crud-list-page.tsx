@@ -182,7 +182,7 @@ function CrudListContent<T extends CrudRecord>({
   }
 
   //  Ô lọc nhanh dựng MỘT LẦN rồi đặt vào một trong hai chỗ tùy khổ màn: hàng
-  //  ngang (khổ rộng) hoặc tờ trượt «Bộ lọc» (khổ hẹp). Dựng hai bản rồi ẩn bớt
+  //  ngang (khổ rộng) hoặc tờ trượt "Bộ lọc" (khổ hẹp). Dựng hai bản rồi ẩn bớt
   //  bằng `md:hidden` thì mỗi ô nằm hai lần trong cây DOM — trình đọc màn hình
   //  đọc cả hai, và mọi bài kiểm tìm theo tên đều vớ phải hai kết quả.
   const quickFilterSelects = (config.quickFilters ?? [])
@@ -213,7 +213,7 @@ function CrudListContent<T extends CrudRecord>({
       }
     })
 
-  //  Đếm để gắn huy hiệu lên nút «Bộ lọc»: không có nó thì người dùng thấy nút
+  //  Đếm để gắn huy hiệu lên nút "Bộ lọc": không có nó thì người dùng thấy nút
   //  trơn mà danh sách vẫn đang bị thu hẹp, rồi đi tìm lỗi ở dữ liệu.
   const activeQuickFilters = (config.quickFilters ?? []).filter((qf) => {
     const val = searchParams.get(qf.key)
@@ -249,7 +249,7 @@ function CrudListContent<T extends CrudRecord>({
           ) : undefined
         }
         actions={
-          //  Khổ hẹp: cụm nút chiếm trọn hàng và nút «Thêm» giãn hết phần còn
+          //  Khổ hẹp: cụm nút chiếm trọn hàng và nút "Thêm" giãn hết phần còn
           //  lại — hành động chính của màn phải là thứ dễ chạm nhất.
           <div className="flex items-center gap-2 max-md:w-full">
             {config.renderToolbarExtra?.()}
@@ -268,7 +268,7 @@ function CrudListContent<T extends CrudRecord>({
         }
       />
 
-      {/*  `group` + `data-scrolled` là đường dẫn tín hiệu «đã cuộn» xuống tới
+      {/*  `group` + `data-scrolled` là đường dẫn tín hiệu "đã cuộn" xuống tới
            dải ghim nằm sâu bên trong (thanh công cụ do `DataTable` vẽ, tầng này
            không với tới bằng prop). Bóng đổ của dải đó đọc thuộc tính này. Dựng
            sẵn cho mọi màn CRUD — không ghim gì thì nó chỉ là một khối flex. */}
@@ -291,14 +291,14 @@ function CrudListContent<T extends CrudRecord>({
           isLoading={isLoading}
           isError={isError}
           errorMessage={describeListError(error)}
-          //  ⚠️ Câu «bảng rỗng» phải PHÂN BIỆT *rỗng vì bộ lọc* với *rỗng vì
+          //  ⚠️ Câu "bảng rỗng" phải PHÂN BIỆT *rỗng vì bộ lọc* với *rỗng vì
           //  chưa có gì*. Một câu chung cho cả hai thì người vừa gõ nhầm một
           //  chữ đọc ra "chưa có dữ liệu" rồi tin là vậy — và ở màn danh mục,
           //  điều đó dẫn thẳng tới việc họ đi khai lại một bản ghi đã tồn tại.
           emptyMessage={
             isFiltering
               ? `Không có ${config.unitLabel} nào khớp bộ lọc.`
-              : (config.emptyMessage ?? `Chưa có ${config.unitLabel} nào. Bấm «Thêm ${config.unitLabel}» để tạo.`)
+              : (config.emptyMessage ?? `Chưa có ${config.unitLabel} nào. Bấm "Thêm ${config.unitLabel}" để tạo.`)
           }
           storageKey={config.storageKey}
           toolbarClassName={toolbarClassName}
@@ -323,7 +323,7 @@ function CrudListContent<T extends CrudRecord>({
                    `flex-1` với `flex-basis: 0` nên nó co theo phần còn thừa.
 
                    ⚠️ Nhưng phải có SÀN (`min-w-40`), nếu không nó co tới mức vô
-                   dụng đúng lúc cần nhất: hàng công cụ mọc thêm nút «Xóa lọc»
+                   dụng đúng lúc cần nhất: hàng công cụ mọc thêm nút "Xóa lọc"
                    NGAY KHI bắt đầu lọc, và bốn nút một hàng trên máy 390px bóp ô
                    tìm còn **73px** — tức hễ lọc một phát là ô tìm hỏng, đúng lúc
                    người ta hay muốn gõ thêm từ khóa để thu hẹp tiếp. Có sàn thì

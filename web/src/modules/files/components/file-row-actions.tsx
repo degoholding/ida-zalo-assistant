@@ -57,7 +57,7 @@ export function FileRowActions({ file }: { file: FileRecord }) {
       </div>
     )
   }
-  // Tệp gốc đã xóa theo hạn nhưng chữ đã bóc vẫn còn — vẫn xem được thứ bot «nhìn thấy»
+  // Tệp gốc đã xóa theo hạn nhưng chữ đã bóc vẫn còn — vẫn xem được thứ bot "nhìn thấy"
   if (file.status === FILE_STATUS.expired) {
     if (file.text_chars === null) return null
     return (

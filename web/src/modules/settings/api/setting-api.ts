@@ -14,6 +14,6 @@ export const settingApi = {
     return { data: res.data.data, message: res.data.message ?? 'Đã khôi phục mặc định' }
   },
   testGoogleConnection: () => apiPost<GoogleTestResult>('/api/settings/google/test'),
-  /** «Kiểm tra thư mục» của khối «Recap họp tự động» — đọc qua Gmail đã «Kết nối Google», không phải service account. */
+  /** "Kiểm tra thư mục" của khối "Recap họp tự động" — đọc qua Gmail đã "Kết nối Google", không phải service account. */
   testDriveFolder: () => apiPost<DriveTestResult>('/api/settings/google/drive-test'),
 }

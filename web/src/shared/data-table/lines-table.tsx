@@ -135,7 +135,7 @@ export function LinesTable<T>({
   } = useTableLayout(layoutColumns, storageKey)
 
   //  Màu hiệu lực của từng cột = màu người dùng tự chọn, không có thì màu khai SẴN
-  //  (`defaultColor`). Tính một lần rồi dùng cho cả menu «Cột», tiêu đề lẫn thân bảng,
+  //  (`defaultColor`). Tính một lần rồi dùng cho cả menu "Cột", tiêu đề lẫn thân bảng,
   //  để ô màu trong menu nói đúng màu đang thấy trên bảng.
   const columnColors = useMemo(() => {
     const merged: Record<string, string> = {}

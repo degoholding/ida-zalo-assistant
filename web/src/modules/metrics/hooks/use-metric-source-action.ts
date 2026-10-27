@@ -12,7 +12,7 @@ const ACTION_DONE: Record<MetricSourceAction, string> = {
 }
 
 /**
- * Bật / Tắt / «Đọc ngay» một nguồn. Lỗi (Google từ chối, ánh xạ sai, nguồn đang được đọc) do `http-client` toast đỏ; dù thành công hay
+ * Bật / Tắt / "Đọc ngay" một nguồn. Lỗi (Google từ chối, ánh xạ sai, nguồn đang được đọc) do `http-client` toast đỏ; dù thành công hay
  * lỗi đều làm mới chi tiết + danh sách nguồn (trạng thái lượt đọc đổi) và số liệu (sau khi đọc có số mới).
  */
 export function useMetricSourceAction(sourceId: number) {

@@ -19,7 +19,7 @@ import { cn } from "@/shared/utils/cn"
  * đè trường trong form, và lần bấm *Lưu* kế tiếp gửi số 0 đó xuống máy chủ.
  *
  * Triệu chứng người dùng thấy: chọn trưởng bộ phận (hoặc phòng ban của nhân sự),
- * bấm Lưu, ô trở lại «— Chưa chỉ định —» và dữ liệu mất thật.
+ * bấm Lưu, ô trở lại "— Chưa chỉ định —" và dữ liệu mất thật.
  *
  * Chặn được ở đây vì **Radix cấm `<SelectItem value="">`**: chuỗi rỗng không bao
  * giờ là lựa chọn hợp lệ của người dùng, nên bỏ qua nó không che mất thao tác
@@ -73,10 +73,10 @@ function SelectTrigger({
         //  nên bề rộng nội tại của nó bằng đúng độ dài nhãn đang chọn; mà phần tử
         //  con của flex/grid mặc định `min-width: auto`, tức KHÔNG co xuống dưới
         //  mức đó — `w-full` của người gọi thua. Một nhãn dài như
-        //  «DEMO_MANAGER_PURCHASE — Trưởng phòng Thu mua (Demo)» vì thế đẩy cả ô
+        //  "DEMO_MANAGER_PURCHASE — Trưởng phòng Thu mua (Demo)" vì thế đẩy cả ô
         //  vượt mép phải màn hình và kéo theo cả trang tràn ngang (khách báo
         //  10/09/2026 ở chi tiết Phòng ban). Có `min-w-0` thì `line-clamp-1` sẵn
-        //  có ở dưới mới cắt được nhãn bằng «…». Không ảnh hưởng ô để `w-fit`:
+        //  có ở dưới mới cắt được nhãn bằng "…". Không ảnh hưởng ô để `w-fit`:
         //  chúng vẫn co giãn theo nội dung khi khung chứa còn đủ chỗ.
         "flex w-fit min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[placeholder]:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
         className
@@ -95,7 +95,7 @@ function SelectTrigger({
  *
  *  `item-aligned` (mặc định của Radix/shadcn) căn cho mục ĐANG CHỌN nằm đè lên ô: danh
  *  sách dài (nhân sự, NCC…) bung kín cả màn hình, kèm mũi tên cuộn trên/dưới, người dùng
- *  không thấy ô mình đang sửa nữa (đại ca chụp lỗi ở ô «Nhân sự YC», 24/09/2026). Nay mọi
+ *  không thấy ô mình đang sửa nữa (đại ca chụp lỗi ở ô "Nhân sự YC", 24/09/2026). Nay mọi
  *  ô chọn sổ xuống dưới, cao tối đa 20rem rồi cuộn trong khung. Ô nào cần kiểu cũ thì tự
  *  truyền `position="item-aligned"`. Danh sách lấy từ DANH MỤC DÀI thì dùng
  *  `SearchSelect` (gõ để tìm), đừng dùng `Select`. */

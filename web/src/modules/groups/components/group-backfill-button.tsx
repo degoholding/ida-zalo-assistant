@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/button'
 import { useBackfillGroup } from '../hooks/use-groups'
 
 /**
- * Nút «Lấy tin cũ» ở hàng nút dính của trang chi tiết nhóm, kèm tiến độ khi đang kéo. Chỉ hiện cho người sửa được nhóm
+ * Nút "Lấy tin cũ" ở hàng nút dính của trang chi tiết nhóm, kèm tiến độ khi đang kéo. Chỉ hiện cho người sửa được nhóm
  * (Quản trị + Quản lý) — máy chủ cũng chặn Nhân viên (403), ẩn nút để khỏi bấm vào lỗi.
  */
 export function GroupBackfillButton({ groupId }: { groupId: number }) {

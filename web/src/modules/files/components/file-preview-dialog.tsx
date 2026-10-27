@@ -22,7 +22,7 @@ interface FilePreviewDialogProps {
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     //  minmax(0,1fr): cột giá trị được co hẹp hơn chữ dài nhất — không thì tên tệp liền một mạch (không dấu cách) đẩy
-    //  cả hộp thoại giãn ra ngoài khung (gặp thật 08/10/2026 với tên «Bao-cao-…-Pltgiang.xlsx»)
+    //  cả hộp thoại giãn ra ngoài khung (gặp thật 08/10/2026 với tên "Bao-cao-…-Pltgiang.xlsx")
     <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 py-1.5 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">{children}</dd>
@@ -32,7 +32,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 
 /**
  * Bấm tên tệp ở màn Tệp: ảnh (đã có trong kho) hiện ngay trong hộp thoại; tệp khác hiện thông tin. Hai nút chung:
- * «Tải về» và «Xem trong hội thoại» (mở cuộc, cuộn tới đúng tin gửi tệp này).
+ * "Tải về" và "Xem trong hội thoại" (mở cuộc, cuộn tới đúng tin gửi tệp này).
  */
 export function FilePreviewDialog({ file, open, onOpenChange }: FilePreviewDialogProps) {
   const [showText, setShowText] = useState(false)
@@ -67,7 +67,7 @@ export function FilePreviewDialog({ file, open, onOpenChange }: FilePreviewDialo
               </InfoRow>
               <InfoRow label="Nội dung">
                 {file.text_chars === null
-                  ? <span className="text-muted-foreground">Chưa đọc — bấm «Đọc» ở dòng tệp để bóc chữ</span>
+                  ? <span className="text-muted-foreground">Chưa đọc — bấm "Đọc" ở dòng tệp để bóc chữ</span>
                   : `${file.text_summary ? `${file.text_summary} · ` : ''}${file.text_chars.toLocaleString('vi-VN')} ký tự`}
               </InfoRow>
             </dl>

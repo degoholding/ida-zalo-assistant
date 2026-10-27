@@ -16,7 +16,7 @@ import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
 
-// API tab «Kết bạn» ở trang tài khoản bot (08/10/2026): tra số điện thoại, bot mời kết bạn, đồng ý / từ chối lời mời
+// API tab "Kết bạn" ở trang tài khoản bot (08/10/2026): tra số điện thoại, bot mời kết bạn, đồng ý / từ chối lời mời
 // đến, rút lời mời đã gửi. Chỉ quản trị (route-permissions: /api/accounts… = bot_account). Lệnh sang Zalo cần tài khoản
 // đang chạy; danh sách thì đọc từ bảng friend_request dù tài khoản đang tắt.
 
@@ -54,7 +54,7 @@ function decorateRequest(row: FriendRequestRow): Record<string, unknown> {
   };
 }
 
-const describePerson = (row: { display_name?: string; zalo_uid: string }) => `«${row.display_name || row.zalo_uid}» (${row.zalo_uid})`;
+const describePerson = (row: { display_name?: string; zalo_uid: string }) => `"${row.display_name || row.zalo_uid}" (${row.zalo_uid})`;
 
 /** Ảnh lấy từ kết quả tra — chỉ nhận đường http(s), còn lại bỏ. */
 function cleanAvatarUrl(value: unknown): string {

@@ -60,7 +60,7 @@ export interface DataTableColumn<T> {
    * Màu tô SẴN cho cột (mã trong `COLUMN_COLORS` hoặc hex) — cùng nghĩa với
    * `LinesTableColumn.defaultColor`: dùng khi màu mang NGHĨA (vd bốn cột giá Thấp nhất /
    * Khoảng phổ biến / Bình quân / Cao nhất, bao-CR-518). Màu người dùng tự chọn trong
-   * menu «Cột» vẫn thắng.
+   * menu "Cột" vẫn thắng.
    */
   defaultColor?: string
   /**
@@ -89,9 +89,9 @@ export interface LinesTableColumn {
   /** Kết thúc bằng `" *"` = cột bắt buộc nhập — xem `DataTableColumn.header`. */
   header: string
   /**
-   * Thay NHÃN tiêu đề bằng một thành phần (ô tick «chọn hết»…) — cùng nghĩa với
+   * Thay NHÃN tiêu đề bằng một thành phần (ô tick "chọn hết"…) — cùng nghĩa với
    * `DataTableColumn.headerContent`; bảng đã chặn kéo cột / sắp xếp quanh chỗ này.
-   * `header` vẫn phải khai vì còn là nhãn lúc kéo cột và tên trong menu «Cột».
+   * `header` vẫn phải khai vì còn là nhãn lúc kéo cột và tên trong menu "Cột".
    */
   headerContent?: ReactNode
   /** Độ rộng ban đầu (px). */
@@ -121,7 +121,7 @@ export interface LinesTableColumn {
   /**
    * Màu tô SẴN cho cột (mã trong `COLUMN_COLORS` hoặc hex), dùng khi màu của cột
    * mang NGHĨA chứ không chỉ để dò — vd ba cột tiền Dự toán / Tạm tính / Quyết toán.
-   * Màu người dùng tự chọn trong menu «Cột» vẫn THẮNG; bỏ màu tự chọn thì cột quay
+   * Màu người dùng tự chọn trong menu "Cột" vẫn THẮNG; bỏ màu tự chọn thì cột quay
    * về màu này chứ không về trắng, vì trắng là mất đúng cái nghĩa ấy.
    */
   defaultColor?: string

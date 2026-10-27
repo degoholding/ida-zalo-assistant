@@ -11,6 +11,7 @@ import { Pill } from '@/shared/ui/pill'
 import { Separator } from '@/shared/ui/separator'
 import { formatDateTime } from '@/shared/utils/format-date'
 import type { ThreadDetail } from '../types/conversation'
+import { DirectCaptureToggles } from './direct-capture-toggles'
 
 function PanelHeader({ name, avatarUrl, shape, sub, detailTo }: { name: string; avatarUrl: string | null; shape: 'circle' | 'rounded'; sub: string; detailTo: string }) {
   return (
@@ -49,6 +50,7 @@ export function ConversationProfilePanel({ thread }: { thread: ThreadDetail }) {
           <dt className="text-muted-foreground">Ở nhóm</dt>
           <dd className="text-right">{contact.group_count} nhóm</dd>
         </dl>
+        <DirectCaptureToggles thread={thread} />
         <Separator />
         <div className="p-4">
           <ContactProfileForm key={contact.id} contact={contact} />

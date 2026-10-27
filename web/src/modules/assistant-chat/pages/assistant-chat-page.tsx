@@ -13,7 +13,7 @@ import { SuggestionChips } from '../components/suggestion-chips'
 import { useAskers, useChatMessages, useSendQuestion } from '../hooks/use-assistant-chat'
 
 /**
- * «Hỏi trợ lý»: hỏi trợ lý AI trong trình duyệt như nhắn Zalo cho bot — đi đúng đường thật
+ * "Hỏi trợ lý": hỏi trợ lý AI trong trình duyệt như nhắn Zalo cho bot — đi đúng đường thật
  * (`AssistantService`, cùng cài đặt / công cụ / giới hạn), không cần quét QR hay mở điện thoại.
  */
 export function AssistantChatPage() {

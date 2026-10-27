@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { confirm } from '@/shared/ui/confirm-dialog'
 
 /**
- * Nút Tắt / Bật bot khẩn ở thanh đầu màn «Gửi tin» — chỉ quản trị thấy (máy chủ cũng chặn người khác). Tắt: hộp xác nhận
+ * Nút Tắt / Bật bot khẩn ở thanh đầu màn "Gửi tin" — chỉ quản trị thấy (máy chủ cũng chặn người khác). Tắt: hộp xác nhận
  * đỏ vì mọi tin gửi ra dừng ngay; Bật: xác nhận thường. Chưa biết tình trạng thì ẩn nút (không đoán hướng bấm).
  */
 export function BotHaltToggleButton() {

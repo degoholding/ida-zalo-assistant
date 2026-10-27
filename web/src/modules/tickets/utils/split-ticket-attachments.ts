@@ -10,7 +10,7 @@ export interface TicketImage extends LightboxImage {
 
 /**
  * Tách tệp kèm thành ẢNH xem được (đã vào kho) và phần còn lại. Ảnh CHƯA vào kho (`download_url` rỗng) rơi sang
- * danh sách tệp để còn hiện «đang tải về kho» — bỏ vào lưới ảnh thì là một ô ảnh vỡ.
+ * danh sách tệp để còn hiện "đang tải về kho" — bỏ vào lưới ảnh thì là một ô ảnh vỡ.
  */
 export function splitTicketAttachments(attachments: TicketAttachment[]): { images: TicketImage[]; files: TicketAttachment[] } {
   const images: TicketImage[] = []

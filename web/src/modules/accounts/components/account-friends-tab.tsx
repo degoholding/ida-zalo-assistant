@@ -47,10 +47,10 @@ function FriendHelp() {
       <div className="space-y-1">
         <p className="font-medium">Đưa bot vào nhóm Zalo để bot đọc tin</p>
         <ol className="list-decimal space-y-0.5 pl-5 text-muted-foreground">
-          <li>Kết bạn với bot: tìm số điện thoại bên dưới rồi «Gửi lời mời», hoặc người đó tự mời bot rồi bấm «Đồng ý» ở mục Lời mời đến.</li>
-          <li>Kết bạn xong, người đó vào nhóm Zalo → «Thêm thành viên» → chọn bot.</li>
+          <li>Kết bạn với bot: tìm số điện thoại bên dưới rồi "Gửi lời mời", hoặc người đó tự mời bot rồi bấm "Đồng ý" ở mục Lời mời đến.</li>
+          <li>Kết bạn xong, người đó vào nhóm Zalo → "Thêm thành viên" → chọn bot.</li>
           <li>
-            Bật «Đọc tin» cho nhóm ở màn <Link to={appRoutes.groups.list} className="text-primary hover:underline">Nhóm</Link> (hoặc chuyển nhóm sang Nội bộ).
+            Bật "Đọc tin" cho nhóm ở màn <Link to={appRoutes.groups.list} className="text-primary hover:underline">Nhóm</Link> (hoặc chuyển nhóm sang Nội bộ).
           </li>
         </ol>
       </div>
@@ -201,7 +201,7 @@ function SentCard({ accountId, overview }: { accountId: number; overview: Friend
 }
 
 /**
- * Tab «Kết bạn» của trang tài khoản bot: tra số điện thoại → mời kết bạn, đồng ý / từ chối lời mời đến, rút lời mời đã
+ * Tab "Kết bạn" của trang tài khoản bot: tra số điện thoại → mời kết bạn, đồng ý / từ chối lời mời đến, rút lời mời đã
  * gửi. Mục đích: nhân sự kết bạn với bot rồi kéo bot vào nhóm Zalo công việc để bot đọc tin.
  */
 export function AccountFriendsTab({ account }: { account: BotAccountDetail }) {

@@ -84,7 +84,7 @@ function decorate(rows: RowDataPacket[]): Record<string, unknown>[] {
     read_messages: Boolean(row.read_messages),
     capture_files: Boolean(row.capture_files),
     is_confidential: Boolean(row.is_confidential),
-    // «Chỉ lưu»: không có bot Trợ lý trong nhóm → không xử lý tự động (cảnh báo, bắt việc, bản tin…)
+    // "Chỉ lưu": không có bot Trợ lý trong nhóm → không xử lý tự động (cảnh báo, bắt việc, bản tin…)
     collect_only: Boolean(row.collect_only),
     file_retention_days: Number(row.file_retention_days),
   }));
@@ -181,7 +181,7 @@ export async function patchGroup(service: Pick<SyncService, "db" | "startBackfil
   if (patch.readMessages && !before.read_messages) {
     try {
       await service.startBackfill(id, { full: false });
-      return "Đã lưu và bật đọc; đang lấy tin gần nhất của nhóm ở nền (bấm «Lấy tin cũ» để kéo toàn bộ lịch sử).";
+      return "Đã lưu và bật đọc; đang lấy tin gần nhất của nhóm ở nền (bấm 'Lấy tin cũ' để kéo toàn bộ lịch sử).";
     } catch (error) {
       return `Đã lưu và bật đọc; lấy tin cũ không được: ${describeError(error)}`;
     }

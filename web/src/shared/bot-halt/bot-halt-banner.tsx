@@ -8,7 +8,7 @@ import { formatHaltSince } from './format-halt-since'
 import { useBotHaltStatus } from './use-bot-halt-status'
 
 /**
- * Dải đỏ trên mọi trang khi bot đang TẮT KHẨN. Mọi người đăng nhập thấy; chỉ quản trị có link tới màn «Gửi tin» (nơi
+ * Dải đỏ trên mọi trang khi bot đang TẮT KHẨN. Mọi người đăng nhập thấy; chỉ quản trị có link tới màn "Gửi tin" (nơi
  * bật lại). Chưa biết tình trạng (đang tải / lỗi mạng lần đầu) thì không hiện gì.
  */
 export function BotHaltBanner() {

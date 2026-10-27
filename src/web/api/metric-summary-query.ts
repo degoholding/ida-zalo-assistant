@@ -5,7 +5,7 @@ import { aggregateMetrics, comparisonPeriod, listMetricCatalog, type MetricGroup
 import { vnLocalTime } from "../../schedule/work-calendar.js";
 import { ApiError } from "./api-http.js";
 
-// Truy vấn cho màn «Số liệu»: tổng hợp (thêm % đổi + số cờ), ô lọc (khu vực / nhân viên), ngày hợp lệ. Lõi gom nhóm ở
+// Truy vấn cho màn "Số liệu": tổng hợp (thêm % đổi + số cờ), ô lọc (khu vực / nhân viên), ngày hợp lệ. Lõi gom nhóm ở
 // src/metrics/ — ở đây chỉ phần riêng của màn web.
 
 export const MAX_RANGE_DAYS = 366;
@@ -13,7 +13,7 @@ const ANY_FLAG = MetricFlag.Negative | MetricFlag.Deviation | MetricFlag.Unparse
 const DAY_MS = 86_400_000;
 const GROUPS = new Set<string>(["staff", "area", "date"]);
 
-/** «YYYY-MM-DD» có thật (không nhận 2026-02-30); sai → 422. */
+/** "YYYY-MM-DD" có thật (không nhận 2026-02-30); sai → 422. */
 export function parseIsoDay(raw: string | null, label: string): string {
   const text = (raw ?? "").trim();
   const ok = /^\d{4}-\d{2}-\d{2}$/.test(text) && new Date(`${text}T00:00:00Z`).toISOString().slice(0, 10) === text;
@@ -105,7 +105,7 @@ export async function listFilterOptions(db: Db): Promise<{ areas: { key: string;
   };
 }
 
-/** Người quản lý của từng nhân viên (qua `owner_entry_id`) — cho tab «Chưa báo». */
+/** Người quản lý của từng nhân viên (qua `owner_entry_id`) — cho tab "Chưa báo". */
 export async function loadManagerNames(db: Db, ids: number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();
   const [rows] = await db.query<RowDataPacket[]>(

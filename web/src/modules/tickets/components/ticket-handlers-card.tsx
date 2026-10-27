@@ -12,7 +12,7 @@ import type { TicketHandler } from '../types/ticket'
 import { TicketHandlerAddDialog } from './ticket-handler-add-dialog'
 
 /**
- * Dải «Người xử lý ticket» trên màn danh sách. Ai cũng xem được; thêm / bỏ chỉ quản trị — máy chủ không khai quyền
+ * Dải "Người xử lý ticket" trên màn danh sách. Ai cũng xem được; thêm / bỏ chỉ quản trị — máy chủ không khai quyền
  * riêng cho hai đường ghi `/api/ticket-handlers` nên chúng rơi về mặc định `setting.write`, gác giống hệt ở đây.
  */
 export function TicketHandlersCard() {
@@ -25,7 +25,7 @@ export function TicketHandlersCard() {
   const removeHandler = async (handler: TicketHandler) => {
     const ok = await confirm({
       title: 'Bỏ người xử lý',
-      message: `${handler.name} sẽ thôi nhận tin báo ticket mới và không gõ «nhận / xong T-…» trên Zalo được nữa.`,
+      message: `${handler.name} sẽ thôi nhận tin báo ticket mới và không gõ "nhận / xong T-…" trên Zalo được nữa.`,
       confirmLabel: 'Bỏ',
     })
     if (ok) remove.mutate(handler.contact_id)
@@ -37,7 +37,7 @@ export function TicketHandlersCard() {
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">Người xử lý ticket</h2>
           <p className="text-xs text-muted-foreground">
-            Những người này nhận tin báo ticket mới qua Zalo và gõ được «nhận T-12», «xong T-12 &lt;ghi chú&gt;».
+            Những người này nhận tin báo ticket mới qua Zalo và gõ được "nhận T-12", "xong T-12 &lt;ghi chú&gt;".
           </p>
         </div>
         {canManage && (
@@ -52,7 +52,7 @@ export function TicketHandlersCard() {
         <Skeleton className="h-8 w-64" />
       ) : !handlers?.length ? (
         <p className="text-sm text-muted-foreground">
-          Chưa có ai — ticket mới sẽ không báo cho ai.{canManage ? ' Bấm «Thêm người» để chọn trong Danh bạ.' : ''}
+          Chưa có ai — ticket mới sẽ không báo cho ai.{canManage ? ' Bấm "Thêm người" để chọn trong Danh bạ.' : ''}
         </p>
       ) : (
         <ul className="flex flex-wrap gap-2">

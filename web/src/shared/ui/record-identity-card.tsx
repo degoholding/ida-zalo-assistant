@@ -41,8 +41,8 @@ export function RecordIdentityCard({
 
       <div className="min-w-0 flex-1">
         {/*  ⚠️ `line-clamp-2` chứ KHÔNG `truncate`. Cắt ở đúng một dòng thì trên
-             màn 390px một cái tên dài hai chữ cũng mất đuôi — «Trưởng phòng Thu
-             mua (Dem…» — mà tên chính là thứ duy nhất nói người ta đang mở bản
+             màn 390px một cái tên dài hai chữ cũng mất đuôi — "Trưởng phòng Thu
+             mua (Dem…" — mà tên chính là thứ duy nhất nói người ta đang mở bản
              ghi nào. Hai dòng đủ cho mọi tên danh mục đang có, và vẫn có trần
              nên một cái tên khai ẩu không đẩy được bộ nút xuống dưới nếp gấp. */}
         <h1 className="line-clamp-2 text-lg font-semibold text-navy">{title}</h1>

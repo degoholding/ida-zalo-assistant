@@ -7,7 +7,7 @@ import { MetricFlagChips } from '../components/metric-flag-chips'
 import { METRIC_FLAG_OPTIONS, type MetricValueRow } from '../types/metric'
 import { formatMetricNumber } from '../utils/format-metric-number'
 
-/** Cột «Chi tiết» — `key` cột sắp xếp PHẢI trùng `sorts` của `METRIC_VALUE_LIST_SPEC` (`src/web/api/metrics-api.ts`). */
+/** Cột "Chi tiết" — `key` cột sắp xếp PHẢI trùng `sorts` của `METRIC_VALUE_LIST_SPEC` (`src/web/api/metrics-api.ts`). */
 export const METRIC_VALUE_COLUMNS: DataTableColumn<MetricValueRow>[] = [
   { key: 'metric_date', header: 'Ngày', width: 110, sortable: true, sortDescFirst: true, cell: (row) => formatDate(row.metric_date) },
   { key: 'staff_name', header: 'Nhân viên', width: 180, sortable: true, hideable: false, wrap: true, cell: (row) => row.staff_name || '—' },
@@ -23,14 +23,14 @@ export const METRIC_VALUE_COLUMNS: DataTableColumn<MetricValueRow>[] = [
   { key: 'source_name', header: 'Nguồn', width: 160, defaultHidden: true, cell: (row) => row.source_name },
 ]
 
-/** Tab «Chi tiết»: chỉ xem (không thêm / sửa tay — số do bot đọc từ bảng), lọc theo ngày và cờ. */
+/** Tab "Chi tiết": chỉ xem (không thêm / sửa tay — số do bot đọc từ bảng), lọc theo ngày và cờ. */
 export const metricValueCrudConfig: CrudConfig<MetricValueRow> = {
   entity: 'metric',
   title: 'Số liệu',
   description: 'Từng số bot đã đọc từ bảng Google Sheets. Chỉ xem — muốn sửa số thì sửa trong bảng, bot sẽ đọc lại.',
   unitLabel: 'dòng số liệu',
   apiPath: METRIC_VALUES_API_PATH,
-  emptyMessage: 'Chưa có số liệu nào — cấu hình nguồn ở màn Nguồn số liệu rồi bấm «Đọc ngay».',
+  emptyMessage: 'Chưa có số liệu nào — cấu hình nguồn ở màn Nguồn số liệu rồi bấm "Đọc ngay".',
   storageKey: 'metrics.values',
   searchParam: 'q',
   searchPlaceholder: 'Tìm nhân viên, khu vực, chữ gốc',
@@ -45,7 +45,7 @@ export const metricValueCrudConfig: CrudConfig<MetricValueRow> = {
   ],
   columns: METRIC_VALUE_COLUMNS,
   filterConfig: {
-    // `tab` nằm trên URL của trang «Số liệu» — bấm «Áp dụng» không được quét mất nó
+    // `tab` nằm trên URL của trang "Số liệu" — bấm "Áp dụng" không được quét mất nó
     preserveParams: ['tab'],
     allowConjunctionToggle: true,
     fields: [

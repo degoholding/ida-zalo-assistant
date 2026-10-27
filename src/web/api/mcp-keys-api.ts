@@ -9,7 +9,7 @@ import { recordAudit } from "./audit-log.js";
 import type { ListSpec, SqlPart } from "./list-query.js";
 import { runList } from "./list-runner.js";
 
-// Màn «Khóa MCP» (17/10/2026): mỗi người tự tạo / xem / thu hồi khóa CỦA MÌNH; quản trị xem + thu hồi mọi khóa (`scope=all`).
+// Màn "Khóa MCP" (17/10/2026): mỗi người tự tạo / xem / thu hồi khóa CỦA MÌNH; quản trị xem + thu hồi mọi khóa (`scope=all`).
 // Khóa thô chỉ có trong phản hồi TẠO; không phản hồi nào chứa token_hash. Khóa MCP không tự quản được khóa (không có công cụ).
 
 /** Hạn khóa cho phép chọn trên giao diện (ngày); null = không hết hạn. */
@@ -95,7 +95,7 @@ export function parseCreateKeyInput(body: Record<string, unknown>, principal: Pr
   const accessLevel = Number(body.access_level);
   if (accessLevel !== McpAccessLevel.Read && accessLevel !== McpAccessLevel.ReadWrite) throw invalid("Mức quyền khóa không hợp lệ");
   if (accessLevel > maxAccessLevelForRole(principal.role)) throw new ApiError(403, "forbidden", "Vai trò của anh/chị chỉ được tạo khóa chỉ đọc");
-  if (body.include_confidential !== undefined && typeof body.include_confidential !== "boolean") throw invalid("«Cho đọc nhóm Mật» chỉ nhận bật / tắt");
+  if (body.include_confidential !== undefined && typeof body.include_confidential !== "boolean") throw invalid("'Cho đọc nhóm Mật' chỉ nhận bật / tắt");
   const includeConfidential = body.include_confidential === true;
   if (includeConfidential && !canSeeConfidential(principal)) throw invalid("Tài khoản chưa được cấp quyền xem nhóm Mật nên không tạo được khóa đọc nhóm Mật");
   const rawDays = body.expires_in_days ?? null;
@@ -131,7 +131,7 @@ export const mcpKeyRoutes: ApiRoute[] = [
       if (error instanceof McpKeyValidationError) throw invalid(error.message);
       throw error;
     }
-    await recordAudit(service.db, { entity: "mcp_key", entityId: created.id, action: "create", message: `Tạo khóa MCP «${input.name}» (${created.prefix})` });
+    await recordAudit(service.db, { entity: "mcp_key", entityId: created.id, action: "create", message: `Tạo khóa MCP "${input.name}" (${created.prefix})` });
     // Khóa thô chỉ nằm ở đây — không log, không lưu
     sendOk(response, { key: await loadKey(service.db, principal, created.id), token: created.token }, "Đã tạo khóa — chép ngay, sẽ không hiện lại", 201);
   }],
@@ -142,7 +142,7 @@ export const mcpKeyRoutes: ApiRoute[] = [
     // Đã thu hồi → trả nguyên, không ghi nhật ký lần hai
     if (before.revoked_at) { sendOk(response, before, "Khóa đã được thu hồi trước đó"); return; }
     const revoked = await revokeMcpKey(service.db, id, principal.fullName, isAdmin(principal) ? undefined : userId);
-    if (revoked) await recordAudit(service.db, { entity: "mcp_key", entityId: id, action: "revoke", message: `Thu hồi khóa MCP «${before.name}» (${before.prefix})` });
+    if (revoked) await recordAudit(service.db, { entity: "mcp_key", entityId: id, action: "revoke", message: `Thu hồi khóa MCP "${before.name}" (${before.prefix})` });
     sendOk(response, await loadKey(service.db, principal, id), "Đã thu hồi khóa");
   }],
 ];

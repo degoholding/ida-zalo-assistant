@@ -15,7 +15,7 @@ interface MetricMappingFieldProps {
   disabled: boolean
 }
 
-/** Ô tự vẽ «Ánh xạ cột»: cột ngày, cột nhân viên (+ theo mã / tên), cột khu vực, danh sách chỉ tiêu. */
+/** Ô tự vẽ "Ánh xạ cột": cột ngày, cột nhân viên (+ theo mã / tên), cột khu vực, danh sách chỉ tiêu. */
 export function MetricMappingField({ control, name, disabled }: MetricMappingFieldProps) {
   const { field } = useController({ control, name })
   const mapping: MetricMapping = (field.value as MetricMapping | null) ?? createEmptyMapping()
@@ -28,7 +28,7 @@ export function MetricMappingField({ control, name, disabled }: MetricMappingFie
       <div>
         <h3 className="text-sm font-semibold">Ánh xạ cột</h3>
         <p className="text-xs text-muted-foreground">
-          Mỗi ô nhập MỘT cột của bảng: gõ đúng chữ ở dòng tiêu đề (không phân biệt hoa thường, dấu) hoặc chữ cột A…ZZ. Bấm «Kiểm tra đọc thử» để thấy bảng khớp cột nào.
+          Mỗi ô nhập MỘT cột của bảng: gõ đúng chữ ở dòng tiêu đề (không phân biệt hoa thường, dấu) hoặc chữ cột A…ZZ. Bấm "Kiểm tra đọc thử" để thấy bảng khớp cột nào.
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-4">

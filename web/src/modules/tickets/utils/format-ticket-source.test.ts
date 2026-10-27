@@ -12,7 +12,7 @@ describe('formatTicketSource', () => {
     expect(formatTicketSource({ source_kind: 'group', source_name: '   ' })).toBe('Nhóm (chưa rõ tên)')
   })
 
-  it('shows «Tin riêng» for a direct message whatever name the server sends', () => {
+  it('shows "Tin riêng" for a direct message whatever name the server sends', () => {
     expect(formatTicketSource({ source_kind: 'direct', source_name: 'Tin riêng' })).toBe('Tin riêng')
     expect(formatTicketSource({ source_kind: 'direct', source_name: '' })).toBe('Tin riêng')
   })

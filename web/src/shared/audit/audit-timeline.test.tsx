@@ -37,7 +37,7 @@ describe('AuditTimeline', () => {
     expect(apiGet).not.toHaveBeenCalled()
   })
 
-  it('says «no permission» on 403 instead of «Chưa có thao tác nào»', async () => {
+  it('says "no permission" on 403 instead of "Chưa có thao tác nào"', async () => {
     apiGet.mockRejectedValue({ response: { status: 403 } })
     renderTimeline()
     expect(await screen.findByText('Bạn không có quyền xem lịch sử thao tác.')).toBeInTheDocument()

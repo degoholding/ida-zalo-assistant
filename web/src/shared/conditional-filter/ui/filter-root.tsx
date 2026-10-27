@@ -14,12 +14,12 @@ export interface ConditionalFilterProps {
   className?: string
   /**
    * Biểu tượng trên nút. Đổi được vì có màn để nút này CẠNH một nút khác cũng
-   * dùng `SlidersHorizontal` (menu «Tùy chỉnh» của bảng Công việc) — hai biểu
+   * dùng `SlidersHorizontal` (menu "Tùy chỉnh" của bảng Công việc) — hai biểu
    * tượng giống hệt nhau cạnh nhau thì không ai phân biệt được nút nào.
    */
   icon?: LucideIcon
   /**
-   * Lớp CSS cho riêng chữ «Bộ lọc» trên nút — có để màn hẹp thu nút về còn biểu
+   * Lớp CSS cho riêng chữ "Bộ lọc" trên nút — có để màn hẹp thu nút về còn biểu
    * tượng (`max-md:hidden`) mà không mất huy hiệu đếm điều kiện bên cạnh.
    *
    * ⚠️ Ẩn chữ thì `aria-label` phải bù vào, nếu không nút chỉ còn một hình và
@@ -89,7 +89,7 @@ export interface ConditionalFilterBodyProps {
 }
 
 /**
- * RUỘT của bộ lọc điều kiện: danh sách dòng + chân («Thêm điều kiện», VÀ/HOẶC,
+ * RUỘT của bộ lọc điều kiện: danh sách dòng + chân ("Thêm điều kiện", VÀ/HOẶC,
  * và tùy chọn cặp nút Xóa hết / Áp dụng).
  *
  * Tách khỏi `ConditionalFilter` để cùng một bộ lọc dùng được ở hai chỗ mở khác

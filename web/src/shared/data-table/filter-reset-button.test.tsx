@@ -85,7 +85,7 @@ describe('FilterResetButton', () => {
   })
 
   it('param được keepParams giữ thì MỘT MÌNH nó không tính là đang lọc', async () => {
-    //  Đứng ở tab «Văn bản đi» mà chưa lọc gì thì không được mọc nút Xóa lọc.
+    //  Đứng ở tab "Văn bản đi" mà chưa lọc gì thì không được mọc nút Xóa lọc.
     build('/document/books?kind=2', { keepParams: ['kind'] })
     expect(nut()).not.toBeInTheDocument()
   })

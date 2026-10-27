@@ -9,7 +9,7 @@ export interface ResolvedSettingsSection extends Omit<SettingsSection, 'keys'> {
 
 /**
  * Chia các khóa của một tab vào thẻ theo khai báo `sections` (giữ thứ tự khai báo). Khóa máy chủ trả về mà chưa khai
- * thẻ nào thì gom vào thẻ «Khác» cuối cùng — thêm cài đặt mới phía máy chủ không bị mất khỏi màn hình. Thẻ rỗng bị bỏ.
+ * thẻ nào thì gom vào thẻ "Khác" cuối cùng — thêm cài đặt mới phía máy chủ không bị mất khỏi màn hình. Thẻ rỗng bị bỏ.
  */
 export function groupSettingsIntoSections(sections: SettingsSection[], settings: SettingView[]): ResolvedSettingsSection[] {
   const byKey = new Map(settings.map((setting) => [setting.key, setting]))

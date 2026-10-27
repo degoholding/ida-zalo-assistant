@@ -52,6 +52,6 @@ export const FRIEND_RELATION_LABELS: Record<FriendRelation, string> = {
   self: 'Đây là chính tài khoản bot',
   friend: 'Đã là bạn của bot',
   requested: 'Bot đã mời, đang chờ người này đồng ý',
-  incoming: 'Người này đang mời bot — đồng ý ở mục «Lời mời đến»',
+  incoming: 'Người này đang mời bot — đồng ý ở mục "Lời mời đến"',
   none: 'Chưa kết bạn',
 }

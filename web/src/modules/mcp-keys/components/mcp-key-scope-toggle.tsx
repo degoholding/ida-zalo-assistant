@@ -5,11 +5,11 @@ import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { useMcpKeyOptions } from '../hooks/use-mcp-key-actions'
 
-/** Tham số URL bật «Tất cả người dùng» — khớp `scope=all` ở `src/web/api/mcp-keys-api.ts`. */
+/** Tham số URL bật "Tất cả người dùng" — khớp `scope=all` ở `src/web/api/mcp-keys-api.ts`. */
 export const MCP_KEY_SCOPE_PARAM = 'scope'
 export const MCP_KEY_SCOPE_ALL = 'all'
 
-/** Công tắc «Tất cả người dùng» — chỉ quản trị thấy; máy chủ vẫn tự khóa phạm vi, nên đây chỉ là hiển thị. */
+/** Công tắc "Tất cả người dùng" — chỉ quản trị thấy; máy chủ vẫn tự khóa phạm vi, nên đây chỉ là hiển thị. */
 export function McpKeyScopeToggle() {
   const { can } = usePermission()
   const { data: options } = useMcpKeyOptions(can('mcp_key', 'read'))

@@ -21,7 +21,7 @@ export const queryKeys = {
   },
   recipients: {
     all: ['recipients'] as const,
-    /** Ô chọn «Tài khoản web» của người nhận — danh sách người dùng rút gọn. */
+    /** Ô chọn "Tài khoản web" của người nhận — danh sách người dùng rút gọn. */
     userOptions: () => ['recipients', 'user-options'] as const,
   },
   contacts: {
@@ -52,7 +52,7 @@ export const queryKeys = {
   accounts: {
     all: ['accounts'] as const,
     qrLogin: (attemptId: string) => ['accounts', 'qr-login', attemptId] as const,
-    /** Tab «Kết bạn» của một tài khoản bot: lời mời đến / đã gửi. */
+    /** Tab "Kết bạn" của một tài khoản bot: lời mời đến / đã gửi. */
     friends: (id: number) => ['accounts', 'friends', id] as const,
     /**
      * Kết quả tra số điện thoại ở tab Kết bạn. CỐ Ý không nằm dưới `friends(id)`: làm mới danh sách không được tra lại
@@ -63,7 +63,7 @@ export const queryKeys = {
   },
   botHalt: {
     all: ['bot-halt'] as const,
-    /** Tình trạng «tắt bot khẩn» — dải đỏ ở khung trang đọc 30 giây / lần, nút Tắt / Bật làm mới ngay. */
+    /** Tình trạng "tắt bot khẩn" — dải đỏ ở khung trang đọc 30 giây / lần, nút Tắt / Bật làm mới ngay. */
     status: () => ['bot-halt', 'status'] as const,
   },
   imports: {
@@ -85,6 +85,11 @@ export const queryKeys = {
   googleOauth: {
     all: ['google-oauth'] as const,
     status: () => ['google-oauth', 'status'] as const,
+  },
+  /** Chấm trạng thái Google + phiên Zalo ở menu (27/10/2026) — chỉ quản trị, đọc 60 giây / lần. */
+  connectionHealth: {
+    all: ['connection-health'] as const,
+    accounts: () => ['connection-health', 'accounts'] as const,
   },
   assistantChat: {
     all: ['assistant-chat'] as const,

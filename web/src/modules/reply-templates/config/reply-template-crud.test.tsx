@@ -9,7 +9,7 @@ const makeTemplate = (overrides: Partial<ReplyTemplate> = {}): ReplyTemplate => 
   created_at: '2026-10-12T01:00:00Z', updated_at: '2026-10-12T01:00:00Z', can_edit: true, can_review: false, ...overrides,
 })
 
-/** Review phase 10: nhân viên mở mẫu của người khác (`can_edit` = false từ máy chủ) không được thấy «Lưu» (bấm là 403). */
+/** Review phase 10: nhân viên mở mẫu của người khác (`can_edit` = false từ máy chủ) không được thấy "Lưu" (bấm là 403). */
 describe('replyTemplateCrudConfig — row-level edit', () => {
   it('locks the detail form when the server says the caller cannot edit this template', () => {
     expect(replyTemplateCrudConfig.canEditRow?.(makeTemplate({ can_edit: false }))).toBe(false)

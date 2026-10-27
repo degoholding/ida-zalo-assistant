@@ -11,7 +11,7 @@ interface FileTextDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-/** Xem chữ đã bóc của một tệp — đúng thứ bot «nhìn thấy» khi đọc tệp này. */
+/** Xem chữ đã bóc của một tệp — đúng thứ bot "nhìn thấy" khi đọc tệp này. */
 export function FileTextDialog({ file, open, onOpenChange }: FileTextDialogProps) {
   const { data, isLoading, isError } = useFileText(open ? file.id : null)
   return (
@@ -27,7 +27,7 @@ export function FileTextDialog({ file, open, onOpenChange }: FileTextDialogProps
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3">
           {isLoading && <p className="text-sm text-muted-foreground">Đang tải…</p>}
-          {isError && <p className="text-sm text-muted-foreground">Tệp này chưa được đọc — bấm «Đọc» ở dòng tệp.</p>}
+          {isError && <p className="text-sm text-muted-foreground">Tệp này chưa được đọc — bấm "Đọc" ở dòng tệp.</p>}
           {data && <pre className="font-sans text-sm whitespace-pre-wrap">{data.text}</pre>}
         </div>
       </DialogContent>

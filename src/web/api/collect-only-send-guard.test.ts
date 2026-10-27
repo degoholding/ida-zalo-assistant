@@ -8,7 +8,7 @@ import { assertThreadSendable, mapCollectOnlyError } from "./collect-only-send-g
 const dbReturning = (collectOnly: number | null): Db =>
   ({ query: async () => [collectOnly === null ? [] : [{ collect_only: collectOnly }]] }) as unknown as Db;
 
-test("ô soạn: cuộc chỉ lưu bị từ chối 409 kèm câu «Bot này chỉ thu thập dữ liệu, không gửi được»", async () => {
+test("ô soạn: cuộc chỉ lưu bị từ chối 409 kèm câu 'Bot này chỉ thu thập dữ liệu, không gửi được'", async () => {
   await assert.rejects(assertThreadSendable(dbReturning(1), 7), (error) =>
     error instanceof ApiError && error.status === 409 && error.code === "collect_only" && error.message === COLLECT_ONLY_MESSAGE);
 });

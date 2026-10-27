@@ -20,28 +20,28 @@ function renderNameCell(group: GroupDetail) {
 }
 
 describe('group list and form config', () => {
-  it('marks a confidential group with a «Mật» pill next to its name', () => {
+  it('marks a confidential group with a "Mật" pill next to its name', () => {
     renderNameCell(makeGroup({ is_confidential: true }))
     expect(screen.getByText('Ban giám đốc')).toBeInTheDocument()
     expect(screen.getByText('Mật')).toBeInTheDocument()
   })
 
-  it('marks a collect-only group with a «Chỉ lưu» pill and a normal group without one', () => {
+  it('marks a collect-only group with a "Chỉ lưu" pill and a normal group without one', () => {
     renderNameCell(makeGroup({ collect_only: true }))
     expect(screen.getByText('Chỉ lưu')).toBeInTheDocument()
   })
 
-  it('shows no «Chỉ lưu» pill when an assistant bot is in the group', () => {
+  it('shows no "Chỉ lưu" pill when an assistant bot is in the group', () => {
     renderNameCell(makeGroup())
     expect(screen.queryByText('Chỉ lưu')).toBeNull()
   })
 
-  it('shows no «Mật» pill for a normal group', () => {
+  it('shows no "Mật" pill for a normal group', () => {
     renderNameCell(makeGroup())
     expect(screen.queryByText('Mật')).toBeNull()
   })
 
-  it('lets admins edit «Nhóm Mật» as a switch and «Số ngày giữ tệp gốc» as a required number', () => {
+  it('lets admins edit "Nhóm Mật" as a switch and "Số ngày giữ tệp gốc" as a required number', () => {
     // Tên ô PHẢI trùng khóa PATCH /api/groups/:id nhận — sai tên thì máy chủ bỏ qua im lặng
     const { formFields } = groupCrudConfig
     const fields = Array.isArray(formFields) ? formFields : formFields(makeGroup())

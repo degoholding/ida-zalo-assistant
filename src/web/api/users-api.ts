@@ -164,7 +164,7 @@ async function assertContactFree(db: Db, contactId: number | null | undefined, e
   if (!contactId) return;
   const [rows] = await db.query<RowDataPacket[]>(
     "SELECT COALESCE(NULLIF(full_name, ''), username, email) AS name FROM app_user WHERE contact_id = ? AND is_active = 1 AND id <> ? LIMIT 1", [contactId, exceptId]);
-  if (rows[0]) throw invalid(`Người Zalo này đã gắn với tài khoản «${rows[0].name}»`);
+  if (rows[0]) throw invalid(`Người Zalo này đã gắn với tài khoản "${rows[0].name}"`);
 }
 
 export const userRoutes: ApiRoute[] = [
@@ -214,7 +214,7 @@ export const userRoutes: ApiRoute[] = [
     if (input.groupIds) await saveScope(db, id, input.groupIds);
     const after = await getUserDetail(db, id);
     const changed = diffFields(before, after, FIELD_LABELS);
-    // Đặt lại mật khẩu (cùng / khác trạng thái «có mật khẩu») vẫn là một thay đổi — ghi nhật ký, đá phiên cũ
+    // Đặt lại mật khẩu (cùng / khác trạng thái "có mật khẩu") vẫn là một thay đổi — ghi nhật ký, đá phiên cũ
     if (input.passwordHash && !changed.includes("Mật khẩu")) changed.push("Mật khẩu");
     // Quyền / phạm vi đổi thì phiên đang mở phải đăng nhập lại để nhận quyền mới (tắt tài khoản = văng ngay)
     if (changed.some((label) => ["Vai trò", "Mọi nhóm", "Xem lịch sử thao tác", "Đang dùng", "Nhóm được xem", "Email", "Tên đăng nhập", "Mật khẩu", "Có mật khẩu"].includes(label))) {

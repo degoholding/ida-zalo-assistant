@@ -1,6 +1,6 @@
 import type { SettingChoice } from '../types/setting'
 
-/** Chuỗi «pdf, mp3» của form → tập giá trị đang tick (bỏ khoảng trắng, chữ thường, bỏ dấu chấm đầu). */
+/** Chuỗi "pdf, mp3" của form → tập giá trị đang tick (bỏ khoảng trắng, chữ thường, bỏ dấu chấm đầu). */
 export function parseChoiceList(value: unknown): Set<string> {
   if (typeof value !== 'string') return new Set()
   return new Set(

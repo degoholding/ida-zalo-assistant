@@ -16,7 +16,7 @@ import { runList } from "./list-runner.js";
 
 const DIRECT = ConversationType.Direct;
 
-/** Ô «Loại» của biểu mẫu: "auto" = theo nhóm, còn lại là mã loại chỉnh tay. */
+/** Ô "Loại" của biểu mẫu: "auto" = theo nhóm, còn lại là mã loại chỉnh tay. */
 export const KIND_MODE_AUTO = "auto";
 
 /** Giới hạn của bộ lọc `group_id`: chỉ nhóm trong phạm vi người hỏi, và (AI / MCP) không đếm nhóm Mật khi không có quyền Mật. */
@@ -28,9 +28,9 @@ export interface GroupFilterLimits {
 const UNRESTRICTED_GROUPS: GroupFilterLimits = { allowedGroupIds: null, hideConfidential: false };
 
 /**
- * Lọc «ở nhóm nào». Id người gọi gửi được GIAO với phạm vi + bỏ nhóm Mật (nếu `hideConfidential`) — không thì lọc `group_id = 999`
+ * Lọc "ở nhóm nào". Id người gọi gửi được GIAO với phạm vi + bỏ nhóm Mật (nếu `hideConfidential`) — không thì lọc `group_id = 999`
  * liệt kê được thành viên nhóm ngoài phạm vi / nhóm Mật (kênh phụ, M1 review phase 2). Với `ne` / `not_in`, nhóm không thấy được
- * coi như không tồn tại: «không ở nhóm X» đúng với mọi người, không lộ ai ở X.
+ * coi như không tồn tại: "không ở nhóm X" đúng với mọi người, không lộ ai ở X.
  */
 export function contactGroupIdField(limits: GroupFilterLimits): FieldSpec {
   return {
@@ -67,7 +67,7 @@ export const CONTACT_LIST_SPEC: ListSpec = {
     dm_count: { sql: "c.dm_count", type: "number" },
     last_dm_at: { sql: "c.last_dm_at", type: "date" },
     first_seen_at: { sql: "c.first_seen_at", type: "date" },
-    // Đã từng nhắn riêng bot (lọc nhanh «chỉ người nhắn riêng»)
+    // Đã từng nhắn riêng bot (lọc nhanh "chỉ người nhắn riêng")
     direct: {
       type: "boolean",
       build: (_operator, values) => ({ sql: values[0] === "1" || values[0] === "true" ? "c.last_dm_at IS NOT NULL" : "c.last_dm_at IS NULL", params: [] }),
@@ -142,7 +142,7 @@ async function decorate(db: Db, rows: RowDataPacket[], includePhone: boolean): P
   });
 }
 
-/** Bản ListSpec cho người KHÔNG xem được SĐT: bỏ lọc / tìm theo SĐT — không thì dò «phone=09…» là biết SĐT dù cột bị ẩn. */
+/** Bản ListSpec cho người KHÔNG xem được SĐT: bỏ lọc / tìm theo SĐT — không thì dò "phone=09…" là biết SĐT dù cột bị ẩn. */
 const { phone: _phoneFilter, ...FIELDS_WITHOUT_PHONE } = CONTACT_LIST_SPEC.fields;
 export const CONTACT_LIST_SPEC_NO_PHONE: ListSpec = {
   ...CONTACT_LIST_SPEC, fields: FIELDS_WITHOUT_PHONE,
@@ -201,7 +201,7 @@ export async function getContactCardByUid(db: Db, uid: string): Promise<Record<s
   return loadContact(db, "c.zalo_uid = ?", uid, false);
 }
 
-/** `company_id`: 0 / "" / null đều là «chưa gán»; số khác phải là công ty có thật. */
+/** `company_id`: 0 / "" / null đều là "chưa gán"; số khác phải là công ty có thật. */
 export async function parseCompanyId(db: Db, raw: unknown): Promise<number | null> {
   if (raw === null || raw === "" || raw === undefined || Number(raw) === 0) return null;
   const companyId = Number(raw);

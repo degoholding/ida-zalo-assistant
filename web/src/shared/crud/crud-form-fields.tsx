@@ -66,7 +66,7 @@ export function CrudFormFields({
 
   //  Gom theo DẢI LIÊN TIẾP, không gom theo tên nhóm. Gom theo tên thì ô không
   //  khai nhóm nằm ở CUỐI form bị kéo ngược lên đầu — nhập chung với cụm không
-  //  tên mở màn — và người khai config không cách nào xếp «Ghi chú» xuống dưới
+  //  tên mở màn — và người khai config không cách nào xếp "Ghi chú" xuống dưới
   //  cùng. Dải liên tiếp giữ đúng thứ tự khai, đọc đúng như lúc viết config.
   const groups: { section: string; fields: CrudFormField[] }[] = []
   for (const field of visible) {
@@ -81,8 +81,8 @@ export function CrudFormFields({
     const switches = group.filter((field) => field.type === 'switch')
 
     //  ⚠️ RỔ NÀO LÊN TRƯỚC do ô ĐẦU TIÊN người khai config viết ra quyết định.
-    //  Bản cũ luôn để ô nhập lên trên, nên ở cụm *«Quỹ phép và lương»* ô «Hạn
-    //  mức mỗi năm» — thứ chỉ hiện ra khi bật công tắc «Trừ vào quỹ phép năm» —
+    //  Bản cũ luôn để ô nhập lên trên, nên ở cụm *"Quỹ phép và lương"* ô "Hạn
+    //  mức mỗi năm" — thứ chỉ hiện ra khi bật công tắc "Trừ vào quỹ phép năm" —
     //  lại nằm PHÍA TRÊN chính cái công tắc mở nó: bật một nút ở dưới thì một ô
     //  mọc ra ở trên, ngoài tầm mắt đang nhìn. Ô phụ thuộc phải đứng sau ô chi
     //  phối nó, và thứ tự khai trong config đã nói đúng điều đó rồi.

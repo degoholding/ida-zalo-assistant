@@ -11,7 +11,7 @@ import type { ListSpec, Operator, SqlPart } from "./list-query.js";
 import { runList } from "./list-runner.js";
 import { parseVnDayStart } from "./message-search-api.js";
 
-// Màn web «Gửi tin» (phase 9, phase 5): nhật ký lệnh gửi (Zalo + tin quản trị gửi từ web), hủy lệnh hẹn, gửi lại nơi lỗi,
+// Màn web "Gửi tin" (phase 9, phase 5): nhật ký lệnh gửi (Zalo + tin quản trị gửi từ web), hủy lệnh hẹn, gửi lại nơi lỗi,
 // Tắt / Bật bot khẩn. Phạm vi dòng khuôn `briefs-api.ts`: quản trị thấy hết; vai trò khác chỉ thấy lệnh do CHÍNH mình ra
 // (tài khoản web gắn liên hệ `app_user.contact_id` → `contact.zalo_uid` = `requester_uid`); chưa gắn liên hệ → rỗng; lệnh
 // người khác (kể cả nhóm Mật) → 404. Gửi lại nơi lỗi + Tắt / Bật chỉ quản trị.
@@ -20,7 +20,7 @@ const DAY_MS = 86_400_000;
 const BODY_PREVIEW_CHARS = 80;
 const GENERIC_ERROR = "Gửi không được — nhờ quản trị xem nhật ký hệ thống.";
 
-/** «Trong khoảng» (hoặc đúng ngày / ≤ / ≥…) trên một cột ngày theo giờ Việt Nam — cùng khuôn `buildBriefCreatedAtCondition`. */
+/** "Trong khoảng" (hoặc đúng ngày / ≤ / ≥…) trên một cột ngày theo giờ Việt Nam — cùng khuôn `buildBriefCreatedAtCondition`. */
 export function buildVnDayCondition(column: string, operator: Operator, values: string[]): SqlPart | null {
   const [first, second] = values.map(parseVnDayStart);
   if (!first) return null;
@@ -88,7 +88,7 @@ async function getCommandDetail(db: Db, id: number, principal: Principal): Promi
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${COMMAND_COLUMNS}, c.body, c.attachment_ids ${COMMAND_FROM} WHERE c.id = ? AND (${where.sql})`, [id, ...where.params]);
   const row = rows[0];
-  // Ngoài phạm vi cũng 404 — không để lộ «có lệnh này nhưng không được xem»
+  // Ngoài phạm vi cũng 404 — không để lộ "có lệnh này nhưng không được xem"
   if (!row) throw new ApiError(404, "not_found", "Không có lệnh gửi này");
   const [targets] = await db.query<RowDataPacket[]>(
     `SELECT id, target_kind, thread_id, display_name, status, attempt_no, error, sent_at FROM send_command_target WHERE command_id = ? ORDER BY id`, [id]);
@@ -146,7 +146,7 @@ export const sendCommandRoutes: ApiRoute[] = [
 
   ["POST", /^\/api\/send-commands\/(\d+)\/actions$/, runCommandAction],
 
-  // Dải đỏ «bot đang tắt» đọc cho mọi người đăng nhập (quyền conversation:read); bật / tắt không khai → chỉ quản trị
+  // Dải đỏ "bot đang tắt" đọc cho mọi người đăng nhập (quyền conversation:read); bật / tắt không khai → chỉ quản trị
   ["GET", /^\/api\/bot-halt$/, async ({ response, service }) => sendOk(response, service.botHalt.status())],
 
   ["POST", /^\/api\/bot-halt$/, async ({ request, response, service, principal }) => {

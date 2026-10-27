@@ -7,7 +7,7 @@ export interface SendCommandForActions {
 
 /**
  * Nút thao tác hiện được, theo luật máy chủ: hủy chỉ khi chờ xác nhận / đang hẹn; gửi lại nơi lỗi chỉ quản trị và chỉ
- * khi lệnh đã chạy xong (hoặc đang gửi) mà còn nơi lỗi. `isAdmin` false → không bao giờ có «gửi lại».
+ * khi lệnh đã chạy xong (hoặc đang gửi) mà còn nơi lỗi. `isAdmin` false → không bao giờ có "gửi lại".
  */
 export function getSendCommandActions(command: SendCommandForActions, isAdmin: boolean): SendCommandAction[] {
   const actions: SendCommandAction[] = []

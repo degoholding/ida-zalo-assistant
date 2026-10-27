@@ -8,7 +8,7 @@ import { ReadOnlyValue } from '@/shared/ui/read-only-value'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 
 const ROLE_HINT =
-  'Có vai trò thì bot trả lời khi người này nhắn riêng. Trong nhóm: nhân sự gọi được bot (cài đặt «Trong nhóm: nhân sự gọi được bot»), khách hàng thì không. Chỉ quản trị đổi được.'
+  'Có vai trò thì bot trả lời khi người này nhắn riêng. Trong nhóm: nhân sự gọi được bot (cài đặt "Trong nhóm: nhân sự gọi được bot"), khách hàng thì không. Chỉ quản trị đổi được.'
 
 interface ContactRoleFieldProps {
   control: Control<CrudRecord>
@@ -17,7 +17,7 @@ interface ContactRoleFieldProps {
 }
 
 /**
- * Ô «Vai trò với bot» của hồ sơ Danh bạ. Vai trò này mở quyền gửi lệnh / tắt bot nên CHỈ quản trị (`user.write`) đổi được —
+ * Ô "Vai trò với bot" của hồ sơ Danh bạ. Vai trò này mở quyền gửi lệnh / tắt bot nên CHỈ quản trị (`user.write`) đổi được —
  * người khác thấy chữ, không thấy ô chọn. Máy chủ vẫn chặn riêng (403), đây chỉ là phần hiển thị.
  */
 export function ContactRoleField({ control, name, disabled }: ContactRoleFieldProps) {

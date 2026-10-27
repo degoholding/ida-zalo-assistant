@@ -5,7 +5,7 @@ import { usePermission } from '@/core/authorization/use-permission'
 import { Button } from '@/shared/ui/button'
 import { TaskCreateDialog } from './task-create-dialog'
 
-/** Nút «Thêm việc» của thanh công cụ danh sách — chỉ Quản trị / Quản lý (`task.write`) thấy, như ticket. */
+/** Nút "Thêm việc" của thanh công cụ danh sách — chỉ Quản trị / Quản lý (`task.write`) thấy, như ticket. */
 export function TaskCreateButton() {
   const { can } = usePermission()
   const [open, setOpen] = useState(false)

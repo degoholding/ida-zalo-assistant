@@ -37,24 +37,24 @@ export function DataTablePagination({
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const pageItems = getPageItems(page, pageCount)
 
-  //  ⚠️ Bảng RỖNG thì chân bảng IM HẲN. Câu «bảng trống» ngay phía trên đã nói
+  //  ⚠️ Bảng RỖNG thì chân bảng IM HẲN. Câu "bảng trống" ngay phía trên đã nói
   //  đủ — và nói rõ hơn, vì nó phân biệt được *rỗng vì bộ lọc* với *rỗng vì
-  //  chưa có gì*. Thêm dòng «Tổng 0 …» bên dưới chỉ là nói lại cùng điều bằng
+  //  chưa có gì*. Thêm dòng "Tổng 0 …" bên dưới chỉ là nói lại cùng điều bằng
   //  giọng máy móc hơn, kèm ba nút bấm không đi đâu được.
   if (total === 0) return null
 
   //  ⚠️ **VỪA ĐÚNG MỘT TRANG = dãy nút số trang đã chết.** Hai nút lùi/tiến đều
-  //  xám, nút «1» bấm vào vẫn đứng nguyên chỗ cũ. Đo ở tab «Người đang giữ» của
+  //  xám, nút "1" bấm vào vẫn đứng nguyên chỗ cũ. Đo ở tab "Người đang giữ" của
   //  một chức vụ chỉ MỘT người (báo 10/09/2026): chân bảng ăn ~100px trong khi
   //  phần đáng đọc cao 65px.
   const showPageButtons = pageCount > 1
 
   //  ⚠️ **Ô CHỌN SỐ DÒNG CHẾT THEO ĐIỀU KIỆN KHÁC — đừng gộp vào điều kiện
-  //  trên.** Gộp thì sinh ra đúng cái bẫy «nút hoàn tác biến mất vì chính lựa
-  //  chọn cần hoàn tác»: người dùng chọn *100 dòng/trang* trên một danh sách 80
+  //  trên.** Gộp thì sinh ra đúng cái bẫy "nút hoàn tác biến mất vì chính lựa
+  //  chọn cần hoàn tác": người dùng chọn *100 dòng/trang* trên một danh sách 80
   //  dòng → còn một trang → ô chọn biến mất → **không có đường nào quay về 20
   //  dòng/trang nữa**, kẹt với một trang cuộn dài 80 thẻ. Cùng họ với luật ở
-  //  thanh công cụ tab «Người đang giữ»: đang lọc thì ô lọc phải ở lại.
+  //  thanh công cụ tab "Người đang giữ": đang lọc thì ô lọc phải ở lại.
   //
   //  Mốc đúng là *"có lựa chọn nào chia nổi danh sách này thành hai trang
   //  không"* — tức so với cỡ trang NHỎ NHẤT, không so với cỡ trang đang dùng.

@@ -246,7 +246,7 @@ export interface DataTableProps<T> {
    * ⚠️ Thẻ KHÔNG đọc `columns`: cột khai bề rộng, thứ tự, ghim — toàn thứ chỉ
    * có nghĩa trong lưới. Ở thẻ, người dựng tự chọn bày trường nào và bày theo
    * thứ bậc nào; suy máy móc từ danh sách cột chỉ ra một cái bảng dựng đứng.
-   * Cũng vì thế menu «Cột» tự ẩn ở chế độ này — không còn cột nào để ẩn/hiện.
+   * Cũng vì thế menu "Cột" tự ẩn ở chế độ này — không còn cột nào để ẩn/hiện.
    */
   mobileCard?: (row: T) => ReactNode
 }
@@ -320,7 +320,7 @@ export function DataTable<T>({
   } = useTableLayout(columns, storageKey)
 
   //  Màu hiệu lực = màu người dùng tự chọn, không có thì màu khai SẴN (`defaultColor`) —
-  //  cùng luật `LinesTable`; dùng chung cho menu «Cột», tiêu đề và thân bảng.
+  //  cùng luật `LinesTable`; dùng chung cho menu "Cột", tiêu đề và thân bảng.
   const columnColors = useMemo(() => {
     const merged: Record<string, string> = {}
     for (const column of columns) {

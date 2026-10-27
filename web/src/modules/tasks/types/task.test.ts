@@ -17,7 +17,7 @@ import {
 
 describe('task status mapping', () => {
   it('mirrors the server TaskStatus codes 1..4 with the Vietnamese labels', () => {
-    //  Chép tay từ `src/constants.ts` — lệch một số là lọc «Đang làm» ra việc «Đã xong».
+    //  Chép tay từ `src/constants.ts` — lệch một số là lọc "Đang làm" ra việc "Đã xong".
     expect(TASK_STATUS).toEqual({ proposed: 1, open: 2, done: 3, cancelled: 4 })
     expect(TASK_STATUS_OPTIONS.map((option) => [option.value, option.label])).toEqual([
       [1, 'Chờ xác nhận'],

@@ -29,7 +29,7 @@ function Section({ icon, title, rows }: { icon: React.ReactNode; title: string; 
   )
 }
 
-/** Tab «Chưa báo»: chọn ngày → nhân viên chưa báo / báo muộn (sau 18:15). Chưa tới 18:00 thì chưa kết luận. */
+/** Tab "Chưa báo": chọn ngày → nhân viên chưa báo / báo muộn (sau 18:15). Chưa tới 18:00 thì chưa kết luận. */
 export function MetricMissingPanel() {
   const [date, setDate] = useState(getTodayIso())
   const { data, isLoading, isError } = useMetricMissing(date)
@@ -43,7 +43,7 @@ export function MetricMissingPanel() {
       {isError && <ErrorState title="Không tải được danh sách chưa báo" description="Thử tải lại trang." />}
       {data && !data.ready && (
         <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          Chưa tới 18:00 ngày này (hoặc chưa có nguồn nào đánh dấu «báo hằng ngày» đang bật) nên chưa tính ai là chưa báo.
+          Chưa tới 18:00 ngày này (hoặc chưa có nguồn nào đánh dấu "báo hằng ngày" đang bật) nên chưa tính ai là chưa báo.
         </p>
       )}
       {data?.ready && (

@@ -21,7 +21,7 @@ export interface Group {
   members_synced_at: string | null
   avatar_url: string | null
   bot_count: number
-  /** «Chỉ lưu»: không có bot Trợ lý trong nhóm → bot chỉ gom dữ liệu, không xử lý tự động (cảnh báo, bắt việc, bản tin…). */
+  /** "Chỉ lưu": không có bot Trợ lý trong nhóm → bot chỉ gom dữ liệu, không xử lý tự động (cảnh báo, bắt việc, bản tin…). */
   collect_only: boolean
   message_count: number
   file_count: number

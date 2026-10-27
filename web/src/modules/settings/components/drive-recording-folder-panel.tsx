@@ -11,8 +11,8 @@ import { getDriveTestAvailability } from '../utils/drive-test-availability'
 import type { DriveTestResult, SettingView } from '../types/setting'
 import { SettingGuideDetails } from './setting-guide-details'
 
-// Khác hẳn 5 bước service account của Google Sheets: thư mục «Ghi âm họp» nằm SẴN trong Drive của chính
-// Gmail đã «Kết nối Google» (mục Calendar & Meet phía trên) — không có bước chia sẻ thư mục cho ai cả.
+// Khác hẳn 5 bước service account của Google Sheets: thư mục "Ghi âm họp" nằm SẴN trong Drive của chính
+// Gmail đã "Kết nối Google" (mục Calendar & Meet phía trên) — không có bước chia sẻ thư mục cho ai cả.
 const GUIDE_STEPS = [
   'console.cloud.google.com → project của Client ID (mục Calendar & Meet) → APIs & Services → Library → tìm "Google Drive API" → Enable.',
   'OAuth consent screen → bấm "Publish App" nếu app đang ở chế độ Testing (tránh phải kết nối lại Google mỗi 7 ngày).',
@@ -25,7 +25,7 @@ interface DriveRecordingFolderPanelProps {
   disabled?: boolean
 }
 
-/** Cuối thẻ «Recap họp tự động»: trạng thái quyền Drive + nút «Kiểm tra thư mục» + hướng dẫn thu gọn. */
+/** Cuối thẻ "Recap họp tự động": trạng thái quyền Drive + nút "Kiểm tra thư mục" + hướng dẫn thu gọn. */
 export function DriveRecordingFolderPanel({ settings, disabled }: DriveRecordingFolderPanelProps) {
   const { data: status, isLoading } = useGoogleOauthStatus()
   const testFolder = useTestDriveFolder()
