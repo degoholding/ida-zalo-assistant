@@ -25,6 +25,9 @@ test("mẫu cấm phủ đủ: password_hash, token_hash, session_cipher, secret
   }
   // Cột / bảng bình thường không bị cấm nhầm
   for (const name of ["g.name", "m.sender_name", "audit_log a", "c.display_name", "secretary"]) assert.equal(covers(name), false, name);
+  // Lọc theo tài khoản Zalo (27/10/2026): cột khóa ngoại bot_group.bot_account_id được dùng, BẢNG bot_account vẫn cấm
+  assert.equal(covers("bga.bot_account_id IN (?)"), false);
+  for (const name of ["JOIN bot_account b", "bot_account.session_cipher", "FROM bot_account"]) assert.ok(covers(name), name);
 });
 
 const sample = (override: Partial<EntityDefinition>): EntityDefinition => ({

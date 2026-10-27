@@ -1,4 +1,5 @@
 import type { ListSpec } from "../../web/api/list-query.js";
+import { ACCOUNT_FILTER_FIELD } from "../../web/api/conversation-accounts.js";
 import type { EntityDefinition } from "../entity-definition.js";
 import { andParts, threadVisibilitySql } from "../visibility-guards.js";
 
@@ -14,6 +15,8 @@ const MESSAGE_RECORD_SPEC: ListSpec = {
     kind: { sql: "m.kind", type: "number" },
     sent_at: { sql: "m.sent_at", type: "date" },
     text: { sql: "m.text", type: "text" },
+    // Lọc theo tài khoản Zalo của bot (27/10/2026) — cùng hàm SQL với màn Hội thoại web
+    account_id: ACCOUNT_FILTER_FIELD,
   },
   sorts: { sent_at: "m.sent_at", id: "m.id" },
   defaultSort: { by: "sent_at", dir: "desc" },

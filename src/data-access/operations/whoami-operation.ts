@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 import { UserRole, McpCallSource } from "../../constants.js";
+import { listAccountOptions } from "../../web/api/conversation-accounts.js";
+import { canUse } from "../data-access-context.js";
 import { readableEntities } from "../entity-registry.js";
 import type { ToolDefinition } from "../tool-definition.js";
 
@@ -17,6 +19,9 @@ const outputSchema = z.object({
   can_view_audit: z.boolean(),
   entities: z.array(z.string()),
   via: z.enum(["mcp", "assistant"]),
+  /** Tài khoản Zalo của bot — id dùng cho bộ lọc account_id của conversations / groups / messages / files (27/10/2026). */
+  zalo_accounts: z.array(z.object({ id: z.number(), name: z.string(), kind_label: z.string() })),
+  untrusted_fields: z.array(z.string()),
   notices: z.array(z.string()),
 });
 type WhoamiOutput = z.infer<typeof outputSchema>;
@@ -24,13 +29,14 @@ type WhoamiOutput = z.infer<typeof outputSchema>;
 export const whoamiTool: ToolDefinition<z.infer<typeof inputSchema>, WhoamiOutput> = {
   name: "whoami",
   title: "Tôi là ai",
-  description: "Cho biết tài khoản đang dùng (vai trò, phạm vi nhóm), mức khóa (đọc / đọc+ghi), có được xem nhóm Mật không, và các thực thể đọc được.",
+  description: "Cho biết tài khoản đang dùng (vai trò, phạm vi nhóm), mức khóa (đọc / đọc+ghi), có được xem nhóm Mật không, các thực thể đọc được, và các tài khoản Zalo của bot (zalo_accounts — id dùng cho bộ lọc account_id).",
   input: () => inputSchema,
   output: outputSchema,
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   available: () => true,
   async handler(ctx) {
     const { principal } = ctx;
+    const accounts = canUse(ctx, "conversation", "read") ? await listAccountOptions(ctx.db) : [];
     const scope = principal.groupIds === null ? { all_groups: true, group_count: null } : { all_groups: false, group_count: principal.groupIds.length };
     const structured: WhoamiOutput = {
       user: { id: principal.userId, name: principal.fullName, email: principal.email, role: principal.role, role_label: ROLE_LABELS[principal.role] ?? "Không rõ" },
@@ -41,6 +47,8 @@ export const whoamiTool: ToolDefinition<z.infer<typeof inputSchema>, WhoamiOutpu
       can_view_audit: principal.canViewAudit === true || principal.role === UserRole.Admin,
       entities: readableEntities(ctx).map((def) => def.name),
       via: ctx.source === McpCallSource.Http ? "mcp" : "assistant",
+      zalo_accounts: accounts.map((account) => ({ id: account.id, name: account.name, kind_label: account.kind_label })),
+      untrusted_fields: ["zalo_accounts"],
       notices: [],
     };
     const where = scope.all_groups ? "mọi nhóm" : `${scope.group_count} nhóm được gán`;

@@ -206,8 +206,8 @@ export function loadConfig(): AppConfig {
     },
     // Mặc định KHÔNG đọc nhóm mới: ai cũng thêm được bot vào nhóm bất kỳ
     defaultGroupRead: readBool("DEFAULT_GROUP_READ", false),
-    // Lấy file mặc định BẬT (27/10/2026, lộ trình 13.1: lưu đủ dữ liệu) — nhóm đã có giữ nguyên cờ của nó
-    defaultGroupCaptureFiles: readBool("DEFAULT_GROUP_CAPTURE_FILES", true),
+    // Nhóm mới mặc định CHƯA lấy file — quản trị muốn lấy thì tự bật (đại ca chốt 27/10/2026)
+    defaultGroupCaptureFiles: readBool("DEFAULT_GROUP_CAPTURE_FILES", false),
     maxFileBytes: readInt("MAX_FILE_MB", 100) * 1024 * 1024,
     downloadConcurrency: readInt("DOWNLOAD_CONCURRENCY", 3),
     heartbeatSeconds: readInt("HEARTBEAT_SECONDS", 60),

@@ -7,7 +7,9 @@ import type { EntityDefinition } from "./entity-definition.js";
 
 export const FORBIDDEN_PATTERNS: readonly RegExp[] = [
   /password_hash/i, /token_hash/i, /session_cipher/i, /\bsecret\b/i, /refresh_token/i, /access_token/i,
-  /app_setting/i, /web_session/i, /ai_key/i, /mcp_api_key/i, /mcp_call_log/i, /mcp_write_draft/i, /bot_account/i, /google_/i,
+  // `bot_account(?!_id)`: cấm BẢNG bot_account (phiên Zalo mã hóa, imei…) nhưng cho cột khóa ngoại `bot_group.bot_account_id` — lọc
+  // theo tài khoản Zalo (27/10/2026) chỉ cần id, không đọc gì của bảng tài khoản
+  /app_setting/i, /web_session/i, /ai_key/i, /mcp_api_key/i, /mcp_call_log/i, /mcp_write_draft/i, /bot_account(?!_id)/i, /google_/i,
   // Nội bộ lưu tệp: khóa lưu trữ + đường dẫn nguồn của Zalo
   /storage_key/i, /source_url/i,
 ];

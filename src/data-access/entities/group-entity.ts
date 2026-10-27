@@ -1,4 +1,5 @@
 import { ConversationType } from "../../constants.js";
+import { ACCOUNT_FILTER_FIELD } from "../../web/api/conversation-accounts.js";
 import { GROUP_LIST_SPEC } from "../../web/api/groups-api.js";
 import type { EntityDefinition } from "../entity-definition.js";
 import { andParts, groupVisibilitySql } from "../visibility-guards.js";
@@ -9,7 +10,7 @@ export const groupEntity: EntityDefinition = {
   title: "Nhóm Zalo",
   permission: "group",
   from: "zalo_group g LEFT JOIN company co ON co.id = g.company_id",
-  spec: () => GROUP_LIST_SPEC,
+  spec: () => ({ ...GROUP_LIST_SPEC, fields: { ...GROUP_LIST_SPEC.fields, account_id: ACCOUNT_FILTER_FIELD } }),
   columns: {
     id: { sql: "g.id", type: "number" },
     zalo_group_id: { sql: "g.zalo_group_id", type: "text" },

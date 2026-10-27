@@ -56,11 +56,11 @@ test("khóa cột / khóa lọc / khóa sắp xếp an toàn để ghép làm b�
 test("chụp danh sách trường lọc từng thực thể (đổi ListSpec web là test đỏ)", () => {
   const snapshot = Object.fromEntries(ENTITY_DEFINITIONS.map((def) => [def.name, Object.keys(listFilterFields(def, managerCtx)).sort()]));
   assert.deepEqual(snapshot, {
-    groups: ["capture_files", "company_id", "file_retention_days", "group_kind", "has_bot", "is_confidential", "label", "last_message_at", "member_count", "message_count", "name", "read_messages", "retention_days", "zalo_group_id"],
-    conversations: ["company_id", "name", "thread_type"],
-    messages: ["kind", "sender_name", "sender_uid", "sent_at", "text", "thread_id", "thread_type"],
+    groups: ["account_id", "capture_files", "company_id", "file_retention_days", "group_kind", "has_bot", "is_confidential", "label", "last_message_at", "member_count", "message_count", "name", "read_messages", "retention_days", "zalo_group_id"],
+    conversations: ["account_id", "company_id", "name", "thread_type"],
+    messages: ["account_id", "kind", "sender_name", "sender_uid", "sent_at", "text", "thread_id", "thread_type"],
     contacts: ["catalog_kind", "company_id", "direct", "display_name", "dm_count", "first_seen_at", "group_id", "kind", "kind_source", "last_dm_at", "note", "phone", "region", "role", "sales_zone", "tag", "zalo_uid"],
-    files: ["file_ext", "file_name", "group_id", "has_text", "sender_name", "sender_uid", "sent_at", "size", "status", "thread_type"],
+    files: ["account_id", "file_ext", "file_name", "group_id", "has_text", "sender_name", "sender_uid", "sent_at", "size", "status", "thread_type"],
     tasks: ["assignee_contact_id", "due_at", "missing_assignee", "missing_due", "overdue", "priority", "source", "source_thread_id", "status"],
     tickets: ["created_at", "handler_name", "requester_name", "status"],
     send_commands: ["action_kind", "created_at", "reminder_at", "requester_uid", "scheduled_at", "source", "status"],

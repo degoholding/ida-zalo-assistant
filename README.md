@@ -282,7 +282,7 @@ Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`)
 |---|---|
 | `whoami` | Mình là ai, thấy được nhóm nào, có cờ Mật không |
 | `describe_entities` | Các thực thể truy vấn được, cột / phép lọc / cột sắp xếp của từng thực thể |
-| `query_records` | Truy vấn có kiểu mọi thực thể: `groups`, `conversations`, `messages`, `contacts`, `files`, `tasks`, `tickets`, `send_commands`, `reply_templates`, `catalog`, `metrics`, `audit_log` |
+| `query_records` | Truy vấn có kiểu mọi thực thể: `groups`, `conversations`, `messages`, `contacts`, `files`, `tasks`, `tickets`, `send_commands`, `reply_templates`, `catalog`, `metrics`, `audit_log`. `groups` / `conversations` / `messages` / `files` lọc được `account_id` (tài khoản Zalo của bot — nhóm theo `bot_group` còn ở, cuộc riêng theo `owner_bot_id`; cùng hàm SQL `src/web/api/conversation-accounts.ts` với màn Hội thoại, 27/10/2026); id + tên tài khoản ở `whoami.zalo_accounts` |
 | `search_messages` | Tìm tin theo từ khóa (gõ không dấu được, cụm trong ngoặc kép); lọc thêm `group_name`, `thread_ids`, `sender_name`, `from` / `to`, `mentions_me` (ai nhắc tới tôi), `limit` |
 | `search_files` | Tìm tệp đã gửi theo tên / chữ đã bóc (`query`, `group_id`, `from` / `to`); `query` rỗng = tệp gần đây trong phạm vi tài khoản |
 | `find_people` | Tìm người trong Danh bạ theo tên (trả `uid` + các nhóm thấy được); tên / nhóm là dữ liệu không đáng tin (`untrusted_fields`) |

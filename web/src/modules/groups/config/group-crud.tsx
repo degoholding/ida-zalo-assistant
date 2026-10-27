@@ -142,7 +142,7 @@ export const groupCrudConfig: CrudConfig<GroupDetail> = {
     },
     { name: 'company_id', label: 'Công ty', type: 'select', source: { url: LOOKUP_URLS.companiesWithNone } },
     { name: 'read_messages', label: 'Đọc tin', type: 'switch', section: 'Đọc và lưu' },
-    { name: 'capture_files', label: 'Lấy file', type: 'switch', section: 'Đọc và lưu' },
+    { name: 'capture_files', label: 'Lấy file', type: 'switch', section: 'Đọc và lưu', hint: 'Mặc định tắt. Bật để lưu tệp và ảnh của nhóm này về kho.' },
     {
       name: 'retention_days',
       label: 'Số ngày lưu',

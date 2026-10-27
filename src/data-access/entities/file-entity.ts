@@ -1,3 +1,4 @@
+import { ACCOUNT_FILTER_FIELD } from "../../web/api/conversation-accounts.js";
 import { FILE_LIST_SPEC } from "../../web/api/files-api.js";
 import type { EntityDefinition } from "../entity-definition.js";
 import { andParts, threadVisibilitySql } from "../visibility-guards.js";
@@ -12,7 +13,7 @@ export const fileEntity: EntityDefinition = {
   permission: "file",
   from: `attachment a JOIN message m ON m.id = a.message_id JOIN zalo_group g ON g.id = a.group_id
     LEFT JOIN attachment_text t ON t.attachment_id = a.id`,
-  spec: () => FILE_LIST_SPEC,
+  spec: () => ({ ...FILE_LIST_SPEC, fields: { ...FILE_LIST_SPEC.fields, account_id: ACCOUNT_FILTER_FIELD } }),
   columns: {
     id: { sql: "a.id", type: "number" },
     file_name: { sql: "a.file_name", type: "text", untrusted: true },

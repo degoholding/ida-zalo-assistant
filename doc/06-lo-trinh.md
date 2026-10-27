@@ -28,7 +28,7 @@
 | **9** | N7 — Gửi tin theo lệnh | **Xong** 12/10 (phần GĐ1: lệnh gửi + tắt khẩn + nhắc hẹn + ghim từ tin riêng) | 6 / 6 |
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 4 / 9 |
 | **12** | Cổng MCP, trợ lý đi qua MCP, tài khoản chỉ thu thập (làm thêm 15–20/10) | **Xong** 20/10 (cổng `/mcp` cho ứng dụng ngoài chưa bật trên máy chủ) | 7 / 8 |
-| **13** | Kho dữ liệu đủ + cổng MCP cho sếp IDA tự lấy báo cáo | Đang làm — mã OAuth + get_file + Lấy file mặc định xong 27/10 (chưa lên máy chủ) | 2 / 6 |
+| **13** | Kho dữ liệu đủ + cổng MCP cho sếp IDA tự lấy báo cáo | Đang làm — OAuth + get_file lên VPS 2 ngày 27/10; lọc theo tài khoản chờ dựng | 3 / 8 |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
@@ -438,12 +438,13 @@ ra ngoài, siết quyền và bổ sung dữ liệu.
 
 | # | Việc | Trạng thái |
 |---|---|---|
-| 13.1 | Soát độ đủ của kho: tỷ lệ tệp / ảnh tải lỗi hoặc quá hạn link, nhóm chưa bật Lấy file; mặc định Lấy file = bật (khớp luật đọc hết); báo cáo đủ / thiếu trên màn Tệp | Một phần — 27/10 mặc định Lấy file = bật cho nhóm mới (cuộc riêng vốn đã bật); nhóm cũ giữ nguyên. Soát VPS 27/10: 2 nhóm + 5 cuộc riêng đang tắt Lấy file, 17 tệp trong kho (1,4 MB); VPS còn khai DEFAULT_GROUP_CAPTURE_FILES=false trong .env — phải đổi true khi dựng |
+| 13.1 | Soát độ đủ của kho: tỷ lệ tệp / ảnh tải lỗi hoặc quá hạn link, nhóm chưa bật Lấy file; mặc định Lấy file = bật (khớp luật đọc hết); báo cáo đủ / thiếu trên màn Tệp | Một phần — đại ca chốt 27/10: nhóm mới mặc định CHƯA lấy file, quản trị tự bật từng nhóm (công tắc có câu nhắc); cuộc riêng giữ mặc định lấy file. Soát VPS 27/10: 2 nhóm + 5 cuộc riêng đang tắt Lấy file, 17 tệp trong kho (1,4 MB) |
 | 13.2 | Lưu **link chia sẻ** trong tin (Drive / Sheets / Docs / web): bảng riêng (link, loại, tiêu đề, người gửi, nhóm, giờ); tùy chọn chụp nội dung lúc tin tới cho tệp Google được chia sẻ cho tài khoản dịch vụ | Chưa |
-| 13.3 | Bật cổng `/mcp` trên máy chủ (`MCP_ENABLED`, `MCP_ALLOWED_HOSTS=botida.degoholding.vn`, `MCP_PUBLIC_URL`); chỉ vai trò Quản lý được tạo khóa MCP; nhóm Mật không đi ra MCP; nhật ký từng lượt gọi | Mã xong 27/10 (chỉ Quản trị / Quản lý dùng MCP, Nhân viên mất màn Khóa MCP); chờ đại ca gật bật biến trên VPS |
+| 13.3 | Bật cổng `/mcp` trên máy chủ (`MCP_ENABLED`, `MCP_ALLOWED_HOSTS=botida.degoholding.vn`, `MCP_PUBLIC_URL`); chỉ vai trò Quản lý được tạo khóa MCP; nhóm Mật không đi ra MCP; nhật ký từng lượt gọi | Xong 27/10 — bật trên VPS 2 (d8e6dcc); chỉ Quản trị / Quản lý dùng MCP |
 | 13.4 | Bộ công cụ báo cáo qua MCP: đã có tìm tin, tin theo nhóm / theo người, tệp, việc, ticket, số liệu, danh bạ, nhóm; thêm tổng hợp theo kỳ (nhóm × ngày, người × ngày) và xuất Excel / PDF trả link | Chưa |
-| 13.5 | Kết nối cho sếp: hướng dẫn Claude Desktop / Claude Code bằng khóa MCP; nếu cần ChatGPT / claude.ai thì làm OAuth như cổng MCP của ERP | Mã xong 27/10: OAuth 2.1 (metadata, tự đăng ký, PKCE, màn đồng ý bằng phiên web, mã 1 giờ + làm mới xoay vòng, kết nối 90 ngày) + hướng dẫn doc/12; chờ dựng |
-| 13.7 | Công cụ `get_file`: đưa tệp gốc cho AI ngoài tự đọc (ảnh = khối ảnh, PDF = tệp nhúng, Excel / Word / CSV / txt bóc chữ tại chỗ, tệp lớn = link ký sẵn 5 phút qua chính bot) — bot không tốn AI | Mã xong 27/10; chờ dựng |
+| 13.5 | Kết nối cho sếp: hướng dẫn Claude Desktop / Claude Code bằng khóa MCP; nếu cần ChatGPT / claude.ai thì làm OAuth như cổng MCP của ERP | Xong 27/10 trên VPS 2: OAuth 2.1 (metadata, tự đăng ký, PKCE, màn đồng ý bằng phiên web, mã 1 giờ + làm mới xoay vòng, kết nối 90 ngày) + hướng dẫn doc/12 |
+| 13.8 | MCP lọc theo tài khoản Zalo: `query_records` của groups / conversations / messages / files nhận `account_id` (dùng chung hàm SQL với màn Hội thoại), `whoami` liệt kê tài khoản | Mã xong 27/10; chờ dựng |
+| 13.7 | Công cụ `get_file`: đưa tệp gốc cho AI ngoài tự đọc (ảnh = khối ảnh, PDF = tệp nhúng, Excel / Word / CSV / txt bóc chữ tại chỗ, tệp lớn = link ký sẵn 5 phút qua chính bot) — bot không tốn AI; tệp gốc là ngoại lệ của che dữ liệu cá nhân (MCP_FILE_RAW, mặc định bật) | Xong 27/10 trên VPS 2 |
 | 13.6 | Đo tải + chi phí khi sếp hỏi qua MCP (trần lượt / phút đã có), che SĐT / STK / CCCD trong kết quả trả ra | Chưa |
 
 Phụ thuộc: app Google «ERP Tro ly AI» chuyển In production (27/10) để kết nối Drive không hết hạn 7 ngày.

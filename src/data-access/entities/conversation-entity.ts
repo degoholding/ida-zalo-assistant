@@ -1,3 +1,4 @@
+import { ACCOUNT_FILTER_FIELD } from "../../web/api/conversation-accounts.js";
 import { CONVERSATION_LIST_SPEC } from "../../web/api/conversations-api.js";
 import type { EntityDefinition } from "../entity-definition.js";
 import { andParts, directThreadSql, groupVisibilitySql } from "../visibility-guards.js";
@@ -8,7 +9,8 @@ export const conversationEntity: EntityDefinition = {
   title: "Cuộc nhắn riêng với bot",
   permission: "conversation",
   from: "zalo_group g",
-  spec: () => CONVERSATION_LIST_SPEC,
+  // Lọc theo tài khoản Zalo (27/10/2026): cùng hàm SQL với màn Hội thoại web (conversation-accounts.ts)
+  spec: () => ({ ...CONVERSATION_LIST_SPEC, fields: { ...CONVERSATION_LIST_SPEC.fields, account_id: ACCOUNT_FILTER_FIELD } }),
   columns: {
     id: { sql: "g.id", type: "number" },
     name: { sql: "g.name", type: "text", untrusted: true },
@@ -31,5 +33,5 @@ export const conversationEntity: EntityDefinition = {
     groupVisibilitySql(ctx, "g.id", "g.is_confidential"),
   ),
   aggregate: { groupBy: ["company_id"], sum: ["message_count"] },
-  notes: ["Chỉ quản trị hoặc người được xem «mọi nhóm» thấy cuộc nhắn riêng. Đọc nội dung bằng get_thread_messages(thread_id = id)."],
+  notes: ["Chỉ quản trị hoặc người được xem «mọi nhóm» thấy cuộc nhắn riêng. Đọc nội dung bằng get_thread_messages(thread_id = id).", "account_id (lọc): id tài khoản Zalo của bot — danh sách id + tên ở whoami.zalo_accounts; nhóm tính theo tài khoản còn ở trong nhóm, cuộc riêng theo tài khoản chủ cuộc."],
 };
