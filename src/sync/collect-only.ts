@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { BotAccountKind, ConversationType } from "../constants.js";
 import type { Db } from "../db/pool.js";
+import type { GroupDefaults } from "./group-repository.js";
 
 // «Chỉ lưu» (17/10/2026): cuộc trò chuyện mà KHÔNG có bot Trợ lý nào ở trong thì bot chỉ gom dữ liệu — mọi xử lý TỰ ĐỘNG
 // (cảnh báo, bắt việc, đọc ảnh, recap họp, bản tin / báo cáo định kỳ) bỏ qua. Xem / tìm / hỏi MCP / hỏi trợ lý vẫn như thường.
@@ -37,4 +38,14 @@ export async function isCollectOnlyThread(db: Db, threadId: number): Promise<boo
   const [rows] = await db.query<RowDataPacket[]>(
     `SELECT ${collectOnlyThreadSql("g")} AS collect_only FROM zalo_group g WHERE g.id = ?`, [threadId]);
   return Boolean(rows[0] && Number(rows[0].collect_only));
+}
+
+/**
+ * Mặc định cho cuộc trò chuyện (nhóm mọi loại, hoặc chat riêng 1-1) mà tài khoản này thấy LẦN ĐẦU. Chốt 27/10/2026: tài
+ * khoản Chỉ thu thập mặc định ĐỌC HẾT — kể cả nhóm khách hàng và chat riêng của chủ tài khoản — bất kể cài đặt "Đọc tin
+ * nhóm mới" / "Đọc tin riêng"; quản trị tắt từng nhóm (PATCH /api/groups/:id) hoặc từng cuộc riêng
+ * (PATCH /api/conversations/:id). Tài khoản Trợ lý giữ cài đặt cũ. Cờ lấy tệp luôn theo cài đặt.
+ */
+export function newThreadDefaults(collectOnly: boolean, configured: GroupDefaults): GroupDefaults {
+  return collectOnly ? { readMessages: true, captureFiles: configured.captureFiles } : configured;
 }

@@ -34,8 +34,10 @@ import {
   markBotInGroup,
   markBotLeftGroup,
   markBotLeftMissingGroups,
+  type GroupDefaults,
   type GroupRow,
 } from "../sync/group-repository.js";
+import { newThreadDefaults } from "../sync/collect-only.js";
 import {
   ingestDirectMessage,
   ingestGroupMessage,
@@ -231,6 +233,17 @@ export class AccountRunner {
     return this.kind === BotAccountKind.Normal;
   }
 
+  /** Mặc định cho nhóm tài khoản này thấy lần đầu — tài khoản Chỉ thu thập đọc hết (xem `newThreadDefaults`). */
+  private newGroupDefaults(): GroupDefaults {
+    return newThreadDefaults(this.isCollectOnly,
+      { readMessages: this.config.defaultGroupRead, captureFiles: this.config.defaultGroupCaptureFiles });
+  }
+
+  private newDirectDefaults(): GroupDefaults {
+    return newThreadDefaults(this.isCollectOnly,
+      { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles });
+  }
+
   /** Đổi loại tài khoản lúc đang chạy (PATCH trên web) — lệnh đang xếp hàng cũng bị dọn nếu thành Normal. */
   setKind(kind: BotAccountKind): void {
     this.kind = kind;
@@ -305,7 +318,7 @@ export class AccountRunner {
       ingestGroupMessage(
         {
           db: this.db,
-          defaults: { readMessages: this.config.defaultGroupRead, captureFiles: this.config.defaultGroupCaptureFiles },
+          defaults: this.newGroupDefaults(),
           onNewGroup: (group) => this.onNewGroup(group.id, group.zalo_group_id),
           onAttachmentQueued: (attachmentId) => this.downloader.enqueue(attachmentId),
         },
@@ -380,8 +393,8 @@ export class AccountRunner {
     let stored = 0;
     const deps = {
       db: this.db,
-      defaults: { readMessages: this.config.defaultGroupRead, captureFiles: this.config.defaultGroupCaptureFiles },
-      directDefaults: { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles },
+      defaults: this.newGroupDefaults(),
+      directDefaults: this.newDirectDefaults(),
       onNewGroup: (group: GroupRow) => this.onNewGroup(group.id, group.zalo_group_id),
       onAttachmentQueued: (attachmentId: number) => this.downloader.enqueue(attachmentId),
     };
@@ -517,8 +530,8 @@ export class AccountRunner {
     const result = await ingestDirectMessage(
       {
         db: this.db,
-        defaults: { readMessages: this.config.defaultGroupRead, captureFiles: this.config.defaultGroupCaptureFiles },
-        directDefaults: { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles },
+        defaults: this.newGroupDefaults(),
+        directDefaults: this.newDirectDefaults(),
         onAttachmentQueued: (attachmentId) => this.downloader.enqueue(attachmentId),
       },
       this.account.id,
@@ -727,7 +740,7 @@ export class AccountRunner {
    */
   async sendDirectReportFile(peerUid: string, peerName: string, file: GeneratedReportFile): Promise<void> {
     const { group: thread } = await ensureThread(this.db, directKey(this.account.id, peerUid),
-      { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles }, peerName);
+      this.newDirectDefaults(), peerName);
     await this.sendReportFile(thread, file);
   }
 
@@ -744,7 +757,7 @@ export class AccountRunner {
     const api = this.api;
     if (!api) throw new Error("bot chưa kết nối");
     const { group: thread } = await ensureThread(this.db, directKey(this.account.id, peerUid),
-      { readMessages: this.config.defaultDirectRead, captureFiles: this.config.defaultDirectCaptureFiles }, peerName);
+      this.newDirectDefaults(), peerName);
     const bot = { uid: this.ownUid, name: this.account.display_name || this.account.label };
     for (const chunk of splitForZalo(text)) {
       const styled = toStyledContent(chunk);
@@ -894,10 +907,7 @@ export class AccountRunner {
       this.log.info(`bot đã rời nhóm ${event.threadId}`);
       return;
     }
-    const { group, created } = await ensureGroup(this.db, event.threadId, {
-      readMessages: this.config.defaultGroupRead,
-      captureFiles: this.config.defaultGroupCaptureFiles,
-    });
+    const { group, created } = await ensureGroup(this.db, event.threadId, this.newGroupDefaults());
     if (touchesBot || created) await markBotInGroup(this.db, this.account.id, group.id);
     if (created) {
       this.onNewGroup(group.id, group.zalo_group_id);
@@ -926,7 +936,7 @@ export class AccountRunner {
     await ingestGroupMessage(
       {
         db: this.db,
-        defaults: { readMessages: this.config.defaultGroupRead, captureFiles: this.config.defaultGroupCaptureFiles },
+        defaults: this.newGroupDefaults(),
         onNewGroup: (group: GroupRow) => this.onNewGroup(group.id, group.zalo_group_id),
       },
       this.account.id,
@@ -954,10 +964,7 @@ export class AccountRunner {
     this.log.info(`bot đang ở ${zaloGroupIds.length} nhóm`);
     const groupIds: number[] = [];
     for (const zaloGroupId of zaloGroupIds) {
-      const { group } = await ensureGroup(this.db, zaloGroupId, {
-        readMessages: this.config.defaultGroupRead,
-        captureFiles: this.config.defaultGroupCaptureFiles,
-      });
+      const { group } = await ensureGroup(this.db, zaloGroupId, this.newGroupDefaults());
       groupIds.push(group.id);
       await markBotInGroup(this.db, this.account.id, group.id);
       try {
