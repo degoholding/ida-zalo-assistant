@@ -18,6 +18,11 @@ export function useThreads(params: ThreadListParams) {
   })
 }
 
+/** Danh sách tài khoản bot cho ô lọc — ít khi đổi, giữ 5 phút. */
+export function useAccountOptions() {
+  return useQuery({ queryKey: queryKeys.conversations.accountOptions(), queryFn: conversationApi.accountOptions, staleTime: 5 * 60_000 })
+}
+
 export function useThread(id: number | null) {
   return useQuery({
     queryKey: queryKeys.conversations.thread(id ?? 0),

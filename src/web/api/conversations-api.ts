@@ -18,6 +18,7 @@ import { decorateFile } from "./files-api.js";
 import { listGroupMembers } from "./groups-api.js";
 import type { ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
+import { ACCOUNT_FILTER_FIELD, loadThreadAccounts } from "./conversation-accounts.js";
 
 // API Hội thoại (màn 3 cột kiểu Zalo): danh sách cuộc, dòng tin theo giờ gửi (cuộn ngược), hồ sơ cột phải.
 // Chỉ xem — bot trả lời trên Zalo, quản trị không gõ thay ở đây.
@@ -35,6 +36,16 @@ export const CONVERSATION_LIST_SPEC: ListSpec = {
   defaultSort: { by: "last_message_at", dir: "desc" },
   tieBreaker: "g.id",
   search: { param: "q", columns: ["g.name", "g.label"] },
+};
+
+/**
+ * Spec RIÊNG của màn Hội thoại trên web = spec chung + lọc theo tài khoản Zalo (27/10/2026): account_id=3 hoặc account_id__in=3,5
+ * (nhóm qua bot_group còn ở, cuộc riêng qua owner_bot_id). KHÔNG nhét vào `CONVERSATION_LIST_SPEC` vì spec đó dùng chung cho
+ * MCP (`src/data-access`), nơi cấm điều kiện chạm bảng bot_account; lọc theo tài khoản phía MCP do Agent 4 làm riêng.
+ */
+export const WEB_CONVERSATION_LIST_SPEC: ListSpec = {
+  ...CONVERSATION_LIST_SPEC,
+  fields: { ...CONVERSATION_LIST_SPEC.fields, account_id: ACCOUNT_FILTER_FIELD },
 };
 
 // Bộ đếm `message_count` / `last_message_at` nằm sẵn trên zalo_group (migration 011) — không quét bảng message
@@ -66,8 +77,13 @@ function decorateThread(bots: Set<string>) {
 
 export async function listConversations(db: Db, params: URLSearchParams, principal: Principal = SYSTEM_PRINCIPAL) {
   const bots = await loadBotUids(db);
-  return runList(db, params, CONVERSATION_LIST_SPEC, {
-    select: CONVERSATION_COLUMNS, from: CONVERSATION_FROM, baseWhere: scopedWhere(principal, BASE_WHERE, "g.id"), decorate: (rows) => rows.map(decorateThread(bots)),
+  return runList(db, params, WEB_CONVERSATION_LIST_SPEC, {
+    select: CONVERSATION_COLUMNS, from: CONVERSATION_FROM, baseWhere: scopedWhere(principal, BASE_WHERE, "g.id"),
+    // Tài khoản Zalo của cả trang: một truy vấn (không N+1)
+    decorate: async (rows) => {
+      const accounts = await loadThreadAccounts(db, rows.map((row) => Number(row.id)));
+      return rows.map((row) => ({ ...decorateThread(bots)(row), accounts: accounts.get(Number(row.id)) ?? [] }));
+    },
   });
 }
 
@@ -77,6 +93,7 @@ export async function getConversation(db: Db, id: number): Promise<Record<string
   if (!rows[0]) throw new ApiError(404, "not_found", "Không có cuộc trò chuyện này");
   const bots = await loadBotUids(db);
   const thread = decorateThread(bots)(rows[0]);
+  Object.assign(thread, { accounts: (await loadThreadAccounts(db, [id])).get(id) ?? [] });
   // Tài khoản bot sẽ đứng tên tin quản trị gõ: cuộc riêng → bot chủ cuộc; nhóm → bot còn trong nhóm
   const [botRows] = await db.query<RowDataPacket[]>(
     rows[0].thread_type === ConversationType.Direct

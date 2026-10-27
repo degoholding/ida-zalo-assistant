@@ -32,6 +32,8 @@ export const queryKeys = {
     all: ['conversations'] as const,
     list: (params: Record<string, unknown>) => ['conversations', 'list', params] as const,
     thread: (id: number) => ['conversations', 'thread', id] as const,
+    /** Ô lọc Tài khoản Zalo (27/10/2026). */
+    accountOptions: () => ['conversations', 'account-options'] as const,
     messages: (id: number) => ['conversations', 'messages', id] as const,
     /** Dòng tin mở quanh một tin (`?msg=`) — nằm dưới khóa `messages(id)` để tin mới tới làm mới cả hai. */
     messagesAround: (id: number, messageId: number) => ['conversations', 'messages', id, 'around', messageId] as const,
