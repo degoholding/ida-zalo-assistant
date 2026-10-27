@@ -6,9 +6,11 @@ import type { Db } from "../../db/pool.js";
 import { describeError } from "../../logger.js";
 import { BotHaltedError } from "../../messaging/bot-halted-error.js";
 import { recordWebSend } from "../../send-commands/send-command-web-actions.js";
+import { updateGroupSettings, type GroupSettingsPatch } from "../../sync/group-repository.js";
 import { OUTGOING_SOURCE } from "../../sync/message-ingest.js";
 import { ApiError, parseId, readJson, readRawBody, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
+import { diffFields, recordAudit } from "./audit-log.js";
 import { getContactCardByUid, loadBotUids } from "./contacts-api.js";
 import { assertThreadSendable, mapCollectOnlyError } from "./collect-only-send-guard.js";
 import { isCollectOnlyThread } from "../../sync/collect-only.js";
@@ -39,6 +41,7 @@ export const CONVERSATION_LIST_SPEC: ListSpec = {
 const CONVERSATION_FROM = "FROM zalo_group g";
 const CONVERSATION_COLUMNS = `
   g.id, g.thread_type, g.name, g.label, g.zalo_group_id, g.owner_bot_id, g.company_id, g.message_count, g.last_message_at,
+  g.read_messages, g.capture_files,
   CASE WHEN g.thread_type = ${ConversationType.Group}
        THEN IF(g.avatar_key IS NULL, NULL, CONCAT('/avatars/g/', g.id))
        ELSE (SELECT IF(c.avatar_key IS NULL, NULL, CONCAT('/avatars/c/', c.zalo_uid)) FROM contact c WHERE c.zalo_uid = g.zalo_group_id)
@@ -55,6 +58,8 @@ function decorateThread(bots: Set<string>) {
     ...row,
     display_name: String(row.label || row.name || "(chưa rõ tên)"),
     message_count: Number(row.message_count),
+    read_messages: Number(row.read_messages) === 1,
+    capture_files: Number(row.capture_files) === 1,
     last_from_bot: bots.has(String(row.last_sender_uid ?? "")),
   });
 }
@@ -239,7 +244,50 @@ async function translateSendError<T>(work: () => Promise<T>, log: WebSendLog): P
   }
 }
 
+const DIRECT_FLAG_LABELS: Record<string, string> = { read_messages: "Đọc tin", capture_files: "Lấy file" };
+
+/**
+ * Thân PATCH bật / tắt lưu cho MỘT cuộc riêng 1-1 (27/10/2026): tài khoản Chỉ thu thập mặc định lưu cả chat riêng của chủ
+ * tài khoản, quản trị tắt từng cuộc ở đây. Chỉ nhận hai cờ; thiếu cả hai hoặc sai kiểu → 422.
+ */
+export function parseDirectThreadPatch(body: Record<string, unknown>): GroupSettingsPatch {
+  const flag = (key: string): boolean | undefined => {
+    const raw = body[key];
+    if (raw === undefined) return undefined;
+    if (typeof raw === "boolean") return raw;
+    if (raw === 1 || raw === 0 || raw === "1" || raw === "0" || raw === "true" || raw === "false") return raw === 1 || raw === "1" || raw === "true";
+    throw new ApiError(422, "validation_error", `${DIRECT_FLAG_LABELS[key]} chỉ nhận bật / tắt`);
+  };
+  const patch: GroupSettingsPatch = {};
+  const read = flag("read_messages");
+  const files = flag("capture_files");
+  if (read !== undefined) patch.readMessages = read;
+  if (files !== undefined) patch.captureFiles = files;
+  if (read === undefined && files === undefined) throw new ApiError(422, "validation_error", "Chưa có gì để sửa (read_messages / capture_files)");
+  return patch;
+}
+
+/** Sửa cờ lưu của một cuộc riêng. Nhóm thì đi PATCH /api/groups/:id — ở đây trả 404 cho nhóm. */
+async function patchDirectThread(db: Db, id: number, body: Record<string, unknown>): Promise<void> {
+  const [rows] = await db.query<RowDataPacket[]>(
+    "SELECT read_messages, capture_files FROM zalo_group WHERE id = ? AND thread_type = ?", [id, ConversationType.Direct]);
+  if (!rows[0]) throw new ApiError(404, "not_found", "Không có cuộc trò chuyện riêng này");
+  const patch = parseDirectThreadPatch(body);
+  await updateGroupSettings(db, id, patch);
+  const before = { read_messages: Boolean(rows[0].read_messages), capture_files: Boolean(rows[0].capture_files) };
+  const after = { read_messages: patch.readMessages ?? before.read_messages, capture_files: patch.captureFiles ?? before.capture_files };
+  await recordAudit(db, { entity: "group", entityId: id, action: "update", changedFields: diffFields(before, after, DIRECT_FLAG_LABELS) });
+}
+
 export const conversationRoutes: ApiRoute[] = [
+  // Bật / tắt lưu một cuộc riêng 1-1 (27/10/2026). Không khai ở route-permissions → chỉ quản trị: tắt hay mở chat riêng của
+  // chủ tài khoản là quyết định riêng tư, không giao Quản lý.
+  ["PATCH", /^\/api\/conversations\/(\d+)$/, async ({ request, response, match, service, principal }) => {
+    const id = parseId(match[1]);
+    assertThreadVisible(principal, id);
+    await patchDirectThread(service.db, id, await readJson(request));
+    sendOk(response, await getConversation(service.db, id), "Đã lưu cấu hình cuộc trò chuyện");
+  }],
   // Quản trị gõ chữ từ màn Hội thoại — đi ra Zalo dưới tên tài khoản bot
   ["POST", /^\/api\/conversations\/(\d+)\/messages$/, async ({ request, response, match, service, principal }) => {
     const id = parseId(match[1]);

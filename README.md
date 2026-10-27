@@ -58,6 +58,10 @@ Giao diện: `http://127.0.0.1:8090` (chỉ mở trong máy; vào từ xa qua đ
    hết bot Trợ lý DÙNG ĐƯỢC (bật + có phiên + không cần quét lại) thì việc gửi mới bị bỏ (log rõ lý do); bot Trợ lý chỉ đang tắt / chưa
    kết nối thì việc báo lỗi thường và hàng đợi thử lại, không rơi về «bot đầu tiên» hay bot không ở trong nhóm. Tài khoản mới quét QR
    luôn là Trợ lý; đổi loại sau ở form sửa.
+   **Tài khoản Chỉ thu thập đọc hết** (27/10/2026): nhóm (mọi loại) và chat riêng 1-1 mà nó thấy lần đầu đều bật đọc, bất kể cài đặt
+   đọc tin nhóm mới / tin riêng; quản trị tắt từng nhóm (`PATCH /api/groups/:id`) hoặc từng cuộc riêng (`PATCH /api/conversations/:id`,
+   chỉ quản trị). Luật ở `newThreadDefaults` trong `src/sync/collect-only.ts`; luồng hai tài khoản cùng nhóm và rủi ro:
+   [`doc/11-tai-khoan-nghe.md`](doc/11-tai-khoan-nghe.md).
    **Nhóm / cuộc «Chỉ lưu»** = không có bot Trợ lý nào đang ở trong VÀ nhóm từng có bot Normal (dính: bot Normal rời nhóm vẫn là chỉ
    lưu, tới khi có bot Trợ lý vào; cuộc riêng của bot Normal cũng vậy; nhóm chưa từng có bot Normal giữ như cũ). Phân loại theo
    thành viên nhóm của bot (`bot_group`), làm mới ở lượt quét lúc khởi động, sự kiện vào / rời nhóm và nút «Quét lại» của quản trị.

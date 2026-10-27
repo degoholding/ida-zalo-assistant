@@ -10,3 +10,8 @@ test("Lấy tin cũ cần quyền sửa nhóm (Quản trị + Quản lý), đọ
 test("đường không khai vẫn chỉ quản trị (cài đặt)", () => {
   assert.deepEqual(requiredPermission("POST", "/api/bot-halt"), { entity: "setting", action: "write" });
 });
+
+test("tắt / bật lưu một cuộc riêng 1-1 chỉ quản trị — không lọt vào quyền gửi tin của Hội thoại (27/10/2026)", () => {
+  assert.deepEqual(requiredPermission("PATCH", "/api/conversations/7"), { entity: "setting", action: "write" });
+  assert.deepEqual(requiredPermission("POST", "/api/conversations/7/messages"), { entity: "conversation", action: "write" });
+});
