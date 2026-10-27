@@ -62,6 +62,11 @@ export function QrLoginDialog({ open, onOpenChange, label: presetLabel }: QrLogi
                 autoFocus={!presetLabel}
               />
               <p className="text-xs text-muted-foreground">Chữ không dấu, số, gạch ngang, gạch dưới. Dùng lại nhãn cũ = quét lại cho tài khoản đó.</p>
+              {!presetLabel && (
+                <p className="text-xs text-muted-foreground">
+                  Tài khoản mới vào ở loại Chỉ thu thập dữ liệu: chỉ lưu tin, không gửi gì. Muốn bot trả lời thì đổi sang Trợ lý ở trang chi tiết.
+                </p>
+              )}
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Đóng</Button>

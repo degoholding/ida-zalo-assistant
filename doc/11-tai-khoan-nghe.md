@@ -6,6 +6,7 @@ Bản 27/10/2026. Đọc khi định gắn một tài khoản Zalo cá nhân và
 
 - **Trợ lý** (loại 0): đọc, trả lời, báo, gửi tin.
 - **Chỉ thu thập** (loại 1), gọi tắt là tài khoản nghe: chỉ lưu tin, thành viên, tệp. Không bao giờ gửi gì lên Zalo.
+- **Tài khoản mới quét QR mặc định là Chỉ thu thập** (từ 27/10/2026). Muốn bot trả lời thì quản trị đổi sang Trợ lý ở trang chi tiết tài khoản. Tài khoản đã có quét lại QR giữ nguyên loại.
 
 ## 2. Tài khoản nghe mặc định đọc hết
 

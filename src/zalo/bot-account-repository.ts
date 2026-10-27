@@ -1,5 +1,5 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import type { BotAccountKind, BotAccountStatus, SessionEvent } from "../constants.js";
+import { NEW_ACCOUNT_KIND, type BotAccountKind, type BotAccountStatus, type SessionEvent } from "../constants.js";
 import type { Db } from "../db/pool.js";
 
 export interface BotAccountRow {
@@ -21,7 +21,10 @@ export async function listActiveAccounts(db: Db): Promise<BotAccountRow[]> {
   return rows as BotAccountRow[];
 }
 
-/** Sau khi quét QR: có tài khoản theo nhãn thì cập nhật phiên, chưa có thì tạo. */
+/**
+ * Sau khi quét QR: có tài khoản theo nhãn thì cập nhật phiên, chưa có thì tạo. Tạo mới mang loại `NEW_ACCOUNT_KIND` (Chỉ thu
+ * thập); nhánh cập nhật KHÔNG đụng `kind` — quét lại QR không đổi loại tài khoản đã có.
+ */
 export async function saveLoggedInAccount(
   db: Db,
   label: string,
@@ -30,11 +33,11 @@ export async function saveLoggedInAccount(
   sessionCipher: string,
 ): Promise<number> {
   const [result] = await db.query<ResultSetHeader>(
-    `INSERT INTO bot_account (label, zalo_uid, display_name, session_cipher, status)
-     VALUES (?, ?, ?, ?, 0)
+    `INSERT INTO bot_account (label, zalo_uid, display_name, session_cipher, status, kind)
+     VALUES (?, ?, ?, ?, 0, ?)
      ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), zalo_uid = VALUES(zalo_uid),
        display_name = VALUES(display_name), session_cipher = VALUES(session_cipher), status = 0`,
-    [label, zaloUid, displayName.slice(0, 255), sessionCipher],
+    [label, zaloUid, displayName.slice(0, 255), sessionCipher, NEW_ACCOUNT_KIND],
   );
   return result.insertId;
 }

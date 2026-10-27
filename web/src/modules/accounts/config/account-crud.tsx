@@ -74,7 +74,7 @@ export const accountCrudConfig: CrudConfig<BotAccountDetail> = {
       label: 'Loại',
       type: 'select',
       options: BOT_ACCOUNT_KIND_OPTIONS,
-      hint: 'Trợ lý: trả lời, báo, gửi tin như thường. Chỉ thu thập dữ liệu: chỉ lưu tin / thành viên / tệp, không bao giờ gửi hay tác động gì lên Zalo (trừ tab Kết bạn do quản trị tự bấm); nhóm chỉ có loại này thì không cảnh báo, bắt việc hay vào bản tin tự động. Đổi có hiệu lực ngay.',
+      hint: 'Trợ lý: trả lời, báo, gửi tin như thường. Chỉ thu thập dữ liệu: chỉ lưu tin / thành viên / tệp, không bao giờ gửi hay tác động gì lên Zalo (trừ tab Kết bạn do quản trị tự bấm); nhóm chỉ có loại này thì không cảnh báo, bắt việc hay vào bản tin tự động. Tài khoản mới quét QR mặc định là Chỉ thu thập dữ liệu. Đổi có hiệu lực ngay.',
     },
     { name: 'is_active', label: 'Đang dùng', type: 'switch', hint: 'Tắt thì bot ngừng nghe ngay; bật lại thì nối lại bằng phiên đã lưu.' },
   ],

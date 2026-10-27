@@ -9,11 +9,17 @@ export enum BotAccountStatus {
 
 /** Loại tài khoản bot (cột bot_account.kind). Giao diện chép sang web/src/modules/accounts/types/account.ts. */
 export enum BotAccountKind {
-  /** Trợ lý: trả lời, báo, gửi tin như thường (mặc định). */
+  /** Trợ lý: trả lời, báo, gửi tin như thường. Dòng cũ trước 27/10/2026 và mặc định của cột DB. */
   Assistant = 0,
   /** Chỉ thu thập dữ liệu: lưu tin / thành viên / tệp, KHÔNG gửi hay tác động gì lên Zalo (trừ tab «Bạn bè» do quản trị bấm). */
   Normal = 1,
 }
+
+/**
+ * Loại của tài khoản MỚI sinh ra từ lượt quét QR (web hoặc CLI) — chốt 27/10/2026: mặc định Chỉ thu thập, quản trị đổi sang
+ * Trợ lý ở trang chi tiết. Tài khoản đã có quét lại QR giữ nguyên loại (xem `saveLoggedInAccount`).
+ */
+export const NEW_ACCOUNT_KIND = BotAccountKind.Normal;
 
 export enum MessageKind {
   Text = 0,

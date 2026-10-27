@@ -57,7 +57,7 @@ Giao diện: `http://127.0.0.1:8090` (chỉ mở trong máy; vào từ xa qua đ
    được» (API 409). Ngoại lệ duy nhất: tab *Kết bạn* do quản trị tự bấm. Chọn bot gửi / người nhận / nơi gửi lệnh chỉ xét bot Trợ lý;
    hết bot Trợ lý DÙNG ĐƯỢC (bật + có phiên + không cần quét lại) thì việc gửi mới bị bỏ (log rõ lý do); bot Trợ lý chỉ đang tắt / chưa
    kết nối thì việc báo lỗi thường và hàng đợi thử lại, không rơi về «bot đầu tiên» hay bot không ở trong nhóm. Tài khoản mới quét QR
-   luôn là Trợ lý; đổi loại sau ở form sửa.
+   (web hoặc CLI) mặc định là *Chỉ thu thập dữ liệu* (27/10/2026, `NEW_ACCOUNT_KIND`); quét lại QR tài khoản đã có giữ nguyên loại; đổi sang Trợ lý ở form sửa.
    **Tài khoản Chỉ thu thập đọc hết** (27/10/2026): nhóm (mọi loại) và chat riêng 1-1 mà nó thấy lần đầu đều bật đọc, bất kể cài đặt
    đọc tin nhóm mới / tin riêng; quản trị tắt từng nhóm (`PATCH /api/groups/:id`) hoặc từng cuộc riêng (`PATCH /api/conversations/:id`,
    chỉ quản trị). Luật ở `newThreadDefaults` trong `src/sync/collect-only.ts`; luồng hai tài khoản cùng nhóm và rủi ro:
