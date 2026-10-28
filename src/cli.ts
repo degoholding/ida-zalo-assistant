@@ -13,6 +13,7 @@
 //   npm run cli -- user-password <tên|email> <mật khẩu>   đặt lại mật khẩu một tài khoản
 //   npm run cli -- mcp-key create|list|revoke ...   khóa truy cập MCP (xem src/dev/mcp-key-cli.ts)
 //   npm run cli -- user-import <tệp.tsv> [vai trò 1|2|3]   nạp «email<TAB>họ tên»: tên đăng nhập = mật khẩu = email
+//   npm run cli -- links-backfill               bóc link chia sẻ cho tin đã có trong kho (phase 13.2; chạy lại không trùng)
 
 import fs from "node:fs";
 import path from "node:path";
@@ -31,6 +32,7 @@ import { UserRole } from "./constants.js";
 import { createCompany, findCompanyByCode, listCompanies } from "./sync/company-repository.js";
 import { findGroupByZaloId, updateGroupSettings, type GroupSettingsPatch } from "./sync/group-repository.js";
 import { saveLoggedInAccount } from "./zalo/bot-account-repository.js";
+import { backfillSharedLinks } from "./sync/shared-links.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -192,6 +194,10 @@ async function main(): Promise<void> {
       const result = await importUsersFromTsv(db, args[0], role as UserRole);
       console.log(`Đã tạo ${result.created} tài khoản, bỏ qua ${result.skipped} dòng (đã có / sai email).`);
     } else if (command === "mcp-key") await runMcpKeyCommand(db, args);
+    else if (command === "links-backfill") {
+      const result = await backfillSharedLinks(db, { onProgress: (lastId, sofar) => console.log(`… tới tin #${lastId}: ${sofar.scanned} tin, ${sofar.inserted} link mới`) });
+      console.log(`Xong: quét ${result.scanned} tin có link, ${result.messagesWithLinks} tin thêm link, ${result.inserted} link mới.`);
+    }
     else if (command === "storage-to-r2") {
       const storage = createFileStorage(config);
       if (!(storage instanceof R2WithLocalFallback)) throw new Error("Chưa bật R2: đặt STORAGE_DRIVER=r2 + R2_* trong .env rồi chạy lại");
@@ -199,7 +205,7 @@ async function main(): Promise<void> {
       console.log(`Xong: chép ${result.moved} tệp lên R2, ${result.missing} tệp không còn trên đĩa, ${result.failed} lỗi.`);
     }
     else {
-      console.log("Lệnh: gen-key | login <nhãn> | accounts | groups | company [add <MÃ> <tên>] | group <mã> read=on|off files=on|off label=.. retention=.. company=<MÃ>|none | stats | storage-to-r2");
+      console.log("Lệnh: gen-key | login <nhãn> | accounts | groups | company [add <MÃ> <tên>] | group <mã> read=on|off files=on|off label=.. retention=.. company=<MÃ>|none | stats | storage-to-r2 | links-backfill");
       process.exitCode = 1;
     }
   } finally {

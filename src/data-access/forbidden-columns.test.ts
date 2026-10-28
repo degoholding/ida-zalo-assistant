@@ -28,6 +28,9 @@ test("mẫu cấm phủ đủ: password_hash, token_hash, session_cipher, secret
   // Lọc theo tài khoản Zalo (27/10/2026): cột khóa ngoại bot_group.bot_account_id được dùng, BẢNG bot_account vẫn cấm
   assert.equal(covers("bga.bot_account_id IN (?)"), false);
   for (const name of ["JOIN bot_account b", "bot_account.session_cipher", "FROM bot_account"]) assert.ok(covers(name), name);
+  // Link chia sẻ (phase 13.2): cột id tệp Google của bảng shared_link được dùng, mọi BẢNG google_* vẫn cấm
+  assert.equal(covers("l.google_file_id"), false);
+  for (const name of ["google_oauth_token", "JOIN google_settings g", "google_file_ids_secret", "l.google_file_idx"]) assert.ok(covers(name), name);
 });
 
 const sample = (override: Partial<EntityDefinition>): EntityDefinition => ({

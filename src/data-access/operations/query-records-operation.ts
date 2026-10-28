@@ -22,7 +22,7 @@ export const queryRecordsTool: ToolDefinition<QueryRequest, QueryOutput> = {
   name: "query_records",
   title: "Truy vấn dữ liệu",
   description:
-    "Truy vấn bản ghi theo thực thể (groups, conversations, messages, contacts, files, tasks, tickets, send_commands, reply_templates, " +
+    "Truy vấn bản ghi theo thực thể (groups, conversations, messages, contacts, files, links, tasks, tickets, send_commands, reply_templates, " +
     "metrics, catalog, audit_log — chỉ những thực thể tài khoản này đọc được). Gọi describe_entities để biết trường lọc, phép so, cột, " +
     "sắp xếp. Lọc bằng filters [{ field, op, value }] nối VÀ; chọn cột bằng fields; gộp nhóm đếm / cộng bằng aggregate. Ngày 'YYYY-MM-DD' " +
     `= cả ngày giờ VN; không ghi múi giờ = giờ VN. Mỗi trang tối đa 100 dòng. ${UNTRUSTED_NOTICE}`,

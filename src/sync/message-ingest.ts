@@ -3,6 +3,7 @@ import { AttachmentStatus, MessageKind } from "../constants.js";
 import type { Db } from "../db/pool.js";
 import { parseZaloContent } from "../zalo/content-parser.js";
 import { liveEvents } from "../live-events.js";
+import { createLogger } from "../logger.js";
 import { indexMessage, unindexMessage } from "../search/message-search-index.js";
 import { countDirectMessage, ensureSenderContact, recordDirectMessageContact, type ContactRow } from "./contact-repository.js";
 import {
@@ -15,6 +16,18 @@ import {
   type GroupRow,
   type ThreadKey,
 } from "./group-repository.js";
+import { deleteSharedLinksOfMessage, storeSharedLinks, type StoredMessageForLinks } from "./shared-links.js";
+
+const log = createLogger("ingest");
+
+/** Bóc link chia sẻ của tin vừa ghi (phase 13.2). Lỗi ở đây KHÔNG làm hỏng việc ghi tin — chỉ ghi log, lệnh links-backfill bù sau. */
+async function recordSharedLinks(db: Db, message: StoredMessageForLinks): Promise<void> {
+  try {
+    await storeSharedLinks(db, message);
+  } catch (error) {
+    log.warn(`không ghi được link của tin #${message.messageId}`, error);
+  }
+}
 
 /**
  * Tin đã bóc khỏi đối tượng zca-js — tách ra để bài kiểm dựng được mà không cần Zalo.
@@ -125,6 +138,10 @@ async function storeMessage(deps: IngestDeps, group: GroupRow, incoming: Incomin
   // Hai tài khoản bot cùng ở một nhóm, hoặc Zalo gửi lại tin cũ khi nối lại: bỏ qua bản trùng
   if (result.affectedRows === 0) return null;
   await indexMessage(deps.db, result.insertId);
+  await recordSharedLinks(deps.db, {
+    messageId: result.insertId, groupId: group.id, senderUid: incoming.senderUid, senderName: incoming.senderName,
+    sentAt: new Date(incoming.sentAtMs), text: parsed.text, kind: parsed.kind, content: incoming.content,
+  });
   await bumpThreadCounters(deps.db, group.id, new Date(incoming.sentAtMs));
   liveEvents.emitMessage({ threadId: group.id, messageId: result.insertId, kind: "new" });
 
@@ -165,6 +182,7 @@ export async function recallMessage(db: Db, key: ThreadKey, zaloMsgId: string): 
       [key.threadType, key.zaloThreadId, key.ownerBotId, zaloMsgId]);
     if (rows[0]) {
       await unindexMessage(db, Number(rows[0].id));
+      await deleteSharedLinksOfMessage(db, Number(rows[0].id));
       liveEvents.emitMessage({ threadId: Number(rows[0].group_id), messageId: Number(rows[0].id), kind: "recalled" });
     }
   }
@@ -217,6 +235,9 @@ export async function recordOutgoingMessage(
   );
   if (result.affectedRows === 0) return null;
   await indexMessage(db, result.insertId);
+  await recordSharedLinks(db, {
+    messageId: result.insertId, groupId: thread.id, senderUid: bot.uid, senderName: bot.name, sentAt, text, kind: options.kind ?? MessageKind.Text,
+  });
   if (options.file) {
     await db.query(
       `INSERT INTO attachment (message_id, group_id, file_name, file_ext, declared_size, source_url, storage_key, stored_bytes, status, stored_at)

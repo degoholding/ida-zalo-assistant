@@ -77,6 +77,8 @@ Giao diện: `http://127.0.0.1:8090` (chỉ mở trong máy; vào từ xa qua đ
    `src/sync/sendable-runner-picker.ts`, `src/zalo/collect-only-account-error.ts`, migration `041_bot_account_kind.sql`.
 3. **Nhóm** → nhóm bot đang ở hiện ra, mặc định KHÔNG đọc → chọn công ty, tick *Đọc tin* / *Lấy file* → Lưu.
 4. **Tệp** → tệp đã tải, tải về máy; tệp lỗi hoặc chưa lấy có nút *Tải vào kho*.
+   Tab *Link chia sẻ* (28/10/2026): link bóc từ tin (Google Sheets / Docs / Slides / Drive, web khác) — bảng `shared_link`,
+   migration 047, mã `src/sync/shared-links.ts`; tin có từ trước thì nạp một lần: `npm run cli -- links-backfill` (chạy lại không trùng).
 5. **Hội thoại** → xem tin từng nhóm và từng người nhắn riêng cho bot (cả câu bot trả lời).
 6. **Danh bạ** → mọi người bot từng thấy (nhắn riêng + thành viên nhóm). Chọn vai trò **Quản lý** /
    **Trưởng phòng** cho ai thì bot trả lời tin riêng của người đó; để «Không» = chỉ lưu, không trả lời.
@@ -288,7 +290,7 @@ Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`)
 |---|---|
 | `whoami` | Mình là ai, thấy được nhóm nào, có cờ Mật không |
 | `describe_entities` | Các thực thể truy vấn được, cột / phép lọc / cột sắp xếp của từng thực thể |
-| `query_records` | Truy vấn có kiểu mọi thực thể: `groups`, `conversations`, `messages`, `contacts`, `files`, `tasks`, `tickets`, `send_commands`, `reply_templates`, `catalog`, `metrics`, `audit_log`. `groups` / `conversations` / `messages` / `files` lọc được `account_id` (tài khoản Zalo của bot — nhóm theo `bot_group` còn ở, cuộc riêng theo `owner_bot_id`; cùng hàm SQL `src/web/api/conversation-accounts.ts` với màn Hội thoại, 27/10/2026); id + tên tài khoản ở `whoami.zalo_accounts` |
+| `query_records` | Truy vấn có kiểu mọi thực thể: `groups`, `conversations`, `messages`, `contacts`, `files`, `links` (link chia sẻ trong tin, lọc `kind` / `host` / `group_id`), `tasks`, `tickets`, `send_commands`, `reply_templates`, `catalog`, `metrics`, `audit_log`. `groups` / `conversations` / `messages` / `files` lọc được `account_id` (tài khoản Zalo của bot — nhóm theo `bot_group` còn ở, cuộc riêng theo `owner_bot_id`; cùng hàm SQL `src/web/api/conversation-accounts.ts` với màn Hội thoại, 27/10/2026); id + tên tài khoản ở `whoami.zalo_accounts` |
 | `search_messages` | Tìm tin theo từ khóa (gõ không dấu được, cụm trong ngoặc kép); lọc thêm `group_name`, `thread_ids`, `sender_name`, `from` / `to`, `mentions_me` (ai nhắc tới tôi), `limit` |
 | `search_files` | Tìm tệp đã gửi theo tên / chữ đã bóc (`query`, `group_id`, `from` / `to`); `query` rỗng = tệp gần đây trong phạm vi tài khoản |
 | `find_people` | Tìm người trong Danh bạ theo tên (trả `uid` + các nhóm thấy được); tên / nhóm là dữ liệu không đáng tin (`untrusted_fields`) |
