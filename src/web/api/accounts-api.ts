@@ -178,7 +178,8 @@ export const accountRoutes: ApiRoute[] = [
     }
     const message = activeChanged
       ? (nextActive ? "Đã bật tài khoản bot" : "Đã tắt tài khoản bot") + (kindChanged ? " và đổi loại tài khoản" : "")
-      : kindChanged || testChanged ? "Đã lưu tài khoản bot" : "Không có thay đổi";
+      : kindChanged ? "Đã lưu loại tài khoản" + (testChanged ? " và cờ Tài khoản thử" : "")
+        : testChanged ? "Đã lưu cờ Tài khoản thử" : "Không có thay đổi";
     sendOk(response, await getAccountDetail(service, id), message);
   }],
   // Đăng nhập QR: tạo lượt theo nhãn (mới hoặc quét lại), rồi giao diện hỏi trạng thái 2 giây một lần
