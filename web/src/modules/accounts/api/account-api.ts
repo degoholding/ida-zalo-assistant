@@ -1,5 +1,5 @@
 import { apiGet, apiPost, httpClient, type SuccessEnvelope } from '@/core/api'
-import type { QrLoginState } from '../types/account'
+import type { AccountPurgePreview, QrLoginState } from '../types/account'
 import type { FriendOverview, FriendSearchResult } from '../types/friend-request'
 
 export const ACCOUNTS_API_PATH = '/api/accounts'
@@ -25,5 +25,10 @@ export const accountApi = {
   },
   acceptFriend: (id: number, uid: string) => postWithMessage(`${ACCOUNTS_API_PATH}/${id}/friends/incoming/${encodeURIComponent(uid)}/accept`),
   rejectFriend: (id: number, uid: string) => postWithMessage(`${ACCOUNTS_API_PATH}/${id}/friends/incoming/${encodeURIComponent(uid)}/reject`),
+  /** Xem trước khi xóa tài khoản thử (409 nếu là tài khoản thật). */
+  purgePreview: (id: number) => apiGet<AccountPurgePreview>(`${ACCOUNTS_API_PATH}/${id}/purge-preview`),
+  /** Xóa tài khoản thử kèm dữ liệu — phải gõ lại đúng nhãn + xác nhận đã sao lưu. */
+  purge: (id: number, payload: { confirm_label: string; backup_confirmed: boolean }) =>
+    postWithMessage(`${ACCOUNTS_API_PATH}/${id}/purge`, payload),
   cancelFriendRequest: (id: number, uid: string) => postWithMessage(`${ACCOUNTS_API_PATH}/${id}/friends/requests/${encodeURIComponent(uid)}/cancel`),
 }

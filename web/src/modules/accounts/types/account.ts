@@ -17,6 +17,8 @@ export interface BotAccount {
   is_active: boolean
   /** Loại tài khoản — `BOT_ACCOUNT_KIND`. */
   kind: number
+  /** Tài khoản thử: quản trị được xóa kèm dữ liệu (tài khoản thật chỉ Tắt). */
+  is_test: boolean
   running: boolean
   /** Trạng thái gộp do máy chủ tính: off | needs_login | stopped | listening | reconnecting. */
   state: string
@@ -74,4 +76,18 @@ export interface QrLoginState {
   phase: QrLoginPhase
   message: string
   qr_image: string
+}
+
+/** `GET /api/accounts/:id/purge-preview` — những gì sẽ mất khi xóa tài khoản thử. */
+export interface AccountPurgePreview {
+  account_id: number
+  label: string
+  direct_count: number
+  solo_group_count: number
+  /** Nhóm có tài khoản khác: giữ nguyên, chỉ bỏ liên kết */
+  shared_group_count: number
+  message_count: number
+  attachment_count: number
+  stored_file_count: number
+  stored_bytes: number
 }

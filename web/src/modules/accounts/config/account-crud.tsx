@@ -1,4 +1,4 @@
-import { Activity, Database, Hash, MessageSquare, Users } from 'lucide-react'
+import { Activity, Database, FlaskConical, Hash, MessageSquare, Users } from 'lucide-react'
 
 import { EntityAvatar } from '@/shared/contact-card/entity-avatar'
 import { appRoutes } from '@/shared/constants/app-routes'
@@ -10,6 +10,7 @@ import { AccountCreateDialog } from '../components/account-create-dialog'
 import { AccountEventsTab, AccountGroupsTab } from '../components/account-detail-tabs'
 import { AccountFriendsTab } from '../components/account-friends-tab'
 import { AccountKindBadge } from '../components/account-kind-badge'
+import { AccountPurgeButton } from '../components/account-purge-button'
 import { AccountRescanButton } from '../components/account-rescan-button'
 import { AccountStateBadge } from '../components/account-state-badge'
 import { BOT_ACCOUNT_KIND, BOT_ACCOUNT_KIND_OPTIONS, type BotAccountDetail } from '../types/account'
@@ -77,16 +78,23 @@ export const accountCrudConfig: CrudConfig<BotAccountDetail> = {
       hint: 'Trợ lý: trả lời, báo, gửi tin như thường. Chỉ thu thập dữ liệu: chỉ lưu tin / thành viên / tệp, không bao giờ gửi hay tác động gì lên Zalo (trừ tab Kết bạn do quản trị tự bấm); nhóm chỉ có loại này thì không cảnh báo, bắt việc hay vào bản tin tự động. Tài khoản mới quét QR mặc định là Chỉ thu thập dữ liệu. Đổi có hiệu lực ngay.',
     },
     { name: 'is_active', label: 'Đang dùng', type: 'switch', hint: 'Tắt thì bot ngừng nghe ngay; bật lại thì nối lại bằng phiên đã lưu.' },
+    { name: 'is_test', label: 'Tài khoản thử', type: 'switch', hint: 'Bật thì trang chi tiết có nút Xóa kèm dữ liệu (cuộc riêng + nhóm chỉ có tài khoản này). Tài khoản thật để tắt: chỉ Tắt được, không xóa.' },
   ],
   detailMedia: (account) => <EntityAvatar name={account.display_name || account.label} avatarUrl={account.avatar_url} className="size-14 text-base" />,
   chips: (account) => [
     ...(account.zalo_uid ? [{ icon: Hash, text: account.zalo_uid, tone: 'code' as const }] : []),
     { icon: Activity, text: account.state_label, tone: account.state === 'listening' ? 'ok' : 'muted' },
     ...(account.kind === BOT_ACCOUNT_KIND.normal ? [{ icon: Database, text: 'Chỉ thu thập dữ liệu', tone: 'muted' as const }] : []),
+    ...(account.is_test ? [{ icon: FlaskConical, text: 'Tài khoản thử', tone: 'muted' as const }] : []),
     { icon: Users, text: `${account.group_count} nhóm`, tone: 'muted' },
     { icon: MessageSquare, text: `${account.direct_count} cuộc riêng`, tone: 'muted' },
   ],
-  detailActions: (account) => <AccountRescanButton label={account.label} />,
+  detailActions: (account) => (
+    <>
+      <AccountRescanButton label={account.label} />
+      {account.is_test && <AccountPurgeButton accountId={account.id} label={account.label} />}
+    </>
+  ),
   tabs: [
     { key: 'groups', label: 'Nhóm đang ở', render: (account) => <AccountGroupsTab account={account} /> },
     { key: 'events', label: 'Nhật ký kết nối', render: (account) => <AccountEventsTab account={account} /> },

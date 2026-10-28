@@ -27,6 +27,7 @@ const ACTION_LABEL: Record<string, string> = {
   google_connect: "Kết nối Google",
   google_disconnect: "Ngắt kết nối Google",
   delete: "Gỡ",
+  purge: "Xóa kèm dữ liệu",
   reorder: "Đổi thứ tự",
   test_message: "Gửi thử kênh báo",
   login: "Đăng nhập",

@@ -4,6 +4,7 @@ import type { SyncService } from "../../sync-service.js";
 import { ApiError, parseId, readJson, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
+import { planTestAccountPurge, purgeTestAccount, PurgeRefusedError, type PurgePlan } from "../../sync/test-account-purge.js";
 import { contactAvatarUrl } from "./contacts-api.js";
 import type { ListSpec } from "./list-query.js";
 import { runList } from "./list-runner.js";
@@ -30,7 +31,7 @@ export const ACCOUNT_LIST_SPEC: ListSpec = {
 
 const ACCOUNT_FROM = "FROM bot_account b LEFT JOIN contact c ON c.zalo_uid = b.zalo_uid";
 const ACCOUNT_COLUMNS = `
-  b.id, b.label, b.zalo_uid, b.display_name, b.status, b.is_active, b.kind, b.last_connected_at, b.last_heartbeat_at, b.created_at,
+  b.id, b.label, b.zalo_uid, b.display_name, b.status, b.is_active, b.kind, b.is_test, b.last_connected_at, b.last_heartbeat_at, b.created_at,
   c.avatar_key,
   (SELECT COUNT(*) FROM bot_group bg WHERE bg.bot_account_id = b.id AND bg.left_at IS NULL) AS group_count,
   (SELECT COUNT(*) FROM zalo_group d WHERE d.thread_type = ${ConversationType.Direct} AND d.owner_bot_id = b.id) AS direct_count`;
@@ -50,7 +51,7 @@ function decorate(service: SyncService, rows: RowDataPacket[]): Record<string, u
     const running = service.isRunning(row.id as number);
     const state = describeAccountState({ is_active: row.is_active, status: row.status, running });
     return {
-      ...rest, running, state: state.code, state_label: state.label, is_active: Boolean(row.is_active),
+      ...rest, running, state: state.code, state_label: state.label, is_active: Boolean(row.is_active), is_test: Boolean(row.is_test),
       avatar_url: contactAvatarUrl(row.zalo_uid, avatarKey), group_count: Number(row.group_count), direct_count: Number(row.direct_count),
     };
   });
@@ -73,7 +74,54 @@ export async function getAccountDetail(service: SyncService, id: number): Promis
   return { ...account, groups, events };
 }
 
+/** Cờ bật / tắt nhận đúng true / false, 0 / 1, "0" / "1", "true" / "false"; còn lại 422 (không đoán). */
+function parseStrictFlag(raw: unknown, label: string): boolean {
+  if (raw === true || raw === 1 || raw === "1" || raw === "true") return true;
+  if (raw === false || raw === 0 || raw === "0" || raw === "false") return false;
+  throw new ApiError(422, "validation_error", `${label} chỉ nhận bật / tắt`);
+}
+
+function serializePlan(plan: PurgePlan): Record<string, unknown> {
+  return {
+    account_id: plan.accountId, label: plan.label, direct_count: plan.directCount, solo_group_count: plan.soloGroupCount,
+    shared_group_count: plan.sharedGroupCount, message_count: plan.messageCount, attachment_count: plan.attachmentCount,
+    stored_file_count: plan.storedFileCount, stored_bytes: plan.storedBytes,
+  };
+}
+
+const refuse = (error: unknown): never => {
+  if (error instanceof PurgeRefusedError) throw new ApiError(409, "conflict", error.message);
+  throw error;
+};
+
+/**
+ * Xóa tài khoản thử kèm dữ liệu (27/10/2026). Điều kiện: is_test = 1, gõ lại ĐÚNG nhãn, xác nhận đã sao lưu. Thứ tự: tắt +
+ * dừng phiên Zalo → xóa trong một giao dịch → xóa tệp trong kho (hỏng thì ghi storage_cleanup) → nhật ký thao tác.
+ */
+export async function purgeAccount(service: Pick<SyncService, "db" | "storage" | "stopAccount">, id: number, body: Record<string, unknown>) {
+  const plan = await planTestAccountPurge(service.db, id).catch(refuse);
+  if (String(body.confirm_label ?? "") !== plan.label) {
+    throw new ApiError(422, "validation_error", "Gõ lại đúng nhãn tài khoản để xác nhận xóa");
+  }
+  if (body.backup_confirmed !== true) throw new ApiError(422, "validation_error", "Chưa xác nhận đã sao lưu dữ liệu");
+  await service.db.query("UPDATE bot_account SET is_active = 0 WHERE id = ?", [id]);
+  await service.stopAccount(id);
+  const result = await purgeTestAccount(service.db, service.storage, id).catch(refuse);
+  const summary = `Xóa tài khoản thử "${result.label}": ${result.directCount} cuộc riêng, ${result.soloGroupCount} nhóm chỉ có nó, `
+    + `${result.messageCount} tin, ${result.attachmentCount} tệp (${result.storageDeleted} đã xóa khỏi kho`
+    + `${result.storageFailed ? `, ${result.storageFailed} lỗi chờ dọn lại` : ""}); giữ ${result.sharedGroupCount} nhóm có tài khoản khác`;
+  await recordAudit(service.db, { entity: "bot_account", entityId: id, action: "purge", message: summary });
+  return { ...serializePlan(result), storage_deleted: result.storageDeleted, storage_failed: result.storageFailed, message: summary };
+}
+
 export const accountRoutes: ApiRoute[] = [
+  // Xem trước khi xóa tài khoản thử: số cuộc riêng / nhóm / tin / tệp / dung lượng sẽ xóa
+  ["GET", /^\/api\/accounts\/(\d+)\/purge-preview$/, async ({ response, match, service }) =>
+    sendOk(response, serializePlan(await planTestAccountPurge(service.db, parseId(match[1])).catch(refuse)))],
+  ["POST", /^\/api\/accounts\/(\d+)\/purge$/, async ({ request, response, match, service }) => {
+    const result = await purgeAccount(service, parseId(match[1]), await readJson(request));
+    sendOk(response, result, "Đã xóa tài khoản thử kèm dữ liệu");
+  }],
   ["GET", /^\/api\/accounts$/, async ({ response, url, service }) =>
     sendOk(response, await runList(service.db, url.searchParams, ACCOUNT_LIST_SPEC, {
       select: ACCOUNT_COLUMNS, from: ACCOUNT_FROM, decorate: (rows) => decorate(service, rows),
@@ -83,8 +131,8 @@ export const accountRoutes: ApiRoute[] = [
     const id = parseId(match[1]);
     const before = await loadAccount(service, id);
     const body = await readJson(request);
-    if (body.is_active === undefined && body.kind === undefined) {
-      throw new ApiError(422, "validation_error", "Chỉ sửa được ô Đang dùng và Loại của tài khoản bot");
+    if (body.is_active === undefined && body.kind === undefined && body.is_test === undefined) {
+      throw new ApiError(422, "validation_error", "Chỉ sửa được ô Đang dùng, Loại và Tài khoản thử của tài khoản bot");
     }
     // Kiểm hết đầu vào TRƯỚC khi ghi gì (loại chỉ nhận đúng 0 / 1 hoặc "0" / "1"; chuỗi rỗng, true, 1.5… đều 422)
     let nextKind: BotAccountKind | null = null;
@@ -96,11 +144,13 @@ export const accountRoutes: ApiRoute[] = [
       }
       nextKind = kind;
     }
+    const nextTest = body.is_test === undefined ? null : parseStrictFlag(body.is_test, "Tài khoản thử");
     const nextActive = body.is_active === undefined
       ? null
       : body.is_active === true || body.is_active === 1 || body.is_active === "1" || body.is_active === "true";
     const kindChanged = nextKind !== null && nextKind !== Number(before.kind);
     const activeChanged = nextActive !== null && nextActive !== Boolean(before.is_active);
+    const testChanged = nextTest !== null && nextTest !== Boolean(before.is_test);
 
     // Loại tài khoản: đổi có hiệu lực NGAY (runner đang chạy áp dụng liền, không khởi động lại)
     if (kindChanged && nextKind !== null) {
@@ -109,6 +159,14 @@ export const accountRoutes: ApiRoute[] = [
       await recordAudit(service.db, {
         entity: "bot_account", entityId: id, action: "update", changedFields: ["kind"],
         message: `Đổi loại tài khoản: ${ACCOUNT_KIND_LABEL[Number(before.kind)] ?? before.kind} → ${ACCOUNT_KIND_LABEL[nextKind]}`,
+      });
+    }
+    // Tài khoản thử (27/10/2026): chỉ đổi cờ, không đụng phiên; bật cờ mới hiện nút "Xóa kèm dữ liệu"
+    if (testChanged && nextTest !== null) {
+      await service.db.query("UPDATE bot_account SET is_test = ? WHERE id = ?", [nextTest ? 1 : 0, id]);
+      await recordAudit(service.db, {
+        entity: "bot_account", entityId: id, action: "update", changedFields: ["is_test"],
+        message: nextTest ? "Đánh dấu Tài khoản thử" : "Bỏ đánh dấu Tài khoản thử",
       });
     }
     // Chỉ dừng / chạy lại tài khoản khi Đang dùng THỰC SỰ đổi — lưu lại cùng giá trị không làm rớt phiên Zalo
@@ -120,7 +178,7 @@ export const accountRoutes: ApiRoute[] = [
     }
     const message = activeChanged
       ? (nextActive ? "Đã bật tài khoản bot" : "Đã tắt tài khoản bot") + (kindChanged ? " và đổi loại tài khoản" : "")
-      : kindChanged ? "Đã lưu loại tài khoản" : "Không có thay đổi";
+      : kindChanged || testChanged ? "Đã lưu tài khoản bot" : "Không có thay đổi";
     sendOk(response, await getAccountDetail(service, id), message);
   }],
   // Đăng nhập QR: tạo lượt theo nhãn (mới hoặc quét lại), rồi giao diện hỏi trạng thái 2 giây một lần
