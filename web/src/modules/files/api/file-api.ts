@@ -2,6 +2,8 @@ import { apiGet, httpClient, type SuccessEnvelope } from '@/core/api'
 import type { FileRecord, FileText } from '../types/file'
 
 export const FILES_API_PATH = '/api/files'
+/** Link chia sẻ bóc từ tin (tab "Link chia sẻ" của màn Tệp) — cùng quyền xem tệp. */
+export const SHARED_LINKS_API_PATH = '/api/files/links'
 
 export const fileApi = {
   /** Đưa tệp lỗi / tệp của nhóm chưa bật lấy file vào hàng tải về kho. */

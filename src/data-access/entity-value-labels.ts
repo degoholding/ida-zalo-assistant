@@ -1,6 +1,6 @@
 import {
   AttachmentStatus, CatalogKind, CatalogMatchStatus, ContactKind, ContactRole, ConversationType, GroupKind, MessageKind,
-  MetricFlag, ReplyTemplateStatus, ReplyTone, SendActionKind, SendCommandSource, SendCommandStatus, TaskPriority, TaskSource,
+  MetricFlag, ReplyTemplateStatus, ReplyTone, SendActionKind, SendCommandSource, SendCommandStatus, SharedLinkKind, TaskPriority, TaskSource,
   TaskStatus, TicketStatus,
 } from "../constants.js";
 
@@ -28,6 +28,11 @@ export const VALUE_LABELS: Record<string, Labels> = {
     [AttachmentStatus.Expired]: "Hết hạn giữ tệp",
   },
   "files.thread_type": { [ConversationType.Direct]: "Nhắn riêng", [ConversationType.Group]: "Nhóm" },
+  "links.kind": {
+    [SharedLinkKind.GoogleDriveFile]: "Google Drive (tệp)", [SharedLinkKind.GoogleSheets]: "Google Sheets", [SharedLinkKind.GoogleDocs]: "Google Docs",
+    [SharedLinkKind.GoogleSlides]: "Google Slides", [SharedLinkKind.GoogleDriveFolder]: "Google Drive (thư mục)", [SharedLinkKind.Web]: "Web khác",
+  },
+  "links.thread_type": { [ConversationType.Direct]: "Nhắn riêng", [ConversationType.Group]: "Nhóm" },
   "tasks.status": { [TaskStatus.Proposed]: "Đề xuất", [TaskStatus.Open]: "Đang làm", [TaskStatus.Done]: "Xong", [TaskStatus.Cancelled]: "Hủy" },
   "tasks.priority": { [TaskPriority.High]: "Cao", [TaskPriority.Normal]: "Vừa", [TaskPriority.Low]: "Thấp" },
   "tasks.source": {

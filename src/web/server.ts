@@ -11,6 +11,8 @@ import { createMcpGateway, MCP_PATH } from "../mcp/mcp-http-handler.js";
 import { serveLegalPage } from "./legal-pages.js";
 import { createMcpOAuthRoutes } from "../mcp/oauth/mcp-oauth-http.js";
 import { serveMcpFileLink } from "../mcp/mcp-file-links.js";
+import { logMcpCall } from "../mcp/mcp-call-log.js";
+import { serveMcpReportLink } from "../mcp/mcp-report-files.js";
 
 // Máy chủ web: giao diện quản trị `web/` (React, khung ERP v2) dưới /app + lớp API JSON /api + ảnh đại diện.
 // Giao diện HTML cũ đã gỡ 01/10/2026 — mọi màn nằm trong /app.
@@ -88,6 +90,10 @@ export function startWebServer(service: SyncService): Promise<http.Server> {
       if (!mcpGateway) throw new HttpError(404, "Không có trang này");
       return mcpGateway.handle(request, response, clientKey);
     }
+    // Link tải báo cáo Excel / PDF của công cụ MCP export_report (phase 13.4) — chữ ký + khóa còn sống + quyền không đổi, không theo MCP_FILE_RAW
+    if (mcpGateway && await serveMcpReportLink({
+      db, secret: config.sessionEncryptionKey, maskPersonalData: config.privacy.maskPersonalData, logCall: (entry) => logMcpCall(db, entry), clientIp: clientKey,
+    }, path, url, method, response)) return;
     // Link tải tệp gốc ký sẵn hạn ngắn của công cụ MCP get_file (27/10/2026) — chữ ký thay cho phiên đăng nhập
     if (mcpGateway && config.mcp.fileRaw
       && await serveMcpFileLink({ db, storage, secret: config.sessionEncryptionKey, maskPersonalData: config.privacy.maskPersonalData }, path, url, method, response)) return;

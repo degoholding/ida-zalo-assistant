@@ -46,6 +46,17 @@ export enum AttachmentStatus {
   Expired = 4,
 }
 
+/** Loại link chia sẻ trong tin (cột shared_link.kind, migration 047). Giao diện chép sang web/src/modules/files/types/shared-link.ts. */
+export enum SharedLinkKind {
+  GoogleDriveFile = 1,
+  GoogleSheets = 2,
+  GoogleDocs = 3,
+  GoogleSlides = 4,
+  GoogleDriveFolder = 5,
+  // Mọi link khác (web, Google Forms, YouTube…)
+  Web = 9,
+}
+
 export enum SessionEvent {
   LoginCookieOk = 0,
   LoginCookieFailed = 1,

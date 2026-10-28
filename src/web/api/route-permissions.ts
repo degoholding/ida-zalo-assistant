@@ -50,6 +50,7 @@ const RULES: Rule[] = [
   // Khóa MCP (17/10/2026): mọi vai trò quản lý khóa CỦA MÌNH (phạm vi dòng kiểm trong API, quản trị thấy hết). Thu hồi = POST …/revoke
   ["GET", /^\/api\/mcp-keys(\/|$)/, "mcp_key", "read"],
   ["WRITE", /^\/api\/mcp-keys(\/\d+\/revoke)?$/, "mcp_key", "write"],
+  // Thống kê dùng MCP (phase 13.6): /api/mcp-usage CỐ Ý không khai → chỉ quản trị (luật mặc định setting.write)
   ["WRITE", /^\/api\/accounts(\/|$)/, "bot_account", "write"],
 ];
 

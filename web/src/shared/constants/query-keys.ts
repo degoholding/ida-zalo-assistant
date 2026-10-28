@@ -18,6 +18,8 @@ export const queryKeys = {
     all: ['mcp-keys'] as const,
     /** Giới hạn tạo khóa của người đang đăng nhập (mức tối đa theo vai trò, có được chọn nhóm Mật không). */
     options: () => ['mcp-keys', 'options'] as const,
+    /** Thống kê dùng MCP (quản trị, phase 13.6) theo khoảng ngày / cách gộp / nguồn. */
+    usage: (params: Record<string, unknown>) => ['mcp-keys', 'usage', params] as const,
   },
   recipients: {
     all: ['recipients'] as const,
