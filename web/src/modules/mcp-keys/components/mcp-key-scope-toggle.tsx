@@ -4,12 +4,13 @@ import { usePermission } from '@/core/authorization/use-permission'
 import { Label } from '@/shared/ui/label'
 import { Switch } from '@/shared/ui/switch'
 import { useMcpKeyOptions } from '../hooks/use-mcp-key-actions'
+import { McpUsageLinkButton } from './mcp-usage-link-button'
 
 /** Tham số URL bật "Tất cả người dùng" — khớp `scope=all` ở `src/web/api/mcp-keys-api.ts`. */
 export const MCP_KEY_SCOPE_PARAM = 'scope'
 export const MCP_KEY_SCOPE_ALL = 'all'
 
-/** Công tắc "Tất cả người dùng" — chỉ quản trị thấy; máy chủ vẫn tự khóa phạm vi, nên đây chỉ là hiển thị. */
+/** Công tắc "Tất cả người dùng" + nút Thống kê dùng — chỉ quản trị thấy; máy chủ vẫn tự khóa phạm vi, nên đây chỉ là hiển thị. */
 export function McpKeyScopeToggle() {
   const { can } = usePermission()
   const { data: options } = useMcpKeyOptions(can('mcp_key', 'read'))
@@ -25,9 +26,12 @@ export function McpKeyScopeToggle() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Switch id="mcp-key-scope-all" checked={checked} onCheckedChange={toggle} />
-      <Label htmlFor="mcp-key-scope-all" className="whitespace-nowrap">Tất cả người dùng</Label>
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <Switch id="mcp-key-scope-all" checked={checked} onCheckedChange={toggle} />
+        <Label htmlFor="mcp-key-scope-all" className="whitespace-nowrap">Tất cả người dùng</Label>
+      </div>
+      <McpUsageLinkButton isAdmin={options.is_admin} />
     </div>
   )
 }

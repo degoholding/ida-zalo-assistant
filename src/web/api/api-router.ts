@@ -22,6 +22,7 @@ import { importRoutes } from "./imports-api.js";
 import { lookupRoutes } from "./lookups-api.js";
 import { catalogRoutes } from "./catalog-api.js";
 import { mcpKeyRoutes } from "./mcp-keys-api.js";
+import { mcpUsageRoutes } from "./mcp-usage-api.js";
 import { metricRoutes } from "./metrics-api.js";
 import { metricSourceRoutes } from "./metric-sources-api.js";
 import { replyTemplateRoutes } from "./reply-templates-api.js";
@@ -43,7 +44,7 @@ const log = createLogger("api");
 const routes: ApiRoute[] = [
   ...contactRoutes, ...groupRoutes, ...fileRoutes, ...companyRoutes, ...accountRoutes, ...accountFriendRoutes, ...conversationRoutes, ...lookupRoutes, ...auditRoutes, ...eventRoutes, ...importRoutes, ...settingRoutes, ...aiKeyRoutes, ...assistantChatRoutes, ...googleOAuthRoutes,
   ...userRoutes, ...recipientRoutes, ...ticketRoutes, ...taskRoutes, ...messageSearchRoutes, ...briefRoutes, ...sendCommandRoutes,
-  ...replyTemplateRoutes, ...metricRoutes, ...metricSourceRoutes, ...catalogRoutes, ...mcpKeyRoutes,
+  ...replyTemplateRoutes, ...metricRoutes, ...metricSourceRoutes, ...catalogRoutes, ...mcpKeyRoutes, ...mcpUsageRoutes,
 ];
 
 export interface ApiDeps {

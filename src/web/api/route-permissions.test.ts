@@ -15,3 +15,8 @@ test("tắt / bật lưu một cuộc riêng 1-1 chỉ quản trị — không l
   assert.deepEqual(requiredPermission("PATCH", "/api/conversations/7"), { entity: "setting", action: "write" });
   assert.deepEqual(requiredPermission("POST", "/api/conversations/7/messages"), { entity: "conversation", action: "write" });
 });
+
+test("thống kê dùng MCP chỉ quản trị — không lọt vào quyền Khóa MCP của Quản lý (phase 13.6)", () => {
+  assert.deepEqual(requiredPermission("GET", "/api/mcp-usage"), { entity: "setting", action: "write" });
+  assert.deepEqual(requiredPermission("GET", "/api/mcp-keys"), { entity: "mcp_key", action: "read" });
+});

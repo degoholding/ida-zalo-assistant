@@ -276,7 +276,7 @@ bearer_token_env_var = "BOTIDA_MCP_KEY"
 
 Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`). Chưa dùng được với claude.ai web / connector (cần OAuth, chưa làm).
 
-**Công cụ** (khóa chỉ đọc thấy 7 công cụ đầu; chỉ hiện công cụ mà vai trò của chủ khóa dùng được):
+**Công cụ** (khóa chỉ đọc thấy các công cụ đọc + báo cáo; chỉ hiện công cụ mà vai trò của chủ khóa dùng được):
 
 | Công cụ | Làm gì |
 |---|---|
@@ -291,6 +291,8 @@ Máy dev: thay URL bằng `http://localhost:8090/mcp` (cần `MCP_ENABLED=true`)
 | `get_file_text` | Đọc chữ đã bóc của tệp theo đoạn (`offset_chars`) |
 | `get_file` | Tệp cho AI ngoài tự đọc (27/10/2026): xlsx / docx / csv / txt bóc chữ tại chỗ (đã che dữ liệu cá nhân; cất `attachment_text` khi chưa có). Tệp GỐC khi `MCP_FILE_RAW=true` (mặc định BẬT, đại ca chốt 27/10 — NGOẠI LỆ của che dữ liệu cá nhân, chỉ Quản trị / Quản lý dùng MCP): ảnh = khối image (≤ 3 MB), PDF = embedded resource (≤ 5 MB), lớn hơn = link `/mcp-files/<id>` ký HMAC hạn 5 phút (lúc tải kiểm lại khóa + phạm vi + Mật). Tắt thì ảnh / PDF trả chữ đã bóc sẵn nếu có. Ghi âm / video báo không đọc được. Trần 20 tệp / 40 MB mỗi khóa mỗi phút |
 | `metrics_summary` | Tổng hợp số liệu bán hàng theo kỳ: chỉ tiêu theo mã (`metrics`) hoặc tên chữ (`metric_name`); khoảng `from` / `to` hoặc kỳ chữ `period` (`today`…`last_month`, `custom`); `group_by` (`staff` / `area` / `date`), `area`, `staff_id` |
+| `activity_summary` | Tổng hợp hoạt động tin theo kỳ (phase 13.4, 28/10/2026): `from` / `to` ngày VN (mặc định 7 ngày, tối đa 92), `group_by` `thread_day` (nhóm × ngày, mặc định) / `sender_day` (người gửi × ngày) / `thread_sender` (nhóm × người); mỗi dòng có số tin, số tệp, số người hoạt động, số cuộc, giờ tin cuối, kèm `totals` đủ cả kỳ. Lọc `thread_ids`, `account_ids` (tài khoản Zalo, cùng hàm SQL màn Hội thoại), `sender_uids`, `sender_name`. Không tính tin thu hồi / dòng sự kiện nhóm; phạm vi nhóm + Mật như `messages`. Trần `max_rows` 200 (tối đa 1 000), bị cắt thì `truncated` + ghi chú |
+| `export_report` | Xuất Excel (`xlsx`, ô ngày / số có định dạng, lọc nhanh) hoặc PDF bảng đơn giản từ MỘT yêu cầu `{ source: "query_records" \| "activity_summary", args, format, title }`. Máy chủ chạy lại truy vấn theo quyền của khóa (không nhận dữ liệu AI gửi), lấy mọi trang tới trần 5 000 dòng Excel / 2 000 dòng PDF, tệp ≤ 10 MB, đã che SĐT / STK / CCCD theo cài đặt; cất tạm trong bộ nhớ (50 tệp / 64 MB, hạn 10 phút) và trả link `/mcp-reports/<mã>` ký HMAC. Lúc tải kiểm lại: chữ ký + hạn, khóa còn sống, quyền không đổi so với lúc xuất (vai trò, phạm vi nhóm, Mật, che) — đổi thì 403, gọi lại công cụ. Lượt tải ghi `mcp_call_log` (`export_report_download`). Tối đa 6 lượt xuất / phút / khóa. Cần `MCP_PUBLIC_URL` (máy dev: Host loopback) |
 | `propose_*` ×6 + `confirm_write` | Ghi — chỉ khóa «Đọc + ghi» của Quản trị / Quản lý (xem dưới) |
 
 `query_records` nhận DSL JSON, **không phải SQL**; trường / phép so / sắp xếp lấy từ `describe_entities`:
@@ -321,9 +323,10 @@ trả «đồng ý» (hoặc «đồng ý <mã>» khi nhiều nháp) hoặc «h�
 - **Nhóm Mật** chỉ khi CẢ cờ «Xem nhóm Mật» của người dùng (màn Người dùng) LẪN cờ «đọc nhóm Mật» của khóa đều bật. Cờ này chỉ chi phối AI / MCP, web người thật không đổi.
 - «Lịch sử thao tác» (`audit_log`) cần quản trị hoặc cờ «Xem lịch sử thao tác»; người không phải quản trị chỉ thấy dòng của bản ghi trong phạm vi nhóm của mình.
 - Cuộc nhắn riêng: chỉ cuộc của CHÍNH chủ khóa, và chỉ khi khóa có cờ Mật (câu trả lời của bot trong đó có thể chứa nội dung nhóm Mật); không đọc cuộc riêng người khác kể cả Quản trị.
-- Bật «Che dữ liệu cá nhân trước khi gửi AI» (Cài đặt) → MCP vẫn che SĐT / STK / CCCD. Nhân viên không có cột SĐT.
+- Bật «Che dữ liệu cá nhân trước khi gửi AI» (Cài đặt) → MCP vẫn che SĐT / STK / CCCD ở mọi đường trả: kết quả công cụ, câu lỗi + danh sách chọn (`choices` / `allowed`, vá 28/10/2026), tệp `export_report`, xem trước tham số trong nhật ký; ngoại lệ duy nhất là tệp gốc của `get_file`. Nhân viên không có cột SĐT.
 - Không bao giờ ghi qua AI: vai trò Danh bạ, loại danh bạ (`kind`), SĐT, cờ Mật / đọc tin của nhóm, tài khoản, khóa, cài đặt.
-- Mỗi lời gọi ghi một dòng `mcp_call_log` (công cụ, thực thể, số dòng, trạng thái, người, khóa, IP) — chỉ xem được qua chi tiết khóa; không ghi nội dung trả về.
+- Mỗi lời gọi ghi một dòng `mcp_call_log` (công cụ, thực thể, số dòng, trạng thái, người, khóa, IP) — xem ở chi tiết khóa; không ghi nội dung trả về.
+- **Thống kê dùng MCP** (phase 13.6, 28/10/2026, chỉ Quản trị): màn Khóa MCP → nút *Thống kê dùng* (`/app/mcp-keys/usage`, API `GET /api/mcp-usage?days=7&group=key|user&source=http|all`, cố ý không khai ở `route-permissions.ts` nên chỉ quản trị). Theo ngày (giờ VN) × khóa hoặc × người: số lượt, lỗi, bị chặn / quá nhịp, thời gian trung bình / p95, số dòng + ký tự trả ra, token ước lượng (ký tự / 4); bảng công cụ dùng nhiều nhất.
 
 **An toàn khi đưa ra Internet**:
 - Tên miền prod `botida.degoholding.vn` hiện **KHÔNG có Cloudflare Access** (kiểm 17/10/2026: `/app/` trả 200 thẳng) nên `/mcp` công khai, chỉ có Bearer + giới hạn nhịp + chặn IP sai khóa. **Khuyến nghị**: thêm Cloudflare Access cho đường dẫn `/mcp` bằng *service token* (Zero Trust → Access → Applications → Service Auth), client gửi thêm hai tiêu đề `CF-Access-Client-Id` / `CF-Access-Client-Secret`. Chưa làm thì giữ `MCP_ENABLED=false` trên prod hoặc chỉ cấp khóa chỉ đọc, hạn ngắn, không cờ Mật.

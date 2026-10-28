@@ -1,6 +1,8 @@
 import { FAMILY_TOOLS } from "./catalog/family-catalogs.js";
 import type { DataAccessContext } from "./data-access-context.js";
+import { activitySummaryTool } from "./operations/activity-summary-operation.js";
 import { describeEntitiesTool } from "./operations/describe-entities-operation.js";
+import { exportReportTool } from "./operations/export-report-operation.js";
 import { fileGetTool } from "./operations/file-get-operation.js";
 import { fileTextTool } from "./operations/file-text-operation.js";
 import { metricsSummaryTool } from "./operations/metrics-summary-operation.js";
@@ -17,8 +19,12 @@ export const READ_TOOLS: readonly AnyToolDefinition[] = [
   whoamiTool, describeEntitiesTool, queryRecordsTool, searchMessagesTool, threadMessagesTool, fileTextTool, fileGetTool, metricsSummaryTool,
 ].map((tool) => eraseTool(tool as ToolDefinition<never, never>));
 
-/** Mọi công cụ (đọc + ghi + công cụ của các họ trợ lý); công cụ ghi tự ẩn khi `ctx.allowWrite` tắt. */
-export const ALL_TOOLS: readonly AnyToolDefinition[] = [...READ_TOOLS, ...WRITE_TOOLS, ...FAMILY_TOOLS];
+/** Công cụ báo cáo của cổng ngoài (phase 13.4): tổng hợp hoạt động theo kỳ + xuất Excel / PDF trả link tải. Chỉ mặt `mcp_http`. */
+export const REPORT_TOOLS: readonly AnyToolDefinition[] = [activitySummaryTool, exportReportTool]
+  .map((tool) => eraseTool(tool as ToolDefinition<never, never>));
+
+/** Mọi công cụ (đọc + báo cáo + ghi + công cụ của các họ trợ lý); công cụ ghi tự ẩn khi `ctx.allowWrite` tắt. */
+export const ALL_TOOLS: readonly AnyToolDefinition[] = [...READ_TOOLS, ...REPORT_TOOLS, ...WRITE_TOOLS, ...FAMILY_TOOLS];
 
 /**
  * Công cụ người này dùng được trên `surface` — danh sách trả cho `tools/list` / khai báo hàm của trợ lý. Mặc định `mcp_http`:

@@ -48,6 +48,13 @@ export interface DataAccessContext {
   alertRuntime?: AlertRuntime;
   /** Đọc tệp gốc trong kho + ký link tải ngắn hạn — chỉ cổng HTTP có (27/10/2026, công cụ `get_file`); thiếu ⇒ `get_file` ẩn. */
   fileAccess?: FileAccess;
+  /** Cất tệp báo cáo xuất + ký link tải ngắn hạn — chỉ cổng HTTP có (phase 13.4, công cụ `export_report`); thiếu ⇒ `export_report` ẩn. */
+  reportFiles?: ReportFileAccess;
+}
+
+export interface ReportFileAccess {
+  /** Cất tệp, trả link tải ký sẵn; null = máy chủ chưa khai gốc công khai (MCP_PUBLIC_URL). */
+  publish(file: { fileName: string; contentType: string; data: Buffer; rowCount: number }): { url: string; expiresInSeconds: number } | null;
 }
 
 export interface FileAccess {
@@ -74,6 +81,7 @@ export interface DataAccessContextInput {
   saveSettings?: DataAccessContext["saveSettings"];
   alertRuntime?: AlertRuntime;
   fileAccess?: FileAccess;
+  reportFiles?: ReportFileAccess;
 }
 
 /**
@@ -87,7 +95,7 @@ export function buildDataAccessContext(input: DataAccessContextInput): DataAcces
     ownDirectThreadsOnly: input.ownDirectThreadsOnly === true, ownDirectUid: input.ownDirectUid ?? null,
     source: input.source, keyId: input.keyId ?? null, now: input.now ?? new Date(),
     wakeJobs: input.wakeJobs, contactActor: input.contactActor, saveSettings: input.saveSettings, alertRuntime: input.alertRuntime,
-    fileAccess: input.fileAccess,
+    fileAccess: input.fileAccess, reportFiles: input.reportFiles,
   };
 }
 

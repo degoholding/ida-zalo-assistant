@@ -1,6 +1,6 @@
 # 12 — Nối ứng dụng AI (claude.ai, ChatGPT, Claude Desktop) vào Bot trợ lý
 
-> Bản 1.0 · 27/10/2026 · dành cho Quản trị / Quản lý (sếp IDA). Nhân viên không dùng được cổng này.
+> Bản 1.1 · 28/10/2026 (thêm báo cáo, xuất tệp) · dành cho Quản trị / Quản lý (sếp IDA). Nhân viên không dùng được cổng này.
 
 Sau khi nối, anh/chị hỏi thẳng ứng dụng AI quen dùng, ví dụ *tuần này nhóm Kho HN có việc gì quá hạn*, *tóm tắt trao đổi với
 anh Minh từ thứ hai*, *tìm tệp báo giá phân bón gửi tháng trước*. AI đọc dữ liệu của bot **đúng theo quyền tài khoản web của
@@ -15,6 +15,21 @@ AI đọc được chữ trong Excel, Word, CSV, txt (đã che số điện tho�
 **tệp gốc** để tự xem. Đây là **ngoại lệ** của luật che dữ liệu cá nhân (đại ca chốt 27/10/2026): số điện thoại, số tài khoản, CCCD
 có trong ảnh / PDF **không được che** — chỉ dùng cho việc nội bộ. Quản trị tắt được (MCP_FILE_RAW=false), khi đó AI chỉ nhận chữ bot đã
 bóc sẵn. Ghi âm và video AI không nghe / xem được.
+
+## Báo cáo và xuất tệp (28/10/2026)
+
+AI tự tổng hợp hoạt động theo kỳ và xuất **Excel / PDF** kèm link tải. Ví dụ câu hỏi:
+
+- *Tuần này nhóm nào nhắn nhiều nhất, mỗi ngày bao nhiêu tin, bao nhiêu ảnh / tệp?*
+- *Từ 01/10 đến hôm nay, ai hoạt động nhiều nhất trong nhóm Kho HN?*
+- *Chị Tư đã nhắn ở những nhóm nào trong 30 ngày qua?*
+- *Xuất Excel số tin theo nhóm × ngày tuần trước, tiêu đề "Hoạt động tuần 43".*
+- *Xuất PDF danh sách việc quá hạn của nhóm Kho HN.*
+- *Chỉ tính các nhóm thuộc tài khoản Zalo Trợ lý, xuất Excel theo người gửi × ngày.*
+
+Link tải sống **10 phút** và chỉ dùng được khi kết nối / khóa còn hiệu lực, quyền chưa đổi; hết hạn thì bảo AI *xuất lại*. Tệp đã
+che số điện thoại, số tài khoản, CCCD như mọi câu trả lời. Một tệp tối đa 5 000 dòng (Excel) hoặc 2 000 dòng (PDF) — nhiều hơn
+thì AI báo đã cắt, chia nhỏ kỳ hoặc lọc bớt nhóm.
 
 ## Trước khi nối
 
