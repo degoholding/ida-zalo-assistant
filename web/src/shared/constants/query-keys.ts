@@ -54,6 +54,7 @@ export const queryKeys = {
   accounts: {
     all: ['accounts'] as const,
     qrLogin: (attemptId: string) => ['accounts', 'qr-login', attemptId] as const,
+    purgePreview: (id: number) => ['accounts', 'purge-preview', id] as const,
     /** Tab "Kết bạn" của một tài khoản bot: lời mời đến / đã gửi. */
     friends: (id: number) => ['accounts', 'friends', id] as const,
     /**

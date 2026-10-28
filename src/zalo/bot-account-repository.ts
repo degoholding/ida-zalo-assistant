@@ -12,6 +12,8 @@ export interface BotAccountRow {
   is_active: number;
   /** Loại tài khoản (BotAccountKind); dòng cũ = 0 (Trợ lý). */
   kind: BotAccountKind;
+  /** 1 = tài khoản thử (migration 046): quản trị được xóa kèm dữ liệu. */
+  is_test: number;
 }
 
 export async function listActiveAccounts(db: Db): Promise<BotAccountRow[]> {

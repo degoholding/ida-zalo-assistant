@@ -24,6 +24,7 @@ import type { FileStorage } from "./storage/file-storage.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
 import { purgeOldDrafts } from "./data-access/write/write-draft-store.js";
 import { purgeExpiredFiles, purgeExpiredMessages } from "./sync/retention.js";
+import { retryStorageCleanup } from "./sync/test-account-purge.js";
 
 // Việc nền không cần phiên Zalo, chạy bằng bộ lập lịch (src/schedule/scheduler.ts): ảnh đại diện, dọn tin + tệp gốc quá
 // hạn, dọn hàng đợi, đưa bản sao lưu lên R2. Chạy ở tiến trình `worker` (src/worker.ts) khi docker compose bật nó, hoặc
@@ -75,6 +76,9 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
       // Nháp ghi qua MCP / trợ lý (phase 8): đã dùng hay hết hạn đều xóa sau vài ngày
       const drafts = await purgeOldDrafts(db, MCP_WRITE_DRAFT_KEEP_DAYS);
       if (drafts) log.info(`dọn nháp ghi MCP: ${drafts} dòng`);
+      // Tệp xóa hỏng lúc xóa tài khoản thử (storage_cleanup) — thử lại mỗi lượt
+      const cleaned = await retryStorageCleanup(db, storage);
+      if (cleaned) log.info(`dọn tệp còn nợ: ${cleaned} tệp`);
     },
     "job-housekeeping": async () => {
       const recovered = await recoverStaleJobs(db, JOB_STALE_MS);

@@ -58,6 +58,12 @@ Giao diện: `http://127.0.0.1:8090` (chỉ mở trong máy; vào từ xa qua đ
    hết bot Trợ lý DÙNG ĐƯỢC (bật + có phiên + không cần quét lại) thì việc gửi mới bị bỏ (log rõ lý do); bot Trợ lý chỉ đang tắt / chưa
    kết nối thì việc báo lỗi thường và hàng đợi thử lại, không rơi về «bot đầu tiên» hay bot không ở trong nhóm. Tài khoản mới quét QR
    (web hoặc CLI) mặc định là *Chỉ thu thập dữ liệu* (27/10/2026, `NEW_ACCOUNT_KIND`); quét lại QR tài khoản đã có giữ nguyên loại; đổi sang Trợ lý ở form sửa.
+   **Tài khoản thử + xóa kèm dữ liệu** (27/10/2026, migration 046): công tắc *Tài khoản thử* ở form sửa (chỉ Quản trị). Chỉ tài khoản thử có
+   nút *Xóa kèm dữ liệu*; tài khoản thật chỉ Tắt (API 409). Xóa: cuộc riêng của nó + nhóm CHỈ có nó (không có dòng `bot_group` nào của tài
+   khoản khác, kể cả đã rời) cùng tin, tệp trong kho, chữ đã bóc; nhóm có tài khoản khác giữ nguyên, chỉ bỏ liên kết. Hộp xác nhận hiện số
+   liệu xem trước (`GET /api/accounts/:id/purge-preview`), bắt gõ lại nhãn + tick đã sao lưu (không có đường sao lưu tức thì — sao lưu tay
+   trước). Thứ tự: tắt + dừng phiên → một giao dịch DB (việc / ticket / lệnh gửi giữ lại, gỡ con trỏ nguồn; việc nền chờ chạy bị bỏ) →
+   xóa tệp trong kho, hỏng thì ghi `storage_cleanup` để lượt dọn quá hạn thử lại → nhật ký thao tác. Mã: `src/sync/test-account-purge.ts`.
    **Tài khoản Chỉ thu thập đọc hết** (27/10/2026): nhóm (mọi loại) và chat riêng 1-1 mà nó thấy lần đầu đều bật đọc, bất kể cài đặt
    đọc tin nhóm mới / tin riêng; quản trị tắt từng nhóm (`PATCH /api/groups/:id`) hoặc từng cuộc riêng (`PATCH /api/conversations/:id`,
    chỉ quản trị). Luật ở `newThreadDefaults` trong `src/sync/collect-only.ts`; luồng hai tài khoản cùng nhóm và rủi ro:
