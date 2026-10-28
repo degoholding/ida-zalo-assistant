@@ -15,3 +15,8 @@ test("tắt / bật lưu một cuộc riêng 1-1 chỉ quản trị — không l
   assert.deepEqual(requiredPermission("PATCH", "/api/conversations/7"), { entity: "setting", action: "write" });
   assert.deepEqual(requiredPermission("POST", "/api/conversations/7/messages"), { entity: "conversation", action: "write" });
 });
+
+test("tab Link chia sẻ của màn Tệp (phase 13.2) dùng quyền xem tệp; không có đường ghi", () => {
+  assert.deepEqual(requiredPermission("GET", "/api/files/links"), { entity: "file", action: "read" });
+  assert.deepEqual(requiredPermission("POST", "/api/files/links"), { entity: "setting", action: "write" });
+});

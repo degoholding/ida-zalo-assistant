@@ -11,9 +11,9 @@ const managerCtx = makeCtx(manager());
 const staffCtx = makeCtx(staff());
 const names = (ctx: ReturnType<typeof makeCtx>) => readableEntities(ctx).map((def) => def.name);
 
-test("12 thực thể, tên duy nhất, không có bảng bí mật / nội bộ", () => {
+test("13 thực thể, tên duy nhất, không có bảng bí mật / nội bộ", () => {
   const all = ENTITY_DEFINITIONS.map((def) => def.name);
-  assert.deepEqual(all, ["groups", "conversations", "messages", "contacts", "files", "tasks", "tickets", "send_commands", "reply_templates", "metrics", "catalog", "audit_log"]);
+  assert.deepEqual(all, ["groups", "conversations", "messages", "contacts", "files", "links", "tasks", "tickets", "send_commands", "reply_templates", "metrics", "catalog", "audit_log"]);
   assert.equal(new Set(all).size, all.length);
   for (const banned of ["app_user", "users", "web_session", "app_setting", "settings", "ai_key", "bot_account", "recipients", "mcp_api_key", "mcp_call_log", "job", "assistant_turn", "brief_log"]) {
     assert.equal(findEntity(banned), undefined, banned);
@@ -22,10 +22,10 @@ test("12 thực thể, tên duy nhất, không có bảng bí mật / nội bộ
   assert.equal(findEntity("constructor"), undefined);
 });
 
-test("quyền đọc theo vai trò: Quản trị đủ 12; Quản lý bỏ audit_log; Nhân viên bỏ metrics / catalog / audit_log", () => {
-  assert.equal(names(adminCtx).length, 12);
-  assert.deepEqual(names(managerCtx), ["groups", "conversations", "messages", "contacts", "files", "tasks", "tickets", "send_commands", "reply_templates", "metrics", "catalog"]);
-  assert.deepEqual(names(staffCtx), ["groups", "conversations", "messages", "contacts", "files", "tasks", "tickets", "send_commands", "reply_templates"]);
+test("quyền đọc theo vai trò: Quản trị đủ 13; Quản lý bỏ audit_log; Nhân viên bỏ metrics / catalog / audit_log", () => {
+  assert.equal(names(adminCtx).length, 13);
+  assert.deepEqual(names(managerCtx), ["groups", "conversations", "messages", "contacts", "files", "links", "tasks", "tickets", "send_commands", "reply_templates", "metrics", "catalog"]);
+  assert.deepEqual(names(staffCtx), ["groups", "conversations", "messages", "contacts", "files", "links", "tasks", "tickets", "send_commands", "reply_templates"]);
 });
 
 test("audit_log chỉ hiện với quản trị hoặc người được cấp cờ xem nhật ký", () => {
@@ -61,6 +61,7 @@ test("chụp danh sách trường lọc từng thực thể (đổi ListSpec web
     messages: ["account_id", "kind", "sender_name", "sender_uid", "sent_at", "text", "thread_id", "thread_type"],
     contacts: ["catalog_kind", "company_id", "direct", "display_name", "dm_count", "first_seen_at", "group_id", "kind", "kind_source", "last_dm_at", "note", "phone", "region", "role", "sales_zone", "tag", "zalo_uid"],
     files: ["account_id", "file_ext", "file_name", "group_id", "has_text", "sender_name", "sender_uid", "sent_at", "size", "status", "thread_type"],
+    links: ["account_id", "group_id", "host", "kind", "sender_name", "sender_uid", "sent_at", "thread_type", "title", "url"],
     tasks: ["assignee_contact_id", "due_at", "missing_assignee", "missing_due", "overdue", "priority", "source", "source_thread_id", "status"],
     tickets: ["created_at", "handler_name", "requester_name", "status"],
     send_commands: ["action_kind", "created_at", "reminder_at", "requester_uid", "scheduled_at", "source", "status"],
@@ -81,7 +82,7 @@ test("cột cần quyền riêng: phone của Danh bạ chỉ khi có catalog.re
 });
 
 test("ctx không Mật → mọi thực thể gắn nhóm có điều kiện is_confidential = 0; có Mật → không còn", () => {
-  const tied = ["groups", "conversations", "messages", "files", "tasks", "tickets", "send_commands", "audit_log"];
+  const tied = ["groups", "conversations", "messages", "files", "links", "tasks", "tickets", "send_commands", "audit_log"];
   const noMat = makeCtx(admin({ canViewAudit: true }));
   const mat = makeCtx(admin({ canViewConfidential: true }));
   for (const name of tied) {

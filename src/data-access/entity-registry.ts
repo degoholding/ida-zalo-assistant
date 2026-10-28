@@ -10,6 +10,7 @@ import { messageEntity } from "./entities/message-entity.js";
 import { metricValueEntity } from "./entities/metric-value-entity.js";
 import { replyTemplateEntity } from "./entities/reply-template-entity.js";
 import { sendCommandEntity } from "./entities/send-command-entity.js";
+import { sharedLinkEntity } from "./entities/shared-link-entity.js";
 import { taskEntity } from "./entities/task-entity.js";
 import { ticketEntity } from "./entities/ticket-entity.js";
 
@@ -17,7 +18,7 @@ import { ticketEntity } from "./entities/ticket-entity.js";
 // recipient*, mcp_*, job, assistant_turn, brief_log, google_*) thì không thể tới được bằng bất kỳ lời gọi nào.
 
 export const ENTITY_DEFINITIONS: readonly EntityDefinition[] = [
-  groupEntity, conversationEntity, messageEntity, contactEntity, fileEntity, taskEntity, ticketEntity,
+  groupEntity, conversationEntity, messageEntity, contactEntity, fileEntity, sharedLinkEntity, taskEntity, ticketEntity,
   sendCommandEntity, replyTemplateEntity, metricValueEntity, catalogEntity, auditLogEntity,
 ];
 
