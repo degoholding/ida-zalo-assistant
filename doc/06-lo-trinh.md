@@ -42,7 +42,12 @@ phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nh
 ngay. Bài toán **tin cũ** có lời giải: một **Cổng Zalo PC** (kho riêng `D:\zalo\zalo-pc-gateway`, GPL-3.0) chạy mã
 renderer chính thức của Zalo PC trong Electron 22 headless trên Linux, đăng nhập QR loại PC, **đồng bộ từ điện thoại** chạy
 trọn (90 cuộc / 95 giây, một chat riêng về tới 04/2021). Hướng chốt: cổng chỉ là **ghế** ngồi một lần mỗi tài khoản, không
-thay zca-js (phase 14). Máy chủ VPS 2 vẫn `096b71f`.
+thay zca-js (phase 14). **Lên VPS 2 chiều 09/11:** bot bản `944cf0f` (phase 14.5–14.8, deploy bằng git bundle vì VPS không
+kéo được GitHub; sao lưu DB `db-before-p14-20261109-1530.sql.gz`), `.env` thêm `SEAT_GATEWAY_URL=http://zpc-seat:8099`;
+image ghế `zalo-pc-gateway:dev` (1,41 GB) dựng ngay trên VPS từ `~/zalo-pc-gateway` + runtime Zalo 26.11.10; bộ công cụ ở
+`~/zalo/tools`, chạy ghế bằng `~/zalo/tools/ghe.sh <tên tài khoản>` (ghế vào cùng mạng compose của bot với tên `zpc-seat`,
+trần 2 GB RAM / 1,5 CPU). Đã thử ghế demo trên VPS: trang QR lên, bot gọi được `http://zpc-seat:8099/status`. Chưa chạy
+tài khoản thật nào trên VPS; Node 22 cài thêm trên máy chủ cho script.
 
 **Soát 27/10:** máy chủ chạy đúng bản mới nhất (`96bd0ce`, migration 044), phiên Zalo bot «thaotho» còn sống (đại ca
 nhắn thử OK), sao lưu chạy mỗi đêm. Bot mới chỉ ở các nhóm / chat THỬ nội bộ — chưa vào nhóm thật của IDA, chưa khai người
