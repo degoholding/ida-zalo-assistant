@@ -56,6 +56,11 @@ export interface IngestDeps {
   onNewGroup?: (group: GroupRow) => void;
   /** Gọi khi có file cần tải về kho. */
   onAttachmentQueued?: (attachmentId: number) => void;
+  /**
+   * Quyết định tải tệp của tin này thay cho công tắc Lấy file của cuộc (phase 14.8, nhập tin cũ: «ảnh + PDF»):
+   * trả boolean thì dùng, trả undefined thì theo công tắc của cuộc như thường.
+   */
+  captureOverride?: (attachment: { fileName: string; fileExt: string; kind: MessageKind }) => boolean | undefined;
 }
 
 export type IngestOutcome = "stored" | "duplicate" | "group_not_read";
@@ -95,15 +100,23 @@ export async function ingestDirectMessage(
   deps: IngestDeps,
   botAccountId: number,
   incoming: IncomingGroupMessage,
+  options: {
+    /**
+     * Người đối diện của cuộc riêng khi KHÔNG phải người gửi (nhập tin cũ: tin do chính tài khoản nghe gửi đi —
+     * phase 14.5). Mặc định người đối diện = người gửi (tin sống, bot không nghe tin của chính mình).
+     */
+    peer?: { uid: string; name: string };
+    /** Mốc «nhắn riêng lần cuối» của Danh bạ: tin cũ nhập lại không được đẩy mốc này về quá khứ sai lệch — mặc định dùng giờ tin. */
+  } = {},
 ): Promise<DirectIngestResult> {
   const sentAt = new Date(incoming.sentAtMs);
-  const contact = await recordDirectMessageContact(deps.db, incoming.senderUid, incoming.senderName, sentAt);
+  const peer = options.peer ?? { uid: incoming.senderUid, name: incoming.senderName };
+  const contact = await recordDirectMessageContact(deps.db, peer.uid, peer.name, sentAt);
   const defaults = deps.directDefaults ?? { readMessages: true, captureFiles: true };
-  const { group: thread } = await ensureThread(deps.db, directKey(botAccountId, incoming.zaloGroupId), defaults,
-    incoming.senderName);
-  if (incoming.senderName && thread.name !== incoming.senderName) {
+  const { group: thread } = await ensureThread(deps.db, directKey(botAccountId, incoming.zaloGroupId), defaults, peer.name);
+  if (peer.name && thread.name !== peer.name) {
     // Tên cuộc riêng = tên người kia, đổi theo khi họ đổi tên Zalo
-    await deps.db.query("UPDATE zalo_group SET name = ? WHERE id = ?", [incoming.senderName.slice(0, 255), thread.id]);
+    await deps.db.query("UPDATE zalo_group SET name = ? WHERE id = ?", [peer.name.slice(0, 255), thread.id]);
   }
   if (!thread.read_messages) return { outcome: "group_not_read", thread, contact, messageId: null };
   const messageId = await storeMessage(deps, thread, incoming);
@@ -146,7 +159,9 @@ async function storeMessage(deps: IngestDeps, group: GroupRow, incoming: Incomin
   liveEvents.emitMessage({ threadId: group.id, messageId: result.insertId, kind: "new" });
 
   if (parsed.attachment) {
-    const status = group.capture_files ? AttachmentStatus.Pending : AttachmentStatus.Skipped;
+    const override = deps.captureOverride?.({ fileName: parsed.attachment.fileName, fileExt: parsed.attachment.fileExt, kind: parsed.kind });
+    const capture = override === undefined ? !!group.capture_files : override;
+    const status = capture ? AttachmentStatus.Pending : AttachmentStatus.Skipped;
     const [attachmentResult] = await deps.db.query<ResultSetHeader>(
       `INSERT INTO attachment (message_id, group_id, file_name, file_ext, declared_size, source_url, status)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,

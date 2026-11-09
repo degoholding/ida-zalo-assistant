@@ -37,7 +37,7 @@ màn chi tiết có thẻ danh tính, biểu mẫu, các tab và «Lịch sử t
 | **Danh bạ** | Mọi người bot gặp (thành viên nhóm + người nhắn riêng): tên, ảnh, loại (khách hàng / nhân sự…), vai trò, công ty, thẻ, ghi chú. Gán vai trò ở đây là cấp quyền hỏi bot. |
 | **Nhóm** | Danh sách nhóm bot đang ở, số tin, tin gần nhất; chi tiết: tên gọi, loại nhóm, công ty, bật «Đọc tin» / «Lấy file», thời hạn lưu, thành viên, nút «Lấy tin cũ». |
 | **Tệp** | Mọi tệp / ảnh đã lưu: lọc theo cuộc, loại, trạng thái; tải về; xem **chữ đã bóc** (bot đọc tệp xong thì cất chữ để tìm và làm báo cáo); «Bóc chữ» thủ công; «Tải lại» tệp lỗi. |
-| **Nhập lịch sử** | Lấy tin trước ngày bot vào nhóm từ Zalo Web — mục 5. |
+| **Nhập lịch sử** | Lấy tin trước ngày bot vào nhóm: từ **Zalo PC (ghế đồng bộ, tin nhiều năm)** hoặc từ Zalo Web (2 tuần) — mục 5. |
 | **Công ty** | Danh mục công ty; nhóm và người gắn công ty. |
 | **Hỏi trợ lý** | Quản trị hỏi trợ lý AI ngay trên web dưới tên một người có vai trò (không cần Zalo): cùng cài đặt, công cụ, giới hạn như tin Zalo thật; báo cáo Excel có nút tải. Mỗi người một cuộc «Hỏi trợ lý · <tên>», không gửi ra Zalo. |
 | **Tài khoản bot** | Thêm bot bằng QR, bật / tắt, trạng thái phiên, số nhóm / số cuộc riêng. |
@@ -134,9 +134,30 @@ Mọi thao tác sửa qua web ghi vào bảng `audit_log`, hiện ở tab «Lị
   tiến trình chết được trả về hàng. Trần song song: cài đặt `assistant_concurrency` (mặc định 6).
 - Bóc chữ xlsx / docx chạy ở luồng phụ (`src/cpu/`), quá 60 giây thì dừng.
 
-## 5. Nhập lịch sử từ Zalo Web
+## 5. Nhập lịch sử
 
-Đường **duy nhất** lấy được tin trước ngày bot vào nhóm (lý do ở mục 6).
+Hai đường lấy tin trước ngày bot vào nhóm (lý do ở mục 6). Cả hai đều ra tệp JSON cùng khuôn và nạp ở màn **Nhập lịch sử**.
+
+### 5a. Từ Zalo PC qua «ghế đồng bộ» (từ 09/11/2026, tin nhiều năm)
+
+Một container **Cổng Zalo PC** (kho riêng `zalo-pc-gateway`) chạy mã Zalo PC chính thức không màn hình trên máy chủ. Nó là
+**ghế**: mỗi lần một tài khoản ngồi, xong trả ghế cho tài khoản kế; không thay đồng bộ zca-js đang chạy (phiên PC và phiên
+web là hai suất riêng của Zalo, không đá nhau).
+
+1. Quản trị chạy `sync-once <tài khoản>` → ghế bật, QR hiện ở trang cổng và ở màn **Nhập lịch sử → Cách 1** của bot
+   (bot lấy QR + trạng thái qua `SEAT_GATEWAY_URL`, cổng không cần mở ra ngoài; chưa có nút bật ghế từ web).
+2. Nhân viên của tài khoản đó: **quét QR** bằng Zalo trên điện thoại, rồi **bấm đồng ý** khi điện thoại hỏi «Đồng bộ tin
+   nhắn sang máy tính». Chỉ hai thao tác này. Zalo PC trên máy nhân viên (nếu có) bị đá trong lúc này, xong đăng nhập lại.
+   Màn Nhập lịch sử hiện tài khoản đang ngồi ghế, có gắn vào bot không (không gắn thì chat riêng bị bỏ), tiến độ đồng bộ;
+   bảng **Kết quả nhập theo cuộc** liệt kê mỗi cuộc từng nhập: tin trong kho, cũ nhất, mới nhất, lần nhập cuối.
+3. Ghế tự đợi đồng bộ xong (1–3 phút), xuất **mọi nhóm đang bật đọc và mọi chat riêng** của tài khoản đó (chốt 09/11),
+   nạp vào bot, đăng xuất, tắt. Tệp của tin cũ: chỉ tải **ảnh và PDF**, loại khác ghi tên + link.
+   Dữ liệu đã kéo về giữ trong `/data/accounts/<uid>` để xuất lại không phải đồng bộ lại; cần bù khoảng trống thì ngồi lại.
+
+Mang về: chữ, ảnh, tệp, link, nhắc hẹn, tin mình gửi; **không** có sự kiện nhóm, ghi chú, bình chọn. Link tệp rất cũ có thể
+hết hạn (chữ + tên tệp vẫn còn). Đo 09/11: một chat riêng về tới 04/2021; nhóm «zalo bot» 468 tin trọn từ ngày lập.
+
+### 5b. Từ Zalo Web (dự phòng, chỉ ~2 tuần)
 
 1. Mở chat.zalo.me bằng **tài khoản cá nhân** của một thành viên lâu năm (không dùng tài khoản bot — mở
    web bằng tài khoản bot là bot bị đá, phải quét QR lại). Điện thoại hỏi đồng bộ thì đồng ý.
@@ -159,8 +180,9 @@ trùng; giờ gửi lấy từ kho Zalo Web, không có thì suy từ `cliMsgId`
 
 - **Tin cũ trước ngày bot vào nhóm:** API mây của Zalo trả `isFiltered` (đo 02/10/2026, chính Zalo Web cũng
   nhận câu đó); đồng bộ qua kết nối trực tiếp trả 0 tin; tệp «Xuất dữ liệu» của Zalo PC **mã hóa toàn bộ**;
-  sao lưu điện thoại cũng mã hóa. Chỉ còn Zalo Web, và Zalo Web chỉ được điện thoại đồng bộ **khoảng 2 tuần**
-  gần nhất. Kết luận: **thêm bot vào nhóm càng sớm càng tốt** — từ lúc đó trở đi không mất tin nào.
+  sao lưu điện thoại cũng mã hóa. Zalo Web chỉ được điện thoại đồng bộ **khoảng 2 tuần** gần nhất. **Từ 09/11/2026 có
+  lối ra:** phiên loại **Zalo PC** được điện thoại đồng bộ toàn bộ kho — mục 5a (ghế đồng bộ). Vẫn nên **thêm bot vào nhóm
+  càng sớm càng tốt** để không phụ thuộc lượt ngồi ghế.
 - Zalo Web chỉ liệt kê cuộc có tin trong cửa sổ 2 tuần; nhóm im lặng lâu hơn không xuất được.
 - `zca-js` là thư viện **không chính thức**: tài khoản bot có rủi ro bị khóa; giữ giãn cách gửi
   (`ASSISTANT_SEND_INTERVAL_MS`) và không gửi hàng loạt.

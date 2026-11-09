@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.8 · 28/10/2026 (phase 13 lên VPS 2: OAuth MCP, get_file, link chia sẻ, báo cáo theo kỳ + xuất Excel / PDF, thống kê MCP, lọc theo tài khoản, tài khoản thử) · bản 1.7 · 27/10/2026 (phase 12 MCP + tài khoản chỉ thu thập + đọc ảnh bắt tin khẩn + vá bảo mật 15–20/10; máy chủ dời VPS 2; soát chạy thật) · bản 1.6 · 12/10/2026 (phase 10: gợi ý trả lời N2 + khung số liệu N3 + danh mục + ghim từ tin riêng) · bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
+> Bản 1.9 · 09/11/2026 (phase 14: **Ghế đồng bộ Zalo PC** — tin cũ nhiều năm từ điện thoại, đã chứng minh chạy thật trên Linux; 13.10 chuyển sang phase này) · bản 1.8 · 28/10/2026 (phase 13 lên VPS 2: OAuth MCP, get_file, link chia sẻ, báo cáo theo kỳ + xuất Excel / PDF, thống kê MCP, lọc theo tài khoản, tài khoản thử) · bản 1.7 · 27/10/2026 (phase 12 MCP + tài khoản chỉ thu thập + đọc ảnh bắt tin khẩn + vá bảo mật 15–20/10; máy chủ dời VPS 2; soát chạy thật) · bản 1.6 · 12/10/2026 (phase 10: gợi ý trả lời N2 + khung số liệu N3 + danh mục + ghim từ tin riêng) · bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -28,14 +28,21 @@
 | **9** | N7 — Gửi tin theo lệnh | **Xong** 12/10 (phần GĐ1: lệnh gửi + tắt khẩn + nhắc hẹn + ghim từ tin riêng) | 6 / 6 |
 | **10** | N3 Số liệu + N2 Gợi ý trả lời | Một phần | 4 / 9 |
 | **12** | Cổng MCP, trợ lý đi qua MCP, tài khoản chỉ thu thập (làm thêm 15–20/10) | **Xong** 20/10; cổng `/mcp` bật cho sếp 27/10 (13.3) | 8 / 8 |
-| **13** | Kho dữ liệu đủ + cổng MCP cho sếp IDA tự lấy báo cáo | **Xong** 28/10 trên VPS 2 (`096b71f`), còn 13.1 soát độ đủ của kho + 13.10 tin cũ chat riêng | 8 / 10 |
-| | **Cộng** | | **102 / 111** |
+| **13** | Kho dữ liệu đủ + cổng MCP cho sếp IDA tự lấy báo cáo | **Xong** 28/10 trên VPS 2 (`096b71f`), còn 13.1 soát độ đủ của kho; 13.10 chuyển sang phase 14 | 8 / 10 |
+| **14** | **Ghế đồng bộ Zalo PC**: tin cũ nhiều năm từ điện thoại cho từng tài khoản nghe (một lần mỗi tài khoản) | **Đang làm** — lõi đã chạy thật 09/11 (P0 + P1 của kho `zalo-pc-gateway`), còn gói thành một lệnh + nhập vào bot (cả chat riêng, tệp ảnh + PDF) | 2 / 8 |
+| | **Cộng** | | **104 / 119** |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
 08/10; tìm tin (phase 6) và checklist công việc (phase 7) xong 09/10; bản tin sáng / tối và báo cáo tuần / tháng (phase 8) xong 09/10; gửi tin theo lệnh (phase 9 GĐ1) xong 12/10 — hàng loạt lớn giai đoạn 2.
 
 **Hiện trạng 28/10:** máy chủ chạy `096b71f` (migration 047). Sếp nối claude.ai vào cổng MCP bằng OAuth, đọc được nhóm / tin / tệp gốc / link chia sẻ, tổng hợp theo kỳ và xuất Excel / PDF. Tài khoản Zalo mới quét QR mặc định Chỉ thu thập; có cờ Tài khoản thử để xóa kèm dữ liệu. Tìm web của trợ lý đang hỏng vì khóa Gemini hết tiền nạp trước (402). Bot vẫn chưa vào nhóm thật của IDA.
+
+**Hiện trạng 09/11:** chạy local bản `9993ac4` với tài khoản chính của đại ca (Gia Bảo): tin thật về DB + màn Hội thoại
+ngay. Bài toán **tin cũ** có lời giải: một **Cổng Zalo PC** (kho riêng `D:\zalo\zalo-pc-gateway`, GPL-3.0) chạy mã
+renderer chính thức của Zalo PC trong Electron 22 headless trên Linux, đăng nhập QR loại PC, **đồng bộ từ điện thoại** chạy
+trọn (90 cuộc / 95 giây, một chat riêng về tới 04/2021). Hướng chốt: cổng chỉ là **ghế** ngồi một lần mỗi tài khoản, không
+thay zca-js (phase 14). Máy chủ VPS 2 vẫn `096b71f`.
 
 **Soát 27/10:** máy chủ chạy đúng bản mới nhất (`96bd0ce`, migration 044), phiên Zalo bot «thaotho» còn sống (đại ca
 nhắn thử OK), sao lưu chạy mỗi đêm. Bot mới chỉ ở các nhóm / chat THỬ nội bộ — chưa vào nhóm thật của IDA, chưa khai người
@@ -451,9 +458,53 @@ ra ngoài, siết quyền và bổ sung dữ liệu.
 | 13.6 | Đo tải + chi phí khi sếp hỏi qua MCP (trần lượt / phút đã có), che SĐT / STK / CCCD trong kết quả trả ra | Xong 28/10 trên VPS 2 (còn đo thật khi sếp dùng): màn Khóa MCP → *Thống kê dùng* (chỉ Quản trị, `GET /api/mcp-usage`): theo ngày × khóa / người — lượt, lỗi, bị chặn / quá nhịp, TB / p95, dòng + ký tự trả ra, token ước lượng; công cụ dùng nhiều nhất. **Soát che 28/10**: kết quả mọi công cụ che ở MỘT chỗ (`runTool`: `structured` + `summary`); `query_records` che TRƯỚC khi cắt ô; nhật ký gọi che bản xem trước tham số + chỉ giữ độ dài thân tin; `export_report` che dòng + tiêu đề trước khi dựng tệp; bộ lọc chặn dò dãy ≥ 9 số khi che bật. **Lỗ đã vá**: đường LỖI (`choices` tên người / nhóm, `allowed`, câu lỗi) trước chưa che — nay qua `maskPersonalDataDeep`. Ngoại lệ đã chốt: tệp gốc `get_file` (ảnh / PDF / link `/mcp-files`). Còn lại chấp nhận: dò bằng nhiều lời gọi ≤ 8 số (O4, 19/10); STK 6–8 số không có chữ STK đứng trước không bị nhận ra |
 
 | 13.9 | **Tài khoản thử**: cờ `is_test` (migration 046); chỉ tài khoản thử mới có nút Xóa kèm dữ liệu (chỉ Quản trị, xem trước số liệu, gõ lại tên + xác nhận đã sao lưu): xóa cuộc riêng của nó + nhóm chỉ có mình nó, giữ nhóm có tài khoản khác, gỡ con trỏ ở việc / ticket / lệnh gửi; tệp trên kho xóa sau, hỏng thì `storage_cleanup` dọn lại. Tài khoản mới quét QR mặc định **Chỉ thu thập** | Xong 28/10 trên VPS 2 |
-| 13.10 | Lấy tin cũ cho **chat riêng 1-1** theo trang (như nút Lấy tin cũ của nhóm) | Chưa — chờ đại ca gật |
+| 13.10 | Lấy tin cũ cho **chat riêng 1-1** theo trang (như nút Lấy tin cũ của nhóm) | Chuyển sang phase 14 — API mây Zalo không trả tin cũ (isFiltered); đường duy nhất là đồng bộ từ điện thoại qua Ghế Zalo PC |
 
 Phụ thuộc: app Google «ERP Tro ly AI» chuyển In production (27/10) — Xong 27/10, đại ca đã kết nối lại Google để kết nối Drive không hết hạn 7 ngày.
+
+### Phase 14 — Ghế đồng bộ Zalo PC: tin cũ nhiều năm từ điện thoại (Đang làm, lõi xong 09/11)
+
+**Vì sao:** zca-js là phiên kiểu **Zalo Web**, Zalo không cho web đồng bộ từ điện thoại; API mây trả `isFiltered`; tệp sao
+lưu `.zl.zip` mã hóa toàn bộ (không giải mã). Chỉ **phiên loại PC** mới có «Đồng bộ tin nhắn từ điện thoại». Dự án Olaz
+(github.com/qnguyen3/zalo-swift-re, GPL-3.0) chứng minh có thể chạy renderer chính thức của Zalo PC ngoài Electron thật
+trên macOS; mình chuyển cách đó lên **Linux** (Electron 22 = Chromium 108 như Zalo PC, chạy trong Docker không màn hình),
+viết lại phần «vỏ main» bằng Node theo bản đồ IPC của Olaz, dùng lại host script của Olaz. Kho riêng `zalo-pc-gateway`
+(GPL-3.0 vì kéo theo mã Olaz; bot IDA chỉ gọi qua API nên không bị kéo theo).
+
+**Chốt 09/11 (đại ca):** cổng là **một ghế**, không phải client thường trực và **không thay zca-js**. Tài khoản nghe lần lượt
+ngồi ghế: quét QR (loại PC) → bấm đồng ý đồng bộ trên điện thoại → chờ 1–3 phút → xuất tin → nhập vào bot → đăng xuất trả
+ghế. Phiên PC và phiên web (zca-js) là hai suất riêng của Zalo nên **không đá nhau**; Zalo PC trên máy nhân viên (nếu có) bị
+đá trong lúc ngồi ghế, xong đăng nhập lại. Dữ liệu đã kéo về nằm ở `/data/accounts/<uid>` (IndexedDB), xuất lại không cần
+đồng bộ lại; cần bù khoảng trống (bot rớt lâu) thì cho tài khoản ngồi ghế lại. Cổng chạy thường trực (P2: kho tin + webhook
+thay zca-js) **để dành**, chỉ làm nếu zca-js rớt nhiều hoặc IDA lên ~10 tài khoản.
+
+**Đã đo thật 09/11 (tài khoản Gia Bảo, container local):** QR thật → đăng nhập → khôi phục phiên bằng cookie khi mở lại →
+trang chính đủ (90 cuộc, 29 nhóm) → tin realtime về ngay → `POST /sync/start` → đồng bộ `full` 95 giây, 62+ cuộc, 0 lỗi →
+nhóm «zalo bot» 468 tin (06/10→09/11; bản xuất từ Zalo PC Windows có 480 vì thêm ghi chú / sự kiện nhóm), một chat riêng
+331 tin từ **04/04/2021**. RAM ~700 MB lúc đồng bộ, ~280 MB lúc nghỉ. Script `tools/cdp-export.mjs` (cũng dùng cho Zalo PC
+Windows qua cổng gỡ lỗi) xuất thẳng từ cổng ra khuôn JSON «zalo-web v2» mà `POST /api/imports/zalo-web` đang nhận.
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 14.1 | **P0** — mã Zalo PC 26.11.10 chạy headless trên Linux: trang đăng nhập, QR thật, đăng nhập, khôi phục phiên, WebSocket | Xong 09/11 |
+| 14.2 | **P1** — cửa sổ shared-worker + định tuyến tác vụ; trang chính; đồng bộ từ điện thoại (`transfer-adapter` + 3 bản vá khi phục vụ tệp); trang QR sống `:8099` tự làm mới, tự bấm tải lại khi QR hết hạn | Xong 09/11 |
+| 14.3 | Cổng: lệnh **đăng xuất** theo đường chính thức (trả suất PC) + máy trạng thái «chờ QR → đã đăng nhập → đang đồng bộ → xong» đọc từ `sync-ui-service`, lộ ở `GET /status` | Đã code 09/11 (`src/host/zpc-sync.js`: `state()` + `logout()` qua dịch vụ phiên chính thức; `POST /logout`; `status.sync {running, progress, lastResult}` + `status.conversations`). Sửa kèm: cửa sổ worker giữ sống (destroy lúc đang trả IPC làm main treo dưới Xvfb), xóa cookie khi về trang đăng nhập. Kiểm trọn vòng 09/11 chiều: đăng nhập → đồng bộ full 60 s success → đăng xuất `ok` → về trang QR, container tắt — ĐẠT |
+| 14.4 | Script `sync-once <tài khoản>`: bật ghế, mở trang QR, đợi đồng bộ xong, xuất mọi nhóm (tùy chọn chat riêng), nhập vào bot, đăng xuất, tắt; giữ `/data` | Đã code 09/11 (`tools/sync-once.mjs`, Node): chờ QR tối đa 15 phút → chờ lượt đồng bộ tự động xong → bấm đồng bộ, nhắc xác nhận trên điện thoại → chờ xong (tối đa 60 phút) → chờ danh sách hội thoại đứng yên 30 s → xuất `--all` → nhập `?files=` → đăng xuất → `docker rm`, giữ `/data`. Ba lần chạy lộ 4 lỗi đã sửa: xuất ngay sau đăng nhập khi danh sách chưa nạp (nay chờ số cuộc đứng yên 30 s), tìm sai dịch vụ đăng xuất, thư mục xuất lẫn tệp cũ (nay mỗi lần một thư mục), và lần 4 (trọn vòng 09/11 chiều) xuất 0 cuộc dù danh sách 96: regex lọc mã cuộc nằm trong chuỗi template nên `\d` thành `d` — đã sửa, bộ xuất gộp 3 nguồn danh sách (conv-info, kho Redux, listVisible) và script GIỮ ghế đăng nhập khi xuất 0 tệp thay vì đăng xuất. Kiểm trọn vòng 09/11 chiều — ĐẠT: (a) Gia Bảo: 109 cuộc, 85 tệp, nhập 10.953 tin mới (55 nhóm 5.597 tin, 51 chat riêng 6.193 tin), 20 phút xuất; phiên bị đại ca đăng xuất từ điện thoại ở cuộc 86 nên 23 nhóm chưa xuất và đăng xuất cuối vòng vô hiệu; (b) Bảo Huỳnh (tài khoản bot, ghế `bot1`): QR → đồng bộ full 268 s → 12 cuộc → xuất 11 → nhập 97 tin chat riêng → đăng xuất `ok` → tắt ghế, không lỗi. Sửa thêm: ngân sách 4 phút/cuộc (`MAX_MS`, cuộc lớn nạp chậm dần ~6 s/trang ở 2.500 tin vì giao diện vẽ lại — Thanh Ngân 1.529 tin mới lùi tới 02/10, đánh dấu `partial`), bỏ tệp 0 tin (OA, trước trả 422), chờ quét QR 60 phút (`QR_WAIT_MIN`), không kẹt khi client không khởi động đồng bộ (đăng nhập lại cùng tài khoản trên ghế còn /data → chỉ incremental). Tồn: nhóm mà bot chưa ở bị bỏ khi nhập (sau khi dọn DB mất `bot_group`, nhóm zalo bot 275 tin bị bỏ) — xem 14.6; muốn lấy trọn cuộc rất lớn phải đọc thẳng IndexedDB (P2) |
+| 14.5 | Bot: API nhập nhận **chat riêng**: cuộc `thread_type = 0`, chủ cuộc (`owner_bot_id`) = tài khoản nghe có `zalo_uid` = `account_uid` của tệp xuất (tài khoản chưa gắn vào bot thì bỏ, báo `skipped_unknown_account`); người đối diện vào `contact`; tin mình gửi (fromUid `0`) gán tài khoản nghe; luật Chỉ thu thập / che dữ liệu áp như tin sống | Đã code 09/11 (`imports-api.ts` nhánh direct, `ingestDirectMessage(..., {peer})`), đo local: chat riêng 285 tin vào cuộc riêng của tài khoản Gia Bảo (thread 57). Còn: tên người đối diện trống khi tệp không có tên (bot tự bù hồ sơ sau); cần kiểm với tài khoản nghe thật |
+| 14.8 | Tùy chọn **tệp** khi nhập tin cũ: `không` / `ảnh + PDF` (mặc định) / `tất cả` — áp riêng cho tin nhập, không đổi công tắc Lấy file của nhóm; ảnh và `.pdf` xếp hàng tải như tin sống, loại khác ghi tên + link (Skipped); link CDN quá cũ tải lỗi thì để Failed, không thử lại vô hạn | Đã code 09/11: `?files=none\|images_pdf\|all` trên `POST /api/imports/zalo-web`, `IngestDeps.captureOverride` trong `message-ingest.ts`; tin trùng đã có dòng Skipped được chuyển sang Pending khi là ảnh / PDF. Đo local (nhóm zalo bot + 1 chat riêng): 199 tệp Stored (66,8 MB), 10 Failed vì link CDN cũ 404, 33 Skipped đúng loại (docx, xlsx, mp3, mp4…) |
+| 14.6 | Bot: màn **Nhập lịch sử** thêm nguồn «Zalo PC (ghế đồng bộ)»: hướng dẫn 2 thao tác của nhân viên, trạng thái ghế, kết quả từng nhóm (số tin, cũ nhất) — để IDA tự làm | Đã code 09/11: cấu hình `SEAT_GATEWAY_URL` (trống = không hỏi ghế); API `GET /api/imports/seat` (trạng thái cổng rút gọn + tài khoản đang ngồi có gắn bot không), `GET /api/imports/seat/qr.png` (QR qua bot, cổng không cần mở ra ngoài), `GET /api/imports/results` (mỗi cuộc từng nhập: tin trong kho, cũ nhất, mới nhất, lần nhập cuối — từ audit_log action import). Màn Nhập lịch sử đổi thành hai cách: Cách 1 ghế Zalo PC (QR + 2 thao tác nhân viên + trạng thái đồng bộ, hỏi 3–8 s/lần), bảng kết quả theo cuộc, Cách 2 Zalo Web như cũ + ô chọn tệp đính kèm (không / ảnh+PDF / mọi tệp, 14.8). Chưa có nút bật ghế từ web (vẫn `sync-once`). Test: 4 bài `fetchSeatInfo`; typecheck + eslint sạch |
+| 14.7 | Dọn tồn: `dal-worker` nạp `search-worker.*.css` như script (lỗi MIME); 684 `ConstraintError` ghi trùng IndexedDB lúc đồng bộ (soát vô hại?); `$zpinVault.*` (mới 26.11.10) đang là stub; ghim bản Zalo + bộ kiểm khi đổi bản | Chưa |
+
+**Giới hạn đã biết:** đồng bộ từ điện thoại mang chữ, ảnh, tệp, link, nhắc hẹn; **không** mang sự kiện nhóm, ghi chú, bình
+chọn. Link CDN của tệp rất cũ có thể hết hạn (chữ + tên tệp vẫn còn); muốn bot tải tệp thì bật «Lấy file» trước khi nhập.
+Vẫn là client không chính thức: rủi ro khóa tài khoản như zca-js; mỗi lần VNG đổi bản phải chạy lại bộ kiểm (cách dò dịch vụ
+theo hình dạng của Olaz đã chịu được 26.10.20 → 26.11.10). Cuộc rất lớn (hàng nghìn tin) xuất chậm dần theo số tin đã nạp,
+ngân sách mặc định 4 phút/cuộc nên chỉ lấy được phần gần nhất (tệp ghi `partial`). Tệp nhập của nhóm mà chưa bot nào ở bị bỏ
+(`skipped_unknown_group`): tài khoản sống phải nhận ít nhất một tin của nhóm (hoặc quét lại nhóm lúc kết nối) rồi mới nhập được.
+Nếu người dùng đăng xuất thiết bị «Zalo PC» từ điện thoại giữa chừng, ghế mất phiên, phần chưa xuất phải chạy lại.
+
+**Đại ca chốt 09/11 (lần 2):** tin cũ nhập **cả nhóm lẫn chat riêng**; tệp của tin cũ lấy **ảnh + PDF**, loại khác chỉ ghi
+tên + link (14.8). **Còn chờ:** `git init` + tạo kho GitHub `degoholding/zalo-pc-gateway`.
 
 ## 9. Đối chiếu 27 câu IDA
 
@@ -516,3 +567,5 @@ khoảng 1,5–7 triệu tin (2–7 GB database); ảnh / tệp giữ 6 tháng k
 | IDA | 30–50 tin báo cáo thật kèm số đúng (bộ đo «trích đúng ≥ 95%») |
 | IDA | Danh sách VIP; danh mục nhân viên và đại lý; file KPI; bộ tài liệu kỹ thuật và nhãn sản phẩm; form báo cáo tuần / tháng |
 | Đại ca | Đưa bot vào nhóm thật của IDA + khai 3 người nhận; nạp tiền khóa Gemini (tìm web đang hỏng); gắn thử một tài khoản Zalo nhân viên (Chỉ thu thập) một tuần; bật Cloudflare Access; VPS riêng khi lên ~10 tài khoản |
+| Đại ca | Phase 14: `git init` kho `zalo-pc-gateway`; trả phiên Gia Bảo cho Zalo PC Windows (ghế chuyển sang Bảo Huỳnh). Đã chốt 09/11: nhập cả nhóm lẫn chat riêng; tệp tin cũ lấy ảnh + PDF |
+| IDA | Phase 14: mỗi tài khoản nghe ngồi ghế một lượt (quét QR + đồng ý đồng bộ trên điện thoại, 3–5 phút); Zalo PC trên máy nhân viên bị đá trong lúc đó |

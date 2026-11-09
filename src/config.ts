@@ -65,6 +65,8 @@ export interface AppConfig {
   defaultDirectRead: boolean;
   /** Số tin gần nhất xin Zalo khi lấy tin cũ của một nhóm. */
   defaultDirectCaptureFiles: boolean;
+  /** Địa chỉ HTTP của Cổng Zalo PC (ghế đồng bộ, phase 14) — vd http://127.0.0.1:8099. Trống = màn Nhập lịch sử không hỏi ghế. */
+  seatGatewayUrl: string;
   /** Không có GEMINI_API_KEY thì trợ lý tắt: bot vẫn lưu tin, không trả lời ai. */
   assistant: {
     apiKey: string;
@@ -237,6 +239,7 @@ export function loadConfig(): AppConfig {
     // Người ta chủ động nhắn riêng cho bot nên mặc định LƯU (khác nhóm: mặc định không đọc)
     defaultDirectRead: readBool("DEFAULT_DM_READ", true),
     defaultDirectCaptureFiles: readBool("DEFAULT_DM_CAPTURE_FILES", true),
+    seatGatewayUrl: readString("SEAT_GATEWAY_URL", "").trim().replace(/\/+$/, ""),
     assistant: {
       apiKey: (process.env.GEMINI_API_KEY ?? "").trim(),
       openaiApiKey: (process.env.OPENAI_API_KEY ?? "").trim(),

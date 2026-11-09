@@ -6,18 +6,23 @@ import { Card } from '@/shared/ui/card'
 import { CopyButton } from '@/shared/ui/copy-button'
 import { PageContainer } from '@/shared/ui/page-container'
 import { PageHeader } from '@/shared/ui/page-header'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { formatDateTime } from '@/shared/utils/format-date'
+import { ImportResultsCard } from '../components/import-results-card'
+import { SeatSyncCard } from '../components/seat-sync-card'
 import { useExportTargets, useImportZaloWeb } from '../hooks/use-imports'
-import type { BatchImportResult, ImportSummary } from '../types/import'
+import { IMPORT_FILES_MODE_LABELS, type BatchImportResult, type ImportFilesMode, type ImportSummary } from '../types/import'
 import { buildZaloWebExporter, EXPORT_ALL_CONVERSATIONS, toBookmarklet } from '../utils/zalo-web-exporter'
 
 const STEPS = [
   'Mở chat.zalo.me trên máy tính, đăng nhập bằng tài khoản Zalo của MỘT THÀNH VIÊN lâu năm trong các nhóm cần lấy (không phải tài khoản bot — đăng nhập web bằng tài khoản bot là bot bị đá, phải quét QR lại).',
-  'Trên điện thoại, khi Zalo hỏi "Đồng bộ tin nhắn sang máy tính?" thì bấm Đồng ý; chờ web báo "Đồng bộ tin nhắn thành công". Zalo chỉ đồng bộ khoảng 2 tuần gần nhất — giới hạn của Zalo, không chỉnh được.',
-  'Kéo nút xuất bên dưới lên thanh dấu trang (Ctrl+Shift+B để hiện thanh). Ở Zalo Web, đứng ở tab Tin nhắn (danh sách "Tất cả", không lọc) rồi bấm nút: trang tự mở lần lượt từng nhóm, cuộn lên đầu, gom tin + ảnh, mỗi nhóm tải về một tệp .json. Góc phải dưới có bảng tiến độ và nút Dừng. Chrome hỏi "tải nhiều tệp" thì bấm Cho phép.',
-  'Chọn TẤT CẢ tệp .json vừa tải ở bước 4 (giữ Ctrl để chọn nhiều). Chỉ nhập được nhóm bot ĐÃ Ở và đã bật "Đọc tin"; tệp chat riêng giữ làm bản lưu, bot chưa nhập. Tin trùng với tin bot đã lưu thì bỏ qua — nạp lại nhiều lần không nhân đôi.',
+  'Trên điện thoại, khi Zalo hỏi "Đồng bộ tin nhắn sang máy tính?" thì bấm Đồng ý; chờ web báo "Đồng bộ tin nhắn thành công". Zalo Web chỉ đồng bộ khoảng 2 tuần gần nhất — muốn lấy nhiều năm thì dùng ghế Zalo PC ở Cách 1.',
+  'Kéo nút xuất bên dưới lên thanh dấu trang (Ctrl+Shift+B để hiện thanh). Ở Zalo Web, đứng ở tab Tin nhắn (danh sách "Tất cả", không lọc) rồi bấm nút: trang tự mở lần lượt từng cuộc, cuộn lên đầu, gom tin + ảnh, mỗi cuộc tải về một tệp .json. Góc phải dưới có bảng tiến độ và nút Dừng. Chrome hỏi "tải nhiều tệp" thì bấm Cho phép.',
+  'Chọn TẤT CẢ tệp .json vừa tải ở bước 3 (giữ Ctrl để chọn nhiều). Nhóm: chỉ nhập được nhóm bot ĐÃ biết và đã bật "Đọc tin". Chat riêng: nhập vào cuộc riêng của tài khoản nghe có cùng mã Zalo với người xuất (tài khoản chưa gắn vào bot thì bỏ tệp). Tin trùng với tin bot đã lưu thì bỏ qua — nạp lại nhiều lần không nhân đôi.',
 ]
+
+const FILES_MODES: ImportFilesMode[] = ['images_pdf', 'none', 'all']
 
 interface BookmarkletLinkProps {
   href: string
@@ -57,7 +62,7 @@ function SummaryCard({ result }: { result: BatchImportResult }) {
           <dt className="text-muted-foreground">Trùng (bot đã có đủ)</dt><dd>{summary.duplicates}</dd>
           <dt className="text-muted-foreground">Nhóm bot chưa ở</dt><dd>{summary.skipped_unknown_group}</dd>
           <dt className="text-muted-foreground">Nhóm chưa bật đọc</dt><dd>{summary.skipped_group_not_read}</dd>
-          <dt className="text-muted-foreground">Tin riêng (không nhập)</dt><dd>{summary.skipped_direct}</dd>
+          <dt className="text-muted-foreground">Tệp chat riêng của tài khoản chưa gắn</dt><dd>{summary.skipped_unknown_account ?? 0}</dd>
           <dt className="text-muted-foreground">Khoảng thời gian</dt>
           <dd>{summary.oldest ? `${formatDateTime(summary.oldest)} → ${formatDateTime(summary.newest)}` : '—'}</dd>
         </dl>
@@ -86,12 +91,16 @@ function SummaryCard({ result }: { result: BatchImportResult }) {
   )
 }
 
-/** Nhập ~2 tuần tin nhóm từ kho cục bộ của Zalo Web — đường duy nhất lấy được tin trước ngày bot vào nhóm. */
+/**
+ * Nhập lịch sử: Cách 1 ghế Zalo PC (phase 14, nhiều năm, tự chạy) — Cách 2 tệp xuất từ Zalo Web (~2 tuần, bấm tay).
+ * Cả hai đổ vào cùng API nhập nên bảng «Kết quả nhập theo cuộc» gom chung.
+ */
 export function ZaloWebImportPage() {
   const importZaloWeb = useImportZaloWeb()
   const targets = useExportTargets()
   const [result, setResult] = useState<BatchImportResult | null>(null)
   const [showSource, setShowSource] = useState(false)
+  const [filesMode, setFilesMode] = useState<ImportFilesMode>('images_pdf')
   const fileInput = useRef<HTMLInputElement>(null)
 
   const targetList = useMemo(() => targets.data ?? [], [targets.data])
@@ -101,17 +110,20 @@ export function ZaloWebImportPage() {
 
   const handleFiles = (files: FileList | null) => {
     if (!files?.length) return
-    importZaloWeb.mutate([...files], { onSuccess: setResult })
+    importZaloWeb.mutate({ files: [...files], mode: filesMode }, { onSuccess: setResult })
     if (fileInput.current) fileInput.current.value = ''
   }
 
   return (
     <PageContainer className="mx-auto w-full max-w-4xl">
       <PageHeader
-        title="Nhập lịch sử từ Zalo Web"
-        description="Zalo không có API lấy tin cũ; nhưng Zalo Web được điện thoại đồng bộ ~2 tuần tin gần nhất. Lấy phần đó về kho bot bằng bốn bước dưới đây — một lần bấm quét hết các nhóm bot đang đọc."
+        title="Nhập lịch sử"
+        description="Zalo không có API lấy tin cũ. Hai đường lấy về kho bot: ghế Zalo PC (điện thoại đồng bộ toàn bộ lịch sử, tự chạy) hoặc tệp xuất từ Zalo Web (~2 tuần gần nhất, bấm tay)."
       />
+      <SeatSyncCard />
+      <ImportResultsCard />
       <Card className="gap-3 p-4">
+        <h2 className="font-semibold text-navy">Cách 2 — Zalo Web: ~2 tuần gần nhất, bốn bước</h2>
         <ol className="list-decimal space-y-2 pl-5 text-sm">
           {STEPS.map((step) => <li key={step}>{step}</li>)}
         </ol>
@@ -142,13 +154,24 @@ export function ZaloWebImportPage() {
       <Card className="gap-3 p-4">
         <h2 className="font-semibold text-navy">Bước 4 — nạp các tệp đã tải</h2>
         <input ref={fileInput} type="file" multiple accept="application/json,.json" className="hidden" onChange={(event) => handleFiles(event.target.files)} aria-label="Chọn tệp JSON" />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={filesMode} onValueChange={(next) => setFilesMode(next as ImportFilesMode)}>
+            <SelectTrigger className="w-64" aria-label="Tệp đính kèm của tin nhập">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FILES_MODES.map((mode) => <SelectItem key={mode} value={mode}>{IMPORT_FILES_MODE_LABELS[mode]}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Button onClick={() => fileInput.current?.click()} disabled={importZaloWeb.isPending}>
             {importZaloWeb.isPending ? <Loader2 className="animate-spin" /> : <Upload />}
             Chọn các tệp zalo-web-….json
           </Button>
           <span className="flex items-center gap-1 text-xs text-muted-foreground"><FileJson className="size-3.5" /> chọn nhiều tệp một lượt, mỗi tệp tối đa 50 MB</span>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Tệp đính kèm của tin nhập áp riêng cho lượt nhập này, không đổi công tắc "Lấy file" của nhóm. Link ảnh quá cũ trên máy chủ Zalo có thể đã hết hạn: tin vẫn vào, tệp ghi lỗi tải.
+        </p>
       </Card>
       {result && <SummaryCard result={result} />}
     </PageContainer>

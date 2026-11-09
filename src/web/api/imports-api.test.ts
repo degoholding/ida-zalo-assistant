@@ -33,3 +33,45 @@ test("tolerates a sender clock running up to a day ahead", () => {
   const ahead = EXPORTED_MS + 3 * 60 * 60 * 1000;
   assert.equal(resolveSentAtMs({ sendDttm: null, cliMsgId: String(ahead) }, EXPORTED_MS), ahead);
 });
+
+// Phase 14.6: trạng thái ghế đồng bộ Zalo PC đọc qua bot
+import { fetchSeatInfo } from "./imports-api.js";
+
+const fakeDb = (rows: Record<string, unknown>[]) => ({ query: async () => [rows, []] }) as unknown as Parameters<typeof fetchSeatInfo>[0];
+const fetcherWith = (body: unknown, ok = true) => (async () => ({ ok, status: ok ? 200 : 503, json: async () => body })) as unknown as typeof fetch;
+
+test("seat: không cấu hình thì không hỏi cổng", async () => {
+  let called = false;
+  const info = await fetchSeatInfo(fakeDb([]), "", (async () => { called = true; return new Response(); }) as typeof fetch);
+  assert.deepEqual(info, { configured: false, reachable: false });
+  assert.equal(called, false);
+});
+
+test("seat: cổng tắt → reachable=false kèm lý do", async () => {
+  const info = await fetchSeatInfo(fakeDb([]), "http://127.0.0.1:8099", (async () => { throw new Error("ECONNREFUSED"); }) as typeof fetch);
+  assert.equal(info.configured, true);
+  assert.equal(info.reachable, false);
+  assert.match(info.error ?? "", /ECONNREFUSED/);
+});
+
+test("seat: đã đăng nhập → rút gọn trạng thái, tiến độ gộp hai giai đoạn, tài khoản gắn bot", async () => {
+  const gateway = {
+    phase: "main", user: { userId: "627015259726895663", displayName: "Bảo Huỳnh" }, lastQrAt: 0, conversations: 12,
+    sync: { ready: true, running: true, progress: { previewAndRecent: 90, other: 10 }, lastResult: null, startedAt: 1000, finishedAt: null },
+  };
+  const info = await fetchSeatInfo(fakeDb([{ id: 1, label: "bot-chinh" }]), "http://127.0.0.1:8099", fetcherWith(gateway));
+  assert.equal(info.reachable, true);
+  assert.deepEqual(info.status, {
+    phase: "main", user: { userId: "627015259726895663", displayName: "Bảo Huỳnh" }, linked_account: "bot-chinh", conversations: 12, last_qr_at: 0,
+    sync: { ready: true, running: true, progress: 50, last_result: null, started_at: 1000, finished_at: null },
+  });
+});
+
+test("seat: chờ QR → user null, không tra tài khoản", async () => {
+  const info = await fetchSeatInfo(fakeDb([]), "http://127.0.0.1:8099", fetcherWith({ phase: "login: chờ quét QR", user: null, lastQrAt: 1794209738903 }));
+  assert.equal(info.status?.phase, "login: chờ quét QR");
+  assert.equal(info.status?.user, null);
+  assert.equal(info.status?.linked_account, null);
+  assert.equal(info.status?.last_qr_at, 1794209738903);
+  assert.equal(info.status?.sync, null);
+});
