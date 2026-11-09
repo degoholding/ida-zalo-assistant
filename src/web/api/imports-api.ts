@@ -323,6 +323,51 @@ export interface SeatInfo {
     conversations: number;
     last_qr_at: number;
     sync: { ready: boolean; running: boolean; progress: number | null; last_result: string | null; started_at: number | null; finished_at: number | null } | null;
+    /** Tiến độ việc ghế do `tools/sync-once.mjs` đẩy vào cổng (POST /job); null khi ghế chạy tay không qua sync-once. */
+    job: SeatJob | null;
+  };
+}
+
+/** Một việc ghế: login → sync (điện thoại gửi tin) → export (ghế xuất tin) → import (nạp vào bot) → done | error. */
+export interface SeatJob {
+  stage: "login" | "sync" | "export" | "import" | "done" | "error";
+  percent: number;
+  note: string | null;
+  error: string | null;
+  conversations: { done: number; total: number } | null;
+  files: { done: number; total: number } | null;
+  /** Số tệp đính kèm (ảnh, PDF, …) trong các tệp đã xuất — tệp thật bot tải về sau, đếm ở bảng kết quả. */
+  media: number | null;
+  messages: { imported: number; duplicates: number } | null;
+  started_at: number | null;
+  finished_at: number | null;
+  updated_at: number | null;
+}
+
+const SEAT_STAGES = new Set<SeatJob["stage"]>(["login", "sync", "export", "import", "done", "error"]);
+
+function parseSeatJob(raw: unknown): SeatJob | null {
+  if (!raw || typeof raw !== "object") return null;
+  const job = raw as Record<string, unknown>;
+  const pair = (value: unknown) => {
+    if (!value || typeof value !== "object") return null;
+    const v = value as Record<string, unknown>;
+    return { done: Number(v.done) || 0, total: Number(v.total) || 0 };
+  };
+  const messages = job.messages && typeof job.messages === "object" ? (job.messages as Record<string, unknown>) : null;
+  const stage = SEAT_STAGES.has(job.stage as SeatJob["stage"]) ? (job.stage as SeatJob["stage"]) : "login";
+  return {
+    stage,
+    percent: Math.max(0, Math.min(100, Number(job.percent) || 0)),
+    note: job.note ? String(job.note) : null,
+    error: job.error ? String(job.error) : null,
+    conversations: pair(job.conversations),
+    files: pair(job.files),
+    media: job.media == null ? null : Number(job.media) || 0,
+    messages: messages ? { imported: Number(messages.imported) || 0, duplicates: Number(messages.duplicates) || 0 } : null,
+    started_at: Number(job.startedAt) || null,
+    finished_at: Number(job.finishedAt) || null,
+    updated_at: Number(job.updatedAt) || null,
   };
 }
 
@@ -365,8 +410,23 @@ export async function fetchSeatInfo(db: Db, gatewayUrl: string, fetcher: typeof 
         started_at: Number(sync.startedAt) || null,
         finished_at: Number(sync.finishedAt) || null,
       } : null,
+      job: parseSeatJob(raw.job),
     },
   };
+}
+
+/** Nút Đăng xuất ghế ở màn Nhập lịch sử: cổng đăng xuất chính thức (trả suất PC); sync-once thấy ghế về trang QR thì tắt container. */
+export async function logoutSeat(gatewayUrl: string, fetcher: typeof fetch = fetch): Promise<string> {
+  if (!gatewayUrl) throw new ApiError(404, "not_found", "Chưa cấu hình SEAT_GATEWAY_URL");
+  let res: Response;
+  try {
+    res = await fetcher(`${gatewayUrl}/logout`, { method: "POST", signal: AbortSignal.timeout(60_000) });
+  } catch {
+    throw new ApiError(502, "seat_unreachable", "Không nối được tới cổng ghế");
+  }
+  const text = await res.text();
+  if (!res.ok) throw new ApiError(502, "seat_logout_failed", `Ghế không đăng xuất được: ${text || res.status}`);
+  return text;
 }
 
 /** `GET /api/imports/results` — mỗi cuộc từng được nhập tin cũ: số tin đang có, mốc cũ nhất / mới nhất, lần nhập cuối. */
@@ -381,6 +441,9 @@ export interface ImportResultRow {
   newest: string | null;
   last_import_at: string | null;
   imports: number;
+  /** Tệp đính kèm đã tải về kho (trạng thái Stored) và tổng dung lượng byte. */
+  attachments: number;
+  attachments_bytes: number;
 }
 
 export async function listImportResults(db: Db, limit = 300): Promise<ImportResultRow[]> {
@@ -389,6 +452,8 @@ export async function listImportResults(db: Db, limit = 300): Promise<ImportResu
             (SELECT COUNT(*) FROM message m WHERE m.group_id = g.id) AS messages,
             (SELECT MIN(m.sent_at) FROM message m WHERE m.group_id = g.id) AS oldest,
             (SELECT MAX(m.sent_at) FROM message m WHERE m.group_id = g.id) AS newest,
+            (SELECT COUNT(*) FROM attachment t WHERE t.group_id = g.id AND t.status = ${AttachmentStatus.Stored}) AS attachments,
+            (SELECT COALESCE(SUM(t.stored_bytes), 0) FROM attachment t WHERE t.group_id = g.id AND t.status = ${AttachmentStatus.Stored}) AS attachments_bytes,
             a.last_import_at, a.imports
      FROM zalo_group g
      JOIN (SELECT entity_id, MAX(created_at) AS last_import_at, COUNT(*) AS imports FROM audit_log
@@ -399,6 +464,7 @@ export async function listImportResults(db: Db, limit = 300): Promise<ImportResu
     group_id: Number(row.id), thread_type: Number(row.thread_type), zalo_thread_id: String(row.zalo_group_id), name: String(row.name ?? ""),
     read_messages: Boolean(row.read_messages), messages: Number(row.messages) || 0,
     oldest: iso(row.oldest), newest: iso(row.newest), last_import_at: iso(row.last_import_at), imports: Number(row.imports) || 0,
+    attachments: Number(row.attachments) || 0, attachments_bytes: Number(row.attachments_bytes) || 0,
   }));
 }
 
@@ -418,6 +484,10 @@ export const importRoutes: ApiRoute[] = [
     if (!upstream.ok) throw new ApiError(404, "not_found", "Ghế chưa có mã QR");
     response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" });
     response.end(Buffer.from(await upstream.arrayBuffer()));
+  }],
+  ["POST", /^\/api\/imports\/seat\/logout$/, async ({ response, service }) => {
+    const result = await logoutSeat(service.config.seatGatewayUrl);
+    sendOk(response, { result }, "Đã đăng xuất ghế");
   }],
   ["GET", /^\/api\/imports\/results$/, async ({ response, service }) => {
     sendOk(response, await listImportResults(service.db));

@@ -73,7 +73,6 @@ export const queryKeys = {
   },
   imports: {
     all: ['imports'] as const,
-    targets: () => ['imports', 'targets'] as const,
     seat: () => ['imports', 'seat'] as const,
     results: () => ['imports', 'results'] as const,
   },

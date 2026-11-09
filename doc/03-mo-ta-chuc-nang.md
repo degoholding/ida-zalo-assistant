@@ -37,7 +37,7 @@ màn chi tiết có thẻ danh tính, biểu mẫu, các tab và «Lịch sử t
 | **Danh bạ** | Mọi người bot gặp (thành viên nhóm + người nhắn riêng): tên, ảnh, loại (khách hàng / nhân sự…), vai trò, công ty, thẻ, ghi chú. Gán vai trò ở đây là cấp quyền hỏi bot. |
 | **Nhóm** | Danh sách nhóm bot đang ở, số tin, tin gần nhất; chi tiết: tên gọi, loại nhóm, công ty, bật «Đọc tin» / «Lấy file», thời hạn lưu, thành viên, nút «Lấy tin cũ». |
 | **Tệp** | Mọi tệp / ảnh đã lưu: lọc theo cuộc, loại, trạng thái; tải về; xem **chữ đã bóc** (bot đọc tệp xong thì cất chữ để tìm và làm báo cáo); «Bóc chữ» thủ công; «Tải lại» tệp lỗi. |
-| **Nhập lịch sử** | Lấy tin trước ngày bot vào nhóm: từ **Zalo PC (ghế đồng bộ, tin nhiều năm)** hoặc từ Zalo Web (2 tuần) — mục 5. |
+| **Nhập lịch sử** | Lấy tin trước ngày bot vào nhóm bằng **ghế đồng bộ Zalo PC** (quét QR, điện thoại gửi tin nhiều năm) — mục 5a. |
 | **Công ty** | Danh mục công ty; nhóm và người gắn công ty. |
 | **Hỏi trợ lý** | Quản trị hỏi trợ lý AI ngay trên web dưới tên một người có vai trò (không cần Zalo): cùng cài đặt, công cụ, giới hạn như tin Zalo thật; báo cáo Excel có nút tải. Mỗi người một cuộc «Hỏi trợ lý · <tên>», không gửi ra Zalo. |
 | **Tài khoản bot** | Thêm bot bằng QR, bật / tắt, trạng thái phiên, số nhóm / số cuộc riêng. |
@@ -144,32 +144,29 @@ Một container **Cổng Zalo PC** (kho riêng `zalo-pc-gateway`) chạy mã Zal
 **ghế**: mỗi lần một tài khoản ngồi, xong trả ghế cho tài khoản kế; không thay đồng bộ zca-js đang chạy (phiên PC và phiên
 web là hai suất riêng của Zalo, không đá nhau).
 
-1. Quản trị chạy `sync-once <tài khoản>` → ghế bật, QR hiện ở trang cổng và ở màn **Nhập lịch sử → Cách 1** của bot
-   (bot lấy QR + trạng thái qua `SEAT_GATEWAY_URL`, cổng không cần mở ra ngoài; chưa có nút bật ghế từ web).
-2. Nhân viên của tài khoản đó: **quét QR** bằng Zalo trên điện thoại, rồi **bấm đồng ý** khi điện thoại hỏi «Đồng bộ tin
+1. Quản trị chạy `~/zalo/tools/ghe.sh <tài khoản>` (VPS 2) hoặc `node tools/sync-once.mjs <tài khoản>` (local) → ghế bật,
+   QR hiện ở màn **Nhập lịch sử** của bot (bot lấy QR + trạng thái qua `SEAT_GATEWAY_URL`, cổng không cần mở ra ngoài;
+   chưa có nút bật ghế từ web). Màn chỉ có một thẻ **Đồng bộ lịch sử Zalo** và bảng **Đã có trong kho** (gọn lại 09/11 tối).
+2. Nhân viên của tài khoản đó: **quét QR** bằng Zalo trên điện thoại, rồi **bấm Đồng ý** khi điện thoại hỏi «Đồng bộ tin
    nhắn sang máy tính». Chỉ hai thao tác này. Zalo PC trên máy nhân viên (nếu có) bị đá trong lúc này, xong đăng nhập lại.
-   Màn Nhập lịch sử hiện tài khoản đang ngồi ghế, có gắn vào bot không (không gắn thì chat riêng bị bỏ), tiến độ đồng bộ;
-   bảng **Kết quả nhập theo cuộc** liệt kê mỗi cuộc từng nhập: tin trong kho, cũ nhất, mới nhất, lần nhập cuối.
-3. Ghế tự đợi đồng bộ xong (1–3 phút), xuất **mọi nhóm đang bật đọc và mọi chat riêng** của tài khoản đó (chốt 09/11),
-   nạp vào bot, đăng xuất, tắt. Tệp của tin cũ: chỉ tải **ảnh và PDF**, loại khác ghi tên + link.
-   Dữ liệu đã kéo về giữ trong `/data/accounts/<uid>` để xuất lại không phải đồng bộ lại; cần bù khoảng trống thì ngồi lại.
+   Từ đó màn hiện: tài khoản đang ngồi ghế, có gắn vào bot không (không gắn thì chat riêng bị bỏ), **thanh % chung** (điện
+   thoại gửi 0–50 %, ghế xuất 50–80 %, nạp vào kho 80–100 %), số cuộc đã xuất / tổng, số tệp đính kèm, tin đã nhập (+ trùng),
+   thời gian chạy. Tiến độ do `sync-once` đẩy vào cổng (`POST /job`), bot đọc chung qua `/status`.
+3. Ghế tự đợi đồng bộ xong (1–5 phút), xuất **mọi nhóm và mọi chat riêng** của tài khoản đó (chốt 09/11), nạp vào bot. Tệp
+   của tin cũ: chỉ tải **ảnh và PDF**, loại khác ghi tên + link. Xong hiện nút **Đăng xuất ghế** (hỏi xác nhận; khóa khi đang
+   chạy): bấm là tài khoản rời ghế, `sync-once` thấy ghế về trang QR thì tắt container. Không ai bấm thì sau `LOGOUT_WAIT_MIN`
+   (30) phút script tự đăng xuất. Dữ liệu đã kéo về giữ trong `/data/accounts/<tên>` để xuất lại không phải đồng bộ lại.
+   Bảng **Đã có trong kho**: mỗi cuộc từng nhập — tin, tệp đã tải về, dung lượng, mốc cũ nhất, lần nhập cuối.
 
 Mang về: chữ, ảnh, tệp, link, nhắc hẹn, tin mình gửi; **không** có sự kiện nhóm, ghi chú, bình chọn. Link tệp rất cũ có thể
 hết hạn (chữ + tên tệp vẫn còn). Đo 09/11: một chat riêng về tới 04/2021; nhóm «zalo bot» 468 tin trọn từ ngày lập.
 
-### 5b. Từ Zalo Web (dự phòng, chỉ ~2 tuần)
+### 5b. Từ Zalo Web (API còn, giao diện đã bỏ 09/11/2026)
 
-1. Mở chat.zalo.me bằng **tài khoản cá nhân** của một thành viên lâu năm (không dùng tài khoản bot — mở
-   web bằng tài khoản bot là bot bị đá, phải quét QR lại). Điện thoại hỏi đồng bộ thì đồng ý.
-2. Kéo một trong ba nút ở màn Nhập lịch sử lên thanh dấu trang, rồi bấm khi đang ở Zalo Web:
-   - **Xuất N nhóm của bot** — tự mở lần lượt các nhóm đang bật «Đọc tin»;
-   - **Xuất toàn bộ danh sách** — mọi cuộc ở cột trái, cả nhóm lẫn chat riêng;
-   - **Xuất cuộc đang mở** — chỉ cuộc đang mở.
-
-   Trang tự mở từng cuộc, cuộn lên đầu, gom chữ + ảnh + tin hệ thống, mỗi cuộc tải về một tệp `.json`;
-   góc phải dưới có bảng tiến độ và nút Dừng.
-3. Quay lại màn Nhập lịch sử, chọn tất cả tệp một lượt. Kết quả cộng gộp: số tin mới, số tin được bổ sung
-   ảnh / chữ, số trùng, tệp lỗi (nếu có).
+Đường cũ: bookmarklet xuất từng cuộc ở chat.zalo.me (~2 tuần gần nhất) rồi chọn tệp `.json` nạp tay. Giao diện (ba nút kéo lên
+thanh dấu trang, ô chọn tệp, ô chọn loại tệp đính kèm) đã **bỏ khỏi màn Nhập lịch sử** để màn chỉ còn ghế — đại ca duyệt
+09/11 tối. `POST /api/imports/zalo-web?files=` **vẫn giữ** vì ghế nạp qua đúng API này (khuôn tệp «zalo-web v2»); mã
+bookmarklet còn trong lịch sử git (`web/src/modules/imports/utils/zalo-web-exporter.ts` trước commit gọn màn).
 
 Quy tắc khi nạp: chỉ nhập **nhóm bot đang ở và đã bật đọc**; tin trùng mã thì bỏ qua (nạp lại nhiều lần
 không nhân đôi) nhưng **bổ sung** ảnh / chữ còn thiếu; tin hệ thống trùng câu chữ trong 90 giây coi là

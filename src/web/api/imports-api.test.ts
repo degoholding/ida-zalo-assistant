@@ -64,7 +64,24 @@ test("seat: đã đăng nhập → rút gọn trạng thái, tiến độ gộp 
   assert.deepEqual(info.status, {
     phase: "main", user: { userId: "627015259726895663", displayName: "Bảo Huỳnh" }, linked_account: "bot-chinh", conversations: 12, last_qr_at: 0,
     sync: { ready: true, running: true, progress: 50, last_result: null, started_at: 1000, finished_at: null },
+    job: null,
   });
+});
+
+test("seat: tiến độ việc từ sync-once (POST /job ở cổng) được rút gọn, stage lạ về login", async () => {
+  const gateway = {
+    phase: "main", user: { userId: "1", displayName: "A" }, lastQrAt: 0, conversations: 5, sync: null,
+    job: { account: "bot1", stage: "import", percent: 87, note: null, conversations: { done: 5, total: 5 }, files: { done: 2, total: 4 }, media: 31,
+      messages: { imported: 120, duplicates: 7 }, startedAt: 10, updatedAt: 20 },
+  };
+  const info = await fetchSeatInfo(fakeDb([]), "http://127.0.0.1:8099", fetcherWith(gateway));
+  assert.deepEqual(info.status?.job, {
+    stage: "import", percent: 87, note: null, error: null, conversations: { done: 5, total: 5 }, files: { done: 2, total: 4 }, media: 31,
+    messages: { imported: 120, duplicates: 7 }, started_at: 10, finished_at: null, updated_at: 20,
+  });
+  const odd = await fetchSeatInfo(fakeDb([]), "http://127.0.0.1:8099", fetcherWith({ ...gateway, job: { stage: "weird", percent: 250 } }));
+  assert.equal(odd.status?.job?.stage, "login");
+  assert.equal(odd.status?.job?.percent, 100);
 });
 
 test("seat: chờ QR → user null, không tra tài khoản", async () => {

@@ -1,113 +1,163 @@
-import { Loader2, MonitorSmartphone, QrCode } from 'lucide-react'
+import { CheckCircle2, Loader2, LogOut, Smartphone, TriangleAlert } from 'lucide-react'
 
 import { Badge } from '@/shared/ui/badge'
+import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { SEAT_QR_URL } from '../api/import-api'
-import { useSeatStatus } from '../hooks/use-imports'
-import type { SeatInfo } from '../types/import'
+import { useSeatLogout, useSeatStatus } from '../hooks/use-imports'
+import type { SeatInfo, SeatJob } from '../types/import'
+import { isSeatBusy } from '../utils/seat-busy'
 
-/** Hai thao tác duy nhất của người có tài khoản Zalo cần lấy tin cũ — phần còn lại ghế tự chạy. */
+/** Hai việc của người quét: quét QR, bấm Đồng ý trên điện thoại. Phần còn lại ghế tự chạy. */
 const STAFF_STEPS = [
-  'Mở Zalo trên điện thoại, bấm biểu tượng quét QR cạnh ô tìm kiếm, quét mã đang hiện ở đây (mã tự làm mới khi hết hạn).',
-  'Khi điện thoại hỏi "Đồng bộ tin nhắn sang máy tính?", bấm Đồng ý và giữ Zalo mở tới khi báo đồng bộ xong (vài phút, tùy số tin).',
+  'Mở Zalo trên điện thoại, bấm biểu tượng QR cạnh ô tìm kiếm, quét mã này.',
+  'Điện thoại hỏi đồng bộ tin nhắn sang máy tính: bấm Đồng ý, giữ Zalo mở.',
 ]
 
+const STAGE_LABELS: Record<SeatJob['stage'], string> = {
+  login: 'Chờ quét QR',
+  sync: 'Điện thoại đang gửi tin sang ghế',
+  export: 'Ghế đang xuất tin',
+  import: 'Đang nạp vào kho bot',
+  done: 'Xong',
+  error: 'Lỗi',
+}
+
 function phaseBadge(info: SeatInfo) {
-  if (!info.configured) return <Badge variant="outline">Chưa cấu hình</Badge>
-  if (!info.reachable) return <Badge variant="secondary">Ghế đang tắt</Badge>
+  if (!info.configured || !info.reachable) return <Badge variant="secondary">Ghế đang tắt</Badge>
   const status = info.status
   if (!status) return null
   if (status.phase === 'main') {
-    if (status.sync?.running) return <Badge>Đang đồng bộ từ điện thoại</Badge>
+    const stage = status.job?.stage
+    if (stage === 'done') return <Badge className="bg-emerald-600 text-white">Xong</Badge>
+    if (stage === 'error') return <Badge variant="destructive">Lỗi</Badge>
+    if (isSeatBusy(info)) return <Badge>Đang đồng bộ</Badge>
     return <Badge className="bg-emerald-600 text-white">Đã đăng nhập</Badge>
   }
   if (status.phase.startsWith('login')) return <Badge variant="secondary">Chờ quét QR</Badge>
   return <Badge variant="outline">{status.phase}</Badge>
 }
 
-function SeatDetails({ info }: { info: SeatInfo }) {
-  if (!info.configured) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Máy chủ bot chưa đặt <code>SEAT_GATEWAY_URL</code> nên màn này không hỏi được ghế. Quản trị bật ghế bằng lệnh <code>node tools/sync-once.mjs &lt;tên tài khoản&gt;</code> ở
-        kho <code>zalo-pc-gateway</code>, rồi trỏ biến đó tới địa chỉ HTTP của cổng (ví dụ <code>http://127.0.0.1:8099</code>).
-      </p>
-    )
+function elapsed(from: number | null, to: number | null): string {
+  if (!from) return '—'
+  const seconds = Math.max(0, Math.round(((to ?? Date.now()) - from) / 1000))
+  const minutes = Math.floor(seconds / 60)
+  return minutes ? `${minutes} phút ${String(seconds % 60).padStart(2, '0')} giây` : `${seconds} giây`
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-muted/30 px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-base font-semibold tabular-nums text-navy">{value}</div>
+    </div>
+  )
+}
+
+function Progress({ percent, label }: { percent: number; label: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-sm">
+        <span className="flex items-center gap-2">
+          {percent < 100 && <Loader2 className="size-4 animate-spin" />}
+          {label}
+        </span>
+        <span className="font-semibold tabular-nums">{percent}%</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function LogoutButton({ disabled }: { disabled: boolean }) {
+  const logout = useSeatLogout()
+  const onClick = async () => {
+    const ok = await confirm({
+      title: 'Đăng xuất ghế',
+      message: 'Tài khoản rời ghế, ghế tắt. Tin đã nhập vẫn giữ trong kho bot.',
+      confirmLabel: 'Đăng xuất',
+      tone: 'default',
+    })
+    if (ok) logout.mutate()
   }
-  if (!info.reachable) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Không nối được tới cổng ghế{info.error ? ` (${info.error})` : ''}. Ghế chỉ chạy khi quản trị đang chạy lệnh <code>sync-once</code>; xong một tài khoản là ghế tự tắt.
-      </p>
-    )
+  return (
+    <Button variant="outline" onClick={onClick} disabled={disabled || logout.isPending}>
+      {logout.isPending ? <Loader2 className="animate-spin" /> : <LogOut />}
+      Đăng xuất ghế
+    </Button>
+  )
+}
+
+function LoggedIn({ info }: { info: SeatInfo }) {
+  const status = info.status!
+  const job = status.job
+  const sync = status.sync
+  const busy = isSeatBusy(info)
+  const percent = job ? job.percent : sync?.running ? (sync.progress ?? 0) : 0
+  const label = job ? (job.note ? `${STAGE_LABELS[job.stage]} · ${job.note}` : STAGE_LABELS[job.stage]) : sync?.running ? 'Điện thoại đang gửi tin sang ghế' : 'Đã đăng nhập, chưa chạy đồng bộ'
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="font-medium">{status.user?.displayName || '—'}</span>
+        <span className="text-muted-foreground">{status.user?.userId}</span>
+        {status.linked_account
+          ? <span className="text-emerald-700">Đã gắn vào bot ({status.linked_account})</span>
+          : <span className="text-amber-700">Chưa gắn vào bot: chỉ nhập được nhóm</span>}
+      </div>
+      {job?.stage === 'error'
+        ? <p className="flex items-center gap-2 text-sm text-destructive"><TriangleAlert className="size-4" /> {job.error || 'Việc ghế lỗi'}</p>
+        : <Progress percent={percent} label={label} />}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label="Cuộc trò chuyện" value={job?.conversations ? `${job.conversations.done}/${job.conversations.total}` : String(status.conversations || '—')} />
+        <Stat label="Tệp đính kèm" value={job?.media == null ? '—' : job.media.toLocaleString('vi-VN')} />
+        <Stat label="Tin đã nhập" value={job?.messages ? `${job.messages.imported.toLocaleString('vi-VN')}${job.messages.duplicates ? ` (+${job.messages.duplicates.toLocaleString('vi-VN')} trùng)` : ''}` : '—'} />
+        <Stat label="Thời gian" value={elapsed(job?.started_at ?? sync?.started_at ?? null, job?.finished_at ?? null)} />
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <LogoutButton disabled={busy} />
+        {job?.stage === 'done' && <span className="flex items-center gap-1 text-sm text-emerald-700"><CheckCircle2 className="size-4" /> Xong. Bấm Đăng xuất để trả ghế.</span>}
+        {busy && <span className="text-xs text-muted-foreground">Đang chạy, chưa đăng xuất được.</span>}
+      </div>
+    </div>
+  )
+}
+
+function SeatBody({ info }: { info: SeatInfo }) {
+  if (!info.configured || !info.reachable) {
+    return <p className="text-sm text-muted-foreground">Ghế đang tắt. Khi quản trị bật ghế, mã QR hiện ở đây.</p>
   }
   const status = info.status
   if (!status) return null
   if (status.phase.startsWith('login')) {
     return (
-      <div className="flex flex-wrap items-start gap-4">
-        <img
-          src={`${SEAT_QR_URL}?t=${status.last_qr_at}`}
-          alt="Mã QR đăng nhập Zalo PC"
-          className="size-56 rounded-md border bg-white p-1"
-        />
-        <ol className="list-decimal space-y-2 pl-5 text-sm">
+      <div className="flex flex-wrap items-center gap-6">
+        <img src={`${SEAT_QR_URL}?t=${status.last_qr_at}`} alt="Mã QR đăng nhập Zalo" className="size-64 rounded-md border bg-white p-2" />
+        <ol className="max-w-sm list-decimal space-y-2 pl-5 text-sm">
           {STAFF_STEPS.map((step) => <li key={step}>{step}</li>)}
+          <li className="text-muted-foreground">Mã tự làm mới. Xong hai bước là ghế tự chạy, theo dõi ở đây.</li>
         </ol>
       </div>
     )
   }
-  if (status.phase === 'main') {
-    const sync = status.sync
-    return (
-      <dl className="grid grid-cols-[200px_1fr] gap-y-1 text-sm">
-        <dt className="text-muted-foreground">Tài khoản đang ngồi ghế</dt>
-        <dd>
-          {status.user?.displayName || '—'} <span className="text-muted-foreground">({status.user?.userId})</span>
-        </dd>
-        <dt className="text-muted-foreground">Gắn vào bot</dt>
-        <dd>
-          {status.linked_account
-            ? <>Có — tài khoản nghe <span className="font-medium">{status.linked_account}</span>, chat riêng sẽ nhập được</>
-            : <span className="text-amber-700">Chưa — chỉ nhập được nhóm, tệp chat riêng sẽ bị bỏ (gắn tài khoản ở màn Tài khoản bot trước)</span>}
-        </dd>
-        <dt className="text-muted-foreground">Hội thoại trên ghế</dt>
-        <dd>{status.conversations || '—'}</dd>
-        <dt className="text-muted-foreground">Đồng bộ từ điện thoại</dt>
-        <dd className="flex items-center gap-2">
-          {sync?.running
-            ? <><Loader2 className="size-4 animate-spin" /> đang chạy{sync.progress != null ? ` — ${sync.progress}%` : ''}</>
-            : sync?.last_result
-              ? `${sync.last_result === 'success' ? 'xong' : sync.last_result}${sync.started_at && sync.finished_at ? ` (${Math.round((sync.finished_at - sync.started_at) / 1000)} giây)` : ''}`
-              : sync?.ready ? 'chưa chạy — chờ xác nhận trên điện thoại' : 'dịch vụ chưa sẵn sàng'}
-        </dd>
-      </dl>
-    )
-  }
-  return <p className="text-sm text-muted-foreground">Ghế đang ở bước: {status.phase}</p>
+  if (status.phase === 'main') return <LoggedIn info={info} />
+  return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> {status.phase}</p>
 }
 
-/** Cách 1 — ghế đồng bộ Zalo PC (phase 14): lấy tin cũ nhiều năm từ điện thoại, mỗi tài khoản một lần. */
+/** Ghế đồng bộ Zalo PC (phase 14): quét QR, điện thoại gửi toàn bộ lịch sử, ghế nạp vào kho bot rồi đăng xuất. */
 export function SeatSyncCard() {
   const seat = useSeatStatus()
   const info = seat.data
   return (
-    <Card className="gap-3 p-4">
+    <Card className="gap-4 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <MonitorSmartphone className="size-5 text-navy" />
-        <h2 className="font-semibold text-navy">Cách 1 — Zalo PC (ghế đồng bộ): tin cũ nhiều năm</h2>
+        <Smartphone className="size-5 text-navy" />
+        <h2 className="font-semibold text-navy">Đồng bộ lịch sử Zalo</h2>
         {info ? phaseBadge(info) : seat.isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
       </div>
-      <p className="text-sm text-muted-foreground">
-        Ghế là một Zalo PC chạy trên máy chủ: tài khoản ngồi vào, điện thoại đồng bộ toàn bộ lịch sử sang, ghế xuất tin (cả nhóm lẫn chat riêng, tệp lấy ảnh + PDF) vào kho bot
-        rồi tự đăng xuất, nhường chỗ cho tài khoản kế. Người có tài khoản chỉ làm hai thao tác: <QrCode className="inline size-3.5" /> quét QR và bấm Đồng ý trên điện thoại.
-      </p>
-      {info ? <SeatDetails info={info} /> : seat.isError ? <p className="text-sm text-destructive">Không hỏi được trạng thái ghế.</p> : null}
-      {info?.configured && !(info.status?.phase.startsWith('login')) && (
-        <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
-          {STAFF_STEPS.map((step) => <li key={step}>{step}</li>)}
-        </ol>
-      )}
+      {info ? <SeatBody info={info} /> : seat.isError ? <p className="text-sm text-destructive">Không hỏi được trạng thái ghế.</p> : null}
     </Card>
   )
 }

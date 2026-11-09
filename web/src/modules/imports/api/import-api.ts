@@ -1,17 +1,14 @@
 import { apiGet, httpClient, type SuccessEnvelope } from '@/core/api'
-import type { ExportTarget, ImportFilesMode, ImportResultRow, ImportSummary, SeatInfo } from '../types/import'
+import type { ImportResultRow, SeatInfo } from '../types/import'
 
 export const importApi = {
-  /** Gửi nguyên tệp JSON (thân thô) — máy chủ Node không có bộ đọc multipart. `files`: tệp đính kèm của tin nhập (phase 14.8). */
-  zaloWeb: async (file: File, files: ImportFilesMode = 'images_pdf') => {
-    const res = await httpClient.post<SuccessEnvelope<ImportSummary>>(`/api/imports/zalo-web?files=${files}`, file, {
-      headers: { 'Content-Type': 'application/json' },
-    })
-    return { data: res.data.data, message: res.data.message ?? 'Đã nhập' }
-  },
-  targets: () => apiGet<ExportTarget[]>('/api/imports/zalo-web/targets'),
   /** Trạng thái ghế đồng bộ Zalo PC (phase 14.6); QR lấy ở `/api/imports/seat/qr.png`. */
   seat: () => apiGet<SeatInfo>('/api/imports/seat'),
+  /** Đăng xuất tài khoản khỏi ghế (trả suất PC); sync-once thấy ghế về trang QR thì tắt container. */
+  seatLogout: async () => {
+    const res = await httpClient.post<SuccessEnvelope<{ result: string }>>('/api/imports/seat/logout')
+    return res.data.message ?? 'Đã đăng xuất ghế'
+  },
   results: () => apiGet<ImportResultRow[]>('/api/imports/results'),
 }
 
