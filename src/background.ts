@@ -23,6 +23,7 @@ import { uploadBackups } from "./storage/backup-uploader.js";
 import type { FileStorage } from "./storage/file-storage.js";
 import { cacheAvatars } from "./sync/avatar-cache.js";
 import { purgeOldDrafts } from "./data-access/write/write-draft-store.js";
+import { defaultReplyMetricsWindow, recomputeReplyMetrics } from "./reply-metrics/reply-metrics-runner.js";
 import { purgeExpiredFiles, purgeExpiredMessages } from "./sync/retention.js";
 import { retryStorageCleanup } from "./sync/test-account-purge.js";
 
@@ -108,6 +109,11 @@ export async function startBackgroundTasks(db: Db, storage: FileStorage, config:
     // Số liệu N3 (phase 10): chỉ đọc bảng Drive. Lỗi từng nguồn thành trạng thái nguồn, không làm sập việc nền
     "metrics-sync": () => runMetricsSync(db, config, safeCalendar(), "sync"),
     "metrics-close": () => runMetricsSync(db, config, safeCalendar(), "close"),
+    "reply-metrics": async () => {
+      const now = new Date();
+      const result = await recomputeReplyMetrics(db, { ...defaultReplyMetricsWindow(now), now, calendar: safeCalendar(), slaMinutes: config.alerts.replyWaitMinutes });
+      if (result.rows) log.info(`chỉ số phản hồi: ${result.threads} cuộc, ${result.rows} dòng`);
+    },
     "search-index": async () => {
       const copied = await backfillMessageSearch(db);
       if (copied) log.info(`chép ${copied} tin cũ vào bảng tìm`);

@@ -7,6 +7,7 @@ import { fileGetTool } from "./operations/file-get-operation.js";
 import { fileTextTool } from "./operations/file-text-operation.js";
 import { metricsSummaryTool } from "./operations/metrics-summary-operation.js";
 import { queryRecordsTool } from "./operations/query-records-operation.js";
+import { replyMetricsTool } from "./operations/reply-metrics-operation.js";
 import { searchMessagesTool } from "./operations/search-messages-operation.js";
 import { threadMessagesTool } from "./operations/thread-messages-operation.js";
 import { whoamiTool } from "./operations/whoami-operation.js";
@@ -20,7 +21,7 @@ export const READ_TOOLS: readonly AnyToolDefinition[] = [
 ].map((tool) => eraseTool(tool as ToolDefinition<never, never>));
 
 /** Công cụ báo cáo của cổng ngoài (phase 13.4): tổng hợp hoạt động theo kỳ + xuất Excel / PDF trả link tải. Chỉ mặt `mcp_http`. */
-export const REPORT_TOOLS: readonly AnyToolDefinition[] = [activitySummaryTool, exportReportTool]
+export const REPORT_TOOLS: readonly AnyToolDefinition[] = [activitySummaryTool, replyMetricsTool, exportReportTool]
   .map((tool) => eraseTool(tool as ToolDefinition<never, never>));
 
 /** Mọi công cụ (đọc + báo cáo + ghi + công cụ của các họ trợ lý); công cụ ghi tự ẩn khi `ctx.allowWrite` tắt. */

@@ -181,6 +181,31 @@ export class WorkCalendar {
     return null;
   }
 
+  /**
+   * Số phút GIỜ LÀM VIỆC nằm giữa `from` và `to` (chỉ số phản hồi, phase 15): tin khách tới 17:00, nhân viên trả lời 08:40 hôm
+   * sau = 30 + 10 = 40 phút. `to` trước `from` → 0. Lịch không có giờ làm → 0. Trần 400 ngày như addWorkingMinutes.
+   */
+  workingMinutesBetween(from: Date, to: Date): number {
+    if (!this.workRanges.length || !this.config.workDays.length || to.getTime() <= from.getTime()) return 0;
+    let total = 0;
+    let local = toLocal(from);
+    const endMs = to.getTime();
+    for (let guard = 0; guard < 400 && local.dayStartMs < endMs; guard += 1) {
+      if (this.isWorkingDay(new Date(local.dayStartMs + 12 * 60 * 60_000))) {
+        // Phút trong ngày (có thể lẻ) của hai đầu khoảng, kẹp vào [0, 1440]
+        const fromMinute = Math.max(0, (Math.max(from.getTime(), local.dayStartMs) - local.dayStartMs) / 60_000);
+        const toMinute = Math.min(MINUTES_PER_DAY, (Math.min(endMs, local.dayStartMs + DAY_MS) - local.dayStartMs) / 60_000);
+        for (const range of this.workRanges) {
+          const end = range.end > range.start ? range.end : MINUTES_PER_DAY;
+          const overlap = Math.min(end, toMinute) - Math.max(range.start, fromMinute);
+          if (overlap > 0) total += overlap;
+        }
+      }
+      local = { ...toLocal(new Date(local.dayStartMs + DAY_MS)), minuteOfDay: 0 };
+    }
+    return Math.round(total * 100) / 100;
+  }
+
   /** Ngày làm việc liền trước ngày chứa `at` (00:00 giờ VN, KHÔNG phải đầu giờ làm). null = không tìm thấy trong tầm nhìn. */
   previousWorkingDay(at: Date, lookupDays = MAX_ADJACENT_LOOKUP_DAYS): Date | null {
     const dayStartMs = toLocal(at).dayStartMs;

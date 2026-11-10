@@ -88,3 +88,23 @@ test("a calendar with no working ranges never comes due", () => {
   assert.equal(none.addWorkingMinutes(vn("2026-10-08T09:00:00"), 10), null);
   assert.equal(none.isWorkingTime(vn("2026-10-08T09:00:00")), false);
 });
+
+// Phase 15 — chỉ số phản hồi: phút làm việc giữa hai mốc
+test("workingMinutesBetween counts only working ranges, skips lunch, nights, Sunday and holidays", () => {
+  // Cùng buổi sáng
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-08T09:00:00"), vn("2026-10-08T09:45:00")), 45);
+  // Vắt qua nghỉ trưa: 11:50 → 13:40 = 10 + 10
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-08T11:50:00"), vn("2026-10-08T13:40:00")), 20);
+  // Tin 17:00 thứ 5, trả lời 08:40 thứ 6 = 30 + 10
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-08T17:00:00"), vn("2026-10-09T08:40:00")), 40);
+  // Thứ 7 17:00 → thứ 2 09:00: 30 (thứ 7) + 30 (thứ 2), Chủ nhật bỏ
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-10T17:00:00"), vn("2026-10-12T09:00:00")), 60);
+  // Trọn một ngày làm = 210 + 240
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-08T00:00:00"), vn("2026-10-09T00:00:00")), 450);
+  // Ngoài giờ hoàn toàn (tối) và ngày lễ 02/09 → 0
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-08T19:00:00"), vn("2026-10-08T22:00:00")), 0);
+  assert.equal(ida.workingMinutesBetween(vn("2026-09-02T08:00:00"), vn("2026-09-02T18:00:00")), 0);
+  // Ngược chiều → 0; giây lẻ giữ hai số thập phân
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-08T10:00:00"), vn("2026-10-08T09:00:00")), 0);
+  assert.equal(ida.workingMinutesBetween(vn("2026-10-08T09:00:00"), vn("2026-10-08T09:00:30")), 0.5);
+});

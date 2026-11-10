@@ -1,6 +1,6 @@
 # 06 — Lộ trình Bot trợ lý cho IDA và trạng thái từng việc
 
-> Bản 1.9 · 09/11/2026 (phase 14: **Ghế đồng bộ Zalo PC** — tin cũ nhiều năm từ điện thoại, đã chứng minh chạy thật trên Linux; 13.10 chuyển sang phase này) · bản 1.8 · 28/10/2026 (phase 13 lên VPS 2: OAuth MCP, get_file, link chia sẻ, báo cáo theo kỳ + xuất Excel / PDF, thống kê MCP, lọc theo tài khoản, tài khoản thử) · bản 1.7 · 27/10/2026 (phase 12 MCP + tài khoản chỉ thu thập + đọc ảnh bắt tin khẩn + vá bảo mật 15–20/10; máy chủ dời VPS 2; soát chạy thật) · bản 1.6 · 12/10/2026 (phase 10: gợi ý trả lời N2 + khung số liệu N3 + danh mục + ghim từ tin riêng) · bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
+> Bản 2.0 · 10/11/2026 (phase 15: **Chỉ số phản hồi khách** tính sẵn cho sếp hỏi qua MCP; màn Nhập lịch sử gọn còn ghế) · bản 1.9 · 09/11/2026 (phase 14: **Ghế đồng bộ Zalo PC** — tin cũ nhiều năm từ điện thoại, đã chứng minh chạy thật trên Linux; 13.10 chuyển sang phase này) · bản 1.8 · 28/10/2026 (phase 13 lên VPS 2: OAuth MCP, get_file, link chia sẻ, báo cáo theo kỳ + xuất Excel / PDF, thống kê MCP, lọc theo tài khoản, tài khoản thử) · bản 1.7 · 27/10/2026 (phase 12 MCP + tài khoản chỉ thu thập + đọc ảnh bắt tin khẩn + vá bảo mật 15–20/10; máy chủ dời VPS 2; soát chạy thật) · bản 1.6 · 12/10/2026 (phase 10: gợi ý trả lời N2 + khung số liệu N3 + danh mục + ghim từ tin riêng) · bản 1.5 · 12/10/2026 (phase 9 gửi tin theo lệnh) · bản 1.4 · 09/10/2026 (phase 8 bản tin + báo cáo) · bản 1.3 09/10/2026 (phase 7 checklist) · bản 1.2 09/10/2026 (phase 6 sửa sau review: bảng tìm riêng, chống sập MySQL) · bản 1.1 09/10/2026 (phase 6) · bản 1.0 08/10/2026 · đối chiếu mã `dev1`.
 > Thay cho mục 7 của [`03-mo-ta-chuc-nang.md`](03-mo-ta-chuc-nang.md). Căn cứ: 27 câu trả lời Q&A của IDA
 > (v0.2, phản hồi 07/10/2026), báo cáo tiến độ BC-IDABOT-2026.10.07 và
 > [`05-doi-chieu-yeu-cau-ida-global.md`](05-doi-chieu-yeu-cau-ida-global.md).
@@ -30,7 +30,8 @@
 | **12** | Cổng MCP, trợ lý đi qua MCP, tài khoản chỉ thu thập (làm thêm 15–20/10) | **Xong** 20/10; cổng `/mcp` bật cho sếp 27/10 (13.3) | 8 / 8 |
 | **13** | Kho dữ liệu đủ + cổng MCP cho sếp IDA tự lấy báo cáo | **Xong** 28/10 trên VPS 2 (`096b71f`), còn 13.1 soát độ đủ của kho; 13.10 chuyển sang phase 14 | 8 / 10 |
 | **14** | **Ghế đồng bộ Zalo PC**: tin cũ nhiều năm từ điện thoại cho từng tài khoản nghe (một lần mỗi tài khoản) | **Đang làm** — lõi đã chạy thật 09/11 (P0 + P1 của kho `zalo-pc-gateway`), còn gói thành một lệnh + nhập vào bot (cả chat riêng, tệp ảnh + PDF) | 2 / 8 |
-| | **Cộng** | | **104 / 119** |
+| **15** | **Chỉ số phản hồi khách**: lượt chờ khách → nhân viên trả lời, đo giờ làm việc, tính sẵn mỗi ngày, sếp hỏi qua MCP `reply_metrics` | **Đã code** 10/11 (local), chờ đẩy VPS 2 | 4 / 6 |
+| | **Cộng** | | **108 / 125** |
 
 **Một câu:** phần «hỏi gì đáp nấy» (đọc tin, đọc tệp, tóm tắt, xuất Excel / Sheets / PDF) đã chạy thật; nền cho
 phần «bot tự theo dõi, tự báo» (phase 3), tài khoản + 3 người nhận (phase 4) và check tin + cảnh báo (phase 5) đã xong
@@ -510,6 +511,32 @@ Nếu người dùng đăng xuất thiết bị «Zalo PC» từ điện thoại
 
 **Đại ca chốt 09/11 (lần 2):** tin cũ nhập **cả nhóm lẫn chat riêng**; tệp của tin cũ lấy **ảnh + PDF**, loại khác chỉ ghi
 tên + link (14.8). **Còn chờ:** `git init` + tạo kho GitHub `degoholding/zalo-pc-gateway`.
+
+### Phase 15 — Chỉ số phản hồi khách cho sếp hỏi qua Claude (Đang làm, lõi xong 10/11)
+
+**Đại ca chốt 09/11 tối:** báo cáo chỉ cần **hỏi qua Claude** (MCP), Claude tự đánh giá tổng quan theo yêu cầu — không làm màn
+báo cáo riêng. Kho đã có tin thô + cờ tin (`message_flag`) + nhật ký bot trả lời (`assistant_turn`, `send_command`); thiếu một lớp
+số tính sẵn để Claude lấy số rồi nhận xét, không phải kéo tin thô mỗi lần. Phase này làm lớp đó.
+
+**Cách tính (lõi thuần `src/reply-metrics/reply-episodes.ts`):** đi qua tin của một cuộc theo thời gian; tin **khách** đầu tiên
+mở một «lượt chờ», tin khách kế tiếp nối vào cùng lượt, tin **nhân viên** đầu tiên sau đó đóng lượt và nhận công. Lượt tính vào
+ngày mở (giờ VN). Chờ đo hai kiểu: giờ thường và **giờ làm việc** theo lịch Cài đặt (`WorkCalendar.workingMinutesBetween`, mới);
+trễ = quá ngưỡng «chờ trả lời» của cảnh báo N1 (`alerts.replyWaitMinutes`, mặc định 120 phút làm việc — dùng lại, không thêm
+cài đặt). Lượt chưa ai trả lời tới lúc tính là «đang chờ», quá ngưỡng là «chờ quá hạn». Nhân viên = Danh bạ loại **Nhân viên**
+(suy từ nhóm nội bộ hoặc quản trị chỉnh tay) + mọi tài khoản bot; chat riêng: chủ tài khoản là nhân viên. Nhóm nội bộ bỏ qua.
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 15.1 | Bảng `reply_metric_daily` (migration 048): cuộc × ngày × người trả lời; dòng `responder_uid = ''` là tổng của cuộc; cột tin khách, lượt, đã trả lời, trả lời trễ, đang chờ, chờ quá hạn, tổng / max chờ (giờ thường + giờ làm), tin nhân viên, lượt bot AI trả lời (`assistant_turn`), ngưỡng, giờ tính | Xong 10/11 |
+| 15.2 | Lõi tính + bộ chạy (`reply-metrics-runner.ts`): đọc tin từng cuộc có tin trong cửa sổ (+3 ngày trước để biết lượt đang mở), xóa rồi ghi lại theo ngày — chạy lại không trùng | Xong 10/11; 6 bài kiểm lõi + 1 bài lịch |
+| 15.3 | Việc nền `reply-metrics` mỗi 30 phút tính hôm qua + hôm nay; CLI `npm run cli -- reply-metrics --days N` tính bù (mặc định 30) | Xong 10/11 |
+| 15.4 | Công cụ MCP `reply_metrics` (cổng ngoài, quyền đọc hội thoại): kỳ tối đa 92 ngày; gộp nhóm × ngày / nhóm / ngày / nhân viên / nhân viên × ngày / nhóm × nhân viên; mỗi dòng có tỷ lệ đúng hạn, chờ TB / lâu nhất (phút thường + phút làm việc); totals luôn đọc lớp tổng; cùng luật thấy cuộc + che như activity_summary | Xong 10/11; 4 bài kiểm |
+| 15.5 | Đo trên dữ liệu thật: chạy bù 30 ngày ở local + VPS 2, soát vài cuộc bằng tay (lượt, chờ) xem khớp cảm nhận; chỉnh luật nếu lệch (vd tin nhân viên nối tiếp nhau, khách tự trả lời mình) | Chưa |
+| 15.6 | `export_report` nhận nguồn `reply_metrics`; hướng dẫn sếp ở doc/12 thêm câu hỏi mẫu; AI chấm chất lượng câu trả lời theo mẫu (lấy mẫu mỗi ngày, cần bộ tiêu chí của IDA) | Chưa — chấm chất lượng chờ đại ca đưa tiêu chí |
+
+**Giới hạn đã biết:** chỉ dựa vào vai Danh bạ — người chưa phân loại (kind 0) coi là khách; nhân viên mới chưa vào nhóm nội bộ
+nào phải được quản trị đặt tay ở Danh bạ. Khách tự hỏi rồi tự trả lời vẫn là một lượt mở tới khi nhân viên lên tiếng. Số liệu
+cũ hơn 2 ngày chỉ có khi đã chạy lệnh tính bù.
 
 ## 9. Đối chiếu 27 câu IDA
 

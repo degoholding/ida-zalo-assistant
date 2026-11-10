@@ -14,6 +14,7 @@
 //   npm run cli -- mcp-key create|list|revoke ...   khóa truy cập MCP (xem src/dev/mcp-key-cli.ts)
 //   npm run cli -- user-import <tệp.tsv> [vai trò 1|2|3]   nạp «email<TAB>họ tên»: tên đăng nhập = mật khẩu = email
 //   npm run cli -- links-backfill               bóc link chia sẻ cho tin đã có trong kho (phase 13.2; chạy lại không trùng)
+//   npm run cli -- reply-metrics [--days N]     tính bù chỉ số phản hồi khách N ngày gần nhất (phase 15; mặc định 30, chạy lại không trùng)
 
 import fs from "node:fs";
 import path from "node:path";
@@ -33,6 +34,8 @@ import { createCompany, findCompanyByCode, listCompanies } from "./sync/company-
 import { findGroupByZaloId, updateGroupSettings, type GroupSettingsPatch } from "./sync/group-repository.js";
 import { saveLoggedInAccount } from "./zalo/bot-account-repository.js";
 import { backfillSharedLinks } from "./sync/shared-links.js";
+import { backfillReplyMetricsWindow, recomputeReplyMetrics } from "./reply-metrics/reply-metrics-runner.js";
+import { buildWorkCalendar } from "./schedule/work-calendar.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -198,6 +201,18 @@ async function main(): Promise<void> {
       const result = await backfillSharedLinks(db, { onProgress: (lastId, sofar) => console.log(`… tới tin #${lastId}: ${sofar.scanned} tin, ${sofar.inserted} link mới`) });
       console.log(`Xong: quét ${result.scanned} tin có link, ${result.messagesWithLinks} tin thêm link, ${result.inserted} link mới.`);
     }
+    else if (command === "reply-metrics") {
+      const daysArg = args.indexOf("--days");
+      const days = daysArg >= 0 ? Number(args[daysArg + 1]) : 30;
+      if (!Number.isInteger(days) || days < 1 || days > 400) throw new Error("--days phải là số nguyên 1–400");
+      const now = new Date();
+      let calendar = null;
+      try { calendar = buildWorkCalendar(config.calendar); } catch (error) { console.log(`Lịch làm việc cài sai (${String((error as Error).message)}) — tính theo giờ thường`); }
+      const result = await recomputeReplyMetrics(db, {
+        ...backfillReplyMetricsWindow(now, days), now, calendar, slaMinutes: config.alerts.replyWaitMinutes, onProgress: (line) => console.log(`… ${line}`),
+      });
+      console.log(`Xong: ${result.threads} cuộc, ${result.rows} dòng chỉ số cho ${days} ngày (ngưỡng trễ ${config.alerts.replyWaitMinutes} phút làm việc).`);
+    }
     else if (command === "storage-to-r2") {
       const storage = createFileStorage(config);
       if (!(storage instanceof R2WithLocalFallback)) throw new Error("Chưa bật R2: đặt STORAGE_DRIVER=r2 + R2_* trong .env rồi chạy lại");
@@ -205,7 +220,7 @@ async function main(): Promise<void> {
       console.log(`Xong: chép ${result.moved} tệp lên R2, ${result.missing} tệp không còn trên đĩa, ${result.failed} lỗi.`);
     }
     else {
-      console.log("Lệnh: gen-key | login <nhãn> | accounts | groups | company [add <MÃ> <tên>] | group <mã> read=on|off files=on|off label=.. retention=.. company=<MÃ>|none | stats | storage-to-r2 | links-backfill");
+      console.log("Lệnh: gen-key | login <nhãn> | accounts | groups | company [add <MÃ> <tên>] | group <mã> read=on|off files=on|off label=.. retention=.. company=<MÃ>|none | stats | storage-to-r2 | links-backfill | reply-metrics [--days N]");
       process.exitCode = 1;
     }
   } finally {

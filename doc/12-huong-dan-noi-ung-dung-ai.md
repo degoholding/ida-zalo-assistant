@@ -18,7 +18,7 @@ bóc sẵn. Ghi âm và video AI không nghe / xem được.
 
 ## Báo cáo và xuất tệp (28/10/2026)
 
-AI tự tổng hợp hoạt động theo kỳ và xuất **Excel / PDF** kèm link tải. Ví dụ câu hỏi:
+AI tự tổng hợp hoạt động theo kỳ, đọc **chỉ số phản hồi khách** tính sẵn (lượt khách chờ, ai trả lời, chờ bao lâu theo giờ làm việc, tỷ lệ đúng hạn — công cụ `reply_metrics`, từ 10/11/2026) và xuất **Excel / PDF** kèm link tải. Ví dụ câu hỏi:
 
 - *Tuần này nhóm nào nhắn nhiều nhất, mỗi ngày bao nhiêu tin, bao nhiêu ảnh / tệp?*
 - *Từ 01/10 đến hôm nay, ai hoạt động nhiều nhất trong nhóm Kho HN?*

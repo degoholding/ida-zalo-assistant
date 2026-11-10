@@ -30,6 +30,8 @@ export const BACKGROUND_TASKS = [
   // Chỉ ĐỌC bảng Drive nên KHÔNG sendsMessages — vẫn chạy khi bot tắt khẩn. «metrics-sync» tự bỏ lượt ngoài giờ làm (src/metrics).
   { name: "metrics-sync", label: "Đọc bảng số liệu (Drive)", spec: { every: "minutes", minutes: 30 } },
   { name: "metrics-close", label: "Chốt số liệu 18:00", spec: { every: "day", at: "18:00", workingDaysOnly: true } },
+  // Chỉ số phản hồi (phase 15): tính lại hôm qua + hôm nay từ bảng message — chỉ đọc / ghi bảng riêng, không gửi tin
+  { name: "reply-metrics", label: "Tính chỉ số phản hồi khách (hôm qua + hôm nay)", spec: { every: "minutes", minutes: 30 } },
 ] as const satisfies readonly { name: string; label: string; spec: ScheduleSpec; sendsMessages?: boolean }[];
 
 export type BackgroundTaskName = (typeof BACKGROUND_TASKS)[number]["name"];
