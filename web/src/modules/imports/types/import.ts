@@ -14,11 +14,26 @@ export interface SeatJob {
   updated_at: number | null
 }
 
+/** Dịch vụ bật / tắt ghế trên máy chủ (phase 14.9). `can_control` = người xem là Quản trị. */
+export interface SeatLauncherInfo {
+  configured: boolean
+  reachable: boolean
+  can_control: boolean
+  error?: string
+  running: boolean
+  account: string | null
+  started_at: number | null
+  finished_at: number | null
+  exit_code: number | null
+  log_tail: string[]
+}
+
 /** `GET /api/imports/seat` — trạng thái ghế đồng bộ Zalo PC (phase 14.6). */
 export interface SeatInfo {
   configured: boolean
   reachable: boolean
   error?: string
+  launcher?: SeatLauncherInfo
   status?: {
     phase: string
     user: { userId: string; displayName: string } | null

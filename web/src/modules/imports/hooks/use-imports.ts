@@ -19,8 +19,8 @@ export function useSeatStatus() {
     queryFn: importApi.seat,
     refetchInterval: (query) => {
       const info = query.state.data as SeatInfo | undefined
-      if (info && !info.configured) return false
-      return info?.status?.phase === 'main' ? SEAT_POLL_ACTIVE_MS : SEAT_POLL_IDLE_MS
+      if (info && !info.configured && !info.launcher?.configured) return false
+      return info?.status?.phase === 'main' || info?.launcher?.running ? SEAT_POLL_ACTIVE_MS : SEAT_POLL_IDLE_MS
     },
     retry: false,
   })
@@ -33,6 +33,27 @@ export function useImportResults(active = false) {
     queryFn: importApi.results,
     refetchInterval: active ? 10_000 : false,
   })
+}
+
+function useSeatControl<T>(run: (input: T) => Promise<{ message: string }>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: run,
+    onSuccess: ({ message }) => {
+      toast.success(message)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.imports.seat() })
+    },
+    onError: (error) => toast.error(extractErrorMessage(error), { duration: 10_000 }),
+  })
+}
+
+/** Bật ghế cho một tài khoản (14.9, chỉ Quản trị). */
+export function useSeatStart() {
+  return useSeatControl((account: string) => importApi.seatStart(account))
+}
+
+export function useSeatStop() {
+  return useSeatControl(() => importApi.seatStop())
 }
 
 export function useSeatLogout() {

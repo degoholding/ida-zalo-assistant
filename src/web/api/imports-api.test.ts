@@ -92,3 +92,50 @@ test("seat: chờ QR → user null, không tra tài khoản", async () => {
   assert.equal(info.status?.last_qr_at, 1794209738903);
   assert.equal(info.status?.sync, null);
 });
+
+// Phase 14.9: dịch vụ bật / tắt ghế trên máy chủ nhìn từ bot
+import { fetchSeatLauncherInfo, startSeat, stopSeat } from "./imports-api.js";
+
+const launcherFetch = (reply: (url: string, init: RequestInit | undefined) => { status: number; body: unknown }) =>
+  (async (url: string | URL | Request, init?: RequestInit) => {
+    const r = reply(String(url), init);
+    return { ok: r.status < 400, status: r.status, json: async () => r.body, text: async () => JSON.stringify(r.body) };
+  }) as unknown as typeof fetch;
+const LAUNCHER = { url: "http://host:8098", token: "t".repeat(20) };
+
+test("launcher: chưa cấu hình → configured=false, không gọi; can_control theo vai", async () => {
+  let called = false;
+  const info = await fetchSeatLauncherInfo({ url: "", token: "" }, true, (async () => { called = true; return new Response(); }) as typeof fetch);
+  assert.equal(info.configured, false);
+  assert.equal(info.can_control, true);
+  assert.equal(called, false);
+});
+
+test("launcher: gửi token ở header, rút gọn trạng thái; tắt → reachable=false kèm lý do", async () => {
+  let seenToken = "";
+  const info = await fetchSeatLauncherInfo(LAUNCHER, false, launcherFetch((url, init) => {
+    seenToken = String((init?.headers as Record<string, string>)["X-Seat-Token"]);
+    assert.match(url, /\/status$/);
+    return { status: 200, body: { running: true, account: "ida1", pid: 5, started_at: 10, finished_at: null, exit_code: null, log_tail: ["a", "b"] } };
+  }));
+  assert.equal(seenToken, LAUNCHER.token);
+  assert.deepEqual(info, { configured: true, reachable: true, can_control: false, running: true, account: "ida1", started_at: 10, finished_at: null, exit_code: null, log_tail: ["a", "b"] });
+  const down = await fetchSeatLauncherInfo(LAUNCHER, true, (async () => { throw new Error("ECONNREFUSED"); }) as typeof fetch);
+  assert.equal(down.configured, true);
+  assert.equal(down.reachable, false);
+  assert.match(down.error ?? "", /Không nối được/);
+});
+
+test("startSeat: tên sai bị chặn trước khi gọi; 409 của dịch vụ thành lỗi 409; stopSeat gọi /stop", async () => {
+  await assert.rejects(() => startSeat(LAUNCHER, "a b/c", (async () => { throw new Error("không được gọi"); }) as typeof fetch), /Tên tài khoản/);
+  await assert.rejects(() => startSeat(LAUNCHER, "ida2", launcherFetch(() => ({ status: 409, body: { error: "Ghế ida1 đang chạy" } }))),
+    (error: unknown) => (error as { status: number; message: string }).status === 409 && /đang chạy/.test((error as Error).message));
+  const started = await startSeat(LAUNCHER, "ida2", launcherFetch((url, init) => {
+    assert.match(url, /\/start$/);
+    assert.deepEqual(JSON.parse(String(init?.body)), { account: "ida2" });
+    return { status: 200, body: { running: true, account: "ida2", started_at: 1, finished_at: null, exit_code: null, log_tail: [] } };
+  }));
+  assert.equal(started.account, "ida2");
+  const stopped = await stopSeat(LAUNCHER, launcherFetch((url) => { assert.match(url, /\/stop$/); return { status: 200, body: { running: false, account: "ida2", finished_at: 2, exit_code: null, log_tail: [] } }; }));
+  assert.equal(stopped.running, false);
+});

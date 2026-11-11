@@ -144,9 +144,12 @@ Một container **Cổng Zalo PC** (kho riêng `zalo-pc-gateway`) chạy mã Zal
 **ghế**: mỗi lần một tài khoản ngồi, xong trả ghế cho tài khoản kế; không thay đồng bộ zca-js đang chạy (phiên PC và phiên
 web là hai suất riêng của Zalo, không đá nhau).
 
-1. Quản trị chạy `~/zalo/tools/ghe.sh <tài khoản>` (VPS 2) hoặc `node tools/sync-once.mjs <tài khoản>` (local) → ghế bật,
-   QR hiện ở màn **Nhập lịch sử** của bot (bot lấy QR + trạng thái qua `SEAT_GATEWAY_URL`, cổng không cần mở ra ngoài;
-   chưa có nút bật ghế từ web). Màn chỉ có một thẻ **Đồng bộ lịch sử Zalo** và bảng **Đã có trong kho** (gọn lại 09/11 tối).
+1. Quản trị vào màn **Nhập lịch sử**, gõ tên tài khoản (chỉ là tên thư mục giữ dữ liệu, vd `giabao`) rồi bấm **Bật ghế** (từ 11/11;
+   bot gọi dịch vụ `seat-launcher` trên máy chủ qua `SEAT_LAUNCHER_URL`, dịch vụ chạy `ghe.sh`). Vài giây sau QR hiện ngay trên màn
+   (bot lấy QR + trạng thái qua `SEAT_GATEWAY_URL`, cổng không cần mở ra ngoài). Đường cũ vẫn dùng được: `~/zalo/tools/ghe.sh <tên>`
+   trên VPS 2 hoặc `node tools/sync-once.mjs <tên>` ở local; ghế bật tay cũng hiện và tắt được từ web. Màn chỉ có một thẻ
+   **Đồng bộ lịch sử Zalo** và bảng **Đã có trong kho** (gọn lại 09/11 tối). Nút **Tắt ghế** (chỉ Quản trị, hỏi xác nhận) dừng
+   ngay cả khi đang chờ quét hay đang chạy dở.
 2. Nhân viên của tài khoản đó: **quét QR** bằng Zalo trên điện thoại, rồi **bấm Đồng ý** khi điện thoại hỏi «Đồng bộ tin
    nhắn sang máy tính». Chỉ hai thao tác này. Zalo PC trên máy nhân viên (nếu có) bị đá trong lúc này, xong đăng nhập lại.
    Từ đó màn hiện: tài khoản đang ngồi ghế, có gắn vào bot không (không gắn thì chat riêng bị bỏ), **thanh % chung** (điện

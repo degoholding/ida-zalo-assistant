@@ -18,6 +18,9 @@ services:
       - "127.0.0.1:8090:8090"
     volumes:
       - ./data:/data
+    # Gọi dịch vụ bật ghế (tools/seat-launcher.mjs) chạy ngoài Docker trên cùng máy: SEAT_LAUNCHER_URL=http://host.docker.internal:8098
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy

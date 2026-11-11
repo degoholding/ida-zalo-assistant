@@ -1,11 +1,13 @@
-import { CheckCircle2, Loader2, LogOut, Smartphone, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, Loader2, LogOut, Power, PowerOff, Smartphone, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
 
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { Input } from '@/shared/ui/input'
 import { SEAT_QR_URL } from '../api/import-api'
-import { useSeatLogout, useSeatStatus } from '../hooks/use-imports'
+import { useSeatLogout, useSeatStart, useSeatStatus, useSeatStop } from '../hooks/use-imports'
 import type { SeatInfo, SeatJob } from '../types/import'
 import { isSeatBusy } from '../utils/seat-busy'
 
@@ -120,14 +122,83 @@ function LoggedIn({ info }: { info: SeatInfo }) {
         <LogoutButton disabled={busy} />
         {job?.stage === 'done' && <span className="flex items-center gap-1 text-sm text-emerald-700"><CheckCircle2 className="size-4" /> Xong. Bấm Đăng xuất để trả ghế.</span>}
         {busy && <span className="text-xs text-muted-foreground">Đang chạy, chưa đăng xuất được.</span>}
+        {(busy || job?.stage === 'error') && <StopSeatButton info={info} />}
       </div>
     </div>
   )
 }
 
+/** Ô tên + nút Bật ghế (14.9): chỉ Quản trị, chỉ khi có dịch vụ bật ghế trên máy chủ. Tên = thư mục giữ dữ liệu đã đồng bộ. */
+function StartSeatForm({ info }: { info: SeatInfo }) {
+  const launcher = info.launcher
+  const start = useSeatStart()
+  const [account, setAccount] = useState('')
+  if (!launcher?.configured || !launcher.can_control) return null
+  if (!launcher.reachable) return <p className="text-sm text-amber-700">Dịch vụ bật ghế trên máy chủ không trả lời{launcher.error ? ` (${launcher.error})` : ''}.</p>
+  const valid = /^[\w.-]{1,40}$/.test(account.trim())
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (valid) start.mutate(account.trim(), { onSuccess: () => setAccount('') })
+      }}
+    >
+      <Input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="Tên tài khoản, vd giabao" className="w-56" aria-label="Tên tài khoản ngồi ghế" />
+      <Button type="submit" disabled={!valid || start.isPending}>
+        {start.isPending ? <Loader2 className="animate-spin" /> : <Power />}
+        Bật ghế
+      </Button>
+      <span className="text-xs text-muted-foreground">Chỉ chữ, số, dấu chấm, gạch. Bật xong mã QR hiện ở đây trong vài giây.</span>
+    </form>
+  )
+}
+
+/** Nút Tắt ghế (14.9): dừng script + gỡ container, kể cả khi đang chờ quét. */
+function StopSeatButton({ info }: { info: SeatInfo }) {
+  const launcher = info.launcher
+  const stop = useSeatStop()
+  if (!launcher?.configured || !launcher.can_control || !launcher.running) return null
+  const onClick = async () => {
+    const ok = await confirm({
+      title: 'Tắt ghế',
+      message: `Dừng ghế ${launcher.account ?? ''} ngay. Phần đang đồng bộ hoặc đang nạp dở sẽ mất, tin đã nạp vẫn giữ.`,
+      confirmLabel: 'Tắt ghế',
+    })
+    if (ok) stop.mutate(undefined)
+  }
+  return (
+    <Button variant="outline" size="sm" onClick={onClick} disabled={stop.isPending}>
+      {stop.isPending ? <Loader2 className="animate-spin" /> : <PowerOff />}
+      Tắt ghế
+    </Button>
+  )
+}
+
 function SeatBody({ info }: { info: SeatInfo }) {
   if (!info.configured || !info.reachable) {
-    return <p className="text-sm text-muted-foreground">Ghế đang tắt. Khi quản trị bật ghế, mã QR hiện ở đây.</p>
+    const launcher = info.launcher
+    if (launcher?.running) {
+      return (
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Đang bật ghế {launcher.account}, chờ mã QR…</p>
+          <StopSeatButton info={info} />
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {launcher?.configured && launcher.can_control ? 'Ghế đang tắt. Nhập tên tài khoản rồi bấm Bật ghế, mã QR hiện ở đây.' : 'Ghế đang tắt. Khi quản trị bật ghế, mã QR hiện ở đây.'}
+        </p>
+        {launcher?.finished_at && launcher.exit_code !== null && launcher.exit_code !== 0 && launcher.log_tail.length > 0 && (
+          <p className="text-xs text-destructive">
+            Lượt trước ({launcher.account}) kết thúc lỗi: {launcher.log_tail.filter((line) => /LỖI|Error|hết giờ/.test(line)).pop() ?? launcher.log_tail[launcher.log_tail.length - 1]}
+          </p>
+        )}
+        <StartSeatForm info={info} />
+      </div>
+    )
   }
   const status = info.status
   if (!status) return null
@@ -135,10 +206,13 @@ function SeatBody({ info }: { info: SeatInfo }) {
     return (
       <div className="flex flex-wrap items-center gap-6">
         <img src={`${SEAT_QR_URL}?t=${status.last_qr_at}`} alt="Mã QR đăng nhập Zalo" className="size-64 rounded-md border bg-white p-2" />
-        <ol className="max-w-sm list-decimal space-y-2 pl-5 text-sm">
-          {STAFF_STEPS.map((step) => <li key={step}>{step}</li>)}
-          <li className="text-muted-foreground">Mã tự làm mới. Xong hai bước là ghế tự chạy, theo dõi ở đây.</li>
-        </ol>
+        <div className="max-w-sm space-y-3">
+          <ol className="list-decimal space-y-2 pl-5 text-sm">
+            {STAFF_STEPS.map((step) => <li key={step}>{step}</li>)}
+            <li className="text-muted-foreground">Mã tự làm mới. Xong hai bước là ghế tự chạy, theo dõi ở đây.</li>
+          </ol>
+          <StopSeatButton info={info} />
+        </div>
       </div>
     )
   }

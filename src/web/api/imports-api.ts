@@ -1,11 +1,11 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { AttachmentStatus, ConversationType, MessageKind } from "../../constants.js";
+import { AttachmentStatus, ConversationType, MessageKind, UserRole } from "../../constants.js";
 import { parseZaloContent } from "../../zalo/content-parser.js";
 import type { Db } from "../../db/pool.js";
 import { findGroupByZaloId, type GroupDefaults } from "../../sync/group-repository.js";
 import { ingestDirectMessage, ingestGroupMessage, type IncomingGroupMessage, type IngestDeps } from "../../sync/message-ingest.js";
 import { indexMessage } from "../../search/message-search-index.js";
-import { ApiError, readRawBody, sendOk } from "./api-http.js";
+import { ApiError, readJson, readRawBody, sendOk } from "./api-http.js";
 import type { ApiRoute } from "./api-route.js";
 import { recordAudit } from "./audit-log.js";
 
@@ -415,6 +415,86 @@ export async function fetchSeatInfo(db: Db, gatewayUrl: string, fetcher: typeof 
   };
 }
 
+/** Dịch vụ bật / tắt ghế trên máy chủ (tools/seat-launcher.mjs, phase 14.9) nhìn từ bot. */
+export interface SeatLauncherInfo {
+  configured: boolean;
+  reachable: boolean;
+  /** Người đang xem có được bấm Bật / Tắt không (chỉ Quản trị). */
+  can_control: boolean;
+  error?: string;
+  running: boolean;
+  account: string | null;
+  started_at: number | null;
+  finished_at: number | null;
+  exit_code: number | null;
+  log_tail: string[];
+}
+
+export interface SeatLauncherConfig {
+  url: string;
+  token: string;
+}
+
+const LAUNCHER_TIMEOUT_MS = 8000;
+
+async function callLauncher(config: SeatLauncherConfig, pathname: string, method: "GET" | "POST", body?: unknown, fetcher: typeof fetch = fetch): Promise<Response> {
+  if (!config.url) throw new ApiError(404, "not_found", "Chưa cấu hình SEAT_LAUNCHER_URL");
+  if (!config.token) throw new ApiError(500, "misconfigured", "Thiếu SEAT_LAUNCHER_TOKEN");
+  try {
+    return await fetcher(`${config.url}${pathname}`, {
+      method, headers: { "X-Seat-Token": config.token, ...(body ? { "Content-Type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(LAUNCHER_TIMEOUT_MS),
+    });
+  } catch {
+    throw new ApiError(502, "launcher_unreachable", "Không nối được tới dịch vụ bật ghế trên máy chủ");
+  }
+}
+
+function shapeLauncher(raw: Record<string, unknown>, canControl: boolean): SeatLauncherInfo {
+  return {
+    configured: true, reachable: true, can_control: canControl,
+    running: Boolean(raw.running), account: raw.account ? String(raw.account) : null,
+    started_at: Number(raw.started_at) || null, finished_at: Number(raw.finished_at) || null,
+    exit_code: raw.exit_code === null || raw.exit_code === undefined ? null : Number(raw.exit_code),
+    log_tail: Array.isArray(raw.log_tail) ? raw.log_tail.slice(-6).map((line) => String(line).slice(0, 300)) : [],
+  };
+}
+
+const LAUNCHER_OFF = (canControl: boolean): SeatLauncherInfo => ({
+  configured: false, reachable: false, can_control: canControl, running: false, account: null, started_at: null, finished_at: null, exit_code: null, log_tail: [],
+});
+
+export async function fetchSeatLauncherInfo(config: SeatLauncherConfig, canControl: boolean, fetcher: typeof fetch = fetch): Promise<SeatLauncherInfo> {
+  if (!config.url) return LAUNCHER_OFF(canControl);
+  let res: Response;
+  try {
+    res = await callLauncher(config, "/status", "GET", undefined, fetcher);
+  } catch (error) {
+    return { ...LAUNCHER_OFF(canControl), configured: true, error: error instanceof ApiError ? error.message : String(error) };
+  }
+  if (!res.ok) return { ...LAUNCHER_OFF(canControl), configured: true, error: `Dịch vụ bật ghế trả HTTP ${res.status}` };
+  return shapeLauncher((await res.json()) as Record<string, unknown>, canControl);
+}
+
+const SEAT_ACCOUNT_RE = /^[\w.-]{1,40}$/;
+
+/** Bật ghế cho một tài khoản (tên thư mục dữ liệu trên máy chủ) — chỉ Quản trị. */
+export async function startSeat(config: SeatLauncherConfig, account: string, fetcher: typeof fetch = fetch): Promise<SeatLauncherInfo> {
+  const name = account.trim();
+  if (!SEAT_ACCOUNT_RE.test(name)) throw new ApiError(422, "invalid_account", "Tên tài khoản chỉ gồm chữ, số, dấu chấm, gạch (tối đa 40)");
+  const res = await callLauncher(config, "/start", "POST", { account: name }, fetcher);
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new ApiError(res.status === 409 ? 409 : 502, "seat_start_failed", String(body.error || `Dịch vụ bật ghế trả HTTP ${res.status}`));
+  return shapeLauncher(body, true);
+}
+
+export async function stopSeat(config: SeatLauncherConfig, fetcher: typeof fetch = fetch): Promise<SeatLauncherInfo> {
+  const res = await callLauncher(config, "/stop", "POST", undefined, fetcher);
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new ApiError(502, "seat_stop_failed", String(body.error || `Dịch vụ bật ghế trả HTTP ${res.status}`));
+  return shapeLauncher(body, true);
+}
+
 /** Nút Đăng xuất ghế ở màn Nhập lịch sử: cổng đăng xuất chính thức (trả suất PC); sync-once thấy ghế về trang QR thì tắt container. */
 export async function logoutSeat(gatewayUrl: string, fetcher: typeof fetch = fetch): Promise<string> {
   if (!gatewayUrl) throw new ApiError(404, "not_found", "Chưa cấu hình SEAT_GATEWAY_URL");
@@ -470,8 +550,27 @@ export async function listImportResults(db: Db, limit = 300): Promise<ImportResu
 
 export const importRoutes: ApiRoute[] = [
   // Ghế đồng bộ Zalo PC (phase 14.6): trạng thái + QR lấy qua bot để người quản trị không cần mở cổng ra ngoài
-  ["GET", /^\/api\/imports\/seat$/, async ({ response, service }) => {
-    sendOk(response, await fetchSeatInfo(service.db, service.config.seatGatewayUrl));
+  ["GET", /^\/api\/imports\/seat$/, async ({ response, service, principal }) => {
+    const launcherConfig = { url: service.config.seatLauncherUrl, token: service.config.seatLauncherToken };
+    const [seat, launcher] = await Promise.all([
+      fetchSeatInfo(service.db, service.config.seatGatewayUrl),
+      fetchSeatLauncherInfo(launcherConfig, principal.role === UserRole.Admin),
+    ]);
+    sendOk(response, { ...seat, launcher });
+  }],
+  // Bật / tắt ghế từ web (phase 14.9): bot gọi dịch vụ seat-launcher trên máy chủ; chỉ Quản trị
+  ["POST", /^\/api\/imports\/seat\/start$/, async ({ request, response, service, principal }) => {
+    if (principal.role !== UserRole.Admin) throw new ApiError(403, "forbidden", "Chỉ Quản trị được bật ghế");
+    const body = await readJson(request);
+    const info = await startSeat({ url: service.config.seatLauncherUrl, token: service.config.seatLauncherToken }, String(body.account ?? ""));
+    await recordAudit(service.db, { entity: "seat", entityId: 0, action: "start", message: `Bật ghế ${info.account ?? ""}` });
+    sendOk(response, info, `Đã bật ghế ${info.account ?? ""}`);
+  }],
+  ["POST", /^\/api\/imports\/seat\/stop$/, async ({ response, service, principal }) => {
+    if (principal.role !== UserRole.Admin) throw new ApiError(403, "forbidden", "Chỉ Quản trị được tắt ghế");
+    const info = await stopSeat({ url: service.config.seatLauncherUrl, token: service.config.seatLauncherToken });
+    await recordAudit(service.db, { entity: "seat", entityId: 0, action: "stop", message: `Tắt ghế ${info.account ?? ""}` });
+    sendOk(response, info, "Đã tắt ghế");
   }],
   ["GET", /^\/api\/imports\/seat\/qr\.png(\?.*)?$/, async ({ response, service }) => {
     if (!service.config.seatGatewayUrl) throw new ApiError(404, "not_found", "Chưa cấu hình SEAT_GATEWAY_URL");
